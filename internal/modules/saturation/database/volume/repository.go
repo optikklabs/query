@@ -1,0 +1,52 @@
+package volume
+
+import (
+	"context"
+
+	"github.com/ClickHouse/clickhouse-go/v2"
+	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
+)
+
+type Repository struct {
+	db clickhouse.Conn
+}
+
+func NewRepository(db clickhouse.Conn) *Repository {
+	return &Repository{db: db}
+}
+
+func (r *Repository) GetOpsBySystem(ctx context.Context, teamID, startMs, endMs int64, f filter.Filters) ([]opsRawDTO, error) {
+	return r.opsSeriesByGroup(ctx, teamID, startMs, endMs, f, filter.AttrDBSystem, "volume.GetOpsBySystem")
+}
+
+func (r *Repository) opsSeriesByGroup(ctx context.Context, teamID, startMs, endMs int64, f filter.Filters, attr, traceLabel string) ([]opsRawDTO, error) {
+	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
+	groupCol := filter.Spans1mGroupColumn(attr)
+	if groupCol == "" {
+		return nil, nil
+	}
+	filterWhere, filterArgs := filter.BuildSpans1mClauses(f)
+
+	query := `
+		WITH active_fps AS (
+		    SELECT fingerprint
+		    FROM observability.spans_resource
+		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		)
+		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + `                   AS time_bucket,
+		       ` + groupCol + `                                                    AS group_by,
+		       sum(request_count) / @bucketGrainSec                                AS ops_per_sec
+		FROM ` + timebucket.SpansRollup(endMs-startMs) + `
+		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
+		WHERE timestamp BETWEEN @start AND @end
+		  AND db_system != ''` + filterWhere + `
+		GROUP BY time_bucket, group_by
+		ORDER BY time_bucket, group_by`
+
+	args := append(filter.SpanArgs(teamID, startMs, endMs), filterArgs...)
+	args = timebucket.WithBucketGrainSec(args, startMs, endMs)
+	var rows []opsRawDTO
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, traceLabel, &rows, query, args...)
+}

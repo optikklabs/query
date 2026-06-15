@@ -1,0 +1,31 @@
+environment: development
+
+server:
+  port: "19090"
+  allowed_origins: "http://localhost:3000,http://localhost:5173"
+
+mysql:
+  host: "127.0.0.1"
+  port: "13306"
+  database: observability
+  user: root
+  password: root123
+  max_open_conns: 50
+  max_idle_conns: 25
+
+clickhouse:
+  host: "127.0.0.1"
+  port: "19000"
+  database: observability
+  user: default
+  password: clickhouse123
+  secure: false
+
+auth:
+  jwt_secret: "dev-only-change-me-0123456789abcdef"
+  access_ttl_ms: 900000
+  refresh_ttl_ms: 604800000
+  refresh_cookie_name: optikk_refresh
+  cookie_domain: ""
+  cookie_secure: false
+  cookie_same_site: lax
