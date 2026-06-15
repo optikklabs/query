@@ -49,7 +49,7 @@ func (r *Repository) QueryMemoryUtilizationForInstance(ctx context.Context, team
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint
-		    FROM observability.metrics_resource
+		    FROM optikk.metrics_resource
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		    WHERE host = @host AND service = @serviceName AND pod = @pod
 		)

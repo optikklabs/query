@@ -39,7 +39,7 @@ type insertArgs struct {
 }
 
 const insertMonitor = `
-INSERT INTO observability.monitors
+INSERT INTO optikk.monitors
   (team_id, name, type, priority, scope_json, query_json, conditions_json, notify_json,
    message_body, runbook_url, tags_json, eval_every_sec, renotify_every_sec,
    active, created_at, created_by_user_id)
@@ -48,7 +48,7 @@ VALUES
 `
 
 const insertInitialState = `
-INSERT INTO observability.monitor_state
+INSERT INTO optikk.monitor_state
   (monitor_id, status, next_evaluation_at)
 VALUES
   (?, 'no_data', ?)
@@ -85,7 +85,7 @@ func (r *Repository) Create(ctx context.Context, row insertArgs) (int64, error) 
 }
 
 const updateMonitor = `
-UPDATE observability.monitors
+UPDATE optikk.monitors
    SET name = ?, type = ?, priority = ?,
        scope_json = ?, query_json = ?, conditions_json = ?, notify_json = ?,
        message_body = ?, runbook_url = ?, tags_json = ?,
@@ -119,7 +119,7 @@ func (r *Repository) Delete(ctx context.Context, id, teamID int64) error {
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.ExecContext(ctx,
-		`DELETE FROM observability.monitors WHERE id = ? AND team_id = ?`, id, teamID)
+		`DELETE FROM optikk.monitors WHERE id = ? AND team_id = ?`, id, teamID)
 	if err != nil {
 		return err
 	}
@@ -128,11 +128,11 @@ func (r *Repository) Delete(ctx context.Context, id, teamID int64) error {
 		return sql.ErrNoRows
 	}
 	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM observability.monitor_state WHERE monitor_id = ?`, id); err != nil {
+		`DELETE FROM optikk.monitor_state WHERE monitor_id = ?`, id); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM observability.monitor_events WHERE monitor_id = ?`, id); err != nil {
+		`DELETE FROM optikk.monitor_events WHERE monitor_id = ?`, id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -157,8 +157,8 @@ func (r *Repository) GetByID(ctx context.Context, id, teamID int64) (models.Moni
 	var state models.MonitorStateRow
 	q := fmt.Sprintf(`
 		SELECT %s, %s
-		  FROM observability.monitors m
-		  LEFT JOIN observability.monitor_state s ON s.monitor_id = m.id
+		  FROM optikk.monitors m
+		  LEFT JOIN optikk.monitor_state s ON s.monitor_id = m.id
 		 WHERE m.id = ? AND m.team_id = ?
 		 LIMIT 1
 	`, selectMonitorCols, selectStateCols)
@@ -241,8 +241,8 @@ func (r *Repository) List(ctx context.Context, teamID int64, q ListQuery) ([]mod
 
 	query := fmt.Sprintf(`
 		SELECT %s, %s
-		  FROM observability.monitors m
-		  LEFT JOIN observability.monitor_state s ON s.monitor_id = m.id
+		  FROM optikk.monitors m
+		  LEFT JOIN optikk.monitor_state s ON s.monitor_id = m.id
 		 WHERE %s
 		 ORDER BY m.created_at DESC
 		 LIMIT ? OFFSET ?

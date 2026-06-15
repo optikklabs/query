@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// MonitorRow is the raw MySQL row for observability.monitors.
+// MonitorRow is the raw MySQL row for optikk.monitors.
 type MonitorRow struct {
 	ID                int64          `db:"id"`
 	TeamID            int64          `db:"team_id"`
@@ -30,7 +30,7 @@ type MonitorRow struct {
 	CreatedByUserID   sql.NullInt64  `db:"created_by_user_id"`
 }
 
-// MonitorStateRow is the raw row for observability.monitor_state.
+// MonitorStateRow is the raw row for optikk.monitor_state.
 type MonitorStateRow struct {
 	MonitorID        int64           `db:"monitor_id"`
 	Status           string          `db:"status"`
@@ -44,7 +44,7 @@ type MonitorStateRow struct {
 	AckedAt          sql.NullTime    `db:"acked_at"`
 }
 
-// MonitorEventRow is the raw row for observability.monitor_events.
+// MonitorEventRow is the raw row for optikk.monitor_events.
 type MonitorEventRow struct {
 	ID         int64           `db:"id"`
 	MonitorID  int64           `db:"monitor_id"`

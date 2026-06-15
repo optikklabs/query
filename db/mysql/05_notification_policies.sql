@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS observability.notification_policies
+CREATE TABLE IF NOT EXISTS optikk.notification_policies
   (
      id            BIGINT AUTO_INCREMENT PRIMARY KEY,
      team_id       BIGINT NOT NULL,

@@ -22,7 +22,7 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, teamID int64, start
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		)
@@ -55,7 +55,7 @@ func (r *Repository) GetApdex(ctx context.Context, teamID int64, startMs, endMs 
 	const query = `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		)
@@ -63,7 +63,7 @@ func (r *Repository) GetApdex(ctx context.Context, teamID int64, startMs, endMs 
 		       count()                                                              AS total_count,
 		       countIf(duration_nano <= @satisfiedNs)                               AS satisfied,
 		       countIf(duration_nano > @satisfiedNs AND duration_nano <= @toleratingNs) AS tolerating
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND fingerprint IN active_fps
@@ -83,7 +83,7 @@ func (r *Repository) GetApdexByService(ctx context.Context, teamID int64, startM
 	const query = `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         AND service   = @serviceName
@@ -92,7 +92,7 @@ func (r *Repository) GetApdexByService(ctx context.Context, teamID int64, startM
 		       count()                                                              AS total_count,
 		       countIf(duration_nano <= @satisfiedNs)                               AS satisfied,
 		       countIf(duration_nano > @satisfiedNs AND duration_nano <= @toleratingNs) AS tolerating
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND fingerprint IN active_fps
@@ -114,7 +114,7 @@ func (r *Repository) GetServiceREDMetrics(ctx context.Context, teamID int64, sta
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         AND service   = @serviceName
@@ -151,7 +151,7 @@ func (r *Repository) GetOperationBaseline(ctx context.Context, teamID int64, sta
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         AND service   = @serviceName
@@ -200,7 +200,7 @@ func (r *Repository) GetServiceSaturationAggs(
 		),
 		active_fps AS (
 		    SELECT fingerprint, any(service) AS service
-		    FROM observability.metrics_resource AS mr
+		    FROM optikk.metrics_resource AS mr
 		    PREWHERE team_id     = @teamID
 		         AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		    WHERE (mr.service = @serviceName OR mr.host IN service_hosts)
@@ -236,7 +236,7 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, teamI
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		)
@@ -263,7 +263,7 @@ func (r *Repository) GetFleetSaturationAggs(
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint, any(service) AS service
-		    FROM observability.metrics_resource AS mr
+		    FROM optikk.metrics_resource AS mr
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		    WHERE mr.service != ''
 		    GROUP BY fingerprint
@@ -324,7 +324,7 @@ func (r *Repository) GetStatusTimeSeries(
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         ` + serviceResourcePred(serviceName) + `
@@ -353,7 +353,7 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         ` + serviceResourcePred(serviceName) + `
@@ -395,7 +395,7 @@ func (r *Repository) GetTopEndpointsCombined(
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         ` + serviceResourcePred(serviceName) + `

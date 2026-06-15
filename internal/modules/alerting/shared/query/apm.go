@@ -11,7 +11,7 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// APMBackend evaluates APM monitors against observability.spans_1m.
+// APMBackend evaluates APM monitors against optikk.spans_1m.
 type APMBackend struct {
 	db clickhouse.Conn
 }
@@ -36,7 +36,7 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 	const query = `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         AND service   = @service
@@ -44,7 +44,7 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		SELECT sum(request_count)                                AS request_count,
 		       sum(error_count)                                  AS error_count,
 		       quantileTimingMerge(0.99)(latency_state)          AS p99
-		FROM observability.spans_1m
+		FROM optikk.spans_1m
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND fingerprint IN active_fps
@@ -80,7 +80,7 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         AND service   = @service

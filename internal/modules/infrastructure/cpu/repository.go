@@ -44,7 +44,7 @@ func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, teamID i
 		           any(pod)       AS pod,
 		           any(container) AS container,
 		           any(service)   AS service
-		    FROM observability.metrics_resource AS mr
+		    FROM optikk.metrics_resource AS mr
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		    WHERE mr.service != ''
 		    GROUP BY fingerprint

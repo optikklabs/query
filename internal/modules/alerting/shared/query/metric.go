@@ -32,7 +32,7 @@ func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, q model
 	table, expr := metricSource(q.Metric.Aggregation)
 	query := `
 		SELECT ` + expr + ` AS value
-		FROM observability.` + table + `
+		FROM optikk.` + table + `
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND metric_name = @metricName
@@ -61,7 +61,7 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q model
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket, ` +
 		expr + ` AS value
-		FROM observability.` + table + `
+		FROM optikk.` + table + `
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND metric_name = @metricName

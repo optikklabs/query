@@ -28,7 +28,7 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, teamID, startMs, 
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint, any(host) AS host
-		    FROM observability.metrics_resource AS mr
+		    FROM optikk.metrics_resource AS mr
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		    WHERE mr.host != ''
 		    GROUP BY fingerprint
@@ -65,7 +65,7 @@ func (r *Repository) QueryHostSpans(
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         AND service   = @serviceName

@@ -7,7 +7,7 @@ server:
 mysql:
   host: "127.0.0.1"
   port: "13306"
-  database: observability
+  database: optikk
   user: root
   password: root123
   max_open_conns: 50
@@ -16,7 +16,7 @@ mysql:
 clickhouse:
   host: "127.0.0.1"
   port: "19000"
-  database: observability
+  database: optikk
   user: default
   password: clickhouse123
   secure: false

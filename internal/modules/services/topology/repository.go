@@ -51,8 +51,8 @@ func (r *Repository) GetEdges(ctx context.Context, teamID, startMs, endMs int64,
 		       count()                                                                AS call_count,
 		       countIf(c.has_error OR toUInt16OrZero(c.response_status_code) >= 400)   AS error_count,
 		       quantilesTiming(0.5, 0.95)(c.duration_nano / 1000000.0)                AS qs
-		FROM observability.spans AS c
-		INNER JOIN observability.spans AS p
+		FROM optikk.spans AS c
+		INNER JOIN optikk.spans AS p
 		  ON c.team_id = p.team_id AND c.trace_id = p.trace_id AND c.parent_span_id = p.span_id
 		WHERE c.team_id = @teamID
 		  AND c.ts_bucket BETWEEN @bucketStart AND @bucketEnd

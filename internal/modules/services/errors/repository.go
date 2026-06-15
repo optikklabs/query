@@ -24,7 +24,7 @@ func (r *Repository) ServiceErrorRateRowsAll(ctx context.Context, teamID int64, 
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		)
@@ -50,7 +50,7 @@ func (r *Repository) ServiceErrorRateRowsByService(ctx context.Context, teamID i
 	query := `
 		WITH active_fps AS (
 		    SELECT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    WHERE team_id = @teamID
 		      AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		      AND service = @serviceName
@@ -98,7 +98,7 @@ func (r *Repository) ErrorVolumeRowsByService(ctx context.Context, teamID int64,
 	query := `
 		WITH active_fps AS (
 		    SELECT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    WHERE team_id = @teamID
 		      AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		      AND service = @serviceName
@@ -137,7 +137,7 @@ func (r *Repository) ErrorGroupRowsAll(ctx context.Context, teamID int64, startM
 		       sum(error_count)                 AS error_count,
 		       max(timestamp)                   AS last_occurrence,
 		       min(timestamp)                   AS first_occurrence
-		FROM observability.spans_errors_1m
+		FROM optikk.spans_errors_1m
 		PREWHERE team_id   = @teamID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @start AND @end
@@ -163,7 +163,7 @@ func (r *Repository) ErrorGroupRowsByService(ctx context.Context, teamID int64, 
 	query := `
 		WITH active_fps AS (
 		    SELECT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    WHERE team_id = @teamID
 		      AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		      AND service = @serviceName
@@ -175,7 +175,7 @@ func (r *Repository) ErrorGroupRowsByService(ctx context.Context, teamID int64, 
 		       sum(error_count)                 AS error_count,
 		       max(timestamp)                   AS last_occurrence,
 		       min(timestamp)                   AS first_occurrence
-		FROM observability.spans_errors_1m
+		FROM optikk.spans_errors_1m
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND fingerprint IN active_fps
@@ -200,7 +200,7 @@ func (r *Repository) ErrorGroupSamples(ctx context.Context, teamID int64, startM
 		SELECT error_group_id                    AS error_group_id,
 		       argMax(status_message, timestamp) AS status_message,
 		       argMax(trace_id, timestamp)       AS sample_trace_id
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id   = @teamID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE is_error = 1
@@ -226,7 +226,7 @@ func (r *Repository) ErrorGroupDetailRow(ctx context.Context, teamID int64, star
 		       max(timestamp)                       AS last_occurrence,
 		       min(timestamp)                       AS first_occurrence,
 		       any(exception_type)                  AS exception_type
-		FROM observability.spans_errors_1m
+		FROM optikk.spans_errors_1m
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @start AND @end
@@ -254,7 +254,7 @@ func (r *Repository) ErrorGroupTraceRows(ctx context.Context, teamID int64, star
 		       s.timestamp                      AS timestamp,
 		       s.duration_nano / 1000000.0      AS duration_ms,
 		       s.status_code_string             AS status_code
-		FROM observability.spans s
+		FROM optikk.spans s
 		PREWHERE s.team_id     = @teamID
 		     AND s.ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE s.is_error = 1
@@ -281,7 +281,7 @@ func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, teamID int64,
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       sum(error_count)                   AS count
-		FROM observability.spans_errors_1m
+		FROM optikk.spans_errors_1m
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @start AND @end
@@ -317,7 +317,7 @@ func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, teamID i
 		       s.environment               AS environment,
 		       s.pod                       AS pod,
 		       s.host                      AS host
-		FROM observability.spans s
+		FROM optikk.spans s
 		PREWHERE s.team_id     = @teamID
 		     AND s.ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE s.is_error = 1
@@ -340,7 +340,7 @@ func (r *Repository) ErrorGroupFacetRows(ctx context.Context, teamID int64, star
 	query := `
 		SELECT ` + column + `             AS value,
 		       sum(error_count)           AS count
-		FROM observability.spans_errors_1m
+		FROM optikk.spans_errors_1m
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @start AND @end
@@ -368,7 +368,7 @@ func (r *Repository) ErrorHotspotRows(ctx context.Context, teamID int64, startMs
 		           sum(group_error_count)                    AS error_count
 		    FROM (
 		        SELECT service, name, error_group_id, sum(error_count) AS group_error_count
-		        FROM observability.spans_errors_1m
+		        FROM optikk.spans_errors_1m
 		        PREWHERE team_id   = @teamID
 		             AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		        WHERE timestamp BETWEEN @start AND @end

@@ -35,7 +35,7 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, 
 	query := `
 		WITH active_fps AS (
 		    SELECT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		),
 		grouped AS (
@@ -44,7 +44,7 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, 
 		           quantileTimingState(duration_nano / 1000000.0)                                     AS lat_state,
 		           count()                                                                            AS call_count,
 		           countIf(has_error OR toUInt16OrZero(response_status_code) >= 400)                  AS error_count
-		    FROM observability.spans
+		    FROM optikk.spans
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
 		    WHERE timestamp BETWEEN @start AND @end
 		      AND db_system != ''

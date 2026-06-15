@@ -23,7 +23,7 @@ func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols s
 	needAttr := attrWhere != "" || len(attrGroup) > 0
 
 	if needAttr {
-		fromTable = "observability.metrics"
+		fromTable = "optikk.metrics"
 		selectCols = bucketGrainSQL(f.StartMs, f.EndMs, f.Step) + " AS bucket_at"
 		groupByCols = "bucket_at"
 		for _, key := range f.GroupBy {
@@ -44,9 +44,9 @@ func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols s
 	// Route by effective grain, not window: an explicit fine step keeps the
 	// query on the 1m tier even for long windows.
 	if BucketDurationSeconds(f.StartMs, f.EndMs, f.Step) >= 3600 {
-		fromTable = "observability.metrics_1h"
+		fromTable = "optikk.metrics_1h"
 	} else {
-		fromTable = "observability.metrics_1m"
+		fromTable = "optikk.metrics_1m"
 	}
 	selectCols = bucketGrainSQL(f.StartMs, f.EndMs, f.Step) + " AS bucket_at"
 	groupByCols = "bucket_at"
@@ -59,7 +59,7 @@ func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols s
 		}
 		ctes = append(ctes, `res AS (
 		    SELECT `+resSel+`
-		    FROM observability.metrics_resource
+		    FROM optikk.metrics_resource
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd`+resourceWhere+`
 		    GROUP BY fingerprint
 		)`)
@@ -92,7 +92,7 @@ func BuildTagValueArms(keys []string) (arms []string, needFps bool, args []any) 
 			needFps = true
 			arms = append(arms, `
 				SELECT @`+label+` AS tag_key, `+col+` AS tag_value, count() AS c
-				FROM observability.metrics_resource
+				FROM optikk.metrics_resource
 				PREWHERE team_id   = @teamID
 				     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 				WHERE fingerprint IN fps AND `+col+` != ''
@@ -102,7 +102,7 @@ func BuildTagValueArms(keys []string) (arms []string, needFps bool, args []any) 
 		col := AttrColumn(key)
 		arms = append(arms, `
 			SELECT @`+label+` AS tag_key, `+col+` AS tag_value, count() AS c
-			FROM observability.metrics_attr
+			FROM optikk.metrics_attr
 			PREWHERE team_id     = @teamID
 			     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 			     AND metric_name = @metricName

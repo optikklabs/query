@@ -20,14 +20,14 @@ const boundsQuery = `
 	       max(ts_bucket)                    AS max_b,
 	       groupUniqArray(1024)(fingerprint) AS fps,
 	       count()                           AS n
-	FROM observability.trace_index
+	FROM optikk.trace_index
 	PREWHERE trace_id = @traceID
 	     AND team_id = @teamID`
 
-// fetchQuery scans observability.logs within the narrowed bucket window.
+// fetchQuery scans optikk.logs within the narrowed bucket window.
 const fetchQuery = `
 	SELECT ` + models.LogColumns + `
-	FROM observability.logs
+	FROM optikk.logs
 	PREWHERE team_id = @teamID
 	     AND ts_bucket BETWEEN @minB AND @maxB
 	     AND fingerprint IN @fps
@@ -54,7 +54,7 @@ func (r *Repository) LookupBounds(ctx context.Context, teamID int64, traceID str
 	return rows[0], nil
 }
 
-// FetchByBounds scans observability.logs constrained to the resolved bounds.
+// FetchByBounds scans optikk.logs constrained to the resolved bounds.
 func (r *Repository) FetchByBounds(ctx context.Context, teamID int64, traceID string, minB, maxB uint32, fps []uint64, limit int) ([]models.LogRow, error) {
 	args := append(traceIDArgs(teamID, traceID),
 		clickhouse.Named("minB", minB),

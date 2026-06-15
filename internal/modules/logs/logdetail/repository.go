@@ -16,7 +16,7 @@ func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} 
 
 const getByIDQuery = `
 	SELECT ` + models.LogColumns + `
-	FROM observability.logs
+	FROM optikk.logs
 	PREWHERE team_id = @teamID
 	     AND log_id = @logID
 	LIMIT 1`

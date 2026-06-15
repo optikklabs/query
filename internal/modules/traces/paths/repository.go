@@ -19,7 +19,7 @@ func (r *Repository) GetCriticalPath(ctx context.Context, teamID int64, traceID 
 	const query = `
 		WITH trace_loc AS (
 		    SELECT ts_bucket, fingerprint
-		    FROM observability.trace_index
+		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
 		)
 		SELECT span_id,
@@ -29,7 +29,7 @@ func (r *Repository) GetCriticalPath(ctx context.Context, teamID int64, traceID 
 		       duration_nano / 1000000.0  AS duration_ms,
 		       timestamp,
 		       duration_nano
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id = @teamID
 		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
 		     AND trace_id = @traceID
@@ -43,7 +43,7 @@ func (r *Repository) GetErrorPath(ctx context.Context, teamID int64, traceID str
 	const query = `
 		WITH trace_loc AS (
 		    SELECT ts_bucket, fingerprint
-		    FROM observability.trace_index
+		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
 		)
 		SELECT span_id,
@@ -54,7 +54,7 @@ func (r *Repository) GetErrorPath(ctx context.Context, teamID int64, traceID str
 		       status_message,
 		       timestamp                  AS start_time,
 		       duration_nano / 1000000.0  AS duration_ms
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id = @teamID
 		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
 		     AND trace_id = @traceID

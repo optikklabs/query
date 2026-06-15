@@ -38,14 +38,14 @@ type TrendRow struct {
 const summaryCTEHead = `
 	WITH active_fps AS (
 	    SELECT DISTINCT fingerprint
-	    FROM observability.logs_resource
+	    FROM optikk.logs_resource
 	    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd`
 const summaryCTETail = `
 	)
 	SELECT count()                       AS total,
 	       countIf(severity_bucket >= 4) AS errors,
 	       countIf(severity_bucket = 3)  AS warns
-	FROM observability.logs
+	FROM optikk.logs
 	PREWHERE team_id = @teamID
 	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 	     AND timestamp BETWEEN @start AND @end
@@ -55,7 +55,7 @@ const summaryBareHead = `
 	SELECT count()                       AS total,
 	       countIf(severity_bucket >= 4) AS errors,
 	       countIf(severity_bucket = 3)  AS warns
-	FROM observability.logs
+	FROM optikk.logs
 	PREWHERE team_id = @teamID
 	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 	     AND timestamp BETWEEN @start AND @end
@@ -79,7 +79,7 @@ func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow,
 const trendCTEHead = `
 	WITH active_fps AS (
 	    SELECT DISTINCT fingerprint
-	    FROM observability.logs_resource
+	    FROM optikk.logs_resource
 	    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd`
 
 const trendGroupOrder = `
@@ -100,7 +100,7 @@ func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, e
 	trendCTETail := `
 	)
 	SELECT ` + grainSQL + trendSelectTail + `
-	FROM observability.logs
+	FROM optikk.logs
 	PREWHERE team_id = @teamID
 	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 	     AND timestamp BETWEEN @start AND @end
@@ -108,7 +108,7 @@ func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, e
 	WHERE timestamp BETWEEN @start AND @end`
 	trendBareHead := `
 	SELECT ` + grainSQL + trendSelectTail + `
-	FROM observability.logs
+	FROM optikk.logs
 	PREWHERE team_id = @teamID
 	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 	     AND timestamp BETWEEN @start AND @end

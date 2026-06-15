@@ -9,7 +9,7 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// Repository reads observability.spans for per-host RED aggregates.
+// Repository reads optikk.spans for per-host RED aggregates.
 
 // Query limits and defaults for node aggregates.
 const (
@@ -30,7 +30,7 @@ func (r *Repository) QueryInfrastructureNodes(ctx context.Context, teamID int64,
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		)
@@ -63,7 +63,7 @@ func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, teamID 
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		)
@@ -119,7 +119,7 @@ func (r *Repository) QueryInfrastructureNodeServices(ctx context.Context, teamID
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id   = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		)

@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS observability.users
+CREATE TABLE IF NOT EXISTS optikk.users
   (
      id            BIGINT auto_increment PRIMARY KEY,
      email         VARCHAR(255) NOT NULL UNIQUE,

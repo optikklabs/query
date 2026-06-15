@@ -19,7 +19,7 @@ func (r *Repository) GetServiceMapSpans(ctx context.Context, teamID int64, trace
 	const query = `
 		WITH trace_loc AS (
 		    SELECT ts_bucket, fingerprint
-		    FROM observability.trace_index
+		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
 		)
 		SELECT span_id,
@@ -27,7 +27,7 @@ func (r *Repository) GetServiceMapSpans(ctx context.Context, teamID int64, trace
 		       service,
 		       duration_nano / 1000000.0 AS duration_ms,
 		       has_error
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id = @teamID
 		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
 		     AND trace_id = @traceID
@@ -41,7 +41,7 @@ func (r *Repository) GetTraceErrors(ctx context.Context, teamID int64, traceID s
 	const query = `
 		WITH trace_loc AS (
 		    SELECT ts_bucket, fingerprint
-		    FROM observability.trace_index
+		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
 		)
 		SELECT span_id,
@@ -52,7 +52,7 @@ func (r *Repository) GetTraceErrors(ctx context.Context, teamID int64, traceID s
 		       status_message,
 		       timestamp                  AS start_time,
 		       duration_nano / 1000000.0  AS duration_ms
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id = @teamID
 		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
 		     AND trace_id = @traceID

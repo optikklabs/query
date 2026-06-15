@@ -50,11 +50,11 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
 		)
 		SELECT ` + traceIndexColumns + `
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
 		WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
 		ORDER BY timestamp DESC, trace_id DESC
@@ -80,7 +80,7 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
 		)
 		SELECT topK(20)(service)              AS top_services,
@@ -131,7 +131,7 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 	query := `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
 		)
 		SELECT ` + grainSQL + `                          AS time_bucket,
@@ -196,7 +196,7 @@ func (r *Repository) SuggestScalar(ctx context.Context, teamID, startMs, endMs i
 func (r *Repository) SuggestAttribute(ctx context.Context, teamID, startMs, endMs int64, attrKey, prefix string, limit int) ([]Suggestion, error) {
 	const query = `
 		SELECT attributes[@attrKey]::String AS value, count() AS count
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @startMs AND @endMs
 		  AND value != ''

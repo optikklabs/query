@@ -12,7 +12,7 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// LogBackend evaluates log monitors against observability.logs.
+// LogBackend evaluates log monitors against optikk.logs.
 type LogBackend struct {
 	db clickhouse.Conn
 }
@@ -32,7 +32,7 @@ func (b *LogBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 
 	const query = `
 		SELECT count() AS value
-		FROM observability.logs
+		FROM optikk.logs
 		PREWHERE team_id   = @teamID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @start AND @end
@@ -59,7 +59,7 @@ func (b *LogBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket,
 		       count() AS value
-		FROM observability.logs
+		FROM optikk.logs
 		PREWHERE team_id   = @teamID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @start AND @end

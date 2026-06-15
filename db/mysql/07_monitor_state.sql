@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS observability.monitor_state
+CREATE TABLE IF NOT EXISTS optikk.monitor_state
   (
      monitor_id           BIGINT PRIMARY KEY,
      status               ENUM('alert','warn','ok','no_data') NOT NULL DEFAULT 'no_data',

@@ -5,7 +5,7 @@ package infraconsts
 
 const (
 	// Table Names
-	TableMetrics = "observability.metrics"
+	TableMetrics = "optikk.metrics"
 
 	// Metrics Table Columns
 	ColTeamID      = "team_id"

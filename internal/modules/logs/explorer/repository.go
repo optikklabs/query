@@ -18,12 +18,12 @@ func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} 
 const listCTEHead = `
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
-		    FROM observability.logs_resource
+		    FROM optikk.logs_resource
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd`
 const listCTETail = `
 		)
 		SELECT ` + models.LogColumns + `
-		FROM observability.logs
+		FROM optikk.logs
 		PREWHERE team_id = @teamID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		     AND timestamp BETWEEN @start AND @end
@@ -31,7 +31,7 @@ const listCTETail = `
 		WHERE timestamp BETWEEN @start AND @end`
 const listBareHead = `
 		SELECT ` + models.LogColumns + `
-		FROM observability.logs
+		FROM optikk.logs
 		PREWHERE team_id = @teamID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		     AND timestamp BETWEEN @start AND @end

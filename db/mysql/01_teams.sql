@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS observability.teams
+CREATE TABLE IF NOT EXISTS optikk.teams
   (
      id                BIGINT auto_increment PRIMARY KEY,
      org_name          VARCHAR(100) NOT NULL,
@@ -9,11 +9,7 @@ CREATE TABLE IF NOT EXISTS observability.teams
      color             VARCHAR(50),
      icon              VARCHAR(100),
      api_key           VARCHAR(64) NOT NULL UNIQUE,
-     retention_days           INT NOT NULL DEFAULT 30,
-     data_ingested_kb         BIGINT NOT NULL DEFAULT 0,
-     pricing_overrides_json   JSON NULL,
-     created_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-     updated_at               DATETIME NULL,
+     created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
      INDEX idx_team_api_key (api_key),
      UNIQUE KEY uq_team_org_name (org_name, name)
   );

@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// ChannelRow is the raw row for observability.notification_channels.
+// ChannelRow is the raw row for optikk.notification_channels.
 type ChannelRow struct {
 	ID             int64          `db:"id"`
 	TeamID         int64          `db:"team_id"`
@@ -20,7 +20,7 @@ type ChannelRow struct {
 	UpdatedAt      sql.NullTime   `db:"updated_at"`
 }
 
-// PolicyRow is the raw row for observability.notification_policies.
+// PolicyRow is the raw row for optikk.notification_policies.
 type PolicyRow struct {
 	ID          int64        `db:"id"`
 	TeamID      int64        `db:"team_id"`
@@ -35,7 +35,7 @@ type PolicyRow struct {
 	UpdatedAt   sql.NullTime `db:"updated_at"`
 }
 
-// TemplateRow is the raw row for observability.notification_templates.
+// TemplateRow is the raw row for optikk.notification_templates.
 type TemplateRow struct {
 	ID          int64          `db:"id"`
 	TeamID      int64          `db:"team_id"`

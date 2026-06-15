@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS observability.monitors
+CREATE TABLE IF NOT EXISTS optikk.monitors
   (
      id                   BIGINT AUTO_INCREMENT PRIMARY KEY,
      team_id              BIGINT NOT NULL,

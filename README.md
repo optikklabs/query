@@ -19,9 +19,13 @@ the tables exist.
 
 ## Local development
 
+Infra (ClickHouse + MariaDB) is provided by the `ingest` repo's compose stack,
+which is a superset and binds the same host ports — bring that up instead of a
+local compose file here:
+
 ```bash
-docker compose up -d        # ClickHouse + MariaDB
-go run ./cmd/query          # applies MySQL migrations, serves :19090
+(cd ../ingest && docker compose up -d)   # ClickHouse + MariaDB (+ Kafka/Grafana)
+go run ./cmd/query                        # applies MySQL migrations, serves :19090
 ```
 
 Configuration is read from `config.yml` (env overrides via the `OPTIKK_` prefix).

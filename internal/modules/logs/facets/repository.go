@@ -46,7 +46,7 @@ func (r *Repository) Compute(ctx context.Context, f filter.Filters) ([]dimRow, e
 func facetArm(dim, resourceWhere string) string {
 	return `
 		SELECT '` + dim + `' AS dim, ` + dim + ` AS value, count() AS cnt
-		FROM observability.logs_resource
+		FROM optikk.logs_resource
 		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
 		WHERE ` + dim + ` != ''
 		GROUP BY ` + dim + `

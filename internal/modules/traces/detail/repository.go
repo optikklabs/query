@@ -21,12 +21,12 @@ func (r *Repository) GetSpanEvents(ctx context.Context, teamID int64, traceID st
 	const query = `
 		WITH trace_loc AS (
 		    SELECT ts_bucket, fingerprint
-		    FROM observability.trace_index
+		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
 		)
 		SELECT span_id, trace_id, timestamp, events,
 		       exception_type, exception_message, exception_stacktrace
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id = @teamID
 		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
 		     AND trace_id = @traceID
@@ -42,7 +42,7 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, teamID int64, traceI
 	const query = `
 		WITH trace_loc AS (
 		    SELECT ts_bucket, fingerprint
-		    FROM observability.trace_index
+		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
 		)
 		SELECT span_id, trace_id, name AS operation_name, service,
@@ -54,7 +54,7 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, teamID int64, traceI
 			   db_name, 
 			   db_statement,
 		       links AS links
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id = @teamID
 		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
 		     AND span_id  = @spanID
@@ -79,7 +79,7 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, teamID int64, service
 	const query = `
 		WITH active_fps AS (
 		    SELECT fingerprint
-		    FROM observability.spans_resource
+		    FROM optikk.spans_resource
 		    PREWHERE team_id = @teamID
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         AND service  = @serviceName
@@ -91,7 +91,7 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, teamID int64, service
 		       duration_nano / 1000000.0  AS duration_ms,
 		       status_code_string         AS status,
 		       timestamp                  AS start_time
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id      = @teamID
 		     AND ts_bucket    BETWEEN @bucketStart AND @bucketEnd
 		     AND fingerprint  IN active_fps
@@ -122,7 +122,7 @@ func (r *Repository) GetTraceSummary(ctx context.Context, teamID int64, traceID 
 	const query = `
 		WITH trace_loc AS (
 		    SELECT ts_bucket, fingerprint
-		    FROM observability.trace_index
+		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
 		)
 		SELECT trace_id,
@@ -139,7 +139,7 @@ func (r *Repository) GetTraceSummary(ctx context.Context, teamID int64, traceID 
 		       (CASE WHEN has_error THEN 1 ELSE 0 END) AS error_count,
 		       [service]                              AS service_set,
 		       false                                  AS truncated
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id = @teamID
 		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
 		     AND trace_id = @traceID
@@ -194,7 +194,7 @@ func (r *Repository) ListSpansByTrace(ctx context.Context, teamID int64, traceID
 	const query = `
 		WITH trace_loc AS (
 		    SELECT ts_bucket, fingerprint
-		    FROM observability.trace_index
+		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
 		)
 		SELECT span_id,
@@ -207,7 +207,7 @@ func (r *Repository) ListSpansByTrace(ctx context.Context, teamID int64, traceID
 		       has_error,
 		       duration_nano / 1000000.0          AS duration_ms,
 		       timestamp
-		FROM observability.spans
+		FROM optikk.spans
 		PREWHERE team_id = @teamID
 		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
 		     AND trace_id = @traceID

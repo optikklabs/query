@@ -35,7 +35,7 @@ func (r *Repository) ListMetricNames(ctx context.Context, teamID, startMs, endMs
 		    SELECT DISTINCT metric_name FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + `
 		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		) mn
-		LEFT JOIN observability.metrics_meta md
+		LEFT JOIN optikk.metrics_meta md
 		    ON md.team_id = @teamID AND md.metric_name = mn.metric_name
 		WHERE mn.metric_name ILIKE @search
 		GROUP BY metric_name
@@ -61,7 +61,7 @@ func (r *Repository) ListAttributeTagKeys(ctx context.Context, teamID, startMs, 
 	// Reads distinct attribute keys from metrics_attr (metric_name leads PK).
 	const dynamicQuery = `
 		SELECT DISTINCT arrayJoin(mapKeys(JSONAllPathsWithTypes(attributes))) AS tag_key
-		FROM observability.metrics_attr
+		FROM optikk.metrics_attr
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND metric_name = @metricName
@@ -98,7 +98,7 @@ func (r *Repository) ListResourceTagValues(ctx context.Context, teamID, startMs,
 		)
 		SELECT ` + col + ` AS tag_value,
 		       count()    AS count
-		FROM observability.metrics_resource
+		FROM optikk.metrics_resource
 		PREWHERE team_id   = @teamID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE fingerprint IN fps
@@ -127,7 +127,7 @@ func (r *Repository) ListAttributeTagValues(ctx context.Context, teamID, startMs
 	query := `
 		SELECT ` + col + ` AS tag_value,
 		       count()      AS count
-		FROM observability.metrics_attr
+		FROM optikk.metrics_attr
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND metric_name = @metricName
@@ -202,7 +202,7 @@ func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([
 	fromTable, cte, joins, selectCols, groupByCols, filterArgs := filter.BuildSelection(f)
 
 	var valSelect string
-	if fromTable == "observability.metrics" {
+	if fromTable == "optikk.metrics" {
 		valSelect = `
 		       sum(value)     AS val_sum,
 		       count()        AS val_count,
