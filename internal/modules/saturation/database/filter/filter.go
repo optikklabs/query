@@ -29,6 +29,10 @@ const (
 const (
 	MetricDBOperationDuration = "db.client.operation.duration"
 
+	// MetricDBSQLConnectionOpen is the otelsql open-connection gauge actually
+	// emitted by the stack (the db.client.connection.* semconv metrics are not).
+	MetricDBSQLConnectionOpen = "db.sql.connection.open"
+
 	MetricDBConnectionCount      = "db.client.connection.count"
 	MetricDBConnectionMax        = "db.client.connection.max"
 	MetricDBConnectionIdleMax    = "db.client.connection.idle.max"

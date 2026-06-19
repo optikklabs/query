@@ -1,14 +1,12 @@
-package redmetrics
+package redfleet
 
 import (
 	"context"
-	"math"
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/infra/utils"
-	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 )
 
 type Service struct {
@@ -19,61 +17,40 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetSummary(ctx context.Context, teamID int64, startMs, endMs int64) (REDSummary, error) {
+// GetFleetServices returns one RED row per service across the whole fleet.
+func (s *Service) GetFleetServices(ctx context.Context, teamID int64, startMs, endMs int64) ([]ServiceREDMetric, error) {
 	rows, err := s.repo.GetFleetREDMetrics(ctx, teamID, startMs, endMs)
 	if err != nil {
-		return REDSummary{}, err
+		return nil, err
 	}
+	return mapFleetServices(rows), nil
+}
 
-	// Fetch saturation aggregates for the fleet
-	metricNames := []string{
-		infraconsts.MetricSystemCPUUtilization,
-		infraconsts.MetricSystemCPUUsage,
-		infraconsts.MetricProcessCPUUsage,
-		infraconsts.MetricSystemMemoryUtilization,
-		infraconsts.MetricSystemDiskUtilization,
-	}
-	sats, err := s.repo.GetFleetSaturationAggs(ctx, teamID, startMs, endMs, metricNames)
+// GetFleetTotals returns the fleet-wide RED rollup KPIs.
+func (s *Service) GetFleetTotals(ctx context.Context, teamID int64, startMs, endMs int64) (FleetTotals, error) {
+	rows, err := s.repo.GetFleetREDMetrics(ctx, teamID, startMs, endMs)
 	if err != nil {
-		sats = nil
+		return FleetTotals{}, err
 	}
+	return computeFleetTotals(mapFleetServices(rows), startMs, endMs), nil
+}
 
-	// Map saturation per service
-	type satMetrics struct {
-		cpuValues []float64
-		memVal    float64
-		diskVal   float64
-		hasMem    bool
-		hasDisk   bool
-	}
-	byService := map[string]*satMetrics{}
-	for _, row := range sats {
-		if row.Service == "" {
-			continue
-		}
-		sm, ok := byService[row.Service]
-		if !ok {
-			sm = &satMetrics{}
-			byService[row.Service] = sm
-		}
-		switch row.MetricName {
-		case infraconsts.MetricSystemCPUUtilization, infraconsts.MetricSystemCPUUsage, infraconsts.MetricProcessCPUUsage:
-			if v := normalizeUtilization(row.Value); v != nil {
-				sm.cpuValues = append(sm.cpuValues, *v)
-			}
-		case infraconsts.MetricSystemMemoryUtilization:
-			if v := normalizeUtilization(row.Value); v != nil {
-				sm.memVal = *v
-				sm.hasMem = true
-			}
-		case infraconsts.MetricSystemDiskUtilization:
-			if v := normalizeUtilization(row.Value); v != nil {
-				sm.diskVal = *v
-				sm.hasDisk = true
-			}
+func mapFleetServices(rows []redMetricsRow) []ServiceREDMetric {
+	services := make([]ServiceREDMetric, len(rows))
+	for i, row := range rows {
+		services[i] = ServiceREDMetric{
+			ServiceName:  row.ServiceName,
+			RequestCount: int64(row.TotalCount),
+			ErrorCount:   int64(row.ErrorCount),
+			AvgLatency:   utils.SanitizeFloat(float64(row.P50Ms)),
+			P95Latency:   utils.SanitizeFloat(float64(row.P95Ms)),
+			P99Latency:   utils.SanitizeFloat(float64(row.P99Ms)),
 		}
 	}
+	return services
+}
 
+func computeFleetTotals(services []ServiceREDMetric, startMs, endMs int64) FleetTotals {
 	durationSec := float64(endMs-startMs) / 1000.0
 	if durationSec <= 0 {
 		durationSec = 1
@@ -81,40 +58,14 @@ func (s *Service) GetSummary(ctx context.Context, teamID int64, startMs, endMs i
 
 	var totalCount, totalErrors int64
 	var totalP50, totalP95, totalP99 float64
-	services := make([]ServiceREDMetric, len(rows))
-	for i, row := range rows {
-		var cpuVal, memVal, diskVal float64
-		if sm, ok := byService[row.ServiceName]; ok {
-			cpuAvg := averageFloats(sm.cpuValues)
-			if cpuAvg != nil {
-				cpuVal = *cpuAvg
-			}
-			if sm.hasMem {
-				memVal = sm.memVal
-			}
-			if sm.hasDisk {
-				diskVal = sm.diskVal
-			}
-		}
-
-		services[i] = ServiceREDMetric{
-			ServiceName:       row.ServiceName,
-			RequestCount:      int64(row.TotalCount),
-			ErrorCount:        int64(row.ErrorCount),
-			AvgLatency:        utils.SanitizeFloat(float64(row.P50Ms)),
-			P95Latency:        utils.SanitizeFloat(float64(row.P95Ms)),
-			P99Latency:        utils.SanitizeFloat(float64(row.P99Ms)),
-			CPUUtilization:    utils.SanitizeFloat(cpuVal),
-			MemoryUtilization: utils.SanitizeFloat(memVal),
-			DiskUtilization:   utils.SanitizeFloat(diskVal),
-		}
-		totalCount += int64(row.TotalCount)
-		totalErrors += int64(row.ErrorCount)
-		totalP50 += utils.SanitizeFloat(float64(row.P50Ms))
-		totalP95 += utils.SanitizeFloat(float64(row.P95Ms))
-		totalP99 += utils.SanitizeFloat(float64(row.P99Ms))
+	for _, svc := range services {
+		totalCount += svc.RequestCount
+		totalErrors += svc.ErrorCount
+		totalP50 += svc.AvgLatency
+		totalP95 += svc.P95Latency
+		totalP99 += svc.P99Latency
 	}
-	serviceCount := int64(len(rows))
+	serviceCount := int64(len(services))
 
 	avgErrorPct := 0.0
 	if totalCount > 0 {
@@ -126,7 +77,7 @@ func (s *Service) GetSummary(ctx context.Context, teamID int64, startMs, endMs i
 		avgP95 = totalP95 / float64(serviceCount)
 		avgP99 = totalP99 / float64(serviceCount)
 	}
-	return REDSummary{
+	return FleetTotals{
 		ServiceCount:   serviceCount,
 		TotalSpanCount: totalCount,
 		TotalErrors:    totalErrors,
@@ -135,8 +86,7 @@ func (s *Service) GetSummary(ctx context.Context, teamID int64, startMs, endMs i
 		AvgP50Ms:       utils.SanitizeFloat(avgP50),
 		AvgP95Ms:       utils.SanitizeFloat(avgP95),
 		AvgP99Ms:       utils.SanitizeFloat(avgP99),
-		Services:       services,
-	}, nil
+	}
 }
 
 func (s *Service) GetApdex(ctx context.Context, teamID int64, startMs, endMs int64, satisfiedMs, toleratingMs float64, serviceName string) ([]ApdexScore, error) {
@@ -174,21 +124,6 @@ func (s *Service) GetApdex(ctx context.Context, teamID int64, startMs, endMs int
 		}
 	}
 	return result, nil
-}
-
-func (s *Service) GetOperationBaseline(ctx context.Context, teamID int64, startMs, endMs int64, serviceName, operationName string) (OperationBaseline, error) {
-	row, err := s.repo.GetOperationBaseline(ctx, teamID, startMs, endMs, serviceName, operationName)
-	if err != nil {
-		return OperationBaseline{}, err
-	}
-	return OperationBaseline{
-		ServiceName:   serviceName,
-		OperationName: operationName,
-		P50Ms:         utils.SanitizeFloat(float64(row.P50Ms)),
-		P95Ms:         utils.SanitizeFloat(float64(row.P95Ms)),
-		P99Ms:         utils.SanitizeFloat(float64(row.P99Ms)),
-		SpanCount:     int64(row.SpanCount),
-	}, nil
 }
 
 func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, teamID int64, startMs, endMs int64) ([]ServicePerformancePoint, error) {
@@ -234,111 +169,6 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, teamID i
 		})
 	}
 	return points, nil
-}
-
-func (s *Service) GetServiceSummary(ctx context.Context, teamID int64, startMs, endMs int64, serviceName string) (ServiceSummaryResponse, error) {
-	redRow, err := s.repo.GetServiceREDMetrics(ctx, teamID, startMs, endMs, serviceName)
-	if err != nil {
-		return ServiceSummaryResponse{}, err
-	}
-
-	metricNames := []string{
-		infraconsts.MetricSystemCPUUtilization,
-		infraconsts.MetricSystemCPUUsage,
-		infraconsts.MetricProcessCPUUsage,
-		infraconsts.MetricSystemMemoryUtilization,
-		infraconsts.MetricSystemDiskUtilization,
-	}
-
-	sats, err := s.repo.GetServiceSaturationAggs(ctx, teamID, startMs, endMs, serviceName, metricNames)
-	if err != nil {
-		sats = nil
-	}
-
-	// Map saturation
-	var cpuValues []float64
-	var memVal float64
-	var diskVal float64
-
-	for _, row := range sats {
-		switch row.MetricName {
-		case infraconsts.MetricSystemCPUUtilization, infraconsts.MetricSystemCPUUsage, infraconsts.MetricProcessCPUUsage:
-			if v := normalizeUtilization(row.Value); v != nil {
-				cpuValues = append(cpuValues, *v)
-			}
-		case infraconsts.MetricSystemMemoryUtilization:
-			if v := normalizeUtilization(row.Value); v != nil {
-				memVal = *v
-			}
-		case infraconsts.MetricSystemDiskUtilization:
-			if v := normalizeUtilization(row.Value); v != nil {
-				diskVal = *v
-			}
-		}
-	}
-
-	var cpuVal float64
-	cpuAvg := averageFloats(cpuValues)
-	if cpuAvg != nil {
-		cpuVal = *cpuAvg
-	}
-
-	var reqCount, errCount int64
-	var rps, errRate float64
-	var p50, p95, p99 float64
-
-	durationSec := float64(endMs-startMs) / 1000.0
-	if durationSec <= 0 {
-		durationSec = 1
-	}
-
-	if redRow != nil {
-		reqCount = int64(redRow.TotalCount)
-		errCount = int64(redRow.ErrorCount)
-		rps = float64(reqCount) / durationSec
-		if reqCount > 0 {
-			errRate = float64(errCount) * 100.0 / float64(reqCount)
-		}
-		p50 = utils.SanitizeFloat(float64(redRow.P50Ms))
-		p95 = utils.SanitizeFloat(float64(redRow.P95Ms))
-		p99 = utils.SanitizeFloat(float64(redRow.P99Ms))
-	}
-
-	return ServiceSummaryResponse{
-		ServiceName:       serviceName,
-		RequestCount:      reqCount,
-		ErrorCount:        errCount,
-		RPS:               utils.SanitizeFloat(rps),
-		ErrorRate:         utils.SanitizeFloat(errRate),
-		P50Ms:             p50,
-		P95Ms:             p95,
-		P99Ms:             p99,
-		CPUUtilization:    utils.SanitizeFloat(cpuVal),
-		MemoryUtilization: utils.SanitizeFloat(memVal),
-		DiskUtilization:   utils.SanitizeFloat(diskVal),
-	}, nil
-}
-
-func normalizeUtilization(v float64) *float64 {
-	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > infraconsts.PercentageThreshold*100 {
-		return nil
-	}
-	if v <= infraconsts.PercentageThreshold {
-		v = v * infraconsts.PercentageMultiplier
-	}
-	return &v
-}
-
-func averageFloats(vals []float64) *float64 {
-	if len(vals) == 0 {
-		return nil
-	}
-	sum := 0.0
-	for _, v := range vals {
-		sum += v
-	}
-	avg := sum / float64(len(vals))
-	return &avg
 }
 
 // GetStatusTimeSeries pivots per-bucket / per-status-class rows into one

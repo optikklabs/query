@@ -20,10 +20,25 @@ type TopicConsumersRow struct {
 	ConsumerGroupCount uint64 `ch:"consumer_group_count" json:"consumer_group_count"`
 }
 
+type TopicBacklogRow struct {
+	Topic          string  `ch:"topic"           json:"topic"`
+	PartitionCount float64 `ch:"partition_count" json:"partition_count"`
+	Backlog        float64 `ch:"backlog"         json:"backlog"`
+}
+
+// Cluster Health (kafkametrics receiver, broker-scraped)
+type ClusterHealthRow struct {
+	BrokerCount               float64 `ch:"broker_count"                json:"broker_count"`
+	ActiveControllers         float64 `ch:"active_controllers"          json:"active_controllers"`
+	UnderReplicatedPartitions uint64  `ch:"under_replicated_partitions" json:"under_replicated_partitions"`
+}
+
 // Consumer Group Domains
 type GroupPartitionsRow struct {
 	ConsumerGroup      string  `ch:"consumer_group"      json:"consumer_group"`
 	AssignedPartitions float64 `ch:"assigned_partitions" json:"assigned_partitions"`
+	TopicCount         uint64  `ch:"topic_count"         json:"topic_count"`
+	Members            float64 `ch:"members"             json:"members"`
 }
 
 type GroupCommitsRow struct {

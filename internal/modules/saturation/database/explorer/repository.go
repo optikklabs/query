@@ -63,6 +63,9 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, teamID, startMs,
 // GetActiveConnectionsBySystem returns active connections by database system.
 func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, teamID, startMs, endMs int64) (map[string]int64, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
+	// otelsql emits the connection count as db.sql.connection.open with the
+	// state encoded in the metric name (no db.client.connection.state attr), so
+	// there is no 'used' state to filter on.
 	query := `
 		SELECT db_system,
 		       ifNotFinite(sum(val_sum) / sum(val_count), 0) AS avg_used
@@ -71,11 +74,10 @@ func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, teamID, s
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND metric_name = @metricName
 		     AND timestamp   BETWEEN @start AND @end
-		WHERE db_connection_state = 'used'
-		  AND db_system != ''
+		WHERE db_system != ''
 		GROUP BY db_system`
 
-	args := filter.MetricArgs(teamID, startMs, endMs, filter.MetricDBConnectionCount)
+	args := filter.MetricArgs(teamID, startMs, endMs, filter.MetricDBSQLConnectionOpen)
 	var rows []connRawRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "datastoreSystems.GetActiveConnectionsBySystem", &rows, query, args...); err != nil {
 		return nil, err

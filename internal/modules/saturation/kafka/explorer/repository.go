@@ -67,8 +67,11 @@ func (r *Repository) QueryTopicThroughput(ctx context.Context, teamID, startMs, 
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicThroughput", &rows, query, args...)
 }
 
+// Lag is sourced from the kafkametrics receiver (kafka.consumer_group.lag),
+// which carries real per (group, topic, partition) lag; lead remains the JMX
+// client gauge (no kafkametrics equivalent is emitted).
 var topicLagMetrics = []string{
-	"kafka.consumer.records_lag",
+	"kafka.consumer_group.lag",
 	"kafka.consumer.records_lead",
 }
 
@@ -78,7 +81,7 @@ func (r *Repository) QueryTopicLag(ctx context.Context, teamID, startMs, endMs i
 	query := fmt.Sprintf(`
 		SELECT
 		    messaging_destination AS topic,
-		    max(if(metric_name = 'kafka.consumer.records_lag',
+		    max(if(metric_name = 'kafka.consumer_group.lag',
 		           ifNotFinite(val_sum / val_count, 0), NULL))  AS lag,
 		    max(if(metric_name = 'kafka.consumer.records_lead',
 		           ifNotFinite(val_sum / val_count, 0), NULL))  AS lead
@@ -113,15 +116,58 @@ func (r *Repository) QueryTopicConsumers(ctx context.Context, teamID, startMs, e
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicConsumers", &rows, query, args...)
 }
 
-var groupPartitionMetrics = []string{"kafka.consumer.assigned_partitions"}
+// Partition count and retained-message backlog come from the kafkametrics
+// receiver: per-partition offsets (current - oldest) and the topic partition gauge.
+var topicBacklogMetrics = []string{
+	"kafka.partition.current_offset",
+	"kafka.partition.oldest_offset",
+	"kafka.topic.partitions",
+}
 
-// QueryGroupPartitions returns partitions assigned per consumer group.
+// QueryTopicBacklog returns partition count and retained-message backlog per topic.
+func (r *Repository) QueryTopicBacklog(ctx context.Context, teamID, startMs, endMs int64, topic string) ([]TopicBacklogRow, error) {
+	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, topicBacklogMetrics, "topic", topic)
+	query := fmt.Sprintf(`
+		SELECT topic, max(parts) AS partition_count, sum(backlog) AS backlog
+		FROM (
+		    SELECT
+		        messaging_destination AS topic,
+		        fingerprint,
+		        argMaxIf(val_max, timestamp, metric_name = 'kafka.topic.partitions') AS parts,
+		        greatest(
+		            argMaxIf(val_max, timestamp, metric_name = 'kafka.partition.current_offset')
+		          - argMaxIf(val_max, timestamp, metric_name = 'kafka.partition.oldest_offset'), 0) AS backlog
+		    FROM `+timebucket.MetricsRollup(endMs-startMs)+`
+		    PREWHERE team_id   = @teamID
+		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		         AND metric_name IN @metricNames
+		         AND timestamp BETWEEN @start AND @end
+		    WHERE messaging_destination != '' %s
+		    GROUP BY topic, fingerprint
+		)
+		GROUP BY topic
+		ORDER BY backlog DESC, topic ASC`, extraWhere)
+	rows := make([]TopicBacklogRow, 0)
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicBacklog", &rows, query, args...)
+}
+
+// Group identity is carried by the kafkametrics-receiver metrics
+// (kafka.consumer_group.*), not the JMX kafka.consumer.* client metrics which
+// are keyed by client-id only. consumer_group.lag has one series per
+// (group, topic, partition), so distinct series == partitions the group reads.
+// Partition / topic identity comes from kafka.consumer_group.lag (one series per
+// group/topic/partition); members from kafka.consumer_group.members.
+var groupPartitionMetrics = []string{"kafka.consumer_group.lag", "kafka.consumer_group.members"}
+
+// QueryGroupPartitions returns partitions, topics, and members per consumer group.
 func (r *Repository) QueryGroupPartitions(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupPartitionsRow, error) {
 	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, groupPartitionMetrics, "consumer_group", group)
 	query := fmt.Sprintf(`
 		SELECT
 		    messaging_consumer_group AS consumer_group,
-		    max(ifNotFinite(val_sum / val_count, 0)) AS assigned_partitions
+		    toFloat64(countDistinctIf(fingerprint, metric_name = 'kafka.consumer_group.lag')) AS assigned_partitions,
+		    countDistinctIf(messaging_destination, messaging_destination != '' AND metric_name = 'kafka.consumer_group.lag') AS topic_count,
+		    ifNotFinite(argMaxIf(val_max, timestamp, metric_name = 'kafka.consumer_group.members'), 0) AS members
 		FROM `+timebucket.MetricsRollup(endMs-startMs)+`
 		PREWHERE team_id   = @teamID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
@@ -192,6 +238,44 @@ func (r *Repository) QueryGroupFetches(ctx context.Context, teamID, startMs, end
 		ORDER BY consumer_group ASC`, extraWhere)
 	rows := make([]GroupFetchesRow, 0)
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryGroupFetches", &rows, query, args...)
+}
+
+// QueryClusterHealth returns broker-level health from the kafkametrics receiver
+// (kafka.brokers / controller / partition replicas). Gauges are read at their
+// latest value in the window; under-replicated counts partitions whose live
+// replica set exceeds the in-sync set.
+func (r *Repository) QueryClusterHealth(ctx context.Context, teamID, startMs, endMs int64) (ClusterHealthRow, error) {
+	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
+	tbl := timebucket.MetricsRollup(endMs - startMs)
+	args := filter.MetricArgs(teamID, startMs, endMs)
+	query := fmt.Sprintf(`
+		SELECT
+		    (SELECT ifNull(argMax(val_max, timestamp), 0) FROM %[1]s
+		       PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		            AND metric_name = 'kafka.brokers' AND timestamp BETWEEN @start AND @end
+		    ) AS broker_count,
+		    (SELECT ifNull(argMax(val_max, timestamp), 0) FROM %[1]s
+		       PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		            AND metric_name = 'kafka.controller.active.count' AND timestamp BETWEEN @start AND @end
+		    ) AS active_controllers,
+		    (SELECT countIf(replicas > insync) FROM (
+		        SELECT fingerprint,
+		               argMaxIf(val_max, timestamp, metric_name = 'kafka.partition.replicas')         AS replicas,
+		               argMaxIf(val_max, timestamp, metric_name = 'kafka.partition.replicas_in_sync') AS insync
+		        FROM %[1]s
+		        PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		             AND metric_name IN ('kafka.partition.replicas', 'kafka.partition.replicas_in_sync')
+		             AND timestamp BETWEEN @start AND @end
+		        GROUP BY fingerprint
+		    )) AS under_replicated_partitions`, tbl)
+	rows := make([]ClusterHealthRow, 0, 1)
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryClusterHealth", &rows, query, args...); err != nil {
+		return ClusterHealthRow{}, err
+	}
+	if len(rows) == 0 {
+		return ClusterHealthRow{}, nil
+	}
+	return rows[0], nil
 }
 
 var groupHealthMetrics = []string{

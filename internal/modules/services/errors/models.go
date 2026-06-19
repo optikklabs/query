@@ -84,7 +84,5 @@ type ErrorHotspotCell struct {
 	ServiceName   string  `json:"service_name"   ch:"service"`
 	OperationName string  `json:"operation_name" ch:"operation_name"`
 	GroupID       string  `json:"group_id"       ch:"error_group_id"`
-	ErrorRate     float64 `json:"error_rate"     ch:"error_rate"`
 	ErrorCount    int64   `json:"error_count"    ch:"error_count"`
-	TotalCount    int64   `json:"total_count"    ch:"total_count"`
 }

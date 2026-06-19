@@ -33,19 +33,14 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, 
 	}
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
-		WITH active_fps AS (
-		    SELECT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		),
-		grouped AS (
+		WITH grouped AS (
 		    SELECT db_statement                                                                       AS query_text,
 		           attributes.'db.collection.name'::String                                            AS collection_name,
 		           quantileTimingState(duration_nano / 1000000.0)                                     AS lat_state,
 		           count()                                                                            AS call_count,
 		           countIf(has_error OR toUInt16OrZero(response_status_code) >= 400)                  AS error_count
 		    FROM optikk.spans
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
+		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		    WHERE timestamp BETWEEN @start AND @end
 		      AND db_system != ''
 		      AND db_statement != ''` + filterWhere + `

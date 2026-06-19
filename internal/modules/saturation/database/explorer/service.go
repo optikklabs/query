@@ -45,9 +45,11 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, teamID, startMs, endM
 	}
 
 	rows := make([]DatastoreSystemRow, 0, len(spanRows))
+	seen := make(map[string]bool, len(spanRows))
 	for _, r := range spanRows {
 		queryCount := int64(r.QueryCount)
 		errorCount := int64(r.ErrorCount)
+		seen[r.DBSystem] = true
 		rows = append(rows, DatastoreSystemRow{
 			System:            r.DBSystem,
 			Category:          datastoreCategory(r.DBSystem),
@@ -58,6 +60,20 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, teamID, startMs, endM
 			ActiveConnections: conns[r.DBSystem],
 			ServerHint:        r.ServerAddress,
 			LastSeen:          r.LastSeen.Format(time.RFC3339),
+		})
+	}
+
+	// Systems with connection metrics but no DB-client spans (e.g. postgres,
+	// which emits db.sql.connection.* but isn't span-instrumented) still belong
+	// in the list — surfaced conns-only, with qps/latency left at zero.
+	for system, active := range conns {
+		if seen[system] {
+			continue
+		}
+		rows = append(rows, DatastoreSystemRow{
+			System:            system,
+			Category:          datastoreCategory(system),
+			ActiveConnections: active,
 		})
 	}
 

@@ -1,27 +1,32 @@
-package redmetrics
+package redfleet
 
 import (
 	"context"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-type REDMetricsHandler struct {
+type REDFleetHandler struct {
 	Service *Service
 }
 
-func (h *REDMetricsHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query RED summary", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetSummary(ctx, teamID, startMs, endMs)
+func (h *REDFleetHandler) GetFleetTotals(w http.ResponseWriter, r *http.Request) {
+	modulecommon.HandleRangeQuery(w, r, "Failed to query fleet totals", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
+		return h.Service.GetFleetTotals(ctx, teamID, startMs, endMs)
 	})
 }
 
-func (h *REDMetricsHandler) GetApdex(w http.ResponseWriter, r *http.Request) {
+func (h *REDFleetHandler) GetFleetServices(w http.ResponseWriter, r *http.Request) {
+	modulecommon.HandleRangeQuery(w, r, "Failed to query fleet services", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
+		return h.Service.GetFleetServices(ctx, teamID, startMs, endMs)
+	})
+}
+
+func (h *REDFleetHandler) GetApdex(w http.ResponseWriter, r *http.Request) {
 	teamID := modulecommon.Tenant(r).TeamID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
@@ -42,7 +47,7 @@ func (h *REDMetricsHandler) GetApdex(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, resp)
 }
 
-func (h *REDMetricsHandler) GetRequestAndErrorRateTimeSeries(w http.ResponseWriter, r *http.Request) {
+func (h *REDFleetHandler) GetRequestAndErrorRateTimeSeries(w http.ResponseWriter, r *http.Request) {
 	teamID := modulecommon.Tenant(r).TeamID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
@@ -58,25 +63,8 @@ func (h *REDMetricsHandler) GetRequestAndErrorRateTimeSeries(w http.ResponseWrit
 	modulecommon.RespondOK(w, resp)
 }
 
-func (h *REDMetricsHandler) GetServiceSummary(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	serviceName := chi.URLParam(r, "serviceName")
-	resp, err := modulecommon.WithComparison(r, startMs, endMs, func(s, e int64) (any, error) {
-		return h.Service.GetServiceSummary(r.Context(), teamID, s, e, serviceName)
-	})
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query service summary", err)
-		return
-	}
-	modulecommon.RespondOK(w, resp)
-}
-
 // GetStatusTimeSeries returns status split by HTTP family over time.
-func (h *REDMetricsHandler) GetStatusTimeSeries(w http.ResponseWriter, r *http.Request) {
+func (h *REDFleetHandler) GetStatusTimeSeries(w http.ResponseWriter, r *http.Request) {
 	serviceName := r.URL.Query().Get("serviceName")
 	modulecommon.HandleRangeQuery(w, r, "Failed to query status time series", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
 		return h.Service.GetStatusTimeSeries(ctx, teamID, startMs, endMs, serviceName)
@@ -84,36 +72,15 @@ func (h *REDMetricsHandler) GetStatusTimeSeries(w http.ResponseWriter, r *http.R
 }
 
 // GetLatencyPercentilesTimeSeries returns p50/p95/p99 latency over time.
-func (h *REDMetricsHandler) GetLatencyPercentilesTimeSeries(w http.ResponseWriter, r *http.Request) {
+func (h *REDFleetHandler) GetLatencyPercentilesTimeSeries(w http.ResponseWriter, r *http.Request) {
 	serviceName := r.URL.Query().Get("serviceName")
 	modulecommon.HandleRangeQuery(w, r, "Failed to query latency percentiles", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
 		return h.Service.GetLatencyPercentilesTimeSeries(ctx, teamID, startMs, endMs, serviceName)
 	})
 }
 
-// GetOperationBaseline returns windowed p50/p95/p99 for service + operation.
-func (h *REDMetricsHandler) GetOperationBaseline(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	serviceName := r.URL.Query().Get("service")
-	operationName := r.URL.Query().Get("operation")
-	if serviceName == "" || operationName == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "service and operation are required")
-		return
-	}
-	resp, err := h.Service.GetOperationBaseline(r.Context(), teamID, startMs, endMs, serviceName, operationName)
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query operation baseline", err)
-		return
-	}
-	modulecommon.RespondOK(w, resp)
-}
-
 // GetTopEndpointsCombined returns per-operation metrics for the endpoints.
-func (h *REDMetricsHandler) GetTopEndpointsCombined(w http.ResponseWriter, r *http.Request) {
+func (h *REDFleetHandler) GetTopEndpointsCombined(w http.ResponseWriter, r *http.Request) {
 	teamID := modulecommon.Tenant(r).TeamID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {

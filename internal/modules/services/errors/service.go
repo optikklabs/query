@@ -426,15 +426,11 @@ func (s *Service) GetErrorHotspot(ctx context.Context, teamID int64, startMs, en
 	}
 	cells := make([]ErrorHotspotCell, len(raw))
 	for i, row := range raw {
-		total := int64(row.TotalCount)
-		errs := int64(row.ErrorCount)
 		cells[i] = ErrorHotspotCell{
 			ServiceName:   row.ServiceName,
 			OperationName: row.OperationName,
 			GroupID:       row.GroupID,
-			ErrorRate:     computeErrorRate(errs, total),
-			ErrorCount:    errs,
-			TotalCount:    total,
+			ErrorCount:    int64(row.ErrorCount),
 		}
 	}
 	return cells, nil
