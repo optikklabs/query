@@ -19,9 +19,12 @@ func RegisterRoutes(cfg Config, v1 chi.Router, h *Handler) {
 		return
 	}
 
+	v1.Get("/saturation/kafka/cluster/health", h.GetClusterHealth)
+
 	v1.Get("/saturation/kafka/topics/throughput", h.GetTopicThroughput)
 	v1.Get("/saturation/kafka/topics/lag", h.GetTopicLag)
 	v1.Get("/saturation/kafka/topics/consumers", h.GetTopicConsumers)
+	v1.Get("/saturation/kafka/topics/backlog", h.GetTopicBacklog)
 
 	v1.Get("/saturation/kafka/groups/partitions", h.GetGroupPartitions)
 	v1.Get("/saturation/kafka/groups/commits", h.GetGroupCommits)

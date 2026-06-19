@@ -30,16 +30,11 @@ func (r *Repository) opsSeriesByGroup(ctx context.Context, teamID, startMs, endM
 	filterWhere, filterArgs := filter.BuildSpans1mClauses(f)
 
 	query := `
-		WITH active_fps AS (
-		    SELECT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		)
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + `                   AS time_bucket,
 		       ` + groupCol + `                                                    AS group_by,
 		       sum(request_count) / @bucketGrainSec                                AS ops_per_sec
 		FROM ` + timebucket.SpansRollup(endMs-startMs) + `
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
+		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @start AND @end
 		  AND db_system != ''` + filterWhere + `
 		GROUP BY time_bucket, group_by

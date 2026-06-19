@@ -21,8 +21,8 @@ func NewRepository(db clickhouse.Conn) *Repository {
 const counterSeriesByTopicQuery = `
 		SELECT
 		    timestamp,
-		    messaging_destination                AS topic,
-		    ifNotFinite(val_sum / val_count, 0)  AS value
+		    messaging_destination          AS topic,
+		    greatest(val_max - val_min, 0) AS value
 		FROM optikk.metrics_1m -- pinned to 1m: Go-side rate folds assume per-minute rows
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
@@ -32,8 +32,14 @@ const counterSeriesByTopicQuery = `
 		  AND lower(messaging_system) = 'kafka'
 		ORDER BY timestamp`
 
+// No consumer-throughput counter is emitted; consume rate is derived from the
+// growth of the broker-scraped committed offset (kafka.consumer_group.offset),
+// summed across groups/partitions per topic. Same per-minute-delta approximation
+// as the produce side.
+var consumeOffsetMetrics = []string{"kafka.consumer_group.offset"}
+
 func (r *Repository) QueryConsumeRateByTopic(ctx context.Context, teamID int64, startMs, endMs int64) ([]TopicCounterRow, error) {
-	args := filter.WithMetricNames(filter.MetricArgs(teamID, startMs, endMs), filter.ConsumerMetrics)
+	args := filter.WithMetricNames(filter.MetricArgs(teamID, startMs, endMs), consumeOffsetMetrics)
 	var rows []TopicCounterRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryConsumeRateByTopic", &rows, counterSeriesByTopicQuery, args...)
 }

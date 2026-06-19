@@ -9,6 +9,7 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	"github.com/optikklabs/query/internal/shared/chargs"
+	"github.com/optikklabs/query/internal/shared/mathutil"
 )
 
 // APMBackend evaluates APM monitors against optikk.spans_1m.
@@ -41,14 +42,15 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         AND service   = @service
 		)
-		SELECT sum(request_count)                                AS request_count,
-		       sum(error_count)                                  AS error_count,
-		       quantileTimingMerge(0.99)(latency_state)          AS p99
-		FROM optikk.spans_1m
+		SELECT sumIf(value, metric_name = 'calls')                                                   AS request_count,
+		       sumIf(value, metric_name = 'calls' AND JSONExtractString(attributes, 'status.code') = 'STATUS_CODE_ERROR') AS error_count,
+		       sumMap(hist_buckets, hist_counts)                                                     AS hist
+		FROM optikk.metrics
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND fingerprint IN active_fps
 		     AND service     = @service
+		     AND metric_name IN ('calls', 'duration')
 		WHERE timestamp BETWEEN @start AND @end`
 
 	args := apmArgs(m.TeamID, q.APM.Service, startMs, endMs)
@@ -60,6 +62,10 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		return ScalarResult{HasData: false}, nil
 	}
 	row := rows[0]
+	qs := mathutil.Quantiles([]float64{0.99}, row.HistTuple)
+	if len(qs) > 0 {
+		row.P99 = float64(qs[0])
+	}
 
 	if cond.MinSample != nil && row.RequestCount < uint64(*cond.MinSample) {
 		return ScalarResult{HasData: false}, nil
@@ -86,14 +92,15 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 		         AND service   = @service
 		)
 		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket,
-		       sum(request_count)                       AS request_count,
-		       sum(error_count)                         AS error_count,
-		       quantileTimingMerge(0.99)(latency_state) AS p99
-		FROM ` + timebucket.SpansRollup(windowMs) + `
+		       sumIf(value, metric_name = 'calls')                                                   AS request_count,
+		       sumIf(value, metric_name = 'calls' AND JSONExtractString(attributes, 'status.code') = 'STATUS_CODE_ERROR') AS error_count,
+		       sumMap(hist_buckets, hist_counts)                                                     AS hist
+		FROM optikk.metrics
 		PREWHERE team_id     = @teamID
 		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND fingerprint IN active_fps
 		     AND service     = @service
+		     AND metric_name IN ('calls', 'duration')
 		WHERE timestamp BETWEEN @start AND @end
 		GROUP BY bucket
 		ORDER BY bucket`
@@ -109,7 +116,12 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 		windowSec = 300
 	}
 	for _, r := range rows {
-		row := apmAggRow{RequestCount: r.RequestCount, ErrorCount: r.ErrorCount, P99: r.P99}
+		qs := mathutil.Quantiles([]float64{0.99}, r.HistTuple)
+		var p99 float64
+		if len(qs) > 0 {
+			p99 = float64(qs[0])
+		}
+		row := apmAggRow{RequestCount: r.RequestCount, ErrorCount: r.ErrorCount, P99: p99}
 		out = append(out, Point{BucketMs: r.Bucket.UnixMilli(), Value: apmTrackValue(q.APM.Track, row, windowSec)})
 	}
 	return out, nil
@@ -152,6 +164,7 @@ func apmArgs(teamID int64, service string, startMs, endMs int64) []any {
 type apmAggRow struct {
 	RequestCount uint64  `ch:"request_count"`
 	ErrorCount   uint64  `ch:"error_count"`
+	HistTuple    []any   `ch:"hist"`
 	P99          float64 `ch:"p99"`
 }
 
@@ -159,5 +172,6 @@ type apmSeriesRow struct {
 	Bucket       time.Time `ch:"bucket"`
 	RequestCount uint64    `ch:"request_count"`
 	ErrorCount   uint64    `ch:"error_count"`
+	HistTuple    []any     `ch:"hist"`
 	P99          float64   `ch:"p99"`
 }

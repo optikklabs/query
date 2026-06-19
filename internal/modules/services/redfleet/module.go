@@ -1,0 +1,53 @@
+package redfleet
+
+import (
+	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/go-chi/chi/v5"
+	"github.com/optikklabs/query/internal/app/registry"
+)
+
+type Config struct {
+	Enabled bool
+}
+
+func DefaultConfig() Config {
+	return Config{Enabled: true}
+}
+
+// RegisterRoutes mounts the fleet/overview RED endpoints. Paths are registered
+// flat (not via chi.Route) so redfleet and redservice can share /spans/red
+// without a duplicate-mount panic.
+func RegisterRoutes(cfg Config, v1 chi.Router, h *REDFleetHandler) {
+	if !cfg.Enabled || h == nil {
+		return
+	}
+	v1.Get("/spans/red/fleet-totals", h.GetFleetTotals)
+	v1.Get("/spans/red/services", h.GetFleetServices)
+	v1.Get("/spans/red/apdex", h.GetApdex)
+	v1.Get("/spans/red/request-and-error-rate", h.GetRequestAndErrorRateTimeSeries)
+	v1.Get("/spans/red/status-timeseries", h.GetStatusTimeSeries)
+	v1.Get("/spans/red/latency-percentiles-timeseries", h.GetLatencyPercentilesTimeSeries)
+	v1.Get("/spans/red/top-endpoints", h.GetTopEndpointsCombined)
+}
+
+func NewModule(nativeQuerier clickhouse.Conn) registry.Module {
+	module := &redFleetModule{}
+	module.configure(nativeQuerier)
+	return module
+}
+
+type redFleetModule struct {
+	handler *REDFleetHandler
+}
+
+func (m *redFleetModule) Name() string { return "redFleet" }
+
+func (m *redFleetModule) configure(nativeQuerier clickhouse.Conn) {
+	m.handler = &REDFleetHandler{
+		Service: NewService(NewRepository(nativeQuerier)),
+	}
+}
+
+func (m *redFleetModule) RegisterRoutes(group chi.Router) {
+	RegisterRoutes(DefaultConfig(), group, m.handler)
+}

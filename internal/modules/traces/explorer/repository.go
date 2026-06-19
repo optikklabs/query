@@ -47,18 +47,29 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 	}
 	args = append(args, clickhouse.Named("pgLimit", uint64(req.Limit+1)))
 
-	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
-		)
-		SELECT ` + traceIndexColumns + `
-		FROM optikk.spans
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
-		WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
-		ORDER BY timestamp DESC, trace_id DESC
-		LIMIT @pgLimit`
+	var query string
+	if resourceWhere == "" {
+		query = `
+			SELECT ` + traceIndexColumns + `
+			FROM optikk.spans
+			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
+			ORDER BY timestamp DESC, trace_id DESC
+			LIMIT @pgLimit`
+	} else {
+		query = `
+			WITH active_fps AS (
+			    SELECT DISTINCT fingerprint
+			    FROM optikk.spans_resource
+			    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
+			)
+			SELECT ` + traceIndexColumns + `
+			FROM optikk.spans
+			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
+			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
+			ORDER BY timestamp DESC, trace_id DESC
+			LIMIT @pgLimit`
+	}
 
 	var rows []traceIndexRowDTO
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "traces.Query", &rows, query, args...); err != nil {
@@ -77,20 +88,33 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets
 	}
 	resourceWhere, where, args := filter.BuildClauses(req.Filters)
 
-	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
-		)
-		SELECT topK(20)(service)              AS top_services,
-		       topK(20)(name)                 AS top_operations,
-		       topK(10)(http_method)          AS top_http_methods,
-		       topK(15)(response_status_code) AS top_http_statuses,
-		       topK(5)(status_code_string)    AS top_statuses
-		FROM ` + timebucket.SpansRollup(req.EndTime-req.StartTime) + `
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
-		WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where
+	var query string
+	if resourceWhere == "" {
+		query = `
+			SELECT topK(20)(service)              AS top_services,
+			       topK(20)(name)                 AS top_operations,
+			       topK(10)(http_method)          AS top_http_methods,
+			       topK(15)(response_status_code) AS top_http_statuses,
+			       topK(5)(status_code_string)    AS top_statuses
+			FROM ` + timebucket.SpansRollup(req.EndTime-req.StartTime) + `
+			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where
+	} else {
+		query = `
+			WITH active_fps AS (
+			    SELECT DISTINCT fingerprint
+			    FROM optikk.spans_resource
+			    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
+			)
+			SELECT topK(20)(service)              AS top_services,
+			       topK(20)(name)                 AS top_operations,
+			       topK(10)(http_method)          AS top_http_methods,
+			       topK(15)(response_status_code) AS top_http_statuses,
+			       topK(5)(status_code_string)    AS top_statuses
+			FROM ` + timebucket.SpansRollup(req.EndTime-req.StartTime) + `
+			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
+			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where
+	}
 
 	var rows []topKRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "facets.QueryFacets", &rows, query, args...); err != nil {
@@ -128,20 +152,33 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 	resourceWhere, where, args := filter.BuildClauses(req.Filters)
 	grainSQL := timebucket.DisplayGrainSQL(req.EndTime - req.StartTime)
 
-	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
-		)
-		SELECT ` + grainSQL + `                          AS time_bucket,
-		       sum(request_count) - sum(error_count)     AS total,
-		       sum(error_count)                          AS errors
-		FROM ` + timebucket.SpansRollup(req.EndTime-req.StartTime) + `
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
-		WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
-		GROUP BY time_bucket
-		ORDER BY time_bucket ASC`
+	var query string
+	if resourceWhere == "" {
+		query = `
+			SELECT ` + grainSQL + `                          AS time_bucket,
+			       sum(request_count) - sum(error_count)     AS total,
+			       sum(error_count)                          AS errors
+			FROM ` + timebucket.SpansRollup(req.EndTime-req.StartTime) + `
+			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
+			GROUP BY time_bucket
+			ORDER BY time_bucket ASC`
+	} else {
+		query = `
+			WITH active_fps AS (
+			    SELECT DISTINCT fingerprint
+			    FROM optikk.spans_resource
+			    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
+			)
+			SELECT ` + grainSQL + `                          AS time_bucket,
+			       sum(request_count) - sum(error_count)     AS total,
+			       sum(error_count)                          AS errors
+			FROM ` + timebucket.SpansRollup(req.EndTime-req.StartTime) + `
+			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
+			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
+			GROUP BY time_bucket
+			ORDER BY time_bucket ASC`
+	}
 
 	var rows []struct {
 		TimeBucket time.Time `ch:"time_bucket"`

@@ -39,16 +39,11 @@ func (r *Repository) latencySeriesByGroup(ctx context.Context, teamID, startMs, 
 	}
 	filterWhere, filterArgs := filter.BuildSpans1mClauses(f)
 	query := `
-		WITH active_fps AS (
-		    SELECT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		)
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       ` + groupCol + `                                       AS group_by,
 		       quantilesTimingMerge(0.5, 0.95, 0.99)(latency_state)  AS qs
 		FROM ` + timebucket.SpansRollup(endMs-startMs) + `
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
+		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @start AND @end
 		  AND db_system != ''` + filterWhere + `
 		GROUP BY bucket_at, group_by

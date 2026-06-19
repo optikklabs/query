@@ -23,5 +23,4 @@ bin/
 # Local env files
 .env
 .env.local
-CLAUDE.md
 

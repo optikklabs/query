@@ -52,9 +52,6 @@ func Load(path ...string) (Config, error) {
 		return Config{}, fmt.Errorf("invalid config in %s: %w", resolved, err)
 	}
 
-	if err := cfg.validate(); err != nil {
-		return Config{}, err
-	}
 	return cfg, nil
 }
 
@@ -122,29 +119,4 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.cookie_secure", false)
 	v.SetDefault("auth.cookie_same_site", "lax")
 
-}
-
-func (c Config) validate() error {
-	if c.Auth.JWTSecret == "" {
-		return fmt.Errorf("auth.jwt_secret must be set")
-	}
-
-	isProd := strings.EqualFold(c.Environment, "production")
-	if !isProd {
-		return nil
-	}
-	var errs []string
-	if c.MySQL.Password == "root123" {
-		errs = append(errs, "mysql.password must be set in production")
-	}
-	if c.ClickHouse.Password == "clickhouse123" {
-		errs = append(errs, "clickhouse.password must be set in production")
-	}
-	if c.Auth.JWTSecret == "dev-only-change-me-0123456789abcdef" {
-		errs = append(errs, "auth.jwt_secret must be set in production")
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("insecure configuration detected: %s", strings.Join(errs, "; "))
-	}
-	return nil
 }

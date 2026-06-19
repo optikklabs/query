@@ -1,4 +1,1 @@
 package nodes
-
-type infrastructureNodeRecordDTO = InfrastructureNode
-type infrastructureNodeServiceRecordDTO = InfrastructureNodeService

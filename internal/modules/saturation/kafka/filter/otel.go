@@ -48,6 +48,10 @@ var (
 		MetricKafkaConsumerLag,
 		MetricKafkaConsumerLagSum,
 		"kafka.consumer.lag",
+		// kafkametrics receiver: broker-scraped per (group, topic, partition)
+		// lag. This is the family actually emitted by the kafkametrics receiver
+		// (the JMX client kafka.consumer.* names rarely carry real lag).
+		"kafka.consumer_group.lag",
 		"queue.depth",
 	}
 
