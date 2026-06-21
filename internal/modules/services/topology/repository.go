@@ -7,6 +7,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
+	"github.com/optikklabs/query/internal/shared/seriesattr"
 )
 
 type Repository struct {
@@ -20,14 +21,23 @@ func NewRepository(db clickhouse.Conn) *Repository {
 // GetNodes returns per-service RED aggregates and p50/p95/p99 latency.
 func (r *Repository) GetNodes(ctx context.Context, teamID, startMs, endMs int64, _ string) ([]nodeAggRow, error) {
 	query := `
-		SELECT service                                                AS service,
-		       sum(request_count)                                     AS request_count,
-		       sum(error_count)                                       AS error_count,
-		       quantilesTimingMerge(0.5, 0.95, 0.99)(latency_state)   AS qs
-		FROM ` + timebucket.SpansRollup(endMs-startMs) + `
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		WHERE timestamp BETWEEN @start AND @end
-		  AND service != ''
+		WITH series AS (
+		    SELECT fingerprint,
+		           any(service)                       AS service,
+		           any(` + seriesattr.StatusCode + `) AS status_code
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE service != ''
+		    GROUP BY fingerprint
+		)
+		SELECT series.service                                                       AS service,
+		       sum(m.hist_count)                                                    AS request_count,
+		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)              AS error_count,
+		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state)  AS qs
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id = @teamID AND m.timestamp BETWEEN @start AND @end
+		  AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY service`
 	var rows []nodeAggRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetNodes", &rows, query, chargs.RollupRangeArgs(teamID, startMs, endMs)...); err != nil {
@@ -35,9 +45,9 @@ func (r *Repository) GetNodes(ctx context.Context, teamID, startMs, endMs int64,
 	}
 	for i := range rows {
 		if len(rows[i].QS) >= 3 {
-			rows[i].P50Ms = rows[i].QS[0]
-			rows[i].P95Ms = rows[i].QS[1]
-			rows[i].P99Ms = rows[i].QS[2]
+			rows[i].P50Ms = float32(rows[i].QS[0])
+			rows[i].P95Ms = float32(rows[i].QS[1])
+			rows[i].P99Ms = float32(rows[i].QS[2])
 		}
 	}
 	return rows, nil
@@ -45,23 +55,29 @@ func (r *Repository) GetNodes(ctx context.Context, teamID, startMs, endMs int64,
 
 // GetEdges derives directed edges from parent-child span links.
 func (r *Repository) GetEdges(ctx context.Context, teamID, startMs, endMs int64, focusService string) ([]edgeAggRow, error) {
-	const query = `
-		SELECT p.service                                                              AS source,
-		       c.service                                                              AS target,
-		       count()                                                                AS call_count,
-		       countIf(c.has_error OR toUInt16OrZero(c.response_status_code) >= 400)   AS error_count,
-		       quantilesTiming(0.5, 0.95)(c.duration_nano / 1000000.0)                AS qs
-		FROM optikk.spans AS c
-		INNER JOIN optikk.spans AS p
-		  ON c.team_id = p.team_id AND c.trace_id = p.trace_id AND c.parent_span_id = p.span_id
-		WHERE c.team_id = @teamID
-		  AND c.ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		  AND p.ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		  AND c.timestamp BETWEEN @start AND @end
-		  AND c.service != ''
-		  AND p.service != ''
-		  AND c.service != p.service
-		  AND (@focusService = '' OR p.service = @focusService OR c.service = @focusService)
+	query := `
+		WITH series AS (
+		    SELECT fingerprint,
+		           any(` + seriesattr.Client + `)     AS client,
+		           any(` + seriesattr.Server + `)     AS server,
+		           any(` + seriesattr.StatusCode + `) AS status_code
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces_service_graph_request_server'
+		    WHERE ` + seriesattr.Client + ` != ''
+		      AND ` + seriesattr.Server + ` != ''
+		      AND ` + seriesattr.Client + ` != ` + seriesattr.Server + `
+		      AND (@focusService = '' OR ` + seriesattr.Client + ` = @focusService OR ` + seriesattr.Server + ` = @focusService)
+		    GROUP BY fingerprint
+		)
+		SELECT series.client                                                     AS source,
+		       series.server                                                     AS target,
+		       sum(m.hist_count)                                                  AS call_count,
+		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)            AS error_count,
+		       quantilesPrometheusHistogramMerge(0.5, 0.95)(m.latency_state)      AS qs
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id = @teamID AND m.timestamp BETWEEN @start AND @end
+		  AND m.metric_name = 'traces_service_graph_request_server'
 		GROUP BY source, target`
 	var rows []edgeAggRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetEdges", &rows, query, spanArgs(teamID, startMs, endMs, focusService)...); err != nil {
@@ -69,8 +85,8 @@ func (r *Repository) GetEdges(ctx context.Context, teamID, startMs, endMs int64,
 	}
 	for i := range rows {
 		if len(rows[i].QS) >= 2 {
-			rows[i].P50Ms = rows[i].QS[0]
-			rows[i].P95Ms = rows[i].QS[1]
+			rows[i].P50Ms = float32(rows[i].QS[0])
+			rows[i].P95Ms = float32(rows[i].QS[1])
 		}
 	}
 	return rows, nil

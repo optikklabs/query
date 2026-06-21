@@ -7,6 +7,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
+	"github.com/optikklabs/query/internal/shared/seriesattr"
 )
 
 const (
@@ -14,7 +15,7 @@ const (
 	defaultUnknown = "unknown"
 )
 
-// fleet reads spans for per-pod RED aggregates using spans_resource.
+// fleet reads spanmetrics duration for per-pod RED aggregates.
 
 type Repository struct {
 	db clickhouse.Conn
@@ -26,27 +27,31 @@ func NewRepository(db clickhouse.Conn) *Repository {
 
 func (r *Repository) QueryFleetPods(ctx context.Context, teamID int64, startMs, endMs int64) ([]FleetPodAggregateRow, error) {
 	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id   = @teamID
-		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		WITH series AS (
+		    SELECT fingerprint,
+		           any(host)                          AS host,
+		           any(pod)                           AS pod,
+		           any(service)                       AS service,
+		           any(` + seriesattr.StatusCode + `) AS status_code
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE pod != ''
+		    GROUP BY fingerprint
 		)
 		SELECT
-		    pod                                                                                  AS pod,
-		    if(host != '', host, @defaultUnknown)                                                AS host,
-		    groupUniqArray(service)                                                              AS services,
-		    sum(request_count)                                                                   AS request_count,
-		    sum(error_count)                                                                     AS error_count,
-		    sum(duration_ms_sum)                                                                 AS duration_ms_sum,
-		    quantileTimingMerge(0.95)(latency_state)                                             AS p95_latency_ms,
-		    max(timestamp)                                                                       AS last_seen
-		FROM ` + timebucket.SpansRollup(endMs-startMs) + `
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND fingerprint IN active_fps
-		WHERE timestamp BETWEEN @start AND @end
-		  AND pod != ''
+		    series.pod                                                            AS pod,
+		    if(series.host != '', series.host, @defaultUnknown)                   AS host,
+		    groupUniqArray(series.service)                                        AS services,
+		    sum(m.hist_count)                                                     AS request_count,
+		    sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)               AS error_count,
+		    sum(m.hist_sum)                                                       AS duration_ms_sum,
+		    toFloat32(quantilesPrometheusHistogramMerge(0.95)(m.latency_state)[1]) AS p95_latency_ms,
+		    max(m.timestamp)                                                      AS last_seen
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY pod, host
 		ORDER BY request_count DESC
 		LIMIT @maxFleetPods`

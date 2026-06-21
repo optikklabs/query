@@ -23,20 +23,28 @@ func (r *Repository) GetOpsBySystem(ctx context.Context, teamID, startMs, endMs 
 
 func (r *Repository) opsSeriesByGroup(ctx context.Context, teamID, startMs, endMs int64, f filter.Filters, attr, traceLabel string) ([]opsRawDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
-	groupCol := filter.Spans1mGroupColumn(attr)
+	groupCol := filter.MetricsGroupColumn(attr)
 	if groupCol == "" {
 		return nil, nil
 	}
-	filterWhere, filterArgs := filter.BuildSpans1mClauses(f)
+	filterWhere, filterArgs := filter.BuildMetricsClauses(f)
 
 	query := `
+		WITH series AS (
+		    SELECT fingerprint, any(` + groupCol + `) AS group_by
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE attributes.` + "`db.system`" + `::String != ''` + filterWhere + `
+		    GROUP BY fingerprint
+		)
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + `                   AS time_bucket,
-		       ` + groupCol + `                                                    AS group_by,
-		       sum(request_count) / @bucketGrainSec                                AS ops_per_sec
-		FROM ` + timebucket.SpansRollup(endMs-startMs) + `
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		WHERE timestamp BETWEEN @start AND @end
-		  AND db_system != ''` + filterWhere + `
+		       series.group_by                                                     AS group_by,
+		       sum(m.hist_count) / @bucketGrainSec                                 AS ops_per_sec
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY time_bucket, group_by
 		ORDER BY time_bucket, group_by`
 

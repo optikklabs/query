@@ -25,7 +25,6 @@ func (r *Repository) QueryCPUUtilizationAgg(ctx context.Context, teamID int64, s
 		    sum(val_sum) / sum(val_count)  AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
 		PREWHERE team_id        = @teamID
-		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		     AND metric_name   IN @metricNames
 		     AND timestamp   BETWEEN @start AND @end
 		GROUP BY metric_name`
@@ -35,7 +34,7 @@ func (r *Repository) QueryCPUUtilizationAgg(ctx context.Context, teamID int64, s
 }
 
 func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, teamID int64, startMs, endMs int64) ([]CPUInstanceMetricRow, error) {
-	// Resource dims (host/pod/container/service) live in metrics_resource;
+	// Resource dims (host/pod/container/service) live in metrics_series;
 	// resolve them per fingerprint and join the scalar rollup on fingerprint.
 	query := `
 		WITH fps AS (
@@ -44,8 +43,8 @@ func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, teamID i
 		           any(pod)       AS pod,
 		           any(container) AS container,
 		           any(service)   AS service
-		    FROM optikk.metrics_resource AS mr
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		    FROM optikk.metrics_series AS mr
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE mr.service != ''
 		    GROUP BY fingerprint
 		)
@@ -59,7 +58,6 @@ func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, teamID i
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN fps AS r ON m.fingerprint = r.fingerprint
 		PREWHERE m.team_id     = @teamID
-		     AND m.ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY host, pod, container, service, metric_name

@@ -79,8 +79,7 @@ type redMetricsRow struct {
 	ServiceName string    `ch:"service"`
 	TotalCount  uint64    `ch:"total_count"`
 	ErrorCount  uint64    `ch:"error_count"`
-	HistTuple   []any     `ch:"hist"`
-	QS          []float32 `ch:"qs"`
+	QS          []float64 `ch:"qs"`
 	P50Ms       float32   `ch:"p50_ms"`
 	P95Ms       float32   `ch:"p95_ms"`
 	P99Ms       float32   `ch:"p99_ms"`

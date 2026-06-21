@@ -46,7 +46,7 @@ type hostMetricRow struct {
 	Value      float64 `ch:"value"`
 }
 
-// hostSpansRow is the per-host RED aggregate read from spans_1m.
+// hostSpansRow is the per-host RED aggregate read from spanmetrics duration.
 type hostSpansRow struct {
 	Host         string    `ch:"host"`
 	Zone         string    `ch:"zone"`

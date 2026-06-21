@@ -8,6 +8,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
+	"github.com/optikklabs/query/internal/shared/seriesattr"
 )
 
 type Repository struct {
@@ -36,22 +37,28 @@ type connRawRow struct {
 func (r *Repository) GetSystemSummariesRaw(ctx context.Context, teamID, startMs, endMs int64) ([]systemSummaryRawDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	query := `
-		WITH active_fps AS (
-		    SELECT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		WITH series AS (
+		    SELECT fingerprint,
+		           any(attributes.` + "`db.system`" + `::String)      AS db_system,
+		           any(attributes.` + "`server.address`" + `::String) AS server_address,
+		           any(` + seriesattr.StatusCode + `)                 AS status_code
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE attributes.` + "`db.system`" + `::String != ''
+		    GROUP BY fingerprint
 		)
-		SELECT db_system                                                                         AS db_system,
-		       sum(request_count)                                                                AS query_count,
-		       sum(error_count)                                                                  AS error_count,
-		       sum(duration_ms_sum) / nullIf(sum(request_count), 0)                              AS avg_latency_ms,
-		       quantileTimingMerge(0.95)(latency_state)                                          AS p95_ms,
-		       any(server_address)                                                               AS server_address,
-		       max(timestamp)                                                                    AS last_seen
-		FROM ` + timebucket.SpansRollup(endMs-startMs) + `
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
-		     AND timestamp BETWEEN @start AND @end
-		WHERE db_system != ''
+		SELECT series.db_system                                                AS db_system,
+		       sum(m.hist_count)                                               AS query_count,
+		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)         AS error_count,
+		       sum(m.hist_sum) / nullIf(sum(m.hist_count), 0)                  AS avg_latency_ms,
+		       toFloat32(quantilesPrometheusHistogramMerge(0.95)(m.latency_state)[1]) AS p95_ms,
+		       any(series.server_address)                                      AS server_address,
+		       max(m.timestamp)                                                AS last_seen
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY db_system
 		ORDER BY query_count DESC`
 
@@ -67,14 +74,20 @@ func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, teamID, s
 	// state encoded in the metric name (no db.client.connection.state attr), so
 	// there is no 'used' state to filter on.
 	query := `
-		SELECT db_system,
+		WITH series AS (
+		    SELECT fingerprint, any(attributes.` + "`db.system`" + `::String) AS db_system
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = @metricName
+		    WHERE attributes.` + "`db.system`" + `::String != ''
+		    GROUP BY fingerprint
+		)
+		SELECT series.db_system AS db_system,
 		       ifNotFinite(sum(val_sum) / sum(val_count), 0) AS avg_used
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND metric_name = @metricName
-		     AND timestamp   BETWEEN @start AND @end
-		WHERE db_system != ''
+		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.metric_name = @metricName
+		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY db_system`
 
 	args := filter.MetricArgs(teamID, startMs, endMs, filter.MetricDBSQLConnectionOpen)

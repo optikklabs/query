@@ -30,23 +30,41 @@ func TestBucketStartMatchesMVDerivation(t *testing.T) {
 	}
 }
 
-// Display grain windows: <=3h: 1m, <=24h: 5m, <=7d: 1h, else 1d.
+// Display grain follows the <=300-points rule: finest of {1m,5m,1h,1d} keeping
+// window/grain <= 300. So 1m holds to 5h, 5m to 25h, 1h to 12.5d, then 1d.
 func TestDisplayGrainWindows(t *testing.T) {
+	hourMs := int64(time.Hour / time.Millisecond)
 	cases := []struct {
 		windowMs int64
 		want     time.Duration
 	}{
-		{int64(time.Hour / time.Millisecond), time.Minute},
-		{3 * int64(time.Hour/time.Millisecond), time.Minute},
-		{3*int64(time.Hour/time.Millisecond) + 1, 5 * time.Minute},
-		{24 * int64(time.Hour/time.Millisecond), 5 * time.Minute},
-		{25 * int64(time.Hour/time.Millisecond), time.Hour},
-		{7 * 24 * int64(time.Hour/time.Millisecond), time.Hour},
-		{8 * 24 * int64(time.Hour/time.Millisecond), 24 * time.Hour},
+		{hourMs, time.Minute},
+		{3 * hourMs, time.Minute},
+		{5 * hourMs, time.Minute}, // boundary: exactly 300 points
+		{6 * hourMs, 5 * time.Minute},
+		{24 * hourMs, 5 * time.Minute},
+		{25 * hourMs, 5 * time.Minute}, // boundary: exactly 300 points
+		{26 * hourMs, time.Hour},
+		{7 * 24 * hourMs, time.Hour},
+		{12 * 24 * hourMs, time.Hour},
+		{13 * 24 * hourMs, 24 * time.Hour},
+		{30 * 24 * hourMs, 24 * time.Hour},
 	}
 	for _, c := range cases {
 		if got := DisplayGrain(c.windowMs); got != c.want {
 			t.Errorf("DisplayGrain(%dms) = %v, want %v", c.windowMs, got, c.want)
+		}
+	}
+}
+
+// GrainSecondsFor must never let a window exceed MaxBucketPoints buckets.
+func TestGrainSecondsForCapsPoints(t *testing.T) {
+	ladder := []int64{60, 300, 3600, 86400}
+	hour := int64(3600)
+	for _, windowSec := range []int64{hour, 24 * hour, 7 * 24 * hour, 30 * 24 * hour, 90 * 24 * hour} {
+		g := GrainSecondsFor(ladder, windowSec)
+		if windowSec/g > MaxBucketPoints {
+			t.Errorf("window %ds at grain %ds = %d points, want <= %d", windowSec, g, windowSec/g, MaxBucketPoints)
 		}
 	}
 }

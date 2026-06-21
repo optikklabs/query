@@ -33,19 +33,27 @@ func (r *Repository) GetLatencyBySystem(ctx context.Context, teamID, startMs, en
 
 func (r *Repository) latencySeriesByGroup(ctx context.Context, teamID, startMs, endMs int64, f filter.Filters, attr, traceLabel string) ([]latencyRawDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
-	groupCol := filter.Spans1mGroupColumn(attr)
+	groupCol := filter.MetricsGroupColumn(attr)
 	if groupCol == "" {
 		return nil, nil
 	}
-	filterWhere, filterArgs := filter.BuildSpans1mClauses(f)
+	filterWhere, filterArgs := filter.BuildMetricsClauses(f)
 	query := `
+		WITH series AS (
+		    SELECT fingerprint, any(` + groupCol + `) AS group_by
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE attributes.` + "`db.system`" + `::String != ''` + filterWhere + `
+		    GROUP BY fingerprint
+		)
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       ` + groupCol + `                                       AS group_by,
-		       quantilesTimingMerge(0.5, 0.95, 0.99)(latency_state)  AS qs
-		FROM ` + timebucket.SpansRollup(endMs-startMs) + `
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		WHERE timestamp BETWEEN @start AND @end
-		  AND db_system != ''` + filterWhere + `
+		       series.group_by                                  AS group_by,
+		       arrayMap(x -> toFloat32(x), quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state)) AS qs
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY bucket_at, group_by
 		ORDER BY bucket_at, group_by`
 

@@ -124,44 +124,40 @@ func BuildSpanClauses(f Filters) (where string, args []any) {
 	return where, args
 }
 
-// BuildSpans1mClauses builds SQL filter clauses for the spans_1m table.
-func BuildSpans1mClauses(f Filters) (where string, args []any) {
+// MetricsGroupColumn returns the metrics_series attribute expression for attr.
+func MetricsGroupColumn(attr string) string {
+	switch attr {
+	case AttrDBSystem:
+		return "attributes.`db.system`::String"
+	case AttrDBOperationName:
+		return "attributes.`db.operation.name`::String"
+	case AttrDBCollectionName:
+		return "attributes.`db.collection.name`::String"
+	case AttrDBNamespace:
+		return "attributes.`db.namespace`::String"
+	case AttrServerAddress:
+		return "attributes.`server.address`::String"
+	}
+	return ""
+}
+
+// BuildMetricsClauses builds metrics_series attribute filters for db saturation.
+func BuildMetricsClauses(f Filters) (where string, args []any) {
 	if len(f.DBSystem) > 0 {
-		where += ` AND db_system IN @dbSystem`
+		where += " AND attributes.`db.system`::String IN @dbSystem"
 		args = append(args, clickhouse.Named("dbSystem", f.DBSystem))
 	}
 	if len(f.Collection) > 0 {
-		where += ` AND db_collection_name IN @dbCollection`
+		where += " AND attributes.`db.collection.name`::String IN @dbCollection"
 		args = append(args, clickhouse.Named("dbCollection", f.Collection))
 	}
 	if len(f.Namespace) > 0 {
-		where += ` AND db_namespace IN @dbNamespace`
+		where += " AND attributes.`db.namespace`::String IN @dbNamespace"
 		args = append(args, clickhouse.Named("dbNamespace", f.Namespace))
 	}
 	if len(f.Server) > 0 {
-		where += ` AND server_address IN @dbServer`
+		where += " AND attributes.`server.address`::String IN @dbServer"
 		args = append(args, clickhouse.Named("dbServer", f.Server))
 	}
 	return where, args
-}
-
-// Spans1mGroupColumn returns the spans_1m column name for the attribute.
-func Spans1mGroupColumn(attr string) string {
-	switch attr {
-	case AttrDBSystem:
-		return "db_system"
-	case AttrDBOperationName:
-		return "db_operation_name"
-	case AttrDBCollectionName:
-		return "db_collection_name"
-	case AttrDBNamespace:
-		return "db_namespace"
-	case AttrServerAddress:
-		return "server_address"
-	case AttrErrorType:
-		return "error_type"
-	case AttrDBResponseStatus:
-		return "db_response_status"
-	}
-	return ""
 }
