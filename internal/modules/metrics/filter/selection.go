@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
 // BuildSelection returns the rollup table, a metrics_series CTE, joins, and
@@ -45,15 +46,10 @@ func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols s
 	return fromTable, cte, joins, selectCols, groupByCols, args
 }
 
-// rollupTable picks the read table for the effective grain: the 1m rollup for
-// sub-hour grains (1m/5m/15m), the 1h rollup for hourly+ grains.
+// rollupTable picks the read table for the effective grain via the shared
+// timebucket mapping: 1m grain -> 1m, 5m/15m -> 5m, hourly+ -> 1h.
 func rollupTable(startMs, endMs int64, step string) string {
-	switch g := BucketDurationSeconds(startMs, endMs, step); {
-	case g < 3600:
-		return "optikk.metrics_1m"
-	default:
-		return "optikk.metrics_1h"
-	}
+	return timebucket.RollupTableForGrain(BucketDurationSeconds(startMs, endMs, step))
 }
 
 // seriesColumn returns the metrics_series column expression for a group key:
@@ -119,16 +115,5 @@ func BucketDurationSeconds(startMs, endMs int64, step string) int64 {
 
 // bucketGrainSQL returns toStartOf* fragment matching BucketDurationSeconds.
 func bucketGrainSQL(startMs, endMs int64, step string) string {
-	switch BucketDurationSeconds(startMs, endMs, step) {
-	case 60:
-		return "toStartOfMinute(timestamp)"
-	case 900:
-		return "toStartOfFifteenMinutes(timestamp)"
-	case 3600:
-		return "toStartOfHour(timestamp)"
-	case 86400:
-		return "toStartOfDay(timestamp)"
-	default: // 300
-		return "toStartOfFiveMinutes(timestamp)"
-	}
+	return timebucket.GrainSQL(BucketDurationSeconds(startMs, endMs, step))
 }

@@ -4,7 +4,7 @@ import "strings"
 
 import "testing"
 
-// Day-window base filters routed to the 5m grain on the 1m rollup tier.
+// Day-window base filters route to the 5m grain on the 5m rollup tier.
 func baseFilters() Filters {
 	return Filters{TeamID: 1, StartMs: 1_000_000, EndMs: 1_000_000 + 24*3_600_000, MetricName: "m"}
 }
@@ -22,7 +22,7 @@ func TestBuildSelectionShortWindowUsesMinuteRollup(t *testing.T) {
 // No filters and no group-by: rollup scanned directly, no CTE or join.
 func TestBuildSelectionNoFilter(t *testing.T) {
 	from, cte, joins, _, groupBy, _ := BuildSelection(baseFilters())
-	if from != "optikk.metrics_1m" {
+	if from != "optikk.metrics_5m" {
 		t.Fatalf("from = %q", from)
 	}
 	if cte != "" || joins != "" {
@@ -39,7 +39,7 @@ func TestBuildSelectionAttrFilterUsesSeries(t *testing.T) {
 	f := baseFilters()
 	f.Tags = []TagFilter{{Key: "db.name", Operator: "=", Values: []string{"orders"}}}
 	from, cte, joins, _, _, args := BuildSelection(f)
-	if from != "optikk.metrics_1m" {
+	if from != "optikk.metrics_5m" {
 		t.Fatalf("from = %q", from)
 	}
 	if !strings.Contains(cte, "optikk.metrics_series") || !strings.Contains(cte, "fps AS") {
