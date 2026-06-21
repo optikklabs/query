@@ -2,8 +2,7 @@
 // for the APM (spanmetrics) dimensions that were formerly stored as fixed
 // columns on the histogram rollup. The dimension now lives in the series
 // metadata JSON and is resolved to a fingerprint set before the rollup join.
-// Keys match the names the rollup MV used to extract (see the pre-refactor
-// ingest/db/clickhouse/12_metrics_hist_5m.sql).
+// Keys match the dimension names the histogram rollup MV formerly extracted.
 package seriesattr
 
 const (

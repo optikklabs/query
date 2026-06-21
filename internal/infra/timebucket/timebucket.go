@@ -64,15 +64,37 @@ func bucketAt(unixSeconds int64, grain time.Duration) time.Time {
 // DisplayGrainSQL returns the fastest CH SQL fragment for adaptive grain.
 // The returned fragment expects a `timestamp` column in scope.
 func DisplayGrainSQL(windowMs int64) string {
-	switch displayGrain(windowMs) {
-	case time.Minute:
-		return "toStartOfMinute(timestamp)"
-	case 5 * time.Minute:
-		return "toStartOfFiveMinutes(timestamp)"
-	case time.Hour:
-		return "toStartOfHour(timestamp)"
+	return GrainSQL(int64(displayGrain(windowMs).Seconds()))
+}
+
+// RollupTableForGrain maps a display grain (seconds) to its backing scalar
+// rollup tier. Single source of truth for both window- and step-based readers.
+func RollupTableForGrain(grainSec int64) string {
+	switch {
+	case grainSec < 300:
+		return "optikk.metrics_1m"
+	case grainSec < 3600:
+		return "optikk.metrics_5m"
 	default:
+		return "optikk.metrics_1h"
+	}
+}
+
+// GrainSQL maps a display grain (seconds) to its toStartOf* SQL fragment.
+func GrainSQL(grainSec int64) string {
+	switch grainSec {
+	case 60:
+		return "toStartOfMinute(timestamp)"
+	case 300:
+		return "toStartOfFiveMinutes(timestamp)"
+	case 900:
+		return "toStartOfFifteenMinutes(timestamp)"
+	case 3600:
+		return "toStartOfHour(timestamp)"
+	case 86400:
 		return "toStartOfDay(timestamp)"
+	default:
+		return "toStartOfFiveMinutes(timestamp)"
 	}
 }
 
@@ -100,13 +122,10 @@ func SnapRangeForRollup(startMs, endMs int64) (int64, int64) {
 	return startMs, endMs
 }
 
-// MetricsRollup returns the scalar rollup table for the window: 1m for windows
-// up to the 1h-routing threshold, 1h beyond it.
+// MetricsRollup returns the scalar rollup table for the window's display grain:
+// 1m (<=5h), 5m (5h-25h), or 1h (beyond).
 func MetricsRollup(windowMs int64) string {
-	if UseHourRollup(windowMs) {
-		return "optikk.metrics_1h"
-	}
-	return "optikk.metrics_1m"
+	return RollupTableForGrain(int64(displayGrain(windowMs).Seconds()))
 }
 
 // MetricsHistRollup returns the rollup table for histogram queries.
