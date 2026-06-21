@@ -23,7 +23,8 @@ func FormatDisplayBucket(t time.Time) string {
 }
 
 // DisplayBucket buckets a row timestamp into a display-time bucket.
-// Grain is based on query window: <=3h: 1m, <=24h: 5m, <=7d: 1h, else 1d.
+// Grain is based on query window: <=24h: 5m, <=7d: 1h, else 1d. 1m is the
+// finest tier (raw -> 1m -> 1h), so there is no sub-1m display grain.
 func DisplayBucket(rowUnixSeconds int64, windowMs int64) time.Time {
 	return bucketAt(rowUnixSeconds, displayGrain(windowMs))
 }
@@ -32,18 +33,28 @@ func DisplayGrain(windowMs int64) time.Duration {
 	return displayGrain(windowMs)
 }
 
-func displayGrain(windowMs int64) time.Duration {
-	w := time.Duration(windowMs) * time.Millisecond
-	switch {
-	case w <= 3*time.Hour:
-		return time.Minute
-	case w <= 24*time.Hour:
-		return 5 * time.Minute
-	case w <= 7*24*time.Hour:
-		return time.Hour
-	default:
-		return 24 * time.Hour
+// MaxBucketPoints caps points-per-graph, mirroring Datadog's ~300/graph rule.
+const MaxBucketPoints int64 = 300
+
+// displayGrainLadder are the table-aligned display grains (1m, 5m, 1h, 1d). The
+// readers pick their rollup table via UseHourRollup, so the grain must never be
+// finer than the chosen table's native resolution.
+var displayGrainLadder = []int64{60, 300, 3600, 86400}
+
+// GrainSecondsFor picks the finest grain in the ladder keeping the point count
+// (windowSeconds/grain) at or under MaxBucketPoints.
+func GrainSecondsFor(ladder []int64, windowSeconds int64) int64 {
+	for _, g := range ladder {
+		if windowSeconds/g <= MaxBucketPoints {
+			return g
+		}
 	}
+	return ladder[len(ladder)-1]
+}
+
+func displayGrain(windowMs int64) time.Duration {
+	sec := GrainSecondsFor(displayGrainLadder, windowMs/1000)
+	return time.Duration(sec) * time.Second
 }
 
 func bucketAt(unixSeconds int64, grain time.Duration) time.Time {
@@ -66,7 +77,7 @@ func DisplayGrainSQL(windowMs int64) string {
 }
 
 // UseHourRollup reports whether a query window should read the 1h rollup
-// tier instead of the 1m tier. True exactly when the display grain is >= 1h
+// tier instead of the 5m tier. True exactly when the display grain is >= 1h
 // (window > 24h), so hourly rows always satisfy the display grain losslessly.
 func UseHourRollup(windowMs int64) bool {
 	return displayGrain(windowMs) >= time.Hour
@@ -89,15 +100,8 @@ func SnapRangeForRollup(startMs, endMs int64) (int64, int64) {
 	return startMs, endMs
 }
 
-// SpansRollup returns the spans RED rollup table for the query window.
-func SpansRollup(windowMs int64) string {
-	if UseHourRollup(windowMs) {
-		return "optikk.spans_1h"
-	}
-	return "optikk.spans_1m"
-}
-
-// MetricsRollup returns the scalar metrics rollup table for the query window.
+// MetricsRollup returns the scalar rollup table for the window: 1m for windows
+// up to the 1h-routing threshold, 1h beyond it.
 func MetricsRollup(windowMs int64) string {
 	if UseHourRollup(windowMs) {
 		return "optikk.metrics_1h"
@@ -105,12 +109,10 @@ func MetricsRollup(windowMs int64) string {
 	return "optikk.metrics_1m"
 }
 
-// MetricsHistRollup returns the histogram metrics rollup table for the query window.
+// MetricsHistRollup returns the rollup table for histogram queries.
+// Now unified with scalar rollups — both carry histogram state.
 func MetricsHistRollup(windowMs int64) string {
-	if UseHourRollup(windowMs) {
-		return "optikk.metrics_hist_1h"
-	}
-	return "optikk.metrics_hist_1m"
+	return MetricsRollup(windowMs)
 }
 
 // WithBucketGrainSec appends @bucketGrainSec in seconds matching DisplayGrain.

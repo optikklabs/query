@@ -18,25 +18,31 @@ func NewRepository(db clickhouse.Conn) *Repository {
 
 // No producer instrumentation is emitted; produce rate is derived from the
 // growth of the broker-scraped partition log-end offset (kafka.partition.
-// current_offset). Per-minute growth (val_max - val_min) feeds the counter-rate
-// fold. This approximates: inter-minute boundary gaps between scrapes are not
-// counted, so it can undercount under sustained load.
+// current_offset). Per-bucket growth (val_max - val_min) feeds the counter-rate
+// fold, which divides the summed deltas by the display-grain seconds — so the
+// source-bucket grain (5m) does not affect the result.
 var produceOffsetMetrics = []string{"kafka.partition.current_offset"}
 
 // QueryPublishRateByTopic returns publish rate grouped by topic.
 func (r *Repository) QueryPublishRateByTopic(ctx context.Context, teamID int64, startMs, endMs int64) ([]TopicCounterRow, error) {
 	const query = `
+		WITH series AS (
+		    SELECT fingerprint, any(` + filter.AttrTopic + `) AS topic
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
+		    WHERE ` + filter.AttrTopic + ` != '' AND lower(` + filter.AttrSystem + `) = 'kafka'
+		    GROUP BY fingerprint
+		)
 		SELECT
-		    timestamp,
-		    messaging_destination          AS topic,
-		    greatest(val_max - val_min, 0) AS value
-		FROM optikk.metrics_1m -- pinned to 1m: Go-side rate folds assume per-minute rows
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND metric_name IN @metricNames
-		     AND timestamp   BETWEEN @start AND @end
-		WHERE messaging_destination != ''
-		  AND lower(messaging_system) = 'kafka'
+		    toStartOfFiveMinutes(m.timestamp)  AS timestamp,
+		    series.topic                       AS topic,
+		    greatest(max(m.value) - min(m.value), 0) AS value
+		FROM optikk.metrics AS m -- rate fold divides by display-grain seconds (grain-independent)
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.metric_name IN @metricNames
+		     AND m.timestamp   BETWEEN @start AND @end
+		GROUP BY timestamp, topic
 		ORDER BY timestamp`
 	args := filter.WithMetricNames(filter.MetricArgs(teamID, startMs, endMs), produceOffsetMetrics)
 	var rows []TopicCounterRow

@@ -11,7 +11,7 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// MetricBackend evaluates metric monitors against ClickHouse rollup tables.
+// MetricBackend evaluates metric monitors against ClickHouse raw metrics.
 type MetricBackend struct {
 	db clickhouse.Conn
 }
@@ -34,7 +34,6 @@ func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, q model
 		SELECT ` + expr + ` AS value
 		FROM optikk.` + table + `
 		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND metric_name = @metricName
 		WHERE timestamp BETWEEN @start AND @end`
 
@@ -63,7 +62,6 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q model
 		expr + ` AS value
 		FROM optikk.` + table + `
 		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND metric_name = @metricName
 		WHERE timestamp BETWEEN @start AND @end
 		GROUP BY bucket
@@ -81,23 +79,23 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q model
 	return out, nil
 }
 
-// metricSource picks the rollup table and SELECT expression for aggregation.
+// metricSource picks the raw metrics table and SELECT expression for aggregation.
 func metricSource(agg string) (table, expr string) {
 	switch agg {
 	case "sum":
-		return "metrics_1m", "sum(val_sum)"
+		return "metrics", "sum(value)"
 	case "min":
-		return "metrics_1m", "min(val_min)"
+		return "metrics", "min(value)"
 	case "max":
-		return "metrics_1m", "max(val_max)"
+		return "metrics", "max(value)"
 	case "p50":
-		return "metrics_hist_1m", "(quantilesPrometheusHistogramMerge(0.50, 0.95, 0.99)(latency_state))[1]"
+		return "metrics", "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[1]"
 	case "p95":
-		return "metrics_hist_1m", "(quantilesPrometheusHistogramMerge(0.50, 0.95, 0.99)(latency_state))[2]"
+		return "metrics", "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[2]"
 	case "p99":
-		return "metrics_hist_1m", "(quantilesPrometheusHistogramMerge(0.50, 0.95, 0.99)(latency_state))[3]"
+		return "metrics", "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[3]"
 	default: // avg
-		return "metrics_1m", "sum(val_sum) / sum(val_count)"
+		return "metrics", "avg(value)"
 	}
 }
 

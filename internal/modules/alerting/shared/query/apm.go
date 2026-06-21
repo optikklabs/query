@@ -9,10 +9,23 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	"github.com/optikklabs/query/internal/shared/chargs"
-	"github.com/optikklabs/query/internal/shared/mathutil"
+	"github.com/optikklabs/query/internal/shared/seriesattr"
 )
 
-// APMBackend evaluates APM monitors against optikk.spans_1m.
+// durationStatusCTE resolves the spanmetrics status_code per fingerprint for the
+// 'duration' histogram, joined to the rollup on fingerprint.
+const durationStatusCTE = `
+		WITH series AS (
+		    SELECT fingerprint,
+		           any(service)                       AS service,
+		           any(` + seriesattr.StatusCode + `) AS status_code
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE service = @service
+		    GROUP BY fingerprint
+		)`
+
+// APMBackend evaluates APM monitors against spanmetrics.
 type APMBackend struct {
 	db clickhouse.Conn
 }
@@ -30,28 +43,15 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 	endMs := now.UnixMilli()
 	startMs := endMs - windowSec*1000
 
-	// Scalar evaluation stays on spans_1m regardless of window: the tracked
-	// value divides counts by the exact windowSec, and the 1h tier's
-	// hour-snapped edges would skew that math. The 1m tier carries the full
-	// 30-day retention, so every alert window is servable.
-	const query = `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id   = @teamID
-		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		         AND service   = @service
-		)
-		SELECT sumIf(value, metric_name = 'calls')                                                   AS request_count,
-		       sumIf(value, metric_name = 'calls' AND JSONExtractString(attributes, 'status.code') = 'STATUS_CODE_ERROR') AS error_count,
-		       sumMap(hist_buckets, hist_counts)                                                     AS hist
-		FROM optikk.metrics
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND fingerprint IN active_fps
-		     AND service     = @service
-		     AND metric_name IN ('calls', 'duration')
-		WHERE timestamp BETWEEN @start AND @end`
+	const query = durationStatusCTE + `
+		SELECT sum(m.hist_count)                                          AS request_count,
+		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)    AS error_count,
+		       quantilesPrometheusHistogramMerge(0.99)(quantilesPrometheusHistogramArrayState(0.99)(m.hist_buckets, arrayCumSum(m.hist_counts))) AS qs
+		FROM optikk.metrics AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.metric_name = 'traces.span.metrics.duration'
+		WHERE m.timestamp BETWEEN @start AND @end`
 
 	args := apmArgs(m.TeamID, q.APM.Service, startMs, endMs)
 	var rows []apmAggRow
@@ -62,9 +62,8 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		return ScalarResult{HasData: false}, nil
 	}
 	row := rows[0]
-	qs := mathutil.Quantiles([]float64{0.99}, row.HistTuple)
-	if len(qs) > 0 {
-		row.P99 = float64(qs[0])
+	if len(row.QS) > 0 {
+		row.P99 = row.QS[0]
 	}
 
 	if cond.MinSample != nil && row.RequestCount < uint64(*cond.MinSample) {
@@ -83,25 +82,16 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 	startMs := endMs - windowMs
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 
-	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id   = @teamID
-		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		         AND service   = @service
-		)
+	query := durationStatusCTE + `
 		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket,
-		       sumIf(value, metric_name = 'calls')                                                   AS request_count,
-		       sumIf(value, metric_name = 'calls' AND JSONExtractString(attributes, 'status.code') = 'STATUS_CODE_ERROR') AS error_count,
-		       sumMap(hist_buckets, hist_counts)                                                     AS hist
-		FROM optikk.metrics
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND fingerprint IN active_fps
-		     AND service     = @service
-		     AND metric_name IN ('calls', 'duration')
-		WHERE timestamp BETWEEN @start AND @end
+		       sum(m.hist_count)                                          AS request_count,
+		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)    AS error_count,
+		       quantilesPrometheusHistogramMerge(0.99)(quantilesPrometheusHistogramArrayState(0.99)(m.hist_buckets, arrayCumSum(m.hist_counts))) AS qs
+		FROM optikk.metrics AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.metric_name = 'traces.span.metrics.duration'
+		WHERE m.timestamp BETWEEN @start AND @end
 		GROUP BY bucket
 		ORDER BY bucket`
 
@@ -116,10 +106,9 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 		windowSec = 300
 	}
 	for _, r := range rows {
-		qs := mathutil.Quantiles([]float64{0.99}, r.HistTuple)
 		var p99 float64
-		if len(qs) > 0 {
-			p99 = float64(qs[0])
+		if len(r.QS) > 0 {
+			p99 = r.QS[0]
 		}
 		row := apmAggRow{RequestCount: r.RequestCount, ErrorCount: r.ErrorCount, P99: p99}
 		out = append(out, Point{BucketMs: r.Bucket.UnixMilli(), Value: apmTrackValue(q.APM.Track, row, windowSec)})
@@ -162,16 +151,16 @@ func apmArgs(teamID int64, service string, startMs, endMs int64) []any {
 }
 
 type apmAggRow struct {
-	RequestCount uint64  `ch:"request_count"`
-	ErrorCount   uint64  `ch:"error_count"`
-	HistTuple    []any   `ch:"hist"`
-	P99          float64 `ch:"p99"`
+	RequestCount uint64    `ch:"request_count"`
+	ErrorCount   uint64    `ch:"error_count"`
+	QS           []float64 `ch:"qs"`
+	P99          float64   `ch:"p99"`
 }
 
 type apmSeriesRow struct {
 	Bucket       time.Time `ch:"bucket"`
 	RequestCount uint64    `ch:"request_count"`
 	ErrorCount   uint64    `ch:"error_count"`
-	HistTuple    []any     `ch:"hist"`
+	QS           []float64 `ch:"qs"`
 	P99          float64   `ch:"p99"`
 }

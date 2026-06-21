@@ -7,7 +7,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
-	"github.com/optikklabs/query/internal/shared/mathutil"
+	"github.com/optikklabs/query/internal/shared/seriesattr"
 )
 
 type Repository struct {
@@ -20,25 +20,24 @@ func NewRepository(db clickhouse.Conn) *Repository {
 
 func (r *Repository) GetServiceREDMetrics(ctx context.Context, teamID int64, startMs, endMs int64, serviceName string) (*redMetricsRow, error) {
 	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id   = @teamID
-		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		         AND service   = @serviceName
+		WITH series AS (
+		    SELECT fingerprint,
+		           any(service)                       AS service,
+		           any(` + seriesattr.StatusCode + `) AS status_code
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE service = @serviceName
+		    GROUP BY fingerprint
 		)
-		SELECT service                                                                               AS service,
-		       sumIf(value, metric_name = 'calls')                                                   AS total_count,
-		       sumIf(value, metric_name = 'calls' AND JSONExtractString(attributes, 'status.code') = 'STATUS_CODE_ERROR') AS error_count,
-		       sumMap(hist_buckets, hist_counts)                                                     AS hist
-		FROM optikk.metrics
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND fingerprint IN active_fps
-		     AND timestamp   BETWEEN @start AND @end
-		     AND metric_name IN ('calls', 'duration')
-		WHERE service = @serviceName
-		GROUP BY service`
+		SELECT any(series.service)                                          AS service,
+		       sum(m.hist_count)                                           AS total_count,
+		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)     AS error_count,
+		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'`
 	var rows []redMetricsRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redservice.GetServiceREDMetrics",
 		&rows, query, detailArgs(teamID, startMs, endMs, serviceName)...); err != nil {
@@ -48,34 +47,30 @@ func (r *Repository) GetServiceREDMetrics(ctx context.Context, teamID int64, sta
 		return nil, nil
 	}
 	row := rows[0]
-	row.QS = mathutil.Quantiles([]float64{0.5, 0.95, 0.99}, row.HistTuple)
 	if len(row.QS) >= 3 {
-		row.P50Ms = row.QS[0]
-		row.P95Ms = row.QS[1]
-		row.P99Ms = row.QS[2]
+		row.P50Ms = float32(row.QS[0])
+		row.P95Ms = float32(row.QS[1])
+		row.P99Ms = float32(row.QS[2])
 	}
 	return &row, nil
 }
 
 func (r *Repository) GetOperationBaseline(ctx context.Context, teamID int64, startMs, endMs int64, serviceName, operationName string) (operationBaselineRow, error) {
 	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id   = @teamID
-		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		         AND service   = @serviceName
+		WITH series AS (
+		    SELECT fingerprint
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE ` + seriesattr.SpanName + ` = @operationName AND service = @serviceName
+		    GROUP BY fingerprint
 		)
-		SELECT sumIf(value, metric_name = 'calls') AS span_count,
-		       sumMap(hist_buckets, hist_counts)   AS hist
-		FROM optikk.metrics
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND fingerprint IN active_fps
-		     AND timestamp   BETWEEN @start AND @end
-		     AND metric_name IN ('calls', 'duration')
-		WHERE service = @serviceName
-		  AND JSONExtractString(attributes, 'span.name') = @operationName`
+		SELECT sum(m.hist_count)                                            AS span_count,
+		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'`
 	args := append(chargs.RollupRangeArgs(teamID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("operationName", operationName),
@@ -89,11 +84,10 @@ func (r *Repository) GetOperationBaseline(ctx context.Context, teamID int64, sta
 		return operationBaselineRow{}, nil
 	}
 	row := rows[0]
-	row.QS = mathutil.Quantiles([]float64{0.5, 0.95, 0.99}, row.HistTuple)
 	if len(row.QS) >= 3 {
-		row.P50Ms = row.QS[0]
-		row.P95Ms = row.QS[1]
-		row.P99Ms = row.QS[2]
+		row.P50Ms = float32(row.QS[0])
+		row.P95Ms = float32(row.QS[1])
+		row.P99Ms = float32(row.QS[2])
 	}
 	return row, nil
 }
@@ -104,18 +98,17 @@ func (r *Repository) GetServiceSaturationAggs(
 	query := `
 		WITH service_hosts AS (
 		    SELECT DISTINCT host
-		    FROM optikk.metrics
-		    PREWHERE team_id     = @teamID
-		         AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		         AND service     = @serviceName
-		         AND host        != ''
-		         AND metric_name = 'calls'
+		    FROM optikk.metrics_series
+		    PREWHERE team_id   = @teamID
+		         AND timestamp BETWEEN @start AND @end
+		    WHERE service = @serviceName
+		      AND host    != ''
 		),
 		active_fps AS (
 		    SELECT fingerprint, any(service) AS service
-		    FROM optikk.metrics_resource AS mr
+		    FROM optikk.metrics_series AS mr
 		    PREWHERE team_id     = @teamID
-		         AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
+		         AND timestamp   BETWEEN @start AND @end
 		    WHERE (mr.service = @serviceName OR mr.host IN service_hosts)
 		    GROUP BY fingerprint
 		)
@@ -126,7 +119,6 @@ func (r *Repository) GetServiceSaturationAggs(
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN active_fps AS r ON m.fingerprint = r.fingerprint
 		PREWHERE m.team_id     = @teamID
-		     AND m.ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY service, metric_name`
@@ -146,18 +138,17 @@ func (r *Repository) GetServiceSaturationTimeSeries(
 	query := `
 		WITH service_hosts AS (
 		    SELECT DISTINCT host
-		    FROM optikk.metrics
-		    PREWHERE team_id     = @teamID
-		         AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		         AND service     = @serviceName
-		         AND host        != ''
-		         AND metric_name = 'calls'
+		    FROM optikk.metrics_series
+		    PREWHERE team_id   = @teamID
+		         AND timestamp BETWEEN @start AND @end
+		    WHERE service = @serviceName
+		      AND host    != ''
 		),
 		active_fps AS (
 		    SELECT fingerprint, any(service) AS service
-		    FROM optikk.metrics_resource AS mr
+		    FROM optikk.metrics_series AS mr
 		    PREWHERE team_id     = @teamID
-		         AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
+		         AND timestamp   BETWEEN @start AND @end
 		    WHERE (mr.service = @serviceName OR mr.host IN service_hosts)
 		    GROUP BY fingerprint
 		)
@@ -167,7 +158,6 @@ func (r *Repository) GetServiceSaturationTimeSeries(
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN active_fps AS r ON m.fingerprint = r.fingerprint
 		PREWHERE m.team_id     = @teamID
-		     AND m.ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY bucket_at

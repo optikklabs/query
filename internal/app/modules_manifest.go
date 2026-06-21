@@ -26,6 +26,7 @@ import (
 	saturation_kafka_consumer "github.com/optikklabs/query/internal/modules/saturation/kafka/consumer"
 	saturation_kafka_explorer "github.com/optikklabs/query/internal/modules/saturation/kafka/explorer"
 	saturation_kafka_producer "github.com/optikklabs/query/internal/modules/saturation/kafka/producer"
+	saturation_kafka_topology "github.com/optikklabs/query/internal/modules/saturation/kafka/topology"
 	services_errors "github.com/optikklabs/query/internal/modules/services/errors"
 	services_redfleet "github.com/optikklabs/query/internal/modules/services/redfleet"
 	services_redservice "github.com/optikklabs/query/internal/modules/services/redservice"
@@ -67,6 +68,7 @@ func configuredModules(
 		saturation_kafka_producer.NewModule(nativeQuerier),
 		saturation_kafka_consumer.NewModule(nativeQuerier),
 		saturation_kafka_explorer.NewModule(nativeQuerier),
+		saturation_kafka_topology.NewModule(nativeQuerier),
 		services_topology.NewModule(nativeQuerier),
 		traces_explorer.NewModule(nativeQuerier),
 		traces_detail.NewModule(nativeQuerier),

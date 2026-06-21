@@ -8,7 +8,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
-	"github.com/optikklabs/query/internal/shared/mathutil"
+	"github.com/optikklabs/query/internal/shared/seriesattr"
 )
 
 type Repository struct {
@@ -21,15 +21,23 @@ func NewRepository(db clickhouse.Conn) *Repository {
 
 func (r *Repository) GetFleetREDMetrics(ctx context.Context, teamID int64, startMs, endMs int64) ([]redMetricsRow, error) {
 	query := `
-		SELECT service                                                                               AS service,
-		       sumIf(value, metric_name = 'calls')                                                   AS total_count,
-		       sumIf(value, metric_name = 'calls' AND JSONExtractString(attributes, 'status.code') = 'STATUS_CODE_ERROR') AS error_count,
-		       sumMap(hist_buckets, hist_counts)                                                     AS hist
-		FROM optikk.metrics
-		PREWHERE team_id   = @teamID
-		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		     AND timestamp BETWEEN @start AND @end
-		     AND metric_name IN ('calls', 'duration')
+		WITH series AS (
+		    SELECT fingerprint,
+		           any(service)                       AS service,
+		           any(` + seriesattr.StatusCode + `) AS status_code
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    GROUP BY fingerprint
+		)
+		SELECT series.service                                              AS service,
+		       sum(m.hist_count)                                           AS total_count,
+		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)     AS error_count,
+		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY service`
 	var rows []redMetricsRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetFleetREDMetrics",
@@ -37,11 +45,10 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, teamID int64, start
 		return nil, err
 	}
 	for i := range rows {
-		rows[i].QS = mathutil.Quantiles([]float64{0.5, 0.95, 0.99}, rows[i].HistTuple)
 		if len(rows[i].QS) >= 3 {
-			rows[i].P50Ms = rows[i].QS[0]
-			rows[i].P95Ms = rows[i].QS[1]
-			rows[i].P99Ms = rows[i].QS[2]
+			rows[i].P50Ms = float32(rows[i].QS[0])
+			rows[i].P95Ms = float32(rows[i].QS[1])
+			rows[i].P99Ms = float32(rows[i].QS[2])
 		}
 	}
 	return rows, nil
@@ -114,14 +121,21 @@ type requestRateRawRow struct {
 
 func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, teamID int64, startMs, endMs int64) ([]requestRateRawRow, error) {
 	query := `
+		WITH series AS (
+		    SELECT fingerprint,
+		           any(` + seriesattr.StatusCode + `) AS status_code
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    GROUP BY fingerprint
+		)
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       sumIf(value, metric_name = 'calls')    AS request_count,
-		       sumIf(value, metric_name = 'calls' AND JSONExtractString(attributes, 'status.code') = 'STATUS_CODE_ERROR') AS error_count
-		FROM optikk.metrics
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND timestamp   BETWEEN @start AND @end
-		     AND metric_name = 'calls'
+		       sum(m.hist_count)                                       AS request_count,
+		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `) AS error_count
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 	var rows []requestRateRawRow
@@ -129,7 +143,7 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, teamI
 		&rows, query, chargs.RollupRangeArgs(teamID, startMs, endMs)...)
 }
 
-// statusBucketTimeseriesRow is one (bucket, status-class) row from spans_1m.
+// statusBucketTimeseriesRow is one (bucket, status-class) row from spanmetrics.
 type statusBucketTimeseriesRow struct {
 	BucketAt     time.Time `ch:"bucket_at"`
 	StatusBucket string    `ch:"http_status_bucket"`
@@ -138,12 +152,11 @@ type statusBucketTimeseriesRow struct {
 
 // latencyPercentilesTimeseriesRow holds p50/p95/p99 for one display bucket.
 type latencyPercentilesTimeseriesRow struct {
-	BucketAt  time.Time `ch:"bucket_at"`
-	HistTuple []any     `ch:"hist"`
-	QS        []float32 `ch:"qs"`
-	P50Ms     float32   `ch:"p50_ms"`
-	P95Ms     float32   `ch:"p95_ms"`
-	P99Ms     float32   `ch:"p99_ms"`
+	BucketAt time.Time `ch:"bucket_at"`
+	QS       []float64 `ch:"qs"`
+	P50Ms    float32   `ch:"p50_ms"`
+	P95Ms    float32   `ch:"p95_ms"`
+	P99Ms    float32   `ch:"p99_ms"`
 }
 
 // topEndpointRow combines rate/error/percentile shape for one operation.
@@ -154,8 +167,7 @@ type topEndpointRow struct {
 	HTTPRoute     string    `ch:"http_route"`
 	TotalCount    uint64    `ch:"total_count"`
 	ErrorCount    uint64    `ch:"error_count"`
-	HistTuple     []any     `ch:"hist"`
-	QS            []float32 `ch:"qs"`
+	QS            []float64 `ch:"qs"`
 	P50Ms         float32   `ch:"p50_ms"`
 	P95Ms         float32   `ch:"p95_ms"`
 	P99Ms         float32   `ch:"p99_ms"`
@@ -166,24 +178,23 @@ func (r *Repository) GetStatusTimeSeries(
 ) ([]statusBucketTimeseriesRow, error) {
 	grainSQL := timebucket.DisplayGrainSQL(endMs - startMs)
 	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id   = @teamID
-		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		         ` + serviceResourcePred(serviceName) + `
+		WITH series AS (
+		    SELECT fingerprint,
+		           any(` + seriesattr.HTTPStatusCode + `) AS http_status_code
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE 1=1
+		          ` + serviceWherePred(serviceName) + `
+		    GROUP BY fingerprint
 		)
 		SELECT ` + grainSQL + ` AS bucket_at,
-		       JSONExtractString(attributes, 'http.status_code') AS http_status_bucket,
-		       sum(value) AS request_count
-		FROM optikk.metrics
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND fingerprint IN active_fps
-		     AND timestamp   BETWEEN @start AND @end
-		     AND metric_name = 'calls'
-		WHERE 1=1
-		      ` + serviceWherePred(serviceName) + `
+		       series.http_status_code AS http_status_bucket,
+		       sum(m.hist_count)       AS request_count
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY bucket_at, http_status_bucket
 		ORDER BY bucket_at ASC`
 	var rows []statusBucketTimeseriesRow
@@ -196,23 +207,21 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(
 ) ([]latencyPercentilesTimeseriesRow, error) {
 	grainSQL := timebucket.DisplayGrainSQL(endMs - startMs)
 	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id   = @teamID
-		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		         ` + serviceResourcePred(serviceName) + `
+		WITH series AS (
+		    SELECT fingerprint
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE 1=1
+		          ` + serviceWherePred(serviceName) + `
+		    GROUP BY fingerprint
 		)
 		SELECT ` + grainSQL + ` AS bucket_at,
-		       sumMap(hist_buckets, hist_counts) AS hist
-		FROM optikk.metrics
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND fingerprint IN active_fps
-		     AND timestamp   BETWEEN @start AND @end
-		     AND metric_name = 'duration'
-		WHERE 1=1
-		      ` + serviceWherePred(serviceName) + `
+		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 	var rows []latencyPercentilesTimeseriesRow
@@ -221,11 +230,10 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(
 		return nil, err
 	}
 	for i := range rows {
-		rows[i].QS = mathutil.Quantiles([]float64{0.5, 0.95, 0.99}, rows[i].HistTuple)
 		if len(rows[i].QS) >= 3 {
-			rows[i].P50Ms = rows[i].QS[0]
-			rows[i].P95Ms = rows[i].QS[1]
-			rows[i].P99Ms = rows[i].QS[2]
+			rows[i].P50Ms = float32(rows[i].QS[0])
+			rows[i].P95Ms = float32(rows[i].QS[1])
+			rows[i].P99Ms = float32(rows[i].QS[2])
 		}
 	}
 	return rows, nil
@@ -240,29 +248,32 @@ func (r *Repository) GetTopEndpointsCombined(
 	}
 
 	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE team_id   = @teamID
-		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		         ` + serviceResourcePred(serviceName) + `
-		)
-		SELECT service                                                                               AS service,
-		       JSONExtractString(attributes, 'span.name')                                            AS operation_name,
-		       any(JSONExtractString(attributes, 'span.kind'))                                       AS kind_string,
-		       any(JSONExtractString(attributes, 'http.route'))                                      AS http_route,
-		       sumIf(value, metric_name = 'calls')                                                   AS total_count,
-		       sumIf(value, metric_name = 'calls' AND JSONExtractString(attributes, 'status.code') = 'STATUS_CODE_ERROR') AS error_count,
-		       sumMap(hist_buckets, hist_counts)                                                     AS hist
-		FROM optikk.metrics
-		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
-		     AND fingerprint IN active_fps
-		     AND timestamp   BETWEEN @start AND @end
-		     AND metric_name IN ('calls', 'duration')
-		WHERE 1=1
-		      ` + serviceWherePred(serviceName) + `
-		GROUP BY service, operation_name
+		WITH series AS (
+		    SELECT fingerprint,
+		           any(service)                           AS service,
+		           any(` + seriesattr.SpanName + `)       AS span_name,
+		           any(` + seriesattr.SpanKind + `)       AS span_kind,
+		           any(` + seriesattr.HTTPStatusCode + `) AS http_status_code,
+		           any(` + seriesattr.StatusCode + `)     AS status_code
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE 1=1
+		          ` + serviceWherePred(serviceName) + `
+		    GROUP BY fingerprint
+		),
+		SELECT any(series.service)                                                  AS service,
+		       series.span_name                                                     AS operation_name,
+		       any(series.span_kind)                                                AS kind_string,
+		       any(series.http_status_code)                                         AS http_route,
+		       sum(m.hist_count)                                                    AS total_count,
+		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)              AS error_count,
+		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state)  AS qs
+		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		INNER JOIN series ON m.fingerprint = series.fingerprint
+		PREWHERE m.team_id     = @teamID
+		     AND m.timestamp   BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'
+		GROUP BY operation_name
 		HAVING operation_name != '' ` + paginationFilter + `
 		ORDER BY total_count DESC, operation_name ASC
 		LIMIT @limit`
@@ -277,21 +288,13 @@ func (r *Repository) GetTopEndpointsCombined(
 		return nil, err
 	}
 	for i := range rows {
-		rows[i].QS = mathutil.Quantiles([]float64{0.5, 0.95, 0.99}, rows[i].HistTuple)
 		if len(rows[i].QS) >= 3 {
-			rows[i].P50Ms = rows[i].QS[0]
-			rows[i].P95Ms = rows[i].QS[1]
-			rows[i].P99Ms = rows[i].QS[2]
+			rows[i].P50Ms = float32(rows[i].QS[0])
+			rows[i].P95Ms = float32(rows[i].QS[1])
+			rows[i].P99Ms = float32(rows[i].QS[2])
 		}
 	}
 	return rows, nil
-}
-
-func serviceResourcePred(serviceName string) string {
-	if serviceName == "" {
-		return ""
-	}
-	return "AND service = @serviceName"
 }
 
 func serviceWherePred(serviceName string) string {

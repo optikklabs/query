@@ -10,7 +10,7 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// All read paths query metrics by joining metrics_resource on fingerprint.
+// All read paths query metrics by joining metrics_series on fingerprint.
 
 var memMetricNames = []string{
 	infraconsts.MetricSystemMemoryUtilization,
@@ -34,7 +34,6 @@ func (r *Repository) QueryMemoryUtilizationAgg(ctx context.Context, teamID int64
 		    sum(val_sum) / sum(val_count)  AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
 		PREWHERE team_id        = @teamID
-		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		     AND metric_name   IN @metricNames
 		     AND timestamp   BETWEEN @start AND @end
 		GROUP BY metric_name`
@@ -44,13 +43,13 @@ func (r *Repository) QueryMemoryUtilizationAgg(ctx context.Context, teamID int64
 }
 
 func (r *Repository) QueryMemoryUtilizationForInstance(ctx context.Context, teamID int64, startMs, endMs int64, host, pod, serviceName string) ([]MemoryMetricNameRow, error) {
-	// Filter resolves to a fingerprint set via metrics_resource,
+	// Filter resolves to a fingerprint set via metrics_series,
 	// then narrows the scalar rollup by fingerprint.
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint
-		    FROM optikk.metrics_resource
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		    FROM optikk.metrics_series
+		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE host = @host AND service = @serviceName AND pod = @pod
 		)
 		SELECT
@@ -58,7 +57,6 @@ func (r *Repository) QueryMemoryUtilizationForInstance(ctx context.Context, team
 		    sum(val_sum) / sum(val_count)  AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
 		PREWHERE team_id        = @teamID
-		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		     AND metric_name   IN @metricNames
 		     AND timestamp   BETWEEN @start AND @end
 		WHERE fingerprint IN fps
