@@ -19,9 +19,9 @@ const durationStatusCTE = `
 		    SELECT fingerprint,
 		           any(service)                       AS service,
 		           any(` + seriesattr.StatusCode + `) AS status_code
-		    FROM optikk.metrics_series
+		    FROM optikk.metrics_series AS s
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE service = @service
+		    WHERE s.service = @service
 		    GROUP BY fingerprint
 		)`
 

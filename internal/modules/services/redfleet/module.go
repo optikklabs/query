@@ -27,7 +27,9 @@ func RegisterRoutes(cfg Config, v1 chi.Router, h *REDFleetHandler) {
 	v1.Get("/spans/red/request-and-error-rate", h.GetRequestAndErrorRateTimeSeries)
 	v1.Get("/spans/red/status-timeseries", h.GetStatusTimeSeries)
 	v1.Get("/spans/red/latency-percentiles-timeseries", h.GetLatencyPercentilesTimeSeries)
+	v1.Get("/spans/red/red-by-endpoint", h.GetREDByEndpointTimeSeries)
 	v1.Get("/spans/red/top-endpoints", h.GetTopEndpointsCombined)
+	v1.Get("/spans/red/top-db-queries", h.GetTopDBQueriesCombined)
 }
 
 func NewModule(nativeQuerier clickhouse.Conn) registry.Module {

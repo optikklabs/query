@@ -43,6 +43,7 @@ func (s *Service) GetServiceSummary(ctx context.Context, teamID int64, startMs, 
 		infraconsts.MetricSystemCPUUtilization,
 		infraconsts.MetricSystemCPUUsage,
 		infraconsts.MetricProcessCPUUsage,
+		infraconsts.MetricJVMCPUUtilization,
 		infraconsts.MetricSystemMemoryUtilization,
 		infraconsts.MetricSystemDiskUtilization,
 	}
@@ -59,7 +60,7 @@ func (s *Service) GetServiceSummary(ctx context.Context, teamID int64, startMs, 
 
 	for _, row := range sats {
 		switch row.MetricName {
-		case infraconsts.MetricSystemCPUUtilization, infraconsts.MetricSystemCPUUsage, infraconsts.MetricProcessCPUUsage:
+		case infraconsts.MetricSystemCPUUtilization, infraconsts.MetricSystemCPUUsage, infraconsts.MetricProcessCPUUsage, infraconsts.MetricJVMCPUUtilization:
 			if v := normalizeUtilization(row.Value); v != nil {
 				cpuValues = append(cpuValues, *v)
 			}
@@ -145,6 +146,7 @@ func (s *Service) GetServiceSaturationTimeSeries(
 		infraconsts.MetricSystemCPUUtilization,
 		infraconsts.MetricSystemCPUUsage,
 		infraconsts.MetricProcessCPUUsage,
+		infraconsts.MetricJVMCPUUtilization,
 	}
 
 	rows, err := s.repo.GetServiceSaturationTimeSeries(ctx, teamID, startMs, endMs, serviceName, metricNames)

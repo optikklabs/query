@@ -79,6 +79,14 @@ func (h *REDFleetHandler) GetLatencyPercentilesTimeSeries(w http.ResponseWriter,
 	})
 }
 
+// GetREDByEndpointTimeSeries returns rps/error-rate/p99 per route over time.
+func (h *REDFleetHandler) GetREDByEndpointTimeSeries(w http.ResponseWriter, r *http.Request) {
+	serviceName := r.URL.Query().Get("serviceName")
+	modulecommon.HandleRangeQuery(w, r, "Failed to query per-endpoint time series", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
+		return h.Service.GetREDByEndpointTimeSeries(ctx, teamID, startMs, endMs, serviceName)
+	})
+}
+
 // GetTopEndpointsCombined returns per-operation metrics for the endpoints.
 func (h *REDFleetHandler) GetTopEndpointsCombined(w http.ResponseWriter, r *http.Request) {
 	teamID := modulecommon.Tenant(r).TeamID
@@ -100,6 +108,32 @@ func (h *REDFleetHandler) GetTopEndpointsCombined(w http.ResponseWriter, r *http
 	})
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query top endpoints", err)
+		return
+	}
+	modulecommon.RespondOK(w, resp)
+}
+
+// GetTopDBQueriesCombined returns per-query metrics for a service's DB calls.
+func (h *REDFleetHandler) GetTopDBQueriesCombined(w http.ResponseWriter, r *http.Request) {
+	teamID := modulecommon.Tenant(r).TeamID
+	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
+	if !ok {
+		return
+	}
+	serviceName := r.URL.Query().Get("serviceName")
+	limit := modulecommon.ParsePageSize(r, "limit", 50)
+	cursorStr := r.URL.Query().Get("cursor")
+	var cur TopEndpointsCursor
+	if cursorStr != "" {
+		if decoded, ok := cursor.Decode[TopEndpointsCursor](cursorStr); ok {
+			cur = decoded
+		}
+	}
+	resp, err := modulecommon.WithComparison(r, startMs, endMs, func(s, e int64) (any, error) {
+		return h.Service.GetTopDBQueries(r.Context(), teamID, s, e, serviceName, limit, cur)
+	})
+	if err != nil {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query top db queries", err)
 		return
 	}
 	modulecommon.RespondOK(w, resp)

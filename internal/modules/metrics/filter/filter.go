@@ -23,6 +23,10 @@ type Filters struct {
 	Step        string
 	GroupBy     []string
 
+	// Cumulative is resolved from series metadata, not the request: true for a
+	// cumulative monotonic counter, which needs per-series delta at read time.
+	Cumulative bool
+
 	Tags []TagFilter
 }
 
