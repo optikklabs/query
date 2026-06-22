@@ -163,6 +163,27 @@ func (r *Repository) ListTagValuesForKeys(ctx context.Context, teamID, startMs, 
 	return rows, nil
 }
 
+// IsCumulativeCounter reports whether the metric is a cumulative monotonic
+// counter, which must be converted to per-series deltas at read time rather than
+// summed across cumulative data points.
+func (r *Repository) IsCumulativeCounter(ctx context.Context, f filter.Filters) (bool, error) {
+	query := `
+		SELECT any(temporality)  AS temporality,
+		       any(is_monotonic) AS is_monotonic
+		FROM optikk.metrics_series
+		PREWHERE team_id     = @teamID
+		     AND metric_name = @metricName
+		     AND timestamp   BETWEEN @start AND @end`
+	var rows []metricKindDTO
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.IsCumulativeCounter", &rows, query, metricArgs(f)...); err != nil {
+		return false, err
+	}
+	if len(rows) == 0 {
+		return false, nil
+	}
+	return rows[0].Temporality == "Cumulative" && rows[0].IsMonotonic, nil
+}
+
 // QueryRollupSeries queries aggregated scalar metrics rollups for timeseries.
 func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([]timeseriesPointDTO, error) {
 	if filter.BucketDurationSeconds(f.StartMs, f.EndMs, f.Step) >= 3600 {
@@ -170,14 +191,29 @@ func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([
 	}
 	fromTable, cte, joins, selectCols, groupByCols, filterArgs := filter.BuildSelection(f)
 
-	valSelect := `
+	var query string
+	if f.Cumulative {
+		query = cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols)
+	} else {
+		query = deltaRollupQuery(cte, fromTable, joins, selectCols, groupByCols)
+	}
+
+	args := append(metricArgs(f), filterArgs...)
+	var rows []timeseriesPointDTO
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.QueryRollupSeries", &rows, query, args...); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// deltaRollupQuery sums delta/gauge rollup aggregates directly per bucket.
+func deltaRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
+	return cte + `
+		SELECT ` + selectCols + `,
 		       sum(val_sum)   AS val_sum,
 		       sum(val_count) AS val_count,
 		       min(val_min)   AS val_min,
-		       max(val_max)   AS val_max`
-
-	query := cte + `
-		SELECT ` + selectCols + `,` + valSelect + `
+		       max(val_max)   AS val_max
 		FROM ` + fromTable + ` AS m` + joins + `
 		PREWHERE m.team_id     = @teamID
 		     AND m.metric_name = @metricName
@@ -186,13 +222,43 @@ func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([
 		ORDER BY bucket_at ASC
 		LIMIT 10000
 		SETTINGS max_execution_time = 30`
+}
 
-	args := append(metricArgs(f), filterArgs...)
-	var rows []timeseriesPointDTO
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.QueryRollupSeries", &rows, query, args...); err != nil {
-		return nil, err
-	}
-	return rows, nil
+// cumulativeRollupQuery converts a cumulative monotonic counter to per-bucket
+// increase: take each series' last cumulative value per bucket, diff it against
+// the prior bucket within the series (window-partitioned, so block-safe), guard
+// the first bucket and counter resets, then total across series per bucket.
+func cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
+	perSeries := cte + `
+		SELECT m.fingerprint AS fingerprint, ` + selectCols + `,
+		       anyLast(m.val_last) AS cval
+		FROM ` + fromTable + ` AS m` + joins + `
+		PREWHERE m.team_id     = @teamID
+		     AND m.metric_name = @metricName
+		     AND m.timestamp   BETWEEN @start AND @end
+		GROUP BY m.fingerprint, ` + groupByCols + ``
+
+	increase := `
+		SELECT ` + groupByCols + `,
+		       if(row_number() OVER w = 1, 0,
+		          if(cval < lagInFrame(cval) OVER w, cval,
+		             cval - lagInFrame(cval) OVER w)) AS increase
+		FROM (` + perSeries + `)
+		WINDOW w AS (PARTITION BY fingerprint ORDER BY bucket_at)`
+
+	// val_count/min/max are unused for cumulative reads (applyAggregation routes
+	// every aggregation to the increase in val_sum); keep types matching the DTO.
+	return `
+		SELECT ` + groupByCols + `,
+		       sum(increase) AS val_sum,
+		       toUInt64(0)   AS val_count,
+		       toFloat64(0)  AS val_min,
+		       toFloat64(0)  AS val_max
+		FROM (` + increase + `)
+		GROUP BY ` + groupByCols + `
+		ORDER BY bucket_at ASC
+		LIMIT 10000
+		SETTINGS max_execution_time = 30`
 }
 
 func metricArgs(f filter.Filters) []any {

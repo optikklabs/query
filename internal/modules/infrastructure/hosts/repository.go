@@ -14,6 +14,10 @@ import (
 
 const defaultUnknownHost = "unknown"
 
+// stateAttr resolves the hostmetrics per-state label (idle/user/used/...) from
+// a metrics_series row, used to pick the meaningful utilization slice.
+const stateAttr = "attributes.`state`::String"
+
 type Repository struct {
 	db clickhouse.Conn
 }
@@ -26,18 +30,25 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func (r *Repository) QueryHostUtilization(ctx context.Context, teamID, startMs, endMs int64) ([]hostMetricRow, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	// Host is grouped from metrics_series; the scalar rollup supplies values.
+	// CPU/memory utilization arrive split per state (and per core), so a plain
+	// mean over all datapoints is a 1/Nstates artifact. Keep cpu 'idle' (and
+	// invert to busy below) and memory 'used'; other metrics are untouched.
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint, any(host) AS host
 		    FROM optikk.metrics_series AS mr
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE mr.host != ''
+		      AND NOT (metric_name = @cpuUtil AND ` + stateAttr + ` != 'idle')
+		      AND NOT (metric_name = @memUtil AND ` + stateAttr + ` != 'used')
 		    GROUP BY fingerprint
 		)
 		SELECT
-		    r.host                            AS host,
-		    m.metric_name                     AS metric_name,
-		    sum(m.val_sum) / sum(m.val_count) AS value
+		    r.host        AS host,
+		    m.metric_name AS metric_name,
+		    if(m.metric_name = @cpuUtil,
+		       1 - sum(m.val_sum) / sum(m.val_count),
+		       sum(m.val_sum) / sum(m.val_count)) AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN fps AS r ON m.fingerprint = r.fingerprint
 		PREWHERE m.team_id     = @teamID
@@ -53,6 +64,8 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, teamID, startMs, 
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricNames", utilizationMetricNames()),
+		clickhouse.Named("cpuUtil", infraconsts.MetricSystemCPUUtilization),
+		clickhouse.Named("memUtil", infraconsts.MetricSystemMemoryUtilization),
 	}
 	var rows []hostMetricRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hosts.QueryHostUtilization", &rows, query, args...)

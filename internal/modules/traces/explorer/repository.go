@@ -176,7 +176,7 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 
 	var rows []struct {
 		TimeBucket time.Time `ch:"time_bucket"`
-		Total      int64     `ch:"total"`
+		Total      uint64    `ch:"total"`
 		Errors     uint64    `ch:"errors"`
 	}
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "trend.QueryTrend", &rows, query, args...); err != nil {
@@ -184,13 +184,9 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 	}
 	out := make([]TrendBucket, len(rows))
 	for i, r := range rows {
-		total := r.Total
-		if total < 0 {
-			total = 0
-		}
 		out[i] = TrendBucket{
 			TimeBucket: timebucket.FormatDisplayBucket(r.TimeBucket),
-			Total:      uint64(total),
+			Total:      r.Total,
 			Errors:     r.Errors,
 		}
 	}

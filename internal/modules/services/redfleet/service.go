@@ -267,6 +267,81 @@ func (s *Service) GetLatencyPercentilesTimeSeries(
 	return points, nil
 }
 
+// GetREDByEndpointTimeSeries returns per-(bucket, route) rps / error rate / p99
+// for the per-endpoint golden-signal lines. Rows are emitted only for buckets
+// that carry traffic; the frontend aligns them onto a shared time axis.
+func (s *Service) GetREDByEndpointTimeSeries(
+	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string,
+) ([]EndpointRatePoint, error) {
+	rows, err := s.repo.GetREDByEndpointTimeSeries(ctx, teamID, startMs, endMs, serviceName)
+	if err != nil {
+		return nil, err
+	}
+
+	grain := timebucket.DisplayGrain(endMs - startMs)
+	grainSec := float64(grain.Seconds())
+	if grainSec <= 0 {
+		grainSec = 60
+	}
+
+	// Index traffic rows by (bucket, route); routes preserve first-seen order.
+	type cell struct{ rps, errRate, p99 float64 }
+	traffic := make(map[time.Time]map[string]cell, len(rows))
+	var routes []string
+	seenRoute := map[string]bool{}
+	for _, row := range rows {
+		bucket := row.BucketAt.UTC().Truncate(grain)
+		if !seenRoute[row.HTTPRoute] {
+			seenRoute[row.HTTPRoute] = true
+			routes = append(routes, row.HTTPRoute)
+		}
+		var errRate, p99 float64
+		if row.RequestCount > 0 {
+			errRate = float64(row.ErrorCount) / float64(row.RequestCount)
+		}
+		if len(row.QS) >= 3 {
+			p99 = utils.SanitizeFloat(row.QS[2])
+		}
+		if traffic[bucket] == nil {
+			traffic[bucket] = map[string]cell{}
+		}
+		traffic[bucket][row.HTTPRoute] = cell{
+			rps:     float64(row.RequestCount) / grainSec,
+			errRate: errRate,
+			p99:     p99,
+		}
+	}
+
+	// Emit a point for every (bucket, route) across the dense window axis so
+	// quiet buckets render as 0 rps (line breaks for latency/error) instead of
+	// collapsing the axis to a straight 2-point line.
+	buckets := denseBuckets(startMs, endMs, grain)
+	points := make([]EndpointRatePoint, 0, len(buckets)*len(routes))
+	for _, bucket := range buckets {
+		for _, route := range routes {
+			pt := EndpointRatePoint{Timestamp: bucket, HTTPRoute: route}
+			if c, ok := traffic[bucket][route]; ok {
+				errRate, p99 := c.errRate, c.p99
+				pt.RPS, pt.ErrorRate, pt.P99Ms = c.rps, &errRate, &p99
+			}
+			points = append(points, pt)
+		}
+	}
+	return points, nil
+}
+
+// denseBuckets returns every display-grain bucket in [start, end], aligned to
+// the same truncation the rollup query uses, so gaps become explicit points.
+func denseBuckets(startMs, endMs int64, grain time.Duration) []time.Time {
+	start := time.UnixMilli(startMs).UTC().Truncate(grain)
+	end := time.UnixMilli(endMs).UTC().Truncate(grain)
+	var out []time.Time
+	for b := start; !b.After(end); b = b.Add(grain) {
+		out = append(out, b)
+	}
+	return out
+}
+
 // GetTopEndpointsCombined returns per-operation rate / errPct / p50 / p95 / p99
 // sorted by request volume.
 func (s *Service) GetTopEndpointsCombined(
@@ -309,6 +384,71 @@ func (s *Service) GetTopEndpointsCombined(
 			Limit:      limit,
 		},
 	}, nil
+}
+
+// GetTopDBQueries returns per-query rate / errPct / p50 / p95 / p99 for the
+// service's database calls, sorted by request volume.
+func (s *Service) GetTopDBQueries(
+	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, limit int, cursorIn TopEndpointsCursor,
+) (PaginatedDBQueries, error) {
+	rows, err := s.repo.GetTopDBQueriesCombined(ctx, teamID, startMs, endMs, serviceName, limit+1, cursorIn)
+	if err != nil {
+		return PaginatedDBQueries{}, err
+	}
+
+	hasMore := len(rows) > limit
+	if hasMore {
+		rows = rows[:limit]
+	}
+
+	durationSec := float64(endMs-startMs) / 1000.0
+	if durationSec <= 0 {
+		durationSec = 1
+	}
+
+	results := make([]TopDBQuery, len(rows))
+	for i, row := range rows {
+		results[i] = toTopDBQuery(row, durationSec)
+	}
+
+	var nextCursor string
+	if hasMore && len(rows) > 0 {
+		lastRow := rows[len(rows)-1]
+		nextCursor = cursor.Encode(TopEndpointsCursor{
+			TotalCount:    lastRow.TotalCount,
+			OperationName: lastRow.OperationName,
+		})
+	}
+
+	return PaginatedDBQueries{
+		Results: results,
+		PageInfo: PageInfo{
+			HasMore:    hasMore,
+			NextCursor: nextCursor,
+			Limit:      limit,
+		},
+	}, nil
+}
+
+func toTopDBQuery(row topDBQueryRow, durationSec float64) TopDBQuery {
+	total := int64(row.TotalCount)
+	errs := int64(row.ErrorCount)
+	errRate := 0.0
+	if total > 0 {
+		errRate = float64(errs) / float64(total)
+	}
+	return TopDBQuery{
+		OperationName: row.OperationName,
+		ServiceName:   row.ServiceName,
+		DBSystem:      row.DBSystem,
+		RPS:           float64(total) / durationSec,
+		ErrorRate:     errRate,
+		ErrorCount:    errs,
+		TotalCount:    total,
+		P50Ms:         utils.SanitizeFloat(float64(row.P50Ms)),
+		P95Ms:         utils.SanitizeFloat(float64(row.P95Ms)),
+		P99Ms:         utils.SanitizeFloat(float64(row.P99Ms)),
+	}
 }
 
 func toTopEndpoint(row topEndpointRow, durationSec float64) TopEndpoint {

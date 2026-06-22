@@ -59,6 +59,18 @@ type LatencyPercentilesPoint struct {
 	P99Ms     float64   `json:"p99_ms"`
 }
 
+// EndpointRatePoint is one (display-bucket, route) RED sample feeding the
+// per-endpoint golden-signal lines on the service detail page. ErrorRate and
+// P99Ms are nil for buckets with no traffic so the chart breaks the line
+// instead of plotting a misleading 0; RPS stays 0 (a true zero rate).
+type EndpointRatePoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	HTTPRoute string    `json:"http_route"`
+	RPS       float64   `json:"rps"`
+	ErrorRate *float64  `json:"error_rate"`
+	P99Ms     *float64  `json:"p99_ms"`
+}
+
 // TopEndpoint is one per-operation row used by the *Service Detail endpoints
 // table — combines rate, error %, and p50/p95/p99 latency.
 type TopEndpoint struct {
@@ -66,6 +78,21 @@ type TopEndpoint struct {
 	ServiceName   string  `json:"service_name"`
 	SpanKind      string  `json:"span_kind"`
 	HTTPRoute     string  `json:"http_route"`
+	RPS           float64 `json:"rps"`
+	ErrorRate     float64 `json:"error_rate"`
+	ErrorCount    int64   `json:"error_count"`
+	TotalCount    int64   `json:"total_count"`
+	P50Ms         float64 `json:"p50_ms"`
+	P95Ms         float64 `json:"p95_ms"`
+	P99Ms         float64 `json:"p99_ms"`
+}
+
+// TopDBQuery is one per-query row used by the Service Detail DB-queries table —
+// combines rate, error %, and p50/p95/p99 latency for a database call.
+type TopDBQuery struct {
+	OperationName string  `json:"operation_name"`
+	ServiceName   string  `json:"service_name"`
+	DBSystem      string  `json:"db_system"`
 	RPS           float64 `json:"rps"`
 	ErrorRate     float64 `json:"error_rate"`
 	ErrorCount    int64   `json:"error_count"`

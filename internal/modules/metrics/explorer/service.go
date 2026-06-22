@@ -165,40 +165,48 @@ func (s *Service) Query(ctx context.Context, teamID int64, req FEQueryRequest) (
 			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
 		}
 
+		cumulative, err := s.repo.IsCumulativeCounter(ctx, f)
+		if err != nil {
+			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
+		}
+		f.Cumulative = cumulative
+
 		rows, err := s.repo.QueryRollupSeries(ctx, f)
 		if err != nil {
 			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
 		}
 
-		points := applyAggregation(rows, f.Aggregation, f.StartMs, f.EndMs, f.Step)
+		points := applyAggregation(rows, f.Aggregation, f.StartMs, f.EndMs, f.Step, f.Cumulative)
 		results[feq.ID] = buildColumnarResult(points)
 	}
 
 	return &FEQueryResponse{Results: results}, nil
 }
 
-// applyAggregation derives final values from raw rollup aggregates.
-func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, endMs int64, step string) []TimeseriesPoint {
+// applyAggregation derives final values from raw rollup aggregates. For a
+// cumulative counter row.Sum already holds the per-bucket increase, so every
+// aggregation maps to that increase (rate scales it per second).
+func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, endMs int64, step string, cumulative bool) []TimeseriesPoint {
 	bucketSeconds := float64(filter.BucketDurationSeconds(startMs, endMs, step))
 	out := make([]TimeseriesPoint, len(rows))
 	for i, row := range rows {
 		var val float64
-		switch aggregation {
-		case "sum":
-			val = row.Sum
-		case "avg":
-			if row.Count > 0 {
-				val = row.Sum / float64(row.Count)
-			}
-		case "min":
-			val = row.Min
-		case "max":
-			val = row.Max
-		case "count":
-			val = float64(row.Count)
-		case "rate":
+		switch {
+		case cumulative && aggregation == "rate":
 			val = row.Sum / bucketSeconds
-		default:
+		case cumulative:
+			val = row.Sum
+		case aggregation == "sum":
+			val = row.Sum
+		case aggregation == "min":
+			val = row.Min
+		case aggregation == "max":
+			val = row.Max
+		case aggregation == "count":
+			val = float64(row.Count)
+		case aggregation == "rate":
+			val = row.Sum / bucketSeconds
+		default: // avg
 			if row.Count > 0 {
 				val = row.Sum / float64(row.Count)
 			}

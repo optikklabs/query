@@ -25,9 +25,9 @@ func (r *Repository) GetNodes(ctx context.Context, teamID, startMs, endMs int64,
 		    SELECT fingerprint,
 		           any(service)                       AS service,
 		           any(` + seriesattr.StatusCode + `) AS status_code
-		    FROM optikk.metrics_series
+		    FROM optikk.metrics_series AS s
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE service != ''
+		    WHERE s.service != ''
 		    GROUP BY fingerprint
 		)
 		SELECT series.service                                                       AS service,

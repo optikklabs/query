@@ -19,3 +19,8 @@ type PaginatedEndpoints struct {
 	Results  []TopEndpoint `json:"results"`
 	PageInfo PageInfo      `json:"pageInfo"`
 }
+
+type PaginatedDBQueries struct {
+	Results  []TopDBQuery `json:"results"`
+	PageInfo PageInfo     `json:"pageInfo"`
+}

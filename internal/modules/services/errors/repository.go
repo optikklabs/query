@@ -12,7 +12,8 @@ import (
 )
 
 // durationStatusCTE resolves the spanmetrics status_code per fingerprint for the
-// 'duration' histogram, to be joined to the rollup on fingerprint.
+// 'duration' histogram, to be joined to the rollup on fingerprint. Scoped to
+// SERVER spans so a service's error rate/volume reflects request errors.
 const durationStatusCTE = `
 		WITH series AS (
 		    SELECT fingerprint,
@@ -20,6 +21,7 @@ const durationStatusCTE = `
 		           any(` + seriesattr.StatusCode + `) AS status_code
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    WHERE ` + seriesattr.ServerKindPred + `
 		    GROUP BY fingerprint
 		)`
 
@@ -59,9 +61,9 @@ func (r *Repository) ServiceErrorRateRowsByService(ctx context.Context, teamID i
 		    SELECT fingerprint,
 		           any(service)                       AS service,
 		           any(` + seriesattr.StatusCode + `) AS status_code
-		    FROM optikk.metrics_series
+		    FROM optikk.metrics_series AS s
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE service = @serviceName
+		    WHERE s.service = @serviceName AND ` + seriesattr.ServerKindPred + `
 		    GROUP BY fingerprint
 		)
 		SELECT series.service              AS service,
@@ -110,9 +112,9 @@ func (r *Repository) ErrorVolumeRowsByService(ctx context.Context, teamID int64,
 		    SELECT fingerprint,
 		           any(service)                       AS service,
 		           any(` + seriesattr.StatusCode + `) AS status_code
-		    FROM optikk.metrics_series
+		    FROM optikk.metrics_series AS s
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE service = @serviceName
+		    WHERE s.service = @serviceName AND ` + seriesattr.ServerKindPred + `
 		    GROUP BY fingerprint
 		)
 		SELECT series.service          AS service,

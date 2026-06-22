@@ -32,6 +32,13 @@ type tagKeyValueDTO struct {
 	Count    uint64 `ch:"count"`
 }
 
+// metricKindDTO scans the temporality/monotonicity of a metric for picking the
+// delta vs cumulative read path.
+type metricKindDTO struct {
+	Temporality string `ch:"temporality"`
+	IsMonotonic bool   `ch:"is_monotonic"`
+}
+
 // timeseriesPointDTO scans a single row from QueryRollupSeries.
 type timeseriesPointDTO struct {
 	BucketAt time.Time `ch:"bucket_at"`
