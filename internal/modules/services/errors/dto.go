@@ -29,8 +29,6 @@ type rawErrorGroupRow struct {
 	FirstOccurrence  time.Time `ch:"first_occurrence"`
 }
 
-// rawErrorGroupSampleRow carries the exemplar status message and trace_id
-// resolved from raw spans.
 type rawErrorGroupSampleRow struct {
 	GroupID       string `ch:"error_group_id"`
 	StatusMessage string `ch:"status_message"`
@@ -56,8 +54,6 @@ type rawErrorGroupTraceRow struct {
 	StatusCode string    `ch:"status_code"`
 }
 
-// rawErrorLatestOccurrenceRow is the single most recent error span of a group,
-// scanned from the raw spans table.
 type rawErrorLatestOccurrenceRow struct {
 	TraceID          string    `ch:"trace_id"`
 	SpanID           string    `ch:"span_id"`
@@ -74,7 +70,6 @@ type rawErrorLatestOccurrenceRow struct {
 	Host             string    `ch:"host"`
 }
 
-// rawErrorFacetRow is one bucket of a single facet dimension (e.g. one pod).
 type rawErrorFacetRow struct {
 	Value string `ch:"value"`
 	Count uint64 `ch:"count"`

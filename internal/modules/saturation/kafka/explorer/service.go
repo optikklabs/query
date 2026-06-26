@@ -29,12 +29,10 @@ func (s *Service) GetTopicBacklog(ctx context.Context, teamID, startMs, endMs in
 	return s.repo.QueryTopicBacklog(ctx, teamID, startMs, endMs, topic)
 }
 
-// Cluster Health
 func (s *Service) GetClusterHealth(ctx context.Context, teamID, startMs, endMs int64) (ClusterHealthRow, error) {
 	return s.repo.QueryClusterHealth(ctx, teamID, startMs, endMs)
 }
 
-// Group Domains
 func (s *Service) GetGroupPartitions(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupPartitionsRow, error) {
 	return s.repo.QueryGroupPartitions(ctx, teamID, startMs, endMs, group)
 }

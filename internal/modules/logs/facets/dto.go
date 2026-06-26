@@ -14,7 +14,6 @@ type Request struct {
 	filter.Filters
 }
 
-// Response carries the per-dimension facet groups.
 type Response struct {
 	Facets models.Facets `json:"facets"`
 }

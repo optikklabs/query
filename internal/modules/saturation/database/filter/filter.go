@@ -29,8 +29,6 @@ const (
 const (
 	MetricDBOperationDuration = "db.client.operation.duration"
 
-	// MetricDBSQLConnectionOpen is the otelsql open-connection gauge actually
-	// emitted by the stack (the db.client.connection.* semconv metrics are not).
 	MetricDBSQLConnectionOpen = "db.sql.connection.open"
 
 	MetricDBConnectionCount      = "db.client.connection.count"
@@ -51,8 +49,6 @@ type Filters struct {
 	Server     []string
 }
 
-// ParseFilters extracts query-string filters into the typed shape consumed
-// by every repository.
 func ParseFilters(r *http.Request) Filters {
 	return Filters{
 		DBSystem:   r.URL.Query()["db_system"],
@@ -124,7 +120,6 @@ func BuildSpanClauses(f Filters) (where string, args []any) {
 	return where, args
 }
 
-// MetricsGroupColumn returns the metrics_series attribute expression for attr.
 func MetricsGroupColumn(attr string) string {
 	switch attr {
 	case AttrDBSystem:
@@ -141,7 +136,6 @@ func MetricsGroupColumn(attr string) string {
 	return ""
 }
 
-// BuildMetricsClauses builds metrics_series attribute filters for db saturation.
 func BuildMetricsClauses(f Filters) (where string, args []any) {
 	if len(f.DBSystem) > 0 {
 		where += " AND attributes.`db.system`::String IN @dbSystem"

@@ -10,7 +10,6 @@ type NodeAgg struct {
 	P99Ms        float64
 }
 
-// EdgeAgg is the source-agnostic directed-call aggregate for BuildGraph.
 type EdgeAgg struct {
 	Source     string
 	Target     string
@@ -20,7 +19,6 @@ type EdgeAgg struct {
 	P95Ms      float64
 }
 
-// BuildGraph derives the node+edge graph from neutral aggregates.
 func BuildGraph(nodeAggs []NodeAgg, edgeAggs []EdgeAgg) TopologyResponse {
 	nodes := buildNodes(nodeAggs)
 	edges := buildEdges(edgeAggs)

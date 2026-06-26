@@ -79,7 +79,6 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q model
 	return out, nil
 }
 
-// metricSource picks the raw metrics table and SELECT expression for aggregation.
 func metricSource(agg string) (table, expr string) {
 	switch agg {
 	case "sum":
@@ -94,7 +93,7 @@ func metricSource(agg string) (table, expr string) {
 		return "metrics", "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[2]"
 	case "p99":
 		return "metrics", "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[3]"
-	default: // avg
+	default:
 		return "metrics", "avg(value)"
 	}
 }
@@ -111,15 +110,12 @@ func metricArgs(teamID int64, metricName string, startMs, endMs int64) []any {
 	}
 }
 
-// scalarRow is the destination for a single-row Scalar query.
 type scalarRow struct {
 	Value float64 `ch:"value"`
 }
 
-// IsZeroNoData checks if the returned scalar represents no data.
 func (s scalarRow) IsZeroNoData() bool { return false }
 
-// bucketRow is the destination for a Series query.
 type bucketRow struct {
 	Bucket time.Time `ch:"bucket"`
 	Value  float64   `ch:"value"`

@@ -17,7 +17,6 @@ func ParseTeamMemberships(raw string) ([]TeamMembership, error) {
 	return memberships, err
 }
 
-// BuildTeamMembershipsJSON encodes memberships into a json string.
 func BuildTeamMembershipsJSON(memberships []TeamMembership) (string, error) {
 	if len(memberships) == 0 {
 		return "[]", nil
@@ -26,7 +25,6 @@ func BuildTeamMembershipsJSON(memberships []TeamMembership) (string, error) {
 	return string(data), err
 }
 
-// TeamIDsFromMemberships extracts team ids from a list of memberships.
 func TeamIDsFromMemberships(memberships []TeamMembership) []int64 {
 	ids := make([]int64, len(memberships))
 	for i, membership := range memberships {
@@ -35,7 +33,6 @@ func TeamIDsFromMemberships(memberships []TeamMembership) []int64 {
 	return ids
 }
 
-// GenerateAPIKey generates a new secure random API key.
 func GenerateAPIKey() (string, error) {
 	bytes := make([]byte, 4)
 	if _, err := rand.Read(bytes); err != nil {
@@ -44,7 +41,6 @@ func GenerateAPIKey() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// NullableString maps an empty string to nil.
 func NullableString(s string) *string {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {
@@ -53,7 +49,6 @@ func NullableString(s string) *string {
 	return &trimmed
 }
 
-// ValueOr returns the string value or a default fallback if nil.
 func ValueOr(s *string, fallback string) string {
 	if s == nil {
 		return fallback

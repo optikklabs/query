@@ -43,8 +43,7 @@ func (r *Repository) QueryMemoryUtilizationAgg(ctx context.Context, teamID int64
 }
 
 func (r *Repository) QueryMemoryUtilizationForInstance(ctx context.Context, teamID int64, startMs, endMs int64, host, pod, serviceName string) ([]MemoryMetricNameRow, error) {
-	// Filter resolves to a fingerprint set via metrics_series,
-	// then narrows the scalar rollup by fingerprint.
+
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint

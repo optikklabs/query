@@ -5,8 +5,9 @@ import (
 	"strings"
 )
 
-// RefreshCookiePath limits the refresh cookie to the refresh endpoint.
-const RefreshCookiePath = "/api/v1/auth/refresh"
+// RefreshCookiePath scopes the refresh cookie to the auth endpoints so it
+// reaches both /refresh (rotation) and /logout (revocation).
+const RefreshCookiePath = "/api/v1/auth"
 
 type cookieOpts struct {
 	name     string
@@ -15,12 +16,10 @@ type cookieOpts struct {
 	sameSite http.SameSite
 }
 
-// RefreshCookieName returns the configured refresh cookie name.
 func (s *Service) RefreshCookieName() string {
 	return s.cookie.name
 }
 
-// SetRefreshCookie writes the refresh token as an httpOnly cookie.
 func (s *Service) SetRefreshCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.cookie.name,
@@ -34,7 +33,6 @@ func (s *Service) SetRefreshCookie(w http.ResponseWriter, token string) {
 	})
 }
 
-// ClearRefreshCookie expires the refresh cookie.
 func (s *Service) ClearRefreshCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.cookie.name,

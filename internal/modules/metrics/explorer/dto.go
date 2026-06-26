@@ -13,37 +13,34 @@ type metricNameDTO struct {
 	Description string `ch:"description"`
 }
 
-// tagKeyDTO scans the result of ListTagKeys.
 type tagKeyDTO struct {
 	TagKey string `ch:"tag_key"`
 }
 
-// tagValueDTO scans the result of ListTagValues.
 type tagValueDTO struct {
 	TagValue string `ch:"tag_value"`
 	Count    uint64 `ch:"count"`
 }
 
-// tagKeyValueDTO scans the result of ListTagValuesForKeys — one (key, value)
-// pair per row, so every tag key's values come back in a single query.
 type tagKeyValueDTO struct {
 	TagKey   string `ch:"tag_key"`
 	TagValue string `ch:"tag_value"`
 	Count    uint64 `ch:"count"`
 }
 
-// metricKindDTO scans the temporality/monotonicity of a metric for picking the
-// delta vs cumulative read path.
 type metricKindDTO struct {
 	Temporality string `ch:"temporality"`
 	IsMonotonic bool   `ch:"is_monotonic"`
+	MetricType  string `ch:"metric_type"`
 }
 
-// timeseriesPointDTO scans a single row from QueryRollupSeries.
 type timeseriesPointDTO struct {
-	BucketAt time.Time `ch:"bucket_at"`
-	Sum      float64   `ch:"val_sum"`
-	Count    uint64    `ch:"val_count"`
-	Min      float64   `ch:"val_min"`
-	Max      float64   `ch:"val_max"`
+	BucketAt  time.Time `ch:"bucket_at"`
+	Sum       float64   `ch:"val_sum"`
+	Count     uint64    `ch:"val_count"`
+	Min       float64   `ch:"val_min"`
+	Max       float64   `ch:"val_max"`
+	HistSum   float64   `ch:"hist_sum"`
+	HistCount uint64    `ch:"hist_count"`
+	Quantiles []float64 `ch:"quantiles"`
 }

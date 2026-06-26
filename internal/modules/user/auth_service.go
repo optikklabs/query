@@ -29,7 +29,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP string) 
 		slog.WarnContext(ctx, "AUTH_EVENT login_update_failed", slog.Int64("user_id", user.ID), slog.String("email", user.Email), slog.Any("error", err))
 	}
 
-	response, refresh, err := s.issueTokens(user)
+	response, refresh, err := s.issueTokens(user, token.NewFamilyID())
 	if err != nil {
 		return LoginResponse{}, "", err
 	}
@@ -38,16 +38,30 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP string) 
 	return response, refresh, nil
 }
 
-// Refresh validates a refresh token and issues a new token pair.
 func (s *Service) Refresh(ctx context.Context, refreshToken string) (LoginResponse, string, error) {
-	userID, err := s.tokens.ParseRefresh(refreshToken)
+	hash := token.HashRefreshToken(refreshToken)
+	stored, err := s.repo.FindRefreshTokenByHash(hash)
 	if err != nil {
 		return LoginResponse{}, "", NewUnauthorizedError("Invalid or expired refresh token", err)
 	}
 
-	user, err := s.repo.FindActiveUserByID(userID)
+	if stored.RevokedAt != nil {
+		_ = s.repo.RevokeRefreshTokenFamily(stored.FamilyID)
+		slog.WarnContext(ctx, "AUTH_EVENT refresh_reuse_detected", slog.Int64("user_id", stored.UserID), slog.String("family_id", stored.FamilyID))
+		return LoginResponse{}, "", NewUnauthorizedError("Invalid or expired refresh token", nil)
+	}
+
+	if time.Now().UTC().After(stored.ExpiresAt) {
+		return LoginResponse{}, "", NewUnauthorizedError("Invalid or expired refresh token", nil)
+	}
+
+	user, err := s.repo.FindActiveUserByID(stored.UserID)
 	if err != nil {
 		return LoginResponse{}, "", NewUnauthorizedError("Invalid or expired refresh token", err)
+	}
+
+	if err := s.repo.RevokeRefreshToken(hash); err != nil {
+		return LoginResponse{}, "", NewInternalError("Failed to rotate refresh token", err)
 	}
 
 	authUser := AuthUser{
@@ -57,15 +71,14 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (LoginRespon
 		AvatarURL: user.AvatarURL,
 		TeamsJSON: user.TeamsJSON,
 	}
-	response, refresh, err := s.issueTokens(authUser)
+	response, refresh, err := s.issueTokens(authUser, stored.FamilyID)
 	if err != nil {
-		return LoginResponse{}, "", NewUnauthorizedError("Invalid or expired refresh token", err)
+		return LoginResponse{}, "", err
 	}
 	return response, refresh, nil
 }
 
-// issueTokens builds the auth context and signs a new token pair.
-func (s *Service) issueTokens(user AuthUser) (LoginResponse, string, error) {
+func (s *Service) issueTokens(user AuthUser, familyID string) (LoginResponse, string, error) {
 	response, err := s.buildAuthContextResponse(user)
 	if err != nil {
 		return LoginResponse{}, "", err
@@ -82,23 +95,30 @@ func (s *Service) issueTokens(user AuthUser) (LoginResponse, string, error) {
 		return LoginResponse{}, "", NewInternalError("Failed to issue access token", err)
 	}
 
-	refresh, err := s.tokens.SignRefresh(user.ID)
+	raw, hash, err := token.GenerateRefreshToken()
 	if err != nil {
 		return LoginResponse{}, "", NewInternalError("Failed to issue refresh token", err)
 	}
+	expiresAt := time.Now().UTC().Add(s.tokens.RefreshTTL())
+	if err := s.repo.InsertRefreshToken(user.ID, familyID, hash, expiresAt); err != nil {
+		return LoginResponse{}, "", NewInternalError("Failed to issue refresh token", err)
+	}
 
-	return LoginResponse{AuthContextResponse: response, AccessToken: access}, refresh, nil
+	return LoginResponse{AuthContextResponse: response, AccessToken: access}, raw, nil
 }
 
-// Logout logs the logout event; token invalidation is cookie removal.
-func (s *Service) Logout(ctx context.Context, tenant contracts.TenantContext, clientIP string) MessageResponse {
+func (s *Service) Logout(ctx context.Context, tenant contracts.TenantContext, refreshToken, clientIP string) MessageResponse {
+	if refreshToken != "" {
+		if err := s.repo.RevokeRefreshToken(token.HashRefreshToken(refreshToken)); err != nil {
+			slog.WarnContext(ctx, "AUTH_EVENT logout_revoke_failed", slog.Int64("user_id", tenant.UserID), slog.Any("error", err))
+		}
+	}
 	if tenant.UserID > 0 {
 		slog.InfoContext(ctx, "AUTH_EVENT logout", slog.Int64("user_id", tenant.UserID), slog.String("email", tenant.UserEmail), slog.String("ip", clientIP))
 	}
 	return MessageResponse{Message: "Logged out successfully"}
 }
 
-// AuthContext loads details of the logged-in user.
 func (s *Service) AuthContext(userID int64) (AuthContextResponse, error) {
 	if userID == 0 {
 		return AuthContextResponse{}, NewUnauthorizedError("Not authenticated", nil)
@@ -123,7 +143,6 @@ func (s *Service) AuthContext(userID int64) (AuthContextResponse, error) {
 	return response, nil
 }
 
-// ValidateToken confirms validity of the active tenant session.
 func (s *Service) ValidateToken(tenant contracts.TenantContext) (ValidateTokenResponse, error) {
 	if tenant.UserID == 0 {
 		return ValidateTokenResponse{}, NewUnauthorizedError("Invalid or expired session", nil)
@@ -136,7 +155,6 @@ func (s *Service) ValidateToken(tenant contracts.TenantContext) (ValidateTokenRe
 	}, nil
 }
 
-// ForgotPassword handles basic password recovery info.
 func (s *Service) ForgotPassword() MessageResponse {
 	return MessageResponse{
 		Message: "Password resets are managed by your IT administrator. Please contact your IT admin for assistance.",
@@ -161,7 +179,6 @@ func (s *Service) buildAuthContextResponse(user AuthUser) (AuthContextResponse, 
 	}, nil
 }
 
-// teamForUser resolves the user's single team from the memberships JSON.
 func (s *Service) teamForUser(teamsJSON *string) (AuthTeamSummary, error) {
 	memberships, err := ParseTeamMemberships(ValueOr(teamsJSON, "[]"))
 	if err != nil {

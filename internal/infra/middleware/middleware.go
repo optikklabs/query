@@ -58,8 +58,7 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 
 			if r.Method == http.MethodOptions {
 				headers.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-				// Allow traceparent/tracestate headers for browser FetchInstrumentation
-				// without tripping CORS preflight.
+
 				headers.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Team-Id, X-User-Id, X-User-Email, X-User-Role, traceparent, tracestate")
 				headers.Set("Access-Control-Allow-Credentials", "true")
 				w.WriteHeader(http.StatusNoContent)
@@ -73,7 +72,6 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 	}
 }
 
-// ErrorRecovery converts panics into logged 500 JSON responses.
 func ErrorRecovery() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -100,8 +98,6 @@ func ErrorRecovery() func(http.Handler) http.Handler {
 	}
 }
 
-// BodyLimitMiddleware limits request bodies to maxBytes.
-// WebSocket requests are excluded.
 func BodyLimitMiddleware(maxBytes int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +113,6 @@ func BodyLimitMiddleware(maxBytes int64) func(http.Handler) http.Handler {
 	}
 }
 
-// publicPrefixes are paths that are always public.
 var publicPrefixes = []string{
 	"/api/v1/auth/login",
 	"/api/v1/auth/refresh",
@@ -126,14 +121,12 @@ var publicPrefixes = []string{
 	"/health",
 }
 
-// publicPOSTPrefixes are paths that are public only for POST requests.
 var publicPOSTPrefixes = []string{
 	"/api/v1/auth/forgot-password",
 	"/api/v1/users",
 	"/api/v1/teams",
 }
 
-// isPublicRequest checks if the request is public.
 func isPublicRequest(method, path string) bool {
 	for _, p := range publicPrefixes {
 		if strings.HasPrefix(path, p) {
@@ -174,7 +167,6 @@ func abortForbiddenTeam(w http.ResponseWriter, r *http.Request, email string, re
 	))
 }
 
-// resolveTeam returns the team ID or aborts on auth violation.
 func resolveTeam(w http.ResponseWriter, r *http.Request, state token.AuthState) (int64, bool) {
 	requested := utils.ToInt64(r.Header.Get("X-Team-Id"), 0)
 	if requested == 0 {
@@ -191,7 +183,6 @@ func resolveTeam(w http.ResponseWriter, r *http.Request, state token.AuthState) 
 	return requested, true
 }
 
-// bearerAuthState extracts and verifies the Authorization bearer token.
 func bearerAuthState(r *http.Request, tokens *token.Service) (token.AuthState, bool) {
 	header := r.Header.Get("Authorization")
 	raw, found := strings.CutPrefix(header, "Bearer ")
@@ -205,8 +196,6 @@ func bearerAuthState(r *http.Request, tokens *token.Service) (token.AuthState, b
 	return state, true
 }
 
-// TenantMiddleware authenticates requests and stores the tenant in the
-// request context; read it back with contracts.TenantFrom.
 func TenantMiddleware(tokens *token.Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

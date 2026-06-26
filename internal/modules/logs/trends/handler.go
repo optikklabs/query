@@ -32,8 +32,6 @@ func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, SummaryResponse{Summary: sum})
 }
 
-// Trend powers POST /api/v1/logs/trend — severity-bucketed time series at
-// display grain.
 func (h *Handler) Trend(w http.ResponseWriter, r *http.Request) {
 	f, ok := h.bindFilters(w, r)
 	if !ok {

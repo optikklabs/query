@@ -24,7 +24,6 @@ const boundsQuery = `
 	PREWHERE trace_id = @traceID
 	     AND team_id = @teamID`
 
-// fetchQuery scans optikk.logs within the narrowed bucket window.
 const fetchQuery = `
 	SELECT ` + models.LogColumns + `
 	FROM optikk.logs
@@ -42,7 +41,6 @@ type boundsRow struct {
 	Count uint64   `ch:"n"`
 }
 
-// LookupBounds resolves bucket bounds and fingerprints for a trace.
 func (r *Repository) LookupBounds(ctx context.Context, teamID int64, traceID string) (boundsRow, error) {
 	var rows []boundsRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "logsTraceLogs.LookupBounds", &rows, boundsQuery, traceIDArgs(teamID, traceID)...); err != nil {
@@ -54,7 +52,6 @@ func (r *Repository) LookupBounds(ctx context.Context, teamID int64, traceID str
 	return rows[0], nil
 }
 
-// FetchByBounds scans optikk.logs constrained to the resolved bounds.
 func (r *Repository) FetchByBounds(ctx context.Context, teamID int64, traceID string, minB, maxB uint32, fps []uint64, limit int) ([]models.LogRow, error) {
 	args := append(traceIDArgs(teamID, traceID),
 		clickhouse.Named("minB", minB),

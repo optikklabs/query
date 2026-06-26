@@ -43,16 +43,12 @@ func NewModule(sqlDB *registry.SQLDB, chConn clickhouse.Conn) *Module {
 
 func (m *Module) Name() string { return "alerting.evaluator" }
 
-// RegisterRoutes is required by registry.Module; evaluator has none.
 func (m *Module) RegisterRoutes(chi.Router) {}
 
-// Start implements registry.BackgroundRunner — spawns the tick goroutine.
 func (m *Module) Start() {
 	go m.run()
 }
 
-// Stop implements registry.BackgroundRunner — signals the tick goroutine to
-// exit and waits for the current tick to drain.
 func (m *Module) Stop() error {
 	m.once.Do(func() { close(m.stop) })
 	select {

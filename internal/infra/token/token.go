@@ -9,10 +9,7 @@ import (
 	"github.com/optikklabs/query/internal/config"
 )
 
-const (
-	typAccess  = "access"
-	typRefresh = "refresh"
-)
+const typAccess = "access"
 
 // AuthState carries the authenticated user identity embedded in tokens.
 type AuthState struct {
@@ -32,12 +29,6 @@ type accessClaims struct {
 	jwt.RegisteredClaims
 }
 
-type refreshClaims struct {
-	Typ string `json:"typ"`
-	jwt.RegisteredClaims
-}
-
-// Service signs and verifies JWT access and refresh tokens.
 type Service struct {
 	secret     []byte
 	accessTTL  time.Duration
@@ -45,7 +36,6 @@ type Service struct {
 	cookie     cookieOpts
 }
 
-// NewService creates a token service from the auth configuration.
 func NewService(cfg config.Config) *Service {
 	return &Service{
 		secret:     []byte(cfg.Auth.JWTSecret),
@@ -60,7 +50,6 @@ func NewService(cfg config.Config) *Service {
 	}
 }
 
-// SignAccess issues a short-lived access token for the given auth state.
 func (s *Service) SignAccess(state AuthState) (string, error) {
 	now := time.Now()
 	claims := accessClaims{
@@ -78,7 +67,6 @@ func (s *Service) SignAccess(state AuthState) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.secret)
 }
 
-// ParseAccess verifies an access token and returns its auth state.
 func (s *Service) ParseAccess(raw string) (AuthState, error) {
 	var claims accessClaims
 	if err := s.parse(raw, &claims); err != nil {
@@ -98,36 +86,6 @@ func (s *Service) ParseAccess(raw string) (AuthState, error) {
 		DefaultTeamID: claims.DefaultTeamID,
 		TeamIDs:       claims.TeamIDs,
 	}, nil
-}
-
-// SignRefresh issues a long-lived refresh token carrying only the user ID.
-func (s *Service) SignRefresh(userID int64) (string, error) {
-	now := time.Now()
-	claims := refreshClaims{
-		Typ: typRefresh,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   strconv.FormatInt(userID, 10),
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(s.refreshTTL)),
-		},
-	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.secret)
-}
-
-// ParseRefresh verifies a refresh token and returns the user ID.
-func (s *Service) ParseRefresh(raw string) (int64, error) {
-	var claims refreshClaims
-	if err := s.parse(raw, &claims); err != nil {
-		return 0, err
-	}
-	if claims.Typ != typRefresh {
-		return 0, fmt.Errorf("token is not a refresh token")
-	}
-	userID, err := strconv.ParseInt(claims.Subject, 10, 64)
-	if err != nil || userID == 0 {
-		return 0, fmt.Errorf("invalid token subject")
-	}
-	return userID, nil
 }
 
 func (s *Service) parse(raw string, claims jwt.Claims) error {

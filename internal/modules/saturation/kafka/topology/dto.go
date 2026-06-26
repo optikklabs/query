@@ -9,7 +9,6 @@ type produceEdgeRow struct {
 	QS         []float64 `ch:"qs"`
 }
 
-// consumeEdgeRow is scanned from the per (service, topic, group) consume aggregation.
 type consumeEdgeRow struct {
 	Service       string    `ch:"service"`
 	Topic         string    `ch:"topic"`

@@ -15,8 +15,6 @@ type FleetPod struct {
 	LastSeen     string   `json:"last_seen"`
 }
 
-// FleetPodAggregateRow is the raw row scanned from CH; service computes
-// derived fields (error_rate, avg_latency_ms) and constructs the DTO.
 type FleetPodAggregateRow struct {
 	Pod           string    `ch:"pod"`
 	Host          string    `ch:"host"`

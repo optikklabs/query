@@ -21,7 +21,6 @@ type ChannelResponse struct {
 	CreatedAt      time.Time       `json:"created_at"`
 }
 
-// PolicyResponse is the wire shape for policies.
 type PolicyResponse struct {
 	ID         int64           `json:"id"`
 	Name       string          `json:"name"`
@@ -34,7 +33,6 @@ type PolicyResponse struct {
 	CreatedAt  time.Time       `json:"created_at"`
 }
 
-// TemplateResponse is the wire shape for templates.
 type TemplateResponse struct {
 	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
@@ -44,12 +42,11 @@ type TemplateResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// IntegrationCatalogEntry powers the integrations grid in the Notifications UI.
 type IntegrationCatalogEntry struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Desc   string `json:"desc"`
-	Status string `json:"status"` // connected | not_connected
+	Status string `json:"status"`
 	Count  int    `json:"count"`
 	Color  string `json:"color"`
 }

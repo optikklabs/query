@@ -4,10 +4,8 @@ package infraconsts
 // Reference: https://opentelemetry.io/docs/specs/semconv/system/
 
 const (
-	// Table Names
 	TableMetrics = "optikk.metrics"
 
-	// Metrics Table Columns
 	ColTeamID      = "team_id"
 	ColTimestamp   = "timestamp"
 	ColMetricName  = "metric_name"
@@ -19,7 +17,6 @@ const (
 	ColAttributes  = "attributes"
 	ColCount       = "hist_count"
 
-	// CPU Metrics
 	MetricSystemCPUUtilization = "system.cpu.utilization"
 	MetricSystemCPUUsage       = "system.cpu.usage"
 	MetricProcessCPUUsage      = "process.cpu.usage"
@@ -29,12 +26,10 @@ const (
 	MetricSystemCPULoadAvg15m  = "system.cpu.load_average.15m"
 	MetricSystemProcessCount   = "system.process.count"
 
-	// Memory Metrics
 	MetricSystemMemoryUtilization = "system.memory.utilization"
 	MetricSystemMemoryUsage       = "system.memory.usage"
 	MetricSystemPagingUsage       = "system.paging.usage"
 
-	// Disk Metrics
 	MetricSystemDiskUtilization = "system.disk.utilization"
 	MetricSystemDiskIO          = "system.disk.io"
 	MetricSystemDiskOperations  = "system.disk.operations"
@@ -44,7 +39,6 @@ const (
 	MetricDiskFree              = "disk.free"
 	MetricDiskTotal             = "disk.total"
 
-	// Network Metrics
 	MetricSystemNetworkUtilization = "system.network.utilization"
 	MetricSystemNetworkIO          = "system.network.io"
 	MetricSystemNetworkPackets     = "system.network.packets"
@@ -52,7 +46,6 @@ const (
 	MetricSystemNetworkDropped     = "system.network.dropped"
 	MetricSystemNetworkConnections = "system.network.connections"
 
-	// JVM Metrics
 	MetricJVMMemoryUsed        = "jvm.memory.used"
 	MetricJVMMemoryMax         = "jvm.memory.max"
 	MetricJVMMemoryCommitted   = "jvm.memory.committed"
@@ -66,14 +59,12 @@ const (
 	MetricJVMBufferMemoryUsage = "jvm.buffer.memory.usage"
 	MetricJVMBufferCount       = "jvm.buffer.count"
 
-	// Database / Connection Pool Metrics
 	MetricDBConnectionPoolUtilization = "db.connection.pool.utilization"
 	MetricHikariCPConnectionsActive   = "hikaricp.connections.active"
 	MetricHikariCPConnectionsMax      = "hikaricp.connections.max"
 	MetricJDBCConnectionsActive       = "jdbc.connections.active"
 	MetricJDBCConnectionsMax          = "jdbc.connections.max"
 
-	// Attribute names for dimensional queries
 	AttrSystemCPUState              = "system.cpu.state"
 	AttrSystemCPUUtilization        = "system.cpu.utilization"
 	AttrSystemMemoryState           = "system.memory.state"
@@ -93,12 +84,10 @@ const (
 	AttrJVMBufferPoolName           = "jvm.buffer.pool.name"
 	AttrDBConnectionPoolUtilization = "db.connection_pool.utilization"
 
-	// Percentage Conversion
 	PercentageMultiplier = 100.0
 	PercentageThreshold  = 1.0
 )
 
-// Metric Sets - Grouped metrics for aggregation queries
 var (
 	CPUMetrics = []string{
 		MetricSystemCPUUtilization,

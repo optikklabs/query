@@ -81,18 +81,14 @@ func resolveConfigFilePath(p string) (string, error) {
 	}
 }
 
-// setDefaults registers known keys with Viper so environment overrides
-// resolve even if the keys are absent from the YAML file.
 func setDefaults(v *viper.Viper) {
-	// top-level
+
 	v.SetDefault("environment", "")
 
-	// server
 	v.SetDefault("server.port", "")
 	v.SetDefault("server.allowed_origins", "")
 	v.SetDefault("server.debug_api_logs", false)
 
-	// mysql
 	v.SetDefault("mysql.host", "")
 	v.SetDefault("mysql.port", "")
 	v.SetDefault("mysql.database", "")
@@ -101,7 +97,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("mysql.max_open_conns", 0)
 	v.SetDefault("mysql.max_idle_conns", 0)
 
-	// clickhouse
 	v.SetDefault("clickhouse.host", "")
 	v.SetDefault("clickhouse.port", "")
 	v.SetDefault("clickhouse.database", "")
@@ -110,7 +105,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("clickhouse.production", false)
 	v.SetDefault("clickhouse.cloud_host", "")
 
-	// auth
 	v.SetDefault("auth.jwt_secret", "")
 	v.SetDefault("auth.access_ttl_ms", 900000)
 	v.SetDefault("auth.refresh_ttl_ms", 604800000)

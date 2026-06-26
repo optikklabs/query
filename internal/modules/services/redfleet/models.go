@@ -14,7 +14,6 @@ type FleetTotals struct {
 	AvgP99Ms       float64 `json:"avg_p99_ms"`
 }
 
-// ServiceREDMetric is one per-service RED row for the fleet services list.
 type ServiceREDMetric struct {
 	ServiceName  string  `json:"service_name"`
 	RequestCount int64   `json:"request_count"`
@@ -41,8 +40,6 @@ type ServicePerformancePoint struct {
 	ErrorPct     float64   `json:"error_pct"`
 }
 
-// StatusTimeSeriesPoint is one display-bucket row with span counts split by
-// the OTel http.status_code bucket (`2xx` / `4xx` / `5xx`).
 type StatusTimeSeriesPoint struct {
 	Timestamp   time.Time `json:"timestamp"`
 	Status2xx   float64   `json:"status_2xx"`
@@ -51,7 +48,6 @@ type StatusTimeSeriesPoint struct {
 	StatusOther float64   `json:"status_other"`
 }
 
-// LatencyPercentilesPoint is one display-bucket row with p50/p95/p99 latency.
 type LatencyPercentilesPoint struct {
 	Timestamp time.Time `json:"timestamp"`
 	P50Ms     float64   `json:"p50_ms"`
@@ -59,10 +55,6 @@ type LatencyPercentilesPoint struct {
 	P99Ms     float64   `json:"p99_ms"`
 }
 
-// EndpointRatePoint is one (display-bucket, route) RED sample feeding the
-// per-endpoint golden-signal lines on the service detail page. ErrorRate and
-// P99Ms are nil for buckets with no traffic so the chart breaks the line
-// instead of plotting a misleading 0; RPS stays 0 (a true zero rate).
 type EndpointRatePoint struct {
 	Timestamp time.Time `json:"timestamp"`
 	HTTPRoute string    `json:"http_route"`
@@ -71,8 +63,6 @@ type EndpointRatePoint struct {
 	P99Ms     *float64  `json:"p99_ms"`
 }
 
-// TopEndpoint is one per-operation row used by the *Service Detail endpoints
-// table — combines rate, error %, and p50/p95/p99 latency.
 type TopEndpoint struct {
 	OperationName string  `json:"operation_name"`
 	ServiceName   string  `json:"service_name"`
@@ -87,8 +77,6 @@ type TopEndpoint struct {
 	P99Ms         float64 `json:"p99_ms"`
 }
 
-// TopDBQuery is one per-query row used by the Service Detail DB-queries table —
-// combines rate, error %, and p50/p95/p99 latency for a database call.
 type TopDBQuery struct {
 	OperationName string  `json:"operation_name"`
 	ServiceName   string  `json:"service_name"`

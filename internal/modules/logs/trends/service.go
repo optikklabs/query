@@ -23,7 +23,6 @@ func (s *Service) Summary(ctx context.Context, f filter.Filters) (models.Summary
 	return models.Summary{Total: row.Total, Errors: row.Errors, Warns: row.Warns}, nil
 }
 
-// Trend powers POST /api/v1/logs/trend.
 func (s *Service) Trend(ctx context.Context, f filter.Filters) ([]models.TrendBucket, error) {
 	rows, err := s.repo.Trend(ctx, f)
 	if err != nil {
@@ -32,7 +31,6 @@ func (s *Service) Trend(ctx context.Context, f filter.Filters) ([]models.TrendBu
 	return mapTrend(rows), nil
 }
 
-// mapTrend maps repository trend rows to response trend buckets.
 func mapTrend(rows []TrendRow) []models.TrendBucket {
 	out := make([]models.TrendBucket, len(rows))
 	for i, r := range rows {

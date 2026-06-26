@@ -11,7 +11,6 @@ type nodeAggRow struct {
 	P99Ms        float32   `ch:"p99_ms"`
 }
 
-// edgeAggRow is scanned from the service-to-peer edge aggregation query.
 type edgeAggRow struct {
 	Source     string    `ch:"source"`
 	Target     string    `ch:"target"`

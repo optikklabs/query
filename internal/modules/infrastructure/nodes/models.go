@@ -34,8 +34,6 @@ type InfrastructureNodeSummary struct {
 	TotalPods      int64 `json:"total_pods"`
 }
 
-// Internal repository row types.
-
 type NodeAggregateRow struct {
 	Host          string    `ch:"host"`
 	PodCount      uint64    `ch:"pod_count"`

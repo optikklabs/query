@@ -13,16 +13,12 @@ func FormatTime(t time.Time) string {
 	return t.UTC().Format("2006-01-02 15:04:05")
 }
 
-// CounterRateFold is one (display_bucket, dim, rate-per-sec) tuple emitted by
-// FoldCounterRateByDim.
 type CounterRateFold struct {
 	Ts   time.Time
 	Dim  string
 	Rate float64
 }
 
-// FoldCounterRateByDim sums values per (display_bucket, dim) and divides
-// by the bucket-grain seconds to produce a rate.
 func FoldCounterRateByDim[R any](rows []R, tsOf func(R) time.Time, dimOf func(R) string, valOf func(R) float64, startMs, endMs int64) []CounterRateFold {
 	type key struct {
 		ts  time.Time

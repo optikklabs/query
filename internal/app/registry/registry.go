@@ -17,7 +17,6 @@ type Module interface {
 	RegisterRoutes(r chi.Router)
 }
 
-// BackgroundRunner is implemented by modules that have background workers.
 type BackgroundRunner interface {
 	Start()
 	Stop() error

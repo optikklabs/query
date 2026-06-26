@@ -33,19 +33,6 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, 
 	}
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
-		WITH grouped AS (
-		    SELECT db_statement                                                                       AS query_text,
-		           attributes.'db.collection.name'::String                                            AS collection_name,
-		           quantileTimingState(duration_nano / 1000000.0)                                     AS lat_state,
-		           count()                                                                            AS call_count,
-		           countIf(has_error OR toUInt16OrZero(response_status_code) >= 400)                  AS error_count
-		    FROM optikk.spans
-		    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		    WHERE timestamp BETWEEN @start AND @end
-		      AND db_system != ''
-		      AND db_statement != ''` + filterWhere + `
-		    GROUP BY query_text, collection_name
-		)
 		SELECT query_text,
 		       collection_name,
 		       qs[1]      AS p50_ms,
@@ -54,12 +41,17 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, 
 		       call_count,
 		       error_count
 		FROM (
-		    SELECT query_text,
-		           collection_name,
-		           any(call_count)                                  AS call_count,
-		           any(error_count)                                 AS error_count,
-		           quantilesTimingMerge(0.5, 0.95, 0.99)(lat_state) AS qs
-		    FROM grouped
+		    SELECT db_statement                                          AS query_text,
+		           attributes.'db.collection.name'::String               AS collection_name,
+		           quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
+		           count()                                               AS call_count,
+		           countIf(is_error)                                     AS error_count
+		    FROM optikk.spans
+		    PREWHERE team_id = @teamID
+		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		         AND db_system != ''
+		         AND db_statement != ''
+		    WHERE timestamp BETWEEN @start AND @end` + filterWhere + `
 		    GROUP BY query_text, collection_name
 		)
 		ORDER BY call_count DESC

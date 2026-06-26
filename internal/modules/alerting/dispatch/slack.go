@@ -17,12 +17,10 @@ type SlackWebhook struct {
 	client *http.Client
 }
 
-// NewSlackWebhook builds a Slack transport with a sensible default client.
 func NewSlackWebhook() *SlackWebhook {
 	return &SlackWebhook{client: &http.Client{Timeout: 5 * time.Second}}
 }
 
-// slackAttachment matches the legacy Slack incoming-webhook schema.
 type slackAttachment struct {
 	Color    string       `json:"color"`
 	Pretext  string       `json:"pretext,omitempty"`

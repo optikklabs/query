@@ -46,14 +46,10 @@ func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols s
 	return fromTable, cte, joins, selectCols, groupByCols, args
 }
 
-// rollupTable picks the read table for the effective grain via the shared
-// timebucket mapping: 1m grain -> 1m, 5m/15m -> 5m, hourly+ -> 1h.
 func rollupTable(startMs, endMs int64, step string) string {
 	return timebucket.RollupTableForGrain(BucketDurationSeconds(startMs, endMs, step))
 }
 
-// seriesColumn returns the metrics_series column expression for a group key:
-// a resource column for canonical resource keys, else a JSON attribute path.
 func seriesColumn(key string) string {
 	if canonical := Canonical(key); canonical != "" {
 		return ResourceColumn(canonical)
@@ -61,9 +57,6 @@ func seriesColumn(key string) string {
 	return "attributes.`" + SanitizeKey(key) + "`::String"
 }
 
-// BuildTagValueArms returns one SELECT arm per key and the per-key named bind
-// args. Resource and attribute arms both read metrics_series scoped by
-// metric_name — fingerprint is the only key, so no pre-filter CTE is needed.
 func BuildTagValueArms(keys []string) (arms []string, args []any) {
 	for i, key := range keys {
 		label := "k" + strconv.Itoa(i)
@@ -84,11 +77,10 @@ func BuildTagValueArms(keys []string) (arms []string, args []any) {
 	return arms, args
 }
 
-// BucketDurationSeconds returns the bucket duration for a step or grain.
 func BucketDurationSeconds(startMs, endMs int64, step string) int64 {
 	switch step {
 	case "1m":
-		// Finest grain: served from the 1m rollup.
+
 		return 60
 	case "5m":
 		return 300
@@ -113,7 +105,6 @@ func BucketDurationSeconds(startMs, endMs int64, step string) int64 {
 	}
 }
 
-// bucketGrainSQL returns toStartOf* fragment matching BucketDurationSeconds.
 func bucketGrainSQL(startMs, endMs int64, step string) string {
 	return timebucket.GrainSQL(BucketDurationSeconds(startMs, endMs, step))
 }

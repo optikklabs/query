@@ -37,7 +37,6 @@ func RegisterRoutes(cfg Config, v1 chi.Router, h *Handler) {
 	})
 }
 
-// NewModule creates the unified user module.
 func NewModule(
 	service *Service,
 	tokens *token.Service,

@@ -11,15 +11,12 @@ type TopicRatePoint struct {
 	RatePerSec float64 `json:"rate_per_sec"`
 }
 
-// LagPoint — consumer lag per group+topic per time bucket.
 type LagPoint struct {
 	Timestamp     string  `json:"timestamp"`
 	ConsumerGroup string  `json:"consumer_group"`
 	Topic         string  `json:"topic"`
 	Lag           float64 `json:"lag"`
 }
-
-// Internal repository row types.
 
 type TopicCounterRow struct {
 	Timestamp time.Time `ch:"timestamp"`

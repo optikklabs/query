@@ -15,7 +15,6 @@ type Handler struct {
 	Tokens  *token.Service
 }
 
-// NewHandler creates a new Handler instance.
 func NewHandler(service *Service, tokens *token.Service) *Handler {
 	return &Handler{
 		Service: service,
@@ -23,7 +22,6 @@ func NewHandler(service *Service, tokens *token.Service) *Handler {
 	}
 }
 
-// CreateTeam provisions a new team with a generated ingest API key.
 func (h *Handler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	var req CreateTeamRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
@@ -39,7 +37,6 @@ func (h *Handler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, team)
 }
 
-// CreateUser registers a new user and assigns team memberships.
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req CreateUserRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
@@ -55,7 +52,6 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, user)
 }
 
-// Login authenticates a user credentials.
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
@@ -75,7 +71,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, response)
 }
 
-// Refresh exchanges a valid refresh cookie for a new token pair.
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(h.Tokens.RefreshCookieName())
 	if err != nil || cookie.Value == "" {
@@ -92,14 +87,16 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, response)
 }
 
-// Logout clears the refresh cookie.
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	response := h.Service.Logout(r.Context(), modulecommon.Tenant(r), modulecommon.ClientIP(r))
+	var refreshToken string
+	if cookie, err := r.Cookie(h.Tokens.RefreshCookieName()); err == nil {
+		refreshToken = cookie.Value
+	}
+	response := h.Service.Logout(r.Context(), modulecommon.Tenant(r), refreshToken, modulecommon.ClientIP(r))
 	h.Tokens.ClearRefreshCookie(w)
 	modulecommon.RespondOK(w, response)
 }
 
-// AuthMe returns details for the current user context.
 func (h *Handler) AuthMe(w http.ResponseWriter, r *http.Request) {
 	response, err := h.Service.AuthContext(modulecommon.Tenant(r).UserID)
 	if err != nil {
@@ -109,7 +106,6 @@ func (h *Handler) AuthMe(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, response)
 }
 
-// GetProfile returns the profile settings of the current user.
 func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	profile, err := h.Service.GetProfile(modulecommon.Tenant(r).UserID)
 	if err != nil {
@@ -119,7 +115,6 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, profile)
 }
 
-// UpdateProfile updates profile info of the current user.
 func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	var req UpdateProfileRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
@@ -135,7 +130,6 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, profile)
 }
 
-// UpdatePreferences updates preferences of the current user.
 func (h *Handler) UpdatePreferences(w http.ResponseWriter, r *http.Request) {
 	var req UpdatePreferencesRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {

@@ -12,7 +12,6 @@ const (
 	RateLimited     = "RATE_LIMITED"
 )
 
-// Server & infrastructure errors (5xx)
 const (
 	Internal        = "INTERNAL_ERROR"
 	QueryFailed     = "QUERY_FAILED"
@@ -22,7 +21,6 @@ const (
 	CircuitOpen     = "CIRCUIT_OPEN"
 )
 
-// Data-level codes (returned inside success responses)
 const (
 	NoData      = "NO_DATA"
 	PartialData = "PARTIAL_DATA"

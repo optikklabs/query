@@ -169,7 +169,6 @@ func (r *Repository) GetByID(ctx context.Context, id, teamID int64) (models.Moni
 	return combined.toRows()
 }
 
-// monitorWithState flattens the SELECT m.* + s.* row so sqlx can scan it.
 type monitorWithState struct {
 	models.MonitorRow
 	StateMonitorID        sql.NullInt64   `db:"monitor_id"`

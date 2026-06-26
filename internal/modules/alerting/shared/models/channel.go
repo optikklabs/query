@@ -20,7 +20,6 @@ type ChannelRow struct {
 	UpdatedAt      sql.NullTime   `db:"updated_at"`
 }
 
-// PolicyRow is the raw row for optikk.notification_policies.
 type PolicyRow struct {
 	ID          int64        `db:"id"`
 	TeamID      int64        `db:"team_id"`
@@ -35,7 +34,6 @@ type PolicyRow struct {
 	UpdatedAt   sql.NullTime `db:"updated_at"`
 }
 
-// TemplateRow is the raw row for optikk.notification_templates.
 type TemplateRow struct {
 	ID          int64          `db:"id"`
 	TeamID      int64          `db:"team_id"`
@@ -47,16 +45,12 @@ type TemplateRow struct {
 	UpdatedAt   sql.NullTime   `db:"updated_at"`
 }
 
-// SlackWebhookConfig is the config_json shape for slack-typed channels.
 type SlackWebhookConfig struct {
 	WebhookURL string `json:"webhook_url"`
 }
 
-// ChannelTypes lists the v1 channel types in display order. Only "slack" is
-// wired end-to-end; the rest ship as Install stubs (no transport).
 var ChannelTypes = []string{"slack", "pagerduty", "opsgenie", "teams", "email", "webhook", "jira"}
 
-// IsValidChannelType reports whether t is one of the channel types we persist.
 func IsValidChannelType(t string) bool {
 	for _, v := range ChannelTypes {
 		if v == t {

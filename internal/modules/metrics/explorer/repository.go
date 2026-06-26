@@ -48,7 +48,7 @@ func (r *Repository) ListMetricNames(ctx context.Context, teamID, startMs, endMs
 }
 
 func (r *Repository) ListAttributeTagKeys(ctx context.Context, teamID, startMs, endMs int64, metricName string) ([]tagKeyDTO, error) {
-	// Reads distinct attribute keys from metrics_series (metric_name leads PK).
+
 	const dynamicQuery = `
 		SELECT DISTINCT arrayJoin(mapKeys(JSONAllPathsWithTypes(attributes))) AS tag_key
 		FROM optikk.metrics_series
@@ -130,7 +130,6 @@ func (r *Repository) ListAttributeTagValues(ctx context.Context, teamID, startMs
 	return rows, nil
 }
 
-// ListTagValuesForKeys returns distinct values and counts for tag keys.
 func (r *Repository) ListTagValuesForKeys(ctx context.Context, teamID, startMs, endMs int64, metricName string, keys []string) ([]tagKeyValueDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	if len(keys) == 0 {
@@ -163,38 +162,39 @@ func (r *Repository) ListTagValuesForKeys(ctx context.Context, teamID, startMs, 
 	return rows, nil
 }
 
-// IsCumulativeCounter reports whether the metric is a cumulative monotonic
-// counter, which must be converted to per-series deltas at read time rather than
-// summed across cumulative data points.
-func (r *Repository) IsCumulativeCounter(ctx context.Context, f filter.Filters) (bool, error) {
+func (r *Repository) ResolveSeriesKind(ctx context.Context, f filter.Filters) (cumulative, histogram bool, err error) {
 	query := `
 		SELECT any(temporality)  AS temporality,
-		       any(is_monotonic) AS is_monotonic
+		       any(is_monotonic) AS is_monotonic,
+		       any(metric_type)  AS metric_type
 		FROM optikk.metrics_series
 		PREWHERE team_id     = @teamID
 		     AND metric_name = @metricName
 		     AND timestamp   BETWEEN @start AND @end`
 	var rows []metricKindDTO
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.IsCumulativeCounter", &rows, query, metricArgs(f)...); err != nil {
-		return false, err
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.ResolveSeriesKind", &rows, query, metricArgs(f)...); err != nil {
+		return false, false, err
 	}
 	if len(rows) == 0 {
-		return false, nil
+		return false, false, nil
 	}
-	return rows[0].Temporality == "Cumulative" && rows[0].IsMonotonic, nil
+	cumulative = rows[0].Temporality == "Cumulative" && rows[0].IsMonotonic
+	histogram = strings.EqualFold(rows[0].MetricType, "histogram")
+	return cumulative, histogram, nil
 }
 
-// QueryRollupSeries queries aggregated scalar metrics rollups for timeseries.
 func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([]timeseriesPointDTO, error) {
-	if filter.BucketDurationSeconds(f.StartMs, f.EndMs, f.Step) >= 3600 {
-		f.StartMs = timebucket.FloorMsToHour(f.StartMs)
-	}
+	bucketSec := filter.BucketDurationSeconds(f.StartMs, f.EndMs, f.Step)
+	f.StartMs = timebucket.FloorMsToBucket(f.StartMs, bucketSec)
 	fromTable, cte, joins, selectCols, groupByCols, filterArgs := filter.BuildSelection(f)
 
 	var query string
-	if f.Cumulative {
+	switch {
+	case f.Histogram && isPercentile(f.Aggregation):
+		query = histogramQuantileQuery(cte, fromTable, joins, selectCols, groupByCols)
+	case f.Cumulative:
 		query = cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols)
-	} else {
+	default:
 		query = deltaRollupQuery(cte, fromTable, joins, selectCols, groupByCols)
 	}
 
@@ -206,14 +206,15 @@ func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([
 	return rows, nil
 }
 
-// deltaRollupQuery sums delta/gauge rollup aggregates directly per bucket.
 func deltaRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
 	return cte + `
 		SELECT ` + selectCols + `,
-		       sum(val_sum)   AS val_sum,
-		       sum(val_count) AS val_count,
-		       min(val_min)   AS val_min,
-		       max(val_max)   AS val_max
+		       sum(val_sum)    AS val_sum,
+		       sum(val_count)  AS val_count,
+		       min(val_min)    AS val_min,
+		       max(val_max)    AS val_max,
+		       sum(hist_sum)   AS hist_sum,
+		       sum(hist_count) AS hist_count
 		FROM ` + fromTable + ` AS m` + joins + `
 		PREWHERE m.team_id     = @teamID
 		     AND m.metric_name = @metricName
@@ -224,10 +225,28 @@ func deltaRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) str
 		SETTINGS max_execution_time = 30`
 }
 
-// cumulativeRollupQuery converts a cumulative monotonic counter to per-bucket
-// increase: take each series' last cumulative value per bucket, diff it against
-// the prior bucket within the series (window-partitioned, so block-safe), guard
-// the first bucket and counter resets, then total across series per bucket.
+func histogramQuantileQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
+	return cte + `
+		SELECT ` + selectCols + `,
+		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(latency_state) AS quantiles
+		FROM ` + fromTable + ` AS m` + joins + `
+		PREWHERE m.team_id     = @teamID
+		     AND m.metric_name = @metricName
+		     AND m.timestamp   BETWEEN @start AND @end
+		GROUP BY ` + groupByCols + `
+		ORDER BY bucket_at ASC
+		LIMIT 10000
+		SETTINGS max_execution_time = 30`
+}
+
+func isPercentile(aggregation string) bool {
+	switch aggregation {
+	case "p50", "p95", "p99":
+		return true
+	}
+	return false
+}
+
 func cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
 	perSeries := cte + `
 		SELECT m.fingerprint AS fingerprint, ` + selectCols + `,
@@ -246,8 +265,6 @@ func cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols string
 		FROM (` + perSeries + `)
 		WINDOW w AS (PARTITION BY fingerprint ORDER BY bucket_at)`
 
-	// val_count/min/max are unused for cumulative reads (applyAggregation routes
-	// every aggregation to the increase in val_sum); keep types matching the DTO.
 	return `
 		SELECT ` + groupByCols + `,
 		       sum(increase) AS val_sum,

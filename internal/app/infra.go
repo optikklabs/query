@@ -46,8 +46,6 @@ func newInfra(cfg config.Config) (_ *Infra, err error) {
 	}, nil
 }
 
-// openMySQL opens the pool, logs the connection, and runs migrations.
-// Query owns the MySQL schema, so it migrates on startup.
 func openMySQL(cfg config.Config) (*sql.DB, error) {
 	dbConn, err := dbutil.Open(cfg.MySQLDSN(), cfg.MySQL.MaxOpenConns, cfg.MySQL.MaxIdleConns)
 	if err != nil {
@@ -65,8 +63,6 @@ func openMySQL(cfg config.Config) (*sql.DB, error) {
 	return dbConn, nil
 }
 
-// openClickHouse opens the connection and logs it. Query reads ClickHouse
-// tables; the ingest service owns and migrates the CH schema.
 func openClickHouse(cfg config.Config) (clickhouse.Conn, error) {
 	chConn, err := dbutil.OpenClickHouseConn(cfg.ClickHouseDSN())
 	if err != nil {

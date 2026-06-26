@@ -71,7 +71,6 @@ func (h *REDFleetHandler) GetStatusTimeSeries(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// GetLatencyPercentilesTimeSeries returns p50/p95/p99 latency over time.
 func (h *REDFleetHandler) GetLatencyPercentilesTimeSeries(w http.ResponseWriter, r *http.Request) {
 	serviceName := r.URL.Query().Get("serviceName")
 	modulecommon.HandleRangeQuery(w, r, "Failed to query latency percentiles", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
@@ -79,7 +78,6 @@ func (h *REDFleetHandler) GetLatencyPercentilesTimeSeries(w http.ResponseWriter,
 	})
 }
 
-// GetREDByEndpointTimeSeries returns rps/error-rate/p99 per route over time.
 func (h *REDFleetHandler) GetREDByEndpointTimeSeries(w http.ResponseWriter, r *http.Request) {
 	serviceName := r.URL.Query().Get("serviceName")
 	modulecommon.HandleRangeQuery(w, r, "Failed to query per-endpoint time series", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
@@ -87,7 +85,6 @@ func (h *REDFleetHandler) GetREDByEndpointTimeSeries(w http.ResponseWriter, r *h
 	})
 }
 
-// GetTopEndpointsCombined returns per-operation metrics for the endpoints.
 func (h *REDFleetHandler) GetTopEndpointsCombined(w http.ResponseWriter, r *http.Request) {
 	teamID := modulecommon.Tenant(r).TeamID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
@@ -113,7 +110,6 @@ func (h *REDFleetHandler) GetTopEndpointsCombined(w http.ResponseWriter, r *http
 	modulecommon.RespondOK(w, resp)
 }
 
-// GetTopDBQueriesCombined returns per-query metrics for a service's DB calls.
 func (h *REDFleetHandler) GetTopDBQueriesCombined(w http.ResponseWriter, r *http.Request) {
 	teamID := modulecommon.Tenant(r).TeamID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)

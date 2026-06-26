@@ -22,6 +22,7 @@ type QueryResponse struct {
 
 type traceIndexRowDTO struct {
 	TraceID        string    `ch:"trace_id"`
+	SpanID         string    `ch:"span_id"`
 	StartTime      time.Time `ch:"start_time"`
 	EndTime        time.Time `ch:"end_time"`
 	DurationNs     uint64    `ch:"duration_ns"`
@@ -45,12 +46,10 @@ type FacetsRequest struct {
 	filter.Filters
 }
 
-type topKRow struct {
-	TopServices     []string `ch:"top_services"`
-	TopOperations   []string `ch:"top_operations"`
-	TopHTTPMethods  []string `ch:"top_http_methods"`
-	TopHTTPStatuses []string `ch:"top_http_statuses"`
-	TopStatuses     []string `ch:"top_statuses"`
+type facetDimRow struct {
+	Dim   string `ch:"dim"`
+	Value string `ch:"value"`
+	Count uint64 `ch:"cnt"`
 }
 
 type TrendRequest struct {

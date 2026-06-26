@@ -4,7 +4,5 @@ package mysql
 
 import "embed"
 
-// FS holds compile-time schema files. Re-runs are safe (IF NOT EXISTS).
-//
 //go:embed *.sql
 var FS embed.FS

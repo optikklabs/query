@@ -23,12 +23,10 @@ type dimRow struct {
 	Count uint64 `ch:"cnt"`
 }
 
-// Compute returns top-N values for all resource dimensions in one query.
 func (r *Repository) Compute(ctx context.Context, f filter.Filters) ([]dimRow, error) {
 	resourceWhere, _, args := filter.BuildClauses(f)
 	args = append(args, clickhouse.Named("facetLimit", uint64(facetTopN)))
 
-	// Each UNION arm shares the same PREWHERE shape on logs_resource.
 	query := facetArm("service", resourceWhere) +
 		" UNION ALL " + facetArm("host", resourceWhere) +
 		" UNION ALL " + facetArm("pod", resourceWhere) +
@@ -42,7 +40,6 @@ func (r *Repository) Compute(ctx context.Context, f filter.Filters) ([]dimRow, e
 	return rows, nil
 }
 
-// facetArm builds a single UNION arm for the specified resource dimension.
 func facetArm(dim, resourceWhere string) string {
 	return `
 		SELECT '` + dim + `' AS dim, ` + dim + ` AS value, count() AS cnt

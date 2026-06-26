@@ -33,24 +33,6 @@ type TrendRow struct {
 	Debug      uint64    `ch:"debug"`
 }
 
-// Summary reads use CTE to narrow fingerprints when resource predicates exist.
-// Otherwise, it queries bare using leading PK columns for pruning.
-const summaryCTEHead = `
-	WITH active_fps AS (
-	    SELECT DISTINCT fingerprint
-	    FROM optikk.logs_resource
-	    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd`
-const summaryCTETail = `
-	)
-	SELECT count()                       AS total,
-	       countIf(severity_bucket >= 4) AS errors,
-	       countIf(severity_bucket = 3)  AS warns
-	FROM optikk.logs
-	PREWHERE team_id = @teamID
-	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-	     AND timestamp BETWEEN @start AND @end
-	     AND fingerprint IN active_fps
-	WHERE timestamp BETWEEN @start AND @end`
 const summaryBareHead = `
 	SELECT count()                       AS total,
 	       countIf(severity_bucket >= 4) AS errors,
@@ -63,24 +45,11 @@ const summaryBareHead = `
 
 func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow, error) {
 	resourceWhere, where, args := filter.BuildClauses(f)
-	var query string
-	if resourceWhere == "" {
-		query = summaryBareHead + where
-	} else {
-		query = summaryCTEHead + resourceWhere + summaryCTETail + where
-	}
+	query := summaryBareHead + resourceWhere + where
 	var row SummaryRow
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Summary",
 		&row, query, args...)
 }
-
-// Trend queries aggregate countIf per severity tier into display buckets.
-// Dispatched using adaptive display grain and supports trailing filters.
-const trendCTEHead = `
-	WITH active_fps AS (
-	    SELECT DISTINCT fingerprint
-	    FROM optikk.logs_resource
-	    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd`
 
 const trendGroupOrder = `
 	GROUP BY time_bucket
@@ -97,15 +66,6 @@ func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, e
 	resourceWhere, where, args := filter.BuildClauses(f)
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 
-	trendCTETail := `
-	)
-	SELECT ` + grainSQL + trendSelectTail + `
-	FROM optikk.logs
-	PREWHERE team_id = @teamID
-	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-	     AND timestamp BETWEEN @start AND @end
-	     AND fingerprint IN active_fps
-	WHERE timestamp BETWEEN @start AND @end`
 	trendBareHead := `
 	SELECT ` + grainSQL + trendSelectTail + `
 	FROM optikk.logs
@@ -114,12 +74,7 @@ func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, e
 	     AND timestamp BETWEEN @start AND @end
 	WHERE timestamp BETWEEN @start AND @end`
 
-	var query string
-	if resourceWhere == "" {
-		query = trendBareHead + where + trendGroupOrder
-	} else {
-		query = trendCTEHead + resourceWhere + trendCTETail + where + trendGroupOrder
-	}
+	query := trendBareHead + resourceWhere + where + trendGroupOrder
 	var rows []TrendRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Trend",
 		&rows, query, args...)

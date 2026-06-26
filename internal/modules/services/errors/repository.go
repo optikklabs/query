@@ -33,8 +33,6 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// --- Service error rate ---
-
 func (r *Repository) ServiceErrorRateRowsAll(ctx context.Context, teamID int64, startMs, endMs int64) ([]rawServiceRateRow, error) {
 	query := durationStatusCTE + `
 		SELECT series.service              AS service,
@@ -86,8 +84,6 @@ func (r *Repository) ServiceErrorRateRowsByService(ctx context.Context, teamID i
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ServiceErrorRateByService", &rows, query, args...)
 }
 
-// --- Error volume ---
-
 func (r *Repository) ErrorVolumeRowsAll(ctx context.Context, teamID int64, startMs, endMs int64) ([]rawServiceErrorRow, error) {
 	query := durationStatusCTE + `
 		SELECT series.service          AS service,
@@ -134,8 +130,6 @@ func (r *Repository) ErrorVolumeRowsByService(ctx context.Context, teamID int64,
 	var rows []rawServiceErrorRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorVolumeByService", &rows, query, args...)
 }
-
-// --- Error groups ---
 
 func (r *Repository) ErrorGroupRowsAll(ctx context.Context, teamID int64, startMs, endMs int64, limit int, cursor ErrorGroupsCursor) ([]rawErrorGroupRow, error) {
 	var paginationFilter string
@@ -203,7 +197,6 @@ func (r *Repository) ErrorGroupRowsByService(ctx context.Context, teamID int64, 
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupsByService", &rows, query, args...)
 }
 
-// ErrorGroupSamples returns status message and trace ID exemplars for groups.
 func (r *Repository) ErrorGroupSamples(ctx context.Context, teamID int64, startMs, endMs int64, groupIDs []string) ([]rawErrorGroupSampleRow, error) {
 	const query = `
 		SELECT error_group_id                    AS error_group_id,
@@ -222,8 +215,6 @@ func (r *Repository) ErrorGroupSamples(ctx context.Context, teamID int64, startM
 	var rows []rawErrorGroupSampleRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupSamples", &rows, query, args...)
 }
-
-// --- Group drill-in (always scoped by GroupIdentity) ---
 
 func (r *Repository) ErrorGroupDetailRow(ctx context.Context, teamID int64, startMs, endMs int64, groupID string) (*rawErrorGroupDetailRow, error) {
 	const query = `
@@ -312,7 +303,6 @@ func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, teamID int64,
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupTimeseries", &rows, query, args...)
 }
 
-// ErrorGroupLatestOccurrenceRow returns the latest error span of the group.
 func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, teamID int64, startMs, endMs int64, groupID string) (*rawErrorLatestOccurrenceRow, error) {
 	const query = `
 		SELECT s.trace_id                  AS trace_id,
@@ -346,7 +336,6 @@ func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, teamID i
 	return &row, nil
 }
 
-// ErrorGroupFacetRows returns error distribution across a single tag dimension.
 func (r *Repository) ErrorGroupFacetRows(ctx context.Context, teamID int64, startMs, endMs int64, groupID, column string) ([]rawErrorFacetRow, error) {
 	query := `
 		SELECT ` + column + `             AS value,
@@ -368,8 +357,6 @@ func (r *Repository) ErrorGroupFacetRows(ctx context.Context, teamID int64, star
 	var rows []rawErrorFacetRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupFacet", &rows, query, args...)
 }
-
-// --- Error hotspot (no service filter) ---
 
 func (r *Repository) ErrorHotspotRows(ctx context.Context, teamID int64, startMs, endMs int64) ([]rawErrorHotspotRow, error) {
 	query := `

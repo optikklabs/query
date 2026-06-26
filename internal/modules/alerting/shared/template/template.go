@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-// Vars carries the substitution map and the three status booleans for sections.
-// Missing keys render as the empty string to prevent breaking delivery.
 type Vars struct {
 	Values     map[string]string
 	IsAlert    bool
@@ -16,8 +14,6 @@ type Vars struct {
 	IsRecovery bool
 }
 
-// Render evaluates the body against the provided Vars.
-// The renderer is single-pass and returns whatever it can process on error.
 func Render(body string, v Vars) string {
 	out := body
 	out = renderSections(out, "is_alert", v.IsAlert)
@@ -27,7 +23,6 @@ func Render(body string, v Vars) string {
 	return out
 }
 
-// renderSections strips or keeps the body between {{#tag}}…{{/tag}}.
 func renderSections(body, tag string, keep bool) string {
 	open := "{{#" + tag + "}}"
 	close := "{{/" + tag + "}}"
@@ -50,7 +45,6 @@ func renderSections(body, tag string, keep bool) string {
 	}
 }
 
-// renderScalars replaces {{key}} substrings with values[key].
 func renderScalars(body string, values map[string]string) string {
 	out := strings.Builder{}
 	out.Grow(len(body))
@@ -63,8 +57,7 @@ func renderScalars(body string, values map[string]string) string {
 				return out.String()
 			}
 			key := strings.TrimSpace(body[i+2 : i+end])
-			// Section markers leak through unchanged if not previously stripped
-			// by renderSections.
+
 			if strings.HasPrefix(key, "#") || strings.HasPrefix(key, "/") {
 				out.WriteString(body[i : i+end+2])
 				i += end + 2
@@ -82,7 +75,6 @@ func renderScalars(body string, values map[string]string) string {
 	return out.String()
 }
 
-// FormatFloat is a small helper for callers building the Values map.
 func FormatFloat(v float64) string {
 	return fmt.Sprintf("%g", v)
 }

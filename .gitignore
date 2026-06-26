@@ -16,6 +16,8 @@ main
 # OS
 .DS_Store
 Thumbs.db
+query
+query-server
 
 # Build output
 bin/

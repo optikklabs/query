@@ -70,9 +70,7 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, teamID, startMs,
 // GetActiveConnectionsBySystem returns active connections by database system.
 func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, teamID, startMs, endMs int64) (map[string]int64, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
-	// otelsql emits the connection count as db.sql.connection.open with the
-	// state encoded in the metric name (no db.client.connection.state attr), so
-	// there is no 'used' state to filter on.
+
 	query := `
 		WITH series AS (
 		    SELECT fingerprint, any(attributes.` + "`db.system`" + `::String) AS db_system

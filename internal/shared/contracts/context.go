@@ -16,7 +16,6 @@ func WithTenant(ctx context.Context, t TenantContext) context.Context {
 	return context.WithValue(ctx, tenantCtxKey{}, t)
 }
 
-// TenantFrom returns the tenant stored in ctx, or a zero value.
 func TenantFrom(ctx context.Context) TenantContext {
 	t, _ := ctx.Value(tenantCtxKey{}).(TenantContext)
 	return t

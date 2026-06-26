@@ -35,11 +35,6 @@ func buildFilterArgs(teamID, startMs, endMs int64, metricNames []string, filterC
 	return extraWhere, args
 }
 
-// seriesCTE builds the metrics_series CTE that resolves a fingerprint set plus
-// the requested dimension values, scoped by metric_name. The dimension that
-// formerly lived as a fixed rollup column is now read from the series JSON and
-// joined back on fingerprint. baseWhere is the primary-dimension non-empty
-// guard; extraWhere is the optional drill-down filter.
 func seriesCTE(needTopic, needGroup bool, baseWhere, extraWhere string) string {
 	sel := "fingerprint"
 	if needTopic {
@@ -65,7 +60,6 @@ var topicThroughputMetrics = []string{
 	"kafka.consumer.records_consumed_total",
 }
 
-// QueryTopicThroughput returns consumption rates and totals per topic.
 func (r *Repository) QueryTopicThroughput(ctx context.Context, teamID, startMs, endMs int64, topic string) ([]TopicThroughputRow, error) {
 	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, topicThroughputMetrics, "topic", topic)
 	query := seriesCTE(true, false, filter.AttrTopic+" != ''", extraWhere) + `
@@ -90,15 +84,11 @@ func (r *Repository) QueryTopicThroughput(ctx context.Context, teamID, startMs, 
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicThroughput", &rows, query, args...)
 }
 
-// Lag is sourced from the kafkametrics receiver (kafka.consumer_group.lag),
-// which carries real per (group, topic, partition) lag; lead remains the JMX
-// client gauge (no kafkametrics equivalent is emitted).
 var topicLagMetrics = []string{
 	"kafka.consumer_group.lag",
 	"kafka.consumer.records_lead",
 }
 
-// QueryTopicLag returns max lag and lead per topic.
 func (r *Repository) QueryTopicLag(ctx context.Context, teamID, startMs, endMs int64, topic string) ([]TopicLagRow, error) {
 	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, topicLagMetrics, "topic", topic)
 	query := seriesCTE(true, false, filter.AttrTopic+" != ''", extraWhere) + `
@@ -119,7 +109,6 @@ func (r *Repository) QueryTopicLag(ctx context.Context, teamID, startMs, endMs i
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicLag", &rows, query, args...)
 }
 
-// QueryTopicConsumers returns count of consumer groups per topic.
 func (r *Repository) QueryTopicConsumers(ctx context.Context, teamID, startMs, endMs int64, topic string) ([]TopicConsumersRow, error) {
 	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, topicLagMetrics, "topic", topic)
 	query := seriesCTE(true, true, filter.AttrTopic+" != ''", extraWhere) + `
@@ -137,15 +126,12 @@ func (r *Repository) QueryTopicConsumers(ctx context.Context, teamID, startMs, e
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicConsumers", &rows, query, args...)
 }
 
-// Partition count and retained-message backlog come from the kafkametrics
-// receiver: per-partition offsets (current - oldest) and the topic partition gauge.
 var topicBacklogMetrics = []string{
 	"kafka.partition.current_offset",
 	"kafka.partition.oldest_offset",
 	"kafka.topic.partitions",
 }
 
-// QueryTopicBacklog returns partition count and retained-message backlog per topic.
 func (r *Repository) QueryTopicBacklog(ctx context.Context, teamID, startMs, endMs int64, topic string) ([]TopicBacklogRow, error) {
 	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, topicBacklogMetrics, "topic", topic)
 	query := seriesCTE(true, false, filter.AttrTopic+" != ''", extraWhere) + `
@@ -171,15 +157,8 @@ func (r *Repository) QueryTopicBacklog(ctx context.Context, teamID, startMs, end
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicBacklog", &rows, query, args...)
 }
 
-// Group identity is carried by the kafkametrics-receiver metrics
-// (kafka.consumer_group.*), not the JMX kafka.consumer.* client metrics which
-// are keyed by client-id only. consumer_group.lag has one series per
-// (group, topic, partition), so distinct series == partitions the group reads.
-// Partition / topic identity comes from kafka.consumer_group.lag (one series per
-// group/topic/partition); members from kafka.consumer_group.members.
 var groupPartitionMetrics = []string{"kafka.consumer_group.lag", "kafka.consumer_group.members"}
 
-// QueryGroupPartitions returns partitions, topics, and members per consumer group.
 func (r *Repository) QueryGroupPartitions(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupPartitionsRow, error) {
 	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, groupPartitionMetrics, "consumer_group", group)
 	query := seriesCTE(true, true, filter.AttrConsumerGroup+" != ''", extraWhere) + `
@@ -205,7 +184,6 @@ var groupCommitMetrics = []string{
 	"kafka.consumer.commit_latency_max",
 }
 
-// QueryGroupCommits returns commit rate and latencies per consumer group.
 func (r *Repository) QueryGroupCommits(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupCommitsRow, error) {
 	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, groupCommitMetrics, "consumer_group", group)
 	query := seriesCTE(false, true, filter.AttrConsumerGroup+" != ''", extraWhere) + `
@@ -234,7 +212,6 @@ var groupFetchMetrics = []string{
 	"kafka.consumer.fetch_latency_max",
 }
 
-// QueryGroupFetches returns fetch rate and latencies per consumer group.
 func (r *Repository) QueryGroupFetches(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupFetchesRow, error) {
 	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, groupFetchMetrics, "consumer_group", group)
 	query := seriesCTE(false, true, filter.AttrConsumerGroup+" != ''", extraWhere) + `
@@ -257,10 +234,6 @@ func (r *Repository) QueryGroupFetches(ctx context.Context, teamID, startMs, end
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryGroupFetches", &rows, query, args...)
 }
 
-// QueryClusterHealth returns broker-level health from the kafkametrics receiver
-// (kafka.brokers / controller / partition replicas). Gauges are read at their
-// latest value in the window; under-replicated counts partitions whose live
-// replica set exceeds the in-sync set.
 func (r *Repository) QueryClusterHealth(ctx context.Context, teamID, startMs, endMs int64) (ClusterHealthRow, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	tbl := timebucket.MetricsRollup(endMs - startMs)
@@ -305,7 +278,6 @@ var groupHealthMetrics = []string{
 	"kafka.consumer.connection_count",
 }
 
-// QueryGroupHealth returns health metrics per consumer group.
 func (r *Repository) QueryGroupHealth(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupHealthRow, error) {
 	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, groupHealthMetrics, "consumer_group", group)
 	query := seriesCTE(false, true, filter.AttrConsumerGroup+" != ''", extraWhere) + `

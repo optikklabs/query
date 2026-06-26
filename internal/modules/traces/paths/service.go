@@ -141,7 +141,6 @@ func pickBestChild(nodes map[string]*criticalNode, children []string) string {
 	return best
 }
 
-// buildErrorPath builds the root→leaf error chain from raw error span rows.
 func buildErrorPath(rows []errorPathRow) []ErrorPathSpan {
 	spans := make(map[string]errorPathRow, len(rows))
 	for _, r := range rows {
@@ -196,8 +195,6 @@ func walkErrorChain(spans map[string]errorPathRow, leafID string) []ErrorPathSpa
 	return chain
 }
 
-// isRootParentSpanID treats empty string and all-zero hex as "no parent" —
-// both forms appear in real data depending on SDK and ingest path.
 func isRootParentSpanID(parentID string) bool {
 	trimmed := strings.Trim(parentID, "\x00")
 	return trimmed == "" || trimmed == "0000000000000000"

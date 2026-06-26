@@ -10,15 +10,21 @@ import (
 	"github.com/optikklabs/query/internal/modules/saturation/kafka/filter"
 )
 
-type Service struct {
-	repo *Repository
+// lagAndRateRepo is the repository surface the service depends on (DIP: lets
+// tests inject synthetic rows without a ClickHouse connection).
+type lagAndRateRepo interface {
+	QueryConsumeRateByTopic(ctx context.Context, teamID int64, startMs, endMs int64) ([]TopicCounterRow, error)
+	QueryConsumerLagByGroupTopic(ctx context.Context, teamID int64, startMs, endMs int64) ([]GroupTopicGaugeRow, error)
 }
 
-func NewService(repo *Repository) *Service {
+type Service struct {
+	repo lagAndRateRepo
+}
+
+func NewService(repo lagAndRateRepo) *Service {
 	return &Service{repo: repo}
 }
 
-// GetConsumeRateByTopic returns counter sum divided by bucket-grain seconds.
 func (s *Service) GetConsumeRateByTopic(ctx context.Context, teamID int64, startMs, endMs int64) ([]TopicRatePoint, error) {
 	rows, err := s.repo.QueryConsumeRateByTopic(ctx, teamID, startMs, endMs)
 	if err != nil {
@@ -36,7 +42,6 @@ func (s *Service) GetConsumeRateByTopic(ctx context.Context, teamID int64, start
 	return out, nil
 }
 
-// GetConsumerLagByGroup returns average lag per bucket, group, and topic.
 func (s *Service) GetConsumerLagByGroup(ctx context.Context, teamID int64, startMs, endMs int64) ([]LagPoint, error) {
 	rows, err := s.repo.QueryConsumerLagByGroupTopic(ctx, teamID, startMs, endMs)
 	if err != nil {

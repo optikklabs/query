@@ -15,7 +15,6 @@ type EventRow struct {
 	MonitorName string `db:"monitor_name"`
 }
 
-// Events returns the recent triggers for one monitor (paginated by limit).
 func (r *Repository) Events(ctx context.Context, monitorID, teamID int64, limit int) ([]EventRow, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 20
@@ -35,8 +34,6 @@ func (r *Repository) Events(ctx context.Context, monitorID, teamID int64, limit 
 	return rows, err
 }
 
-// Activity returns recent events across all monitors for the team — powers
-// the list page's "Recent activity" card.
 func (r *Repository) Activity(ctx context.Context, teamID int64, since time.Time, limit int) ([]EventRow, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 20
@@ -56,7 +53,6 @@ func (r *Repository) Activity(ctx context.Context, teamID int64, since time.Time
 	return rows, err
 }
 
-// StatusTimelineRows returns raw events to build the 24h status bands.
 func (r *Repository) StatusTimelineRows(ctx context.Context, monitorID, teamID int64, since time.Time) ([]models.MonitorEventRow, error) {
 	var rows []models.MonitorEventRow
 	const q = `
@@ -70,8 +66,6 @@ func (r *Repository) StatusTimelineRows(ctx context.Context, monitorID, teamID i
 	return rows, err
 }
 
-// Ack marks the monitor's alerting state as acknowledged. Returns
-// sql.ErrNoRows if not currently in an alerting/warning state.
 func (r *Repository) Ack(ctx context.Context, monitorID, teamID, userID int64, at time.Time) error {
 	const q = `
 		UPDATE optikk.monitor_state s
@@ -90,7 +84,6 @@ func (r *Repository) Ack(ctx context.Context, monitorID, teamID, userID int64, a
 	return nil
 }
 
-// Mute sets muted_until to (now + duration). 0 duration clears the mute.
 func (r *Repository) Mute(ctx context.Context, monitorID, teamID int64, until sql.NullTime) error {
 	const q = `UPDATE optikk.monitors SET muted_until = ?, updated_at = ? WHERE id = ? AND team_id = ?`
 	res, err := dbutil.ExecSQL(ctx, r.db, "monitors.Mute", q, until, time.Now().UTC(), monitorID, teamID)

@@ -36,27 +36,22 @@ func (e *ServiceError) Unwrap() error {
 	return e.Cause
 }
 
-// NewValidationError creates a validation ServiceError.
 func NewValidationError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorValidation, Message: message, Cause: cause}
 }
 
-// NewUnauthorizedError creates an unauthorized ServiceError.
 func NewUnauthorizedError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorUnauthorized, Message: message, Cause: cause}
 }
 
-// NewNotFoundError creates a not found ServiceError.
 func NewNotFoundError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorNotFound, Message: message, Cause: cause}
 }
 
-// NewInternalError creates an internal ServiceError.
 func NewInternalError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorInternal, Message: message, Cause: cause}
 }
 
-// RespondServiceError serializes a service error to the response.
 func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fallbackMessage string) {
 	var serviceErr *ServiceError
 	if errors.As(err, &serviceErr) {

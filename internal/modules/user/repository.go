@@ -17,14 +17,12 @@ type Repository struct {
 	db *sqlx.DB
 }
 
-// NewRepository creates a new Repository instance.
 func NewRepository(db *sql.DB, appConfig registry.AppConfig) *Repository {
 	return &Repository{
 		db: sqlx.NewDb(db, "mysql"),
 	}
 }
 
-// FindActiveUserByID loads an active user record by ID.
 func (r *Repository) FindActiveUserByID(userID int64) (UserRecord, error) {
 	var u UserRecord
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindActiveUserByID", &u, `
@@ -36,7 +34,6 @@ func (r *Repository) FindActiveUserByID(userID int64) (UserRecord, error) {
 	return u, err
 }
 
-// FindActiveUserByEmail loads an active user record by Email.
 func (r *Repository) FindActiveUserByEmail(email string) (AuthUser, error) {
 	var u AuthUser
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindActiveUserByEmail", &u, `
@@ -48,7 +45,6 @@ func (r *Repository) FindActiveUserByEmail(email string) (AuthUser, error) {
 	return u, err
 }
 
-// UpdateUserLastLogin updates the login timestamp for a user.
 func (r *Repository) UpdateUserLastLogin(userID int64, at time.Time) error {
 	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.UpdateUserLastLogin", `
 		UPDATE users SET last_login_at = ? WHERE id = ?
@@ -56,7 +52,39 @@ func (r *Repository) UpdateUserLastLogin(userID int64, at time.Time) error {
 	return err
 }
 
-// FindTeamByID loads a team record by ID.
+func (r *Repository) InsertRefreshToken(userID int64, familyID, tokenHash string, expiresAt time.Time) error {
+	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.InsertRefreshToken", `
+		INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
+		VALUES (?, ?, ?, ?)
+	`, userID, familyID, tokenHash, expiresAt)
+	return err
+}
+
+func (r *Repository) FindRefreshTokenByHash(tokenHash string) (RefreshTokenRecord, error) {
+	var t RefreshTokenRecord
+	err := dbutil.GetSQL(context.Background(), r.db, "user.FindRefreshTokenByHash", &t, `
+		SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, created_at
+		FROM refresh_tokens
+		WHERE token_hash = ?
+		LIMIT 1
+	`, tokenHash)
+	return t, err
+}
+
+func (r *Repository) RevokeRefreshToken(tokenHash string) error {
+	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.RevokeRefreshToken", `
+		UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL
+	`, time.Now().UTC(), tokenHash)
+	return err
+}
+
+func (r *Repository) RevokeRefreshTokenFamily(familyID string) error {
+	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.RevokeRefreshTokenFamily", `
+		UPDATE refresh_tokens SET revoked_at = ? WHERE family_id = ? AND revoked_at IS NULL
+	`, time.Now().UTC(), familyID)
+	return err
+}
+
 func (r *Repository) FindTeamByID(teamID int64) (TeamRecord, error) {
 	var t TeamRecord
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindTeamByID", &t, `
@@ -68,7 +96,6 @@ func (r *Repository) FindTeamByID(teamID int64) (TeamRecord, error) {
 	return t, err
 }
 
-// FindTeamBySlug loads a team record by Slug.
 func (r *Repository) FindTeamBySlug(orgName, slug string) (TeamRecord, error) {
 	var t TeamRecord
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindTeamBySlug", &t, `
@@ -80,7 +107,6 @@ func (r *Repository) FindTeamBySlug(orgName, slug string) (TeamRecord, error) {
 	return t, err
 }
 
-// FindTeamByOrgAndName loads a team record by Org and Name.
 func (r *Repository) FindTeamByOrgAndName(orgName, teamName string) (TeamRecord, error) {
 	var t TeamRecord
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindTeamByOrgAndName", &t, `
@@ -92,7 +118,6 @@ func (r *Repository) FindTeamByOrgAndName(orgName, teamName string) (TeamRecord,
 	return t, err
 }
 
-// ListActiveTeamsByOrganization lists active teams for an organization.
 func (r *Repository) ListActiveTeamsByOrganization(orgName string) ([]TeamRecord, error) {
 	var records []TeamRecord
 	err := dbutil.SelectSQL(context.Background(), r.db, "user.ListActiveTeamsByOrganization", &records, `
@@ -104,7 +129,6 @@ func (r *Repository) ListActiveTeamsByOrganization(orgName string) ([]TeamRecord
 	return records, err
 }
 
-// ListActiveTeamsByIDs lists active teams matching IDs.
 func (r *Repository) ListActiveTeamsByIDs(teamIDs []int64) ([]TeamRecord, error) {
 	if len(teamIDs) == 0 {
 		return []TeamRecord{}, nil
@@ -126,7 +150,6 @@ func (r *Repository) ListActiveTeamsByIDs(teamIDs []int64) ([]TeamRecord, error)
 	return records, nil
 }
 
-// CreateTeam inserts a new team record.
 func (r *Repository) CreateTeam(orgName, name, slug string, description, icon *string, color, apiKey string, createdAt time.Time) (int64, error) {
 	res, err := dbutil.ExecSQL(context.Background(), r.db, "user.CreateTeam", `
 		INSERT INTO teams (org_name, name, slug, description, icon, active, color, api_key, created_at)
@@ -138,7 +161,6 @@ func (r *Repository) CreateTeam(orgName, name, slug string, description, icon *s
 	return res.LastInsertId()
 }
 
-// FindTeamIDByAPIKey resolves a team ID from its API key.
 func (r *Repository) FindTeamIDByAPIKey(ctx context.Context, apiKey string) (int64, error) {
 	var teamID int64
 	err := dbutil.GetSQL(ctx, r.db, "user.FindTeamIDByAPIKey", &teamID, `
@@ -147,7 +169,6 @@ func (r *Repository) FindTeamIDByAPIKey(ctx context.Context, apiKey string) (int
 	return teamID, err
 }
 
-// FindUserByID loads any user record by ID.
 func (r *Repository) FindUserByID(userID int64) (UserRecord, error) {
 	var u UserRecord
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindUserByID", &u, `
@@ -159,7 +180,6 @@ func (r *Repository) FindUserByID(userID int64) (UserRecord, error) {
 	return u, err
 }
 
-// ListActiveUsersByTeamIDs lists active users belonging to any given teams.
 func (r *Repository) ListActiveUsersByTeamIDs(teamIDs []int64, limit, offset int) ([]UserRecord, error) {
 	if len(teamIDs) == 0 {
 		return []UserRecord{}, nil
@@ -184,7 +204,6 @@ func (r *Repository) ListActiveUsersByTeamIDs(teamIDs []int64, limit, offset int
 	return records, err
 }
 
-// CreateUser inserts a new user record.
 func (r *Repository) CreateUser(email, passwordHash, name string, avatarURL, teamsJSON *string, createdAt time.Time) (int64, error) {
 	res, err := dbutil.ExecSQL(context.Background(), r.db, "user.CreateUser", `
 		INSERT INTO users (email, password_hash, name, avatar_url, teams, active, created_at)
@@ -196,7 +215,6 @@ func (r *Repository) CreateUser(email, passwordHash, name string, avatarURL, tea
 	return res.LastInsertId()
 }
 
-// UpdateUserProfile updates a user's name and avatar.
 func (r *Repository) UpdateUserProfile(userID int64, name, avatarURL *string) error {
 	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.UpdateUserProfile", `
 		UPDATE users
@@ -206,7 +224,6 @@ func (r *Repository) UpdateUserProfile(userID int64, name, avatarURL *string) er
 	return err
 }
 
-// UpdateUserTeams updates the teams associated with a user.
 func (r *Repository) UpdateUserTeams(userID int64, teamsJSON string) error {
 	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.UpdateUserTeams", `
 		UPDATE users SET teams = ? WHERE id = ?

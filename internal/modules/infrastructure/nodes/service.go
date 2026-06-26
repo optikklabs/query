@@ -27,7 +27,7 @@ func (s *Service) GetInfrastructureNodes(ctx context.Context, teamID int64, star
 			PodCount: int64(r.PodCount),
 			// Container count is not derived from spans.
 			ContainerCount: 0,
-			// Services are omitted from fleet view for performance.
+
 			Services:     []string{},
 			RequestCount: int64(r.RequestCount),
 			ErrorCount:   int64(r.ErrorCount),
@@ -79,7 +79,6 @@ func (s *Service) GetInfrastructureNodeServices(ctx context.Context, teamID int6
 	return out, nil
 }
 
-// redDerivations computes (error_rate %, avg_latency_ms) from raw aggregates.
 func redDerivations(reqCount, errCount uint64, durationMsSum float64) (errorRate, avgLatency float64) {
 	if reqCount == 0 {
 		return 0, 0

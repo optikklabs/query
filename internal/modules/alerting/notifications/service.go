@@ -22,19 +22,14 @@ func NewService(repo *Repository, dispatcher *dispatch.Dispatcher) *Service {
 	return &Service{repo: repo, dispatcher: dispatcher}
 }
 
-// Sentinel errors -----------------------------------------------------------
-
 var (
 	ErrNotFound     = errors.New("notification resource not found")
 	ErrChannelInUse = errors.New("channel is in use by one or more monitors")
 )
 
-// ErrValidation wraps a user-facing validation message.
 type ErrValidation struct{ Msg string }
 
 func (e ErrValidation) Error() string { return e.Msg }
-
-// Channels ------------------------------------------------------------------
 
 func (s *Service) CreateChannel(ctx context.Context, teamID int64, req CreateChannelRequest) (ChannelResponse, error) {
 	row, err := buildChannelRow(teamID, req)
@@ -104,7 +99,6 @@ func (s *Service) ListChannels(ctx context.Context, teamID int64) ([]ChannelResp
 	return out, nil
 }
 
-// TestChannel runs a synthetic dispatch mirroring a real Alerting trigger.
 func (s *Service) TestChannel(ctx context.Context, teamID, id int64) (map[string]any, error) {
 	row, err := s.repo.GetChannel(ctx, id, teamID)
 	if err != nil {
@@ -166,8 +160,6 @@ func buildChannelRow(teamID int64, req CreateChannelRequest) (models.ChannelRow,
 		ConfigJSON: cfg,
 	}, nil
 }
-
-// Policies ------------------------------------------------------------------
 
 func (s *Service) CreatePolicy(ctx context.Context, teamID int64, req CreatePolicyRequest) (PolicyResponse, error) {
 	row, err := buildPolicyRow(teamID, req)
@@ -250,8 +242,6 @@ func buildPolicyRow(teamID int64, req CreatePolicyRequest) (models.PolicyRow, er
 	}, nil
 }
 
-// Templates -----------------------------------------------------------------
-
 func (s *Service) CreateTemplate(ctx context.Context, teamID int64, req CreateTemplateRequest) (TemplateResponse, error) {
 	row, err := buildTemplateRow(teamID, req)
 	if err != nil {
@@ -323,9 +313,6 @@ func buildTemplateRow(teamID int64, req CreateTemplateRequest) (models.TemplateR
 	}, nil
 }
 
-// Integrations catalog ------------------------------------------------------
-
-// integrationCatalog is the static catalog rendered by the Integrations tab.
 var integrationCatalog = []struct {
 	ID    string
 	Name  string
@@ -342,7 +329,6 @@ var integrationCatalog = []struct {
 	{"jira", "Jira", "Auto-create tickets on trigger", "#2563eb"},
 }
 
-// ListIntegrations returns the catalog with channel counts and status.
 func (s *Service) ListIntegrations(ctx context.Context, teamID int64) ([]IntegrationCatalogEntry, error) {
 	rows, err := s.repo.ListChannels(ctx, teamID)
 	if err != nil {

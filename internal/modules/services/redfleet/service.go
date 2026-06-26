@@ -26,7 +26,6 @@ func (s *Service) GetFleetServices(ctx context.Context, teamID int64, startMs, e
 	return mapFleetServices(rows), nil
 }
 
-// GetFleetTotals returns the fleet-wide RED rollup KPIs.
 func (s *Service) GetFleetTotals(ctx context.Context, teamID int64, startMs, endMs int64) (FleetTotals, error) {
 	rows, err := s.repo.GetFleetREDMetrics(ctx, teamID, startMs, endMs)
 	if err != nil {
@@ -171,8 +170,6 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, teamID i
 	return points, nil
 }
 
-// GetStatusTimeSeries pivots per-bucket / per-status-class rows into one
-// point per bucket with 2xx / 4xx / 5xx (and "other") counts.
 func (s *Service) GetStatusTimeSeries(
 	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string,
 ) ([]StatusTimeSeriesPoint, error) {
@@ -228,8 +225,6 @@ func writeStatusCount(pt *StatusTimeSeriesPoint, bucket string, count float64) {
 	}
 }
 
-// GetLatencyPercentilesTimeSeries returns p50/p95/p99 over time for one service
-// (or for all team services when serviceName is empty).
 func (s *Service) GetLatencyPercentilesTimeSeries(
 	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string,
 ) ([]LatencyPercentilesPoint, error) {
@@ -267,9 +262,6 @@ func (s *Service) GetLatencyPercentilesTimeSeries(
 	return points, nil
 }
 
-// GetREDByEndpointTimeSeries returns per-(bucket, route) rps / error rate / p99
-// for the per-endpoint golden-signal lines. Rows are emitted only for buckets
-// that carry traffic; the frontend aligns them onto a shared time axis.
 func (s *Service) GetREDByEndpointTimeSeries(
 	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string,
 ) ([]EndpointRatePoint, error) {
@@ -284,7 +276,6 @@ func (s *Service) GetREDByEndpointTimeSeries(
 		grainSec = 60
 	}
 
-	// Index traffic rows by (bucket, route); routes preserve first-seen order.
 	type cell struct{ rps, errRate, p99 float64 }
 	traffic := make(map[time.Time]map[string]cell, len(rows))
 	var routes []string
@@ -312,9 +303,6 @@ func (s *Service) GetREDByEndpointTimeSeries(
 		}
 	}
 
-	// Emit a point for every (bucket, route) across the dense window axis so
-	// quiet buckets render as 0 rps (line breaks for latency/error) instead of
-	// collapsing the axis to a straight 2-point line.
 	buckets := denseBuckets(startMs, endMs, grain)
 	points := make([]EndpointRatePoint, 0, len(buckets)*len(routes))
 	for _, bucket := range buckets {
@@ -330,8 +318,6 @@ func (s *Service) GetREDByEndpointTimeSeries(
 	return points, nil
 }
 
-// denseBuckets returns every display-grain bucket in [start, end], aligned to
-// the same truncation the rollup query uses, so gaps become explicit points.
 func denseBuckets(startMs, endMs int64, grain time.Duration) []time.Time {
 	start := time.UnixMilli(startMs).UTC().Truncate(grain)
 	end := time.UnixMilli(endMs).UTC().Truncate(grain)
@@ -342,8 +328,6 @@ func denseBuckets(startMs, endMs int64, grain time.Duration) []time.Time {
 	return out
 }
 
-// GetTopEndpointsCombined returns per-operation rate / errPct / p50 / p95 / p99
-// sorted by request volume.
 func (s *Service) GetTopEndpointsCombined(
 	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, limit int, cursorIn TopEndpointsCursor,
 ) (PaginatedEndpoints, error) {
@@ -386,8 +370,6 @@ func (s *Service) GetTopEndpointsCombined(
 	}, nil
 }
 
-// GetTopDBQueries returns per-query rate / errPct / p50 / p95 / p99 for the
-// service's database calls, sorted by request volume.
 func (s *Service) GetTopDBQueries(
 	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, limit int, cursorIn TopEndpointsCursor,
 ) (PaginatedDBQueries, error) {

@@ -94,17 +94,16 @@ func TestDecideRenotify(t *testing.T) {
 	now := time.Now().UTC()
 	cond := models.Conditions{Comparator: "above", AlertThreshold: f(100)}
 
-	// Still alerting, last notified 10 min ago, renotify every 5 min.
 	d := Decide(state("alert", now.Add(-10*time.Minute)), models.MonitorRow{}, cond, 150, true, 300, now)
 	if !d.ShouldNotify || d.Transition {
 		t.Errorf("expected renotify without transition, got notify=%v transition=%v", d.ShouldNotify, d.Transition)
 	}
-	// Last notified 1 min ago: too soon.
+
 	d = Decide(state("alert", now.Add(-time.Minute)), models.MonitorRow{}, cond, 150, true, 300, now)
 	if d.ShouldNotify {
 		t.Error("renotify fired before interval elapsed")
 	}
-	// Renotify disabled.
+
 	d = Decide(state("alert", now.Add(-10*time.Minute)), models.MonitorRow{}, cond, 150, true, 0, now)
 	if d.ShouldNotify {
 		t.Error("renotify fired with interval disabled")
