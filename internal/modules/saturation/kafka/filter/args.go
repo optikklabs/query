@@ -8,19 +8,15 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
-// MessagingSystemKafka is the OTel messaging.system value for Kafka.
 const MessagingSystemKafka = "kafka"
 
-// MaxTopQueues caps the number of rows returned by top-N readers.
 const MaxTopQueues = 50
 
-// MetricBucketBounds returns the ts_bucket range for [startMs, endMs].
 func MetricBucketBounds(startMs, endMs int64) (uint32, uint32) {
 	return timebucket.BucketStart(startMs / 1000),
 		timebucket.BucketStart(endMs/1000) + uint32(timebucket.BucketSeconds)
 }
 
-// MetricArgs returns the canonical bind set for Kafka queries.
 func MetricArgs(teamID int64, startMs, endMs int64) []any {
 	bucketStart, bucketEnd := MetricBucketBounds(startMs, endMs)
 	return []any{

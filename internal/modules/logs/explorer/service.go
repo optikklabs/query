@@ -36,9 +36,8 @@ func buildPageInfo(rows []models.LogRow, hasMore bool, limit int) models.PageInf
 	if hasMore && len(rows) > 0 {
 		last := rows[len(rows)-1]
 		info.NextCursor = models.Cursor{
-			Timestamp:         last.Timestamp,
-			ObservedTimestamp: last.ObservedTimestamp,
-			TraceID:           last.TraceID,
+			Timestamp: last.Timestamp,
+			LogID:     last.LogID,
 		}.Encode()
 	}
 	return info

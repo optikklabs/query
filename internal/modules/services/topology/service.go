@@ -57,7 +57,6 @@ func (s *Service) GetTopology(ctx context.Context, teamID, startMs, endMs int64,
 	return TopologyResponse{Nodes: nodes, Edges: edges}, nil
 }
 
-// nodeAggsFromRows maps rollup query rows onto neutral BuildGraph inputs.
 func nodeAggsFromRows(rows []nodeAggRow) []NodeAgg {
 	out := make([]NodeAgg, len(rows))
 	for i, r := range rows {
@@ -88,8 +87,6 @@ func edgeAggsFromRows(rows []edgeAggRow) []EdgeAgg {
 	return out
 }
 
-// filterNeighborhood keeps only the focus service and its direct neighbors
-// (1-hop, both upstream and downstream).
 func filterNeighborhood(nodes []ServiceNode, edges []ServiceEdge, focus string) ([]ServiceNode, []ServiceEdge) {
 	keep := map[string]struct{}{focus: {}}
 	keepEdges := make([]ServiceEdge, 0, len(edges))

@@ -60,7 +60,7 @@ func buildPageInfo(rows []traceIndexRowDTO, hasMore bool, limit int) PageInfo {
 	info := PageInfo{HasMore: hasMore, Limit: limit}
 	if hasMore && len(rows) > 0 {
 		last := rows[len(rows)-1]
-		info.NextCursor = TraceCursor{StartMs: uint64(last.StartTime.UnixMilli()), TraceID: last.TraceID}.Encode()
+		info.NextCursor = TraceCursor{StartNs: uint64(last.StartTime.UnixNano()), SpanID: last.SpanID}.Encode()
 	}
 	return info
 }

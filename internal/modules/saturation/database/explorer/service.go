@@ -33,7 +33,7 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, teamID, startMs, endM
 		return nil
 	})
 	g.Go(func() error {
-		// Active-connection metric is best-effort; absence shouldn't fail the query.
+
 		c, err := s.repo.GetActiveConnectionsBySystem(gctx, teamID, startMs, endMs)
 		if err == nil {
 			conns = c
@@ -63,9 +63,6 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, teamID, startMs, endM
 		})
 	}
 
-	// Systems with connection metrics but no DB-client spans (e.g. postgres,
-	// which emits db.sql.connection.* but isn't span-instrumented) still belong
-	// in the list — surfaced conns-only, with qps/latency left at zero.
 	for system, active := range conns {
 		if seen[system] {
 			continue

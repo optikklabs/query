@@ -37,7 +37,6 @@ func (s *Service) Compute(ctx context.Context, f filter.Filters) (models.Facets,
 	return fc, nil
 }
 
-// ComputeResponse wraps Compute as a wire Response for the public endpoint.
 func (s *Service) ComputeResponse(ctx context.Context, f filter.Filters) (Response, error) {
 	fc, err := s.Compute(ctx, f)
 	if err != nil {

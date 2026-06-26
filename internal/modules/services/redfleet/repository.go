@@ -152,7 +152,6 @@ type statusBucketTimeseriesRow struct {
 	RequestCount uint64    `ch:"request_count"`
 }
 
-// latencyPercentilesTimeseriesRow holds p50/p95/p99 for one display bucket.
 type latencyPercentilesTimeseriesRow struct {
 	BucketAt time.Time `ch:"bucket_at"`
 	QS       []float64 `ch:"qs"`
@@ -161,8 +160,6 @@ type latencyPercentilesTimeseriesRow struct {
 	P99Ms    float32   `ch:"p99_ms"`
 }
 
-// endpointRateRow is one (bucket, route) RED sample from spanmetrics, feeding
-// the per-endpoint golden-signal lines.
 type endpointRateRow struct {
 	BucketAt     time.Time `ch:"bucket_at"`
 	HTTPRoute    string    `ch:"http_route"`
@@ -171,7 +168,6 @@ type endpointRateRow struct {
 	QS           []float64 `ch:"qs"`
 }
 
-// topDBQueryRow combines rate/error/percentile shape for one DB query operation.
 type topDBQueryRow struct {
 	ServiceName   string    `ch:"service"`
 	OperationName string    `ch:"operation_name"`
@@ -184,7 +180,6 @@ type topDBQueryRow struct {
 	P99Ms         float32   `ch:"p99_ms"`
 }
 
-// topEndpointRow combines rate/error/percentile shape for one operation.
 type topEndpointRow struct {
 	ServiceName   string    `ch:"service"`
 	OperationName string    `ch:"operation_name"`
@@ -266,8 +261,6 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(
 	return rows, nil
 }
 
-// GetREDByEndpointTimeSeries returns request/error counts and p50/p95/p99 per
-// (display-bucket, http.route) for SERVER spans of one service.
 func (r *Repository) GetREDByEndpointTimeSeries(
 	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string,
 ) ([]endpointRateRow, error) {

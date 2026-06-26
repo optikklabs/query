@@ -34,8 +34,6 @@ func NewService(repo *Repository, queries query.Registry, dispatcher *dispatch.D
 	}
 }
 
-// Tick processes one round of due monitors. Bounded-concurrency fan-out via
-// a buffered semaphore so the run.Group can shut down cleanly via ctx.
 func (s *Service) Tick(ctx context.Context, now time.Time) error {
 	due, err := s.repo.LoadDue(ctx, now, 500)
 	if err != nil {
@@ -60,8 +58,6 @@ func (s *Service) Tick(ctx context.Context, now time.Time) error {
 	return nil
 }
 
-// evalOne handles a single monitor: query -> decide -> persist -> dispatch.
-// Errors are logged but never bubble up — one bad monitor can't kill the tick.
 func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {
 	m := due.Monitor
 	state := due.State
@@ -77,7 +73,7 @@ func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {
 	res, err := backend.Scalar(ctx, m, q, scope, cond, now)
 	if err != nil {
 		slog.WarnContext(ctx, "alerting: scalar eval failed", slog.Int64("monitor_id", m.ID), slog.Any("error", err))
-		// still bump next_evaluation_at so we don't spin
+
 		_ = s.repo.UpdateState(ctx, nextEvalOnly(m, state, now))
 		return
 	}
@@ -116,8 +112,6 @@ func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {
 	}
 }
 
-// nextEvalOnly returns args that only advance the next_evaluation_at clock
-// without changing status — used when the underlying query errored.
 func nextEvalOnly(m models.MonitorRow, state models.MonitorStateRow, now time.Time) UpdateStateArgs {
 	status := state.Status
 	if status == "" {

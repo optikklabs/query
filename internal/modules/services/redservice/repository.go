@@ -14,6 +14,7 @@ type Repository struct {
 	db clickhouse.Conn
 }
 
+// NewRepository returns a new instance of Repository.
 func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
@@ -95,80 +96,112 @@ func (r *Repository) GetOperationBaseline(ctx context.Context, teamID int64, sta
 func (r *Repository) GetServiceSaturationAggs(
 	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, metricNames []string,
 ) ([]serviceMetricRow, error) {
+
+	hostQuery := `
+		SELECT DISTINCT host
+		FROM optikk.metrics_series
+		PREWHERE team_id     = @teamID
+		     AND metric_name = 'traces.span.metrics.duration'
+		WHERE service = @serviceName
+		  AND host    != ''`
+	var hostRows []struct {
+		Host string `ch:"host"`
+	}
+	hostArgs := []any{
+		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("serviceName", serviceName),
+	}
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redservice.GetServiceHosts",
+		&hostRows, hostQuery, hostArgs...); err != nil {
+		return nil, err
+	}
+
+	hosts := make([]string, len(hostRows))
+	for i, row := range hostRows {
+		hosts[i] = row.Host
+	}
+
 	query := `
-		WITH service_hosts AS (
-		    SELECT DISTINCT host
-		    FROM optikk.metrics_series
-		    PREWHERE team_id   = @teamID
-		         AND timestamp BETWEEN @start AND @end
-		    WHERE service = @serviceName
-		      AND host    != ''
-		),
-		active_fps AS (
-		    SELECT fingerprint, any(service) AS service
-		    FROM optikk.metrics_series AS mr
-		    PREWHERE team_id     = @teamID
-		         AND timestamp   BETWEEN @start AND @end
-		    WHERE (mr.service = @serviceName OR mr.host IN service_hosts)
-		    GROUP BY fingerprint
-		)
 		SELECT
-		    r.service                         AS service,
+		    @serviceName                      AS service,
 		    m.metric_name                     AS metric_name,
 		    sum(m.val_sum) / sum(m.val_count) AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
-		INNER JOIN active_fps AS r ON m.fingerprint = r.fingerprint
+		INNER JOIN optikk.metrics_series AS s ON m.fingerprint = s.fingerprint
 		PREWHERE m.team_id     = @teamID
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
-		GROUP BY service, metric_name`
+		WHERE s.service = @serviceName
+		   OR (s.host != '' AND s.host IN @hosts)
+		GROUP BY metric_name`
+
 	args := append(chargs.RollupRangeArgs(teamID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("metricNames", metricNames),
+		clickhouse.Named("hosts", hosts),
 	)
 	var rows []serviceMetricRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redservice.GetServiceSaturationAggs",
-		&rows, query, args...)
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redservice.GetServiceSaturationAggs",
+		&rows, query, args...); err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 func (r *Repository) GetServiceSaturationTimeSeries(
 	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, metricNames []string,
 ) ([]saturationTimeSeriesRawRow, error) {
+
+	hostQuery := `
+		SELECT DISTINCT host
+		FROM optikk.metrics_series
+		PREWHERE team_id     = @teamID
+		     AND metric_name = 'traces.span.metrics.duration'
+		WHERE service = @serviceName
+		  AND host    != ''`
+	var hostRows []struct {
+		Host string `ch:"host"`
+	}
+	hostArgs := []any{
+		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("serviceName", serviceName),
+	}
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redservice.GetServiceHosts",
+		&hostRows, hostQuery, hostArgs...); err != nil {
+		return nil, err
+	}
+
+	hosts := make([]string, len(hostRows))
+	for i, row := range hostRows {
+		hosts[i] = row.Host
+	}
+
 	grainSQL := timebucket.DisplayGrainSQL(endMs - startMs)
 	query := `
-		WITH service_hosts AS (
-		    SELECT DISTINCT host
-		    FROM optikk.metrics_series
-		    PREWHERE team_id   = @teamID
-		         AND timestamp BETWEEN @start AND @end
-		    WHERE service = @serviceName
-		      AND host    != ''
-		),
-		active_fps AS (
-		    SELECT fingerprint, any(service) AS service
-		    FROM optikk.metrics_series AS mr
-		    PREWHERE team_id     = @teamID
-		         AND timestamp   BETWEEN @start AND @end
-		    WHERE (mr.service = @serviceName OR mr.host IN service_hosts)
-		    GROUP BY fingerprint
-		)
 		SELECT
 		    ` + grainSQL + ` AS bucket_at,
 		    sum(m.val_sum) / sum(m.val_count) AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
-		INNER JOIN active_fps AS r ON m.fingerprint = r.fingerprint
+		INNER JOIN optikk.metrics_series AS s ON m.fingerprint = s.fingerprint
 		PREWHERE m.team_id     = @teamID
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
+		WHERE s.service = @serviceName
+		   OR (s.host != '' AND s.host IN @hosts)
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
+
 	args := append(chargs.RollupRangeArgs(teamID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("metricNames", metricNames),
+		clickhouse.Named("hosts", hosts),
 	)
 	var rows []saturationTimeSeriesRawRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redservice.GetServiceSaturationTimeSeries",
-		&rows, query, args...)
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redservice.GetServiceSaturationTimeSeries",
+		&rows, query, args...); err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 func detailArgs(teamID int64, startMs, endMs int64, serviceName string) []any {

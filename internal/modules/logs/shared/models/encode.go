@@ -26,7 +26,6 @@ func MapLog(d LogRow) Log {
 	}
 }
 
-// MapLogs is the slice form of MapLog.
 func MapLogs(rows []LogRow) []Log {
 	out := make([]Log, len(rows))
 	for i, r := range rows {

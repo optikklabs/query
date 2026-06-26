@@ -12,7 +12,6 @@ import (
 
 const maxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
 
-// Filters is the typed shape consumed by the metrics repository.
 type Filters struct {
 	TeamID  int64
 	StartMs int64
@@ -23,29 +22,25 @@ type Filters struct {
 	Step        string
 	GroupBy     []string
 
-	// Cumulative is resolved from series metadata, not the request: true for a
-	// cumulative monotonic counter, which needs per-series delta at read time.
 	Cumulative bool
+
+	Histogram bool
 
 	Tags []TagFilter
 }
 
-// TagFilter represents a single filter row with SQL-form operators.
 type TagFilter struct {
 	Key      string
 	Operator string
 	Values   []string
 }
 
-// validAggregations is the set of supported aggregation functions.
 var validAggregations = map[string]bool{
 	"avg": true, "sum": true, "min": true, "max": true, "count": true,
 	"p50": true, "p75": true, "p95": true, "p99": true,
 	"rate": true,
 }
 
-// Validate clamps to ≤30 days, defaults Aggregation, rejects empty
-// MetricName, missing time range, and unknown aggregation.
 func (f *Filters) Validate() error {
 	if f.MetricName == "" {
 		return errors.New("metricName is required")
@@ -68,7 +63,6 @@ func (f *Filters) Validate() error {
 	return nil
 }
 
-// keyAliases maps frontend resource aliases to their canonical key.
 var keyAliases = map[string]string{
 	"service":                "service",
 	"service.name":           "service",
@@ -80,13 +74,10 @@ var keyAliases = map[string]string{
 	"k8s.namespace.name":     "k8s_namespace",
 }
 
-// Canonical maps a frontend resource alias to its canonical key, or "" if
-// the key is not a known resource dimension.
 func Canonical(key string) string {
 	return keyAliases[key]
 }
 
-// ResourceColumn returns the low-cardinality column for a resource key.
 func ResourceColumn(canonical string) string {
 	switch canonical {
 	case "service":
@@ -101,12 +92,10 @@ func ResourceColumn(canonical string) string {
 	return ""
 }
 
-// AttrColumn returns the attributes JSON column expression for a tag key.
 func AttrColumn(key string) string {
 	return "attributes.`" + SanitizeKey(key) + "`::String"
 }
 
-// SanitizeKey strips characters outside [a-zA-Z0-9._-] to prevent injection.
 func SanitizeKey(key string) string {
 	var b strings.Builder
 	b.Grow(len(key))
@@ -121,7 +110,6 @@ func SanitizeKey(key string) string {
 	return b.String()
 }
 
-// validOperators is the set of SQL-form operators BuildClauses accepts.
 var validOperators = map[string]bool{
 	"=":      true,
 	"!=":     true,
@@ -129,7 +117,6 @@ var validOperators = map[string]bool{
 	"NOT IN": true,
 }
 
-// BuildClauses partitions f.Tags into resource and attribute clauses.
 func BuildClauses(f Filters) (resourceWhere, attrWhere string, args []any) {
 	type resourceAccum struct {
 		positive []string
@@ -180,7 +167,6 @@ func BuildClauses(f Filters) (resourceWhere, attrWhere string, args []any) {
 		}
 	}
 
-	// Emit resource clauses in a fixed order for plan cache hits.
 	for _, spec := range []struct {
 		canonical string
 		col       string

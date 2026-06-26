@@ -57,14 +57,12 @@ type ErrorLatestOccurrence struct {
 	Host           string    `json:"host"`
 }
 
-// ErrorFacet is one value within a facet dimension with its error count share.
 type ErrorFacet struct {
 	Name  string  `json:"name"`
 	Count int64   `json:"count"`
 	Pct   float64 `json:"pct"`
 }
 
-// ErrorFacetGroup is the distribution of group errors across one tag dimension.
 type ErrorFacetGroup struct {
 	Key    string       `json:"key"`
 	Facets []ErrorFacet `json:"facets"`
@@ -79,10 +77,9 @@ type TimeSeriesPoint struct {
 	AvgLatency   float64   `json:"avg_latency"`
 }
 
-// ErrorHotspotCell imported from errortracking
 type ErrorHotspotCell struct {
-	ServiceName   string  `json:"service_name"   ch:"service"`
-	OperationName string  `json:"operation_name" ch:"operation_name"`
-	GroupID       string  `json:"group_id"       ch:"error_group_id"`
-	ErrorCount    int64   `json:"error_count"    ch:"error_count"`
+	ServiceName   string `json:"service_name"   ch:"service"`
+	OperationName string `json:"operation_name" ch:"operation_name"`
+	GroupID       string `json:"group_id"       ch:"error_group_id"`
+	ErrorCount    int64  `json:"error_count"    ch:"error_count"`
 }

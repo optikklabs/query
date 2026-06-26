@@ -10,7 +10,6 @@ type TeamMembership struct {
 	Role   string `json:"role"`
 }
 
-// AuthUser is used for credential scanning from the database.
 type AuthUser struct {
 	ID           int64   `db:"id"`
 	Email        string  `db:"email"`
@@ -20,7 +19,6 @@ type AuthUser struct {
 	TeamsJSON    *string `db:"teams"`
 }
 
-// UserRecord represents a user in the database.
 type UserRecord struct {
 	ID          int64      `db:"id"`
 	Email       string     `db:"email"`
@@ -32,7 +30,16 @@ type UserRecord struct {
 	CreatedAt   time.Time  `db:"created_at"`
 }
 
-// TeamRecord represents a team in the database.
+type RefreshTokenRecord struct {
+	ID        int64      `db:"id"`
+	UserID    int64      `db:"user_id"`
+	FamilyID  string     `db:"family_id"`
+	TokenHash string     `db:"token_hash"`
+	ExpiresAt time.Time  `db:"expires_at"`
+	RevokedAt *time.Time `db:"revoked_at"`
+	CreatedAt time.Time  `db:"created_at"`
+}
+
 type TeamRecord struct {
 	ID          int64     `db:"id"`
 	OrgName     string    `db:"org_name"`

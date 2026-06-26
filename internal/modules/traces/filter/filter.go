@@ -14,7 +14,6 @@ import (
 
 const maxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
 
-// Filters represents the query filters used for traces read path.
 type Filters struct {
 	TeamID  int64 `json:"-"`
 	StartMs int64 `json:"-"`
@@ -42,14 +41,12 @@ type Filters struct {
 	Attributes []AttrFilter `json:"attributes,omitempty"`
 }
 
-// AttrFilter represents a single key-value filter over attributes.
 type AttrFilter struct {
 	Key   string `json:"key"`
 	Op    string `json:"op,omitempty"`
 	Value string `json:"value"`
 }
 
-// Validate checks and normalizes the filters.
 func (f *Filters) Validate() error {
 	if f.EndMs <= 0 {
 		f.EndMs = time.Now().UnixMilli()
@@ -69,7 +66,6 @@ func (f *Filters) Validate() error {
 	return nil
 }
 
-// BuildClauses converts traces filters into SQL where clauses and arguments.
 func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 	args = []any{
 		clickhouse.Named("teamID", uint32(f.TeamID)),

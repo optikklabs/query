@@ -43,7 +43,6 @@ func (s *Service) GetTopology(ctx context.Context, teamID, startMs, endMs int64,
 	return buildGraph(produceRows, consumeRows, winSecs), nil
 }
 
-// p95 reads the 0.95 quantile from a [p50, p95, p99] merge result.
 func p95(qs []float64) float64 {
 	if len(qs) >= 2 {
 		return qs[1]
@@ -58,24 +57,20 @@ func errRate(errors, calls uint64) float64 {
 	return float64(errors) / float64(calls)
 }
 
-// nodeAgg accumulates calls/errors and the worst-topic p95 for a node.
 type nodeAgg struct {
 	calls  uint64
 	errors uint64
 	maxP95 float64
 }
 
-// buildGraph derives producer/topic/consumer nodes and stream edges from the
-// two per-edge aggregations. Node latency uses the worst-topic p95 since
-// histogram quantiles cannot be re-merged in Go.
 func buildGraph(produceRows []produceEdgeRow, consumeRows []consumeEdgeRow, winSecs float64) TopologyResponse {
 	producers := map[string]*nodeAgg{}
-	consumers := map[string]*nodeAgg{}                 // key: service|group
-	consumerMeta := map[string][2]string{}             // key -> {service, group}
-	topicProduce := map[string]uint64{}                // topic -> produce calls
-	topicProducers := map[string]map[string]struct{}{} // topic -> producer set
-	topicGroups := map[string]map[string]struct{}{}    // topic -> group set
-	topicTop := map[string]struct {                    // topic -> top producer
+	consumers := map[string]*nodeAgg{}
+	consumerMeta := map[string][2]string{}
+	topicProduce := map[string]uint64{}
+	topicProducers := map[string]map[string]struct{}{}
+	topicGroups := map[string]map[string]struct{}{}
+	topicTop := map[string]struct {
 		svc   string
 		calls uint64
 	}{}
@@ -97,7 +92,7 @@ func buildGraph(produceRows []produceEdgeRow, consumeRows []consumeEdgeRow, winS
 		})
 	}
 
-	consumeEdge := map[[2]string]uint64{} // (topic, service) -> calls
+	consumeEdge := map[[2]string]uint64{}
 	pathways := make([]Pathway, 0, len(consumeRows))
 	for _, row := range consumeRows {
 		key := row.Service + "|" + row.ConsumerGroup

@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// MonitorRow is the raw MySQL row for optikk.monitors.
 type MonitorRow struct {
 	ID                int64          `db:"id"`
 	TeamID            int64          `db:"team_id"`
@@ -30,7 +29,6 @@ type MonitorRow struct {
 	CreatedByUserID   sql.NullInt64  `db:"created_by_user_id"`
 }
 
-// MonitorStateRow is the raw row for optikk.monitor_state.
 type MonitorStateRow struct {
 	MonitorID        int64           `db:"monitor_id"`
 	Status           string          `db:"status"`
@@ -44,7 +42,6 @@ type MonitorStateRow struct {
 	AckedAt          sql.NullTime    `db:"acked_at"`
 }
 
-// MonitorEventRow is the raw row for optikk.monitor_events.
 type MonitorEventRow struct {
 	ID         int64           `db:"id"`
 	MonitorID  int64           `db:"monitor_id"`
@@ -59,26 +56,22 @@ type MonitorEventRow struct {
 	Note       sql.NullString  `db:"note"`
 }
 
-// Scope describes the resource filter the monitor evaluates against.
 type Scope struct {
 	Tags []ScopeTag `json:"tags,omitempty"`
 }
 
-// ScopeTag is one resource constraint, e.g. service:payment-svc.
 type ScopeTag struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
-// Conditions are common to all monitor types.
 type Conditions struct {
-	// Comparator specifies the operator: above, below, or equal.
 	Comparator        string   `json:"comparator"`
 	AlertThreshold    *float64 `json:"alert_threshold,omitempty"`
 	WarnThreshold     *float64 `json:"warn_threshold,omitempty"`
 	RecoveryThreshold *float64 `json:"recovery_threshold,omitempty"`
 	NoDataAfterSec    int      `json:"no_data_after_sec"`
-	// NoDataAs is the state if data is missing: no_data, alert, or ok.
+
 	NoDataAs  string `json:"no_data_as"`
 	MinSample *int   `json:"min_sample,omitempty"`
 }

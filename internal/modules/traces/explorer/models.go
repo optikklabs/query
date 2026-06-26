@@ -28,11 +28,11 @@ type PageInfo struct {
 }
 
 type TraceCursor struct {
-	StartMs uint64 `json:"s"`
-	TraceID string `json:"t"`
+	StartNs uint64 `json:"s"`
+	SpanID  string `json:"p"`
 }
 
-func (c TraceCursor) IsZero() bool { return c.TraceID == "" }
+func (c TraceCursor) IsZero() bool { return c.SpanID == "" }
 
 func (c TraceCursor) Encode() string {
 	if c.IsZero() {

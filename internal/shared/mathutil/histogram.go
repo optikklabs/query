@@ -6,10 +6,8 @@ import (
 )
 
 // HistogramTuple matches the ClickHouse sumMap output shape.
-type HistogramTuple []any // [0] is []float64, [1] is []uint64
+type HistogramTuple []any
 
-// Quantiles computes percentiles using linear interpolation over explicit bucket bounds.
-// q is a list of percentiles (0 to 1).
 func Quantiles(q []float64, hist HistogramTuple) []float32 {
 	out := make([]float32, len(q))
 	if len(hist) != 2 {
@@ -18,12 +16,10 @@ func Quantiles(q []float64, hist HistogramTuple) []float32 {
 	buckets, okB := hist[0].([]float64)
 	counts, okC := hist[1].([]uint64)
 	if !okB || !okC || len(buckets) == 0 || len(buckets) != len(counts) {
-		// try specific numeric types if generic reflection fails
-		// ClickHouse go driver might return []float64 and []uint64
+
 		return out
 	}
 
-	// sumMap might return unsorted buckets. Ensure they are sorted.
 	type bc struct {
 		b float64
 		c uint64
@@ -52,13 +48,13 @@ func Quantiles(q []float64, hist HistogramTuple) []float32 {
 					out[i] = float32(p.b)
 					break
 				}
-				// Linear interpolation
+
 				prevSum := sum - p.c
 				prevB := 0.0
 				if j > 0 {
 					prevB = pairs[j-1].b
 				}
-				// if bound is +Inf, just return previous bound
+
 				if math.IsInf(p.b, 1) {
 					out[i] = float32(prevB)
 					break

@@ -2,6 +2,7 @@ package explorer
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 }
 
 const traceIndexColumns = `trace_id,
+		span_id,
 		timestamp                                                  AS start_time,
 		timestamp                                                  AS end_time,
 		duration_nano                                              AS duration_ns,
@@ -38,11 +40,12 @@ const traceIndexColumns = `trace_id,
 func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, bool, error) {
 	resourceWhere, where, args := filter.BuildClauses(req.Filters)
 	cur, _ := DecodeCursor(req.Cursor)
-	if cur.TraceID != "" {
-		where += ` AND (timestamp, trace_id) < (@curStart, @curTraceID)`
+	if !cur.IsZero() {
+		where += ` AND (timestamp, span_id) < (@curStart, @curSpanID)`
 		args = append(args,
-			clickhouse.Named("curStart", time.UnixMilli(int64(cur.StartMs))),
-			clickhouse.Named("curTraceID", cur.TraceID),
+			// DateNamed with ns scale; a plain time.Time arg truncates to seconds.
+			clickhouse.DateNamed("curStart", time.Unix(0, int64(cur.StartNs)), clickhouse.NanoSeconds),
+			clickhouse.Named("curSpanID", cur.SpanID),
 		)
 	}
 	args = append(args, clickhouse.Named("pgLimit", uint64(req.Limit+1)))
@@ -54,7 +57,7 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 			FROM optikk.spans
 			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
-			ORDER BY timestamp DESC, trace_id DESC
+			ORDER BY timestamp DESC, span_id DESC
 			LIMIT @pgLimit`
 	} else {
 		query = `
@@ -67,7 +70,7 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 			FROM optikk.spans
 			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
-			ORDER BY timestamp DESC, trace_id DESC
+			ORDER BY timestamp DESC, span_id DESC
 			LIMIT @pgLimit`
 	}
 
@@ -85,61 +88,59 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets, error) {
 	resourceWhere, where, args := filter.BuildClauses(req.Filters)
 
-	var query string
-	if resourceWhere == "" {
-		query = `
-			SELECT topK(20)(service)              AS top_services,
-			       topK(20)(name)                 AS top_operations,
-			       topK(10)(http_method)          AS top_http_methods,
-			       topK(15)(response_status_code) AS top_http_statuses,
-			       topK(5)(status_code_string)    AS top_statuses
-			FROM optikk.spans
-			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where
-	} else {
-		query = `
+	cte, prewhereFP := "", ""
+	if resourceWhere != "" {
+		cte = `
 			WITH active_fps AS (
 			    SELECT DISTINCT fingerprint
 			    FROM optikk.spans_resource
 			    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
-			)
-			SELECT topK(20)(service)              AS top_services,
-			       topK(20)(name)                 AS top_operations,
-			       topK(10)(http_method)          AS top_http_methods,
-			       topK(15)(response_status_code) AS top_http_statuses,
-			       topK(5)(status_code_string)    AS top_statuses
-			FROM optikk.spans
-			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
-			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where
+			)`
+		prewhereFP = " AND fingerprint IN active_fps"
 	}
 
-	var rows []topKRow
+	arm := func(dim, col string, limit int) string {
+		return `
+			SELECT '` + dim + `' AS dim, ` + col + ` AS value, count() AS cnt
+			FROM optikk.spans
+			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + prewhereFP + `
+			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + ` AND ` + col + ` != ''
+			GROUP BY value
+			ORDER BY cnt DESC
+			LIMIT ` + strconv.Itoa(limit)
+	}
+
+	query := cte + arm("service", "service", 20) +
+		" UNION ALL " + arm("operation", "name", 20) +
+		" UNION ALL " + arm("http_method", "http_method", 10) +
+		" UNION ALL " + arm("http_status", "response_status_code", 15) +
+		" UNION ALL " + arm("status", "status_code_string", 5)
+
+	var rows []facetDimRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "facets.QueryFacets", &rows, query, args...); err != nil {
 		return Facets{}, err
 	}
-	if len(rows) == 0 {
-		return Facets{}, nil
-	}
-	return pivotTopK(rows[0]), nil
+	return pivotFacets(rows), nil
 }
 
-func pivotTopK(row topKRow) Facets {
-	toFacetBuckets := func(vals []string) []FacetBucket {
-		out := make([]FacetBucket, 0, len(vals))
-		for _, v := range vals {
-			if v != "" {
-				out = append(out, FacetBucket{Value: v})
-			}
+func pivotFacets(rows []facetDimRow) Facets {
+	var f Facets
+	for _, row := range rows {
+		b := FacetBucket{Value: row.Value, Count: row.Count}
+		switch row.Dim {
+		case "service":
+			f.Service = append(f.Service, b)
+		case "operation":
+			f.Operation = append(f.Operation, b)
+		case "http_method":
+			f.HTTPMethod = append(f.HTTPMethod, b)
+		case "http_status":
+			f.HTTPStatus = append(f.HTTPStatus, b)
+		case "status":
+			f.Status = append(f.Status, b)
 		}
-		return out
 	}
-	return Facets{
-		Service:    toFacetBuckets(row.TopServices),
-		Operation:  toFacetBuckets(row.TopOperations),
-		HTTPMethod: toFacetBuckets(row.TopHTTPMethods),
-		HTTPStatus: toFacetBuckets(row.TopHTTPStatuses),
-		Status:     toFacetBuckets(row.TopStatuses),
-	}
+	return f
 }
 
 func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBucket, error) {

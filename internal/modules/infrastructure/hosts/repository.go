@@ -26,13 +26,9 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// QueryHostUtilization returns metric utilization for CPU, memory, and disk.
 func (r *Repository) QueryHostUtilization(ctx context.Context, teamID, startMs, endMs int64) ([]hostMetricRow, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
-	// Host is grouped from metrics_series; the scalar rollup supplies values.
-	// CPU/memory utilization arrive split per state (and per core), so a plain
-	// mean over all datapoints is a 1/Nstates artifact. Keep cpu 'idle' (and
-	// invert to busy below) and memory 'used'; other metrics are untouched.
+
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint, any(host) AS host
@@ -71,7 +67,6 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, teamID, startMs, 
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hosts.QueryHostUtilization", &rows, query, args...)
 }
 
-// QueryHostSpans returns host RED aggregates from spanmetrics duration.
 func (r *Repository) QueryHostSpans(
 	ctx context.Context, teamID, startMs, endMs int64, serviceName string,
 ) ([]hostSpansRow, error) {
@@ -109,7 +104,6 @@ func (r *Repository) QueryHostSpans(
 		&rows, query, args...)
 }
 
-// utilizationMetricNames returns the CPU, memory, and disk metric names.
 func utilizationMetricNames() []string {
 	names := make([]string, 0, len(infraconsts.CPUMetrics)+len(infraconsts.MemoryMetrics)+len(infraconsts.DiskMetrics))
 	names = append(names, infraconsts.CPUMetrics...)

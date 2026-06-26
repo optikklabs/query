@@ -107,8 +107,6 @@ func (s *Service) GetServiceErrorRate(ctx context.Context, teamID int64, startMs
 	return points, nil
 }
 
-// --- Error volume ---
-
 func (s *Service) GetErrorVolume(ctx context.Context, teamID int64, startMs, endMs int64, serviceName string) ([]TimeSeriesPoint, error) {
 	var (
 		raw []rawServiceErrorRow
@@ -186,8 +184,6 @@ func (s *Service) GetErrorVolume(ctx context.Context, teamID int64, startMs, end
 	return points, nil
 }
 
-// --- Error groups ---
-
 func (s *Service) GetErrorGroups(ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, limit int, cursorIn ErrorGroupsCursor) (PaginatedErrorGroups, error) {
 	raw, err := s.fetchErrorGroups(ctx, teamID, startMs, endMs, serviceName, limit+1, cursorIn)
 	if err != nil {
@@ -198,7 +194,6 @@ func (s *Service) GetErrorGroups(ctx context.Context, teamID int64, startMs, end
 		raw = raw[:limit]
 	}
 
-	// Exemplar message + trace come from the most recent actual error span.
 	samples, err := s.fetchErrorGroupSamples(ctx, teamID, startMs, endMs, raw)
 	if err != nil {
 		return PaginatedErrorGroups{}, err
@@ -245,8 +240,6 @@ func (s *Service) fetchErrorGroups(ctx context.Context, teamID int64, startMs, e
 	return s.repo.ErrorGroupRowsByService(ctx, teamID, startMs, endMs, serviceName, limit, cursorIn)
 }
 
-// fetchErrorGroupSamples resolves exemplar message and trace_id
-// for the page's groups.
 func (s *Service) fetchErrorGroupSamples(ctx context.Context, teamID int64, startMs, endMs int64, groups []rawErrorGroupRow) (map[string]rawErrorGroupSampleRow, error) {
 	if len(groups) == 0 {
 		return map[string]rawErrorGroupSampleRow{}, nil
@@ -286,7 +279,6 @@ func (s *Service) GetErrorGroupDetail(ctx context.Context, teamID int64, startMs
 	}, nil
 }
 
-// facetColumns are the error-span dimensions exposed as facets.
 var facetColumns = []string{"service_version", "environment", "pod", "http_route"}
 
 func (s *Service) GetErrorGroupLatestOccurrence(ctx context.Context, teamID int64, startMs, endMs int64, groupID string) (*ErrorLatestOccurrence, error) {
@@ -417,8 +409,6 @@ func (s *Service) GetErrorGroupTimeseries(ctx context.Context, teamID int64, sta
 	return points, nil
 }
 
-// --- Error hotspot ---
-
 func (s *Service) GetErrorHotspot(ctx context.Context, teamID int64, startMs, endMs int64) ([]ErrorHotspotCell, error) {
 	raw, err := s.repo.ErrorHotspotRows(ctx, teamID, startMs, endMs)
 	if err != nil {
@@ -435,8 +425,6 @@ func (s *Service) GetErrorHotspot(ctx context.Context, teamID int64, startMs, en
 	}
 	return cells, nil
 }
-
-// --- helpers (service-layer derivations) ---
 
 func httpBucketToCode(bucket string) int {
 	switch bucket {

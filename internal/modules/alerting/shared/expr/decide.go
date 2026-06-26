@@ -8,7 +8,6 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
-// Decision contains the output status and notification flags of Decide.
 type Decision struct {
 	NewStatus    string
 	Transition   bool
@@ -16,7 +15,6 @@ type Decision struct {
 	IsRecovery   bool
 }
 
-// Decide evaluates a monitor's conditions to output a new Decision.
 func Decide(prev models.MonitorStateRow, m models.MonitorRow, cond models.Conditions, value float64, hasData bool, renotifyEverySec int64, now time.Time) Decision {
 	prevStatus := prev.Status
 	if prevStatus == "" {
@@ -49,7 +47,6 @@ func Decide(prev models.MonitorStateRow, m models.MonitorRow, cond models.Condit
 	}
 }
 
-// classify maps a (prev, value) pair to a new status under the conditions.
 func classify(prev string, cond models.Conditions, value float64, hasData bool) string {
 	if !hasData {
 		switch cond.NoDataAs {

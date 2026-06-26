@@ -26,7 +26,6 @@ func (s *Service) GetServiceMap(ctx context.Context, teamID int64, traceID strin
 	return topology.BuildGraph(nodeAggsFromSpans(rows), edgeAggsFromSpans(rows)), nil
 }
 
-// GetTraceErrors groups error spans by exception type.
 func (s *Service) GetTraceErrors(ctx context.Context, teamID int64, traceID string) ([]TraceErrorGroup, error) {
 	rows, err := s.repo.GetTraceErrors(ctx, teamID, traceID)
 	if err != nil {
@@ -36,7 +35,6 @@ func (s *Service) GetTraceErrors(ctx context.Context, teamID int64, traceID stri
 	return groupErrors(rows), nil
 }
 
-// nodeAggsFromSpans aggregates this trace's spans per service.
 func nodeAggsFromSpans(rows []serviceMapSpanRow) []topology.NodeAgg {
 	aggMap := make(map[string]*topology.NodeAgg)
 	for i := range rows {
@@ -65,7 +63,6 @@ func nodeAggsFromSpans(rows []serviceMapSpanRow) []topology.NodeAgg {
 	return out
 }
 
-// edgeAggsFromSpans derives service edges from parent-child span links.
 func edgeAggsFromSpans(rows []serviceMapSpanRow) []topology.EdgeAgg {
 	bySpan := make(map[string]*serviceMapSpanRow, len(rows))
 	for i := range rows {

@@ -20,7 +20,6 @@ type MonitorEventResponse struct {
 	EndedAt     *time.Time `json:"ended_at,omitempty"`
 }
 
-// toEventResponses converts repository event rows into wire responses.
 func toEventResponses(rows []EventRow) []MonitorEventResponse {
 	out := make([]MonitorEventResponse, 0, len(rows))
 	for _, r := range rows {

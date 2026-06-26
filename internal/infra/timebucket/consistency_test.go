@@ -13,13 +13,11 @@ func TestBucketSecondsInvariant(t *testing.T) {
 	}
 }
 
-// BucketStart must match the MV-side derivation:
-// intDiv(toUnixTimestamp(timestamp), 300) * 300.
 func TestBucketStartMatchesMVDerivation(t *testing.T) {
 	cases := []int64{
 		0, 1, 299, 300, 301, 599, 600,
-		1735689600,     // 2025-01-01 00:00:00 (bucket-aligned)
-		1735689600 + 7, // mid-bucket
+		1735689600,
+		1735689600 + 7,
 		1735689600 + 299,
 	}
 	for _, s := range cases {
@@ -30,8 +28,6 @@ func TestBucketStartMatchesMVDerivation(t *testing.T) {
 	}
 }
 
-// Display grain follows the <=300-points rule: finest of {1m,5m,1h,1d} keeping
-// window/grain <= 300. So 1m holds to 5h, 5m to 25h, 1h to 12.5d, then 1d.
 func TestDisplayGrainWindows(t *testing.T) {
 	hourMs := int64(time.Hour / time.Millisecond)
 	cases := []struct {
@@ -40,10 +36,10 @@ func TestDisplayGrainWindows(t *testing.T) {
 	}{
 		{hourMs, time.Minute},
 		{3 * hourMs, time.Minute},
-		{5 * hourMs, time.Minute}, // boundary: exactly 300 points
+		{5 * hourMs, time.Minute},
 		{6 * hourMs, 5 * time.Minute},
 		{24 * hourMs, 5 * time.Minute},
-		{25 * hourMs, 5 * time.Minute}, // boundary: exactly 300 points
+		{25 * hourMs, 5 * time.Minute},
 		{26 * hourMs, time.Hour},
 		{7 * 24 * hourMs, time.Hour},
 		{12 * 24 * hourMs, time.Hour},
@@ -57,7 +53,6 @@ func TestDisplayGrainWindows(t *testing.T) {
 	}
 }
 
-// GrainSecondsFor must never let a window exceed MaxBucketPoints buckets.
 func TestGrainSecondsForCapsPoints(t *testing.T) {
 	ladder := []int64{60, 300, 3600, 86400}
 	hour := int64(3600)
@@ -69,7 +64,6 @@ func TestGrainSecondsForCapsPoints(t *testing.T) {
 	}
 }
 
-// DisplayGrainSQL must dispatch to the matching toStartOfX function.
 func TestDisplayGrainSQLDispatch(t *testing.T) {
 	cases := []struct {
 		windowMs int64
@@ -87,9 +81,8 @@ func TestDisplayGrainSQLDispatch(t *testing.T) {
 	}
 }
 
-// DisplayBucket must agree with DisplayGrainSQL's truncation semantics.
 func TestDisplayBucketTruncation(t *testing.T) {
-	rowSec := int64(1735693271) // 2025-01-01 01:01:11 UTC
+	rowSec := int64(1735693271)
 	cases := []struct {
 		windowMs int64
 		want     string

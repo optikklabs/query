@@ -15,7 +15,6 @@ import (
 // alert or warn status.
 var ErrNotAlerting = errors.New("monitor is not currently alerting")
 
-// Ack acknowledges the current alert.
 func (s *Service) Ack(ctx context.Context, teamID, userID, id int64) error {
 	r := s.repo
 	if err := r.Ack(ctx, id, teamID, userID, time.Now().UTC()); err != nil {
@@ -27,7 +26,6 @@ func (s *Service) Ack(ctx context.Context, teamID, userID, id int64) error {
 	return nil
 }
 
-// Mute sets a mute window. duration=0 clears the mute.
 func (s *Service) Mute(ctx context.Context, teamID, id int64, durationSec int) error {
 	r := s.repo
 	var until sql.NullTime
@@ -43,12 +41,10 @@ func (s *Service) Mute(ctx context.Context, teamID, id int64, durationSec int) e
 	return nil
 }
 
-// Unmute clears the muted_until column. Equivalent to Mute(0).
 func (s *Service) Unmute(ctx context.Context, teamID, id int64) error {
 	return s.Mute(ctx, teamID, id, 0)
 }
 
-// TestResult is the dry-run payload returned by POST /monitors/:id/test.
 type TestResult struct {
 	Value         float64 `json:"value"`
 	HasData       bool    `json:"has_data"`
@@ -56,7 +52,6 @@ type TestResult struct {
 	Threshold     float64 `json:"threshold"`
 }
 
-// Test evaluates the monitor once without changing state.
 func (s *Service) Test(ctx context.Context, teamID, id int64, queries query.Registry) (TestResult, error) {
 	row, state, err := s.repo.GetByID(ctx, id, teamID)
 	if err != nil {
@@ -95,7 +90,6 @@ func (s *Service) Test(ctx context.Context, teamID, id int64, queries query.Regi
 	}, nil
 }
 
-// Series returns the eval-chart timeseries for the detail page.
 func (s *Service) Series(ctx context.Context, teamID, id int64, queries query.Registry, windowMs int64) (SeriesResponse, error) {
 	row, _, err := s.repo.GetByID(ctx, id, teamID)
 	if err != nil {
@@ -123,7 +117,6 @@ func (s *Service) Series(ctx context.Context, teamID, id int64, queries query.Re
 	}, nil
 }
 
-// SeriesResponse pairs bucketed values with the monitor's thresholds.
 type SeriesResponse struct {
 	Points            []query.Point `json:"points"`
 	AlertThreshold    *float64      `json:"alert_threshold,omitempty"`
@@ -131,7 +124,6 @@ type SeriesResponse struct {
 	RecoveryThreshold *float64      `json:"recovery_threshold,omitempty"`
 }
 
-// Events returns recent events for a single monitor.
 func (s *Service) Events(ctx context.Context, teamID, id int64, limit int) ([]MonitorEventResponse, error) {
 	r := s.repo
 	rows, err := r.Events(ctx, id, teamID, limit)
@@ -141,7 +133,6 @@ func (s *Service) Events(ctx context.Context, teamID, id int64, limit int) ([]Mo
 	return toEventResponses(rows), nil
 }
 
-// Activity returns recent events across all team monitors.
 func (s *Service) Activity(ctx context.Context, teamID int64, sinceMs int64, limit int) ([]MonitorEventResponse, error) {
 	r := s.repo
 	since := time.Now().UTC().Add(-1 * time.Hour)
@@ -155,7 +146,6 @@ func (s *Service) Activity(ctx context.Context, teamID int64, sinceMs int64, lim
 	return toEventResponses(rows), nil
 }
 
-// StatusTimeline returns 24h status bands derived from monitor_events.
 func (s *Service) StatusTimeline(ctx context.Context, teamID, id int64, windowMs int64) (StatusTimelineResponse, error) {
 	r := s.repo
 	if windowMs <= 0 {
@@ -173,22 +163,18 @@ func (s *Service) StatusTimeline(ctx context.Context, teamID, id int64, windowMs
 	}, nil
 }
 
-// StatusTimelineResponse is the 24h bar of status bands.
 type StatusTimelineResponse struct {
 	Bands     []StatusBand `json:"bands"`
 	StartedAt time.Time    `json:"started_at"`
 	EndedAt   time.Time    `json:"ended_at"`
 }
 
-// StatusBand is one contiguous span of one status.
 type StatusBand struct {
 	Status    string    `json:"status"`
 	StartedAt time.Time `json:"started_at"`
 	EndedAt   time.Time `json:"ended_at"`
 }
 
-// buildBands materializes the start-to-end window as a sequence of bands
-// by walking events in chronological order.
 func buildBands(events []models.MonitorEventRow, start, end time.Time) []StatusBand {
 	if len(events) == 0 {
 		return []StatusBand{{Status: "ok", StartedAt: start, EndedAt: end}}

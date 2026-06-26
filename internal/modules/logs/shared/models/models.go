@@ -7,7 +7,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/cursor"
 )
 
-// Log is the JSON model for a single log row returned by list + detail.
 type Log struct {
 	ID                string             `json:"id"`
 	Timestamp         uint64             `json:"timestamp,string"`
@@ -31,7 +30,6 @@ type Log struct {
 	ScopeVersion      string             `json:"scope_version"`
 }
 
-// LogRow is the ClickHouse scan target for raw log reads.
 type LogRow struct {
 	LogID             string             `ch:"log_id"`
 	Timestamp         time.Time          `ch:"timestamp"`
@@ -55,16 +53,13 @@ type LogRow struct {
 	ScopeVersion      string             `ch:"scope_version"`
 }
 
-// Cursor keyset-paginates raw logs ordered by (timestamp, observed_timestamp,
-// trace_id) DESC. Zero cursor means "first page".
 type Cursor struct {
-	Timestamp         time.Time `json:"ts"`
-	ObservedTimestamp uint64    `json:"ots"`
-	TraceID           string    `json:"tid"`
+	Timestamp time.Time `json:"ts"`
+	LogID     string    `json:"lid"`
 }
 
 func (c Cursor) IsZero() bool {
-	return c.Timestamp.IsZero() && c.ObservedTimestamp == 0 && c.TraceID == ""
+	return c.Timestamp.IsZero() && c.LogID == ""
 }
 
 func (c Cursor) Encode() string {
@@ -78,18 +73,13 @@ func DecodeCursor(raw string) (Cursor, bool) {
 	return cursor.Decode[Cursor](raw)
 }
 
-// FacetValue is one bucket in a facet group.
 type FacetValue struct {
 	Value string `json:"value"`
 	Count uint64 `json:"count"`
 }
 
-// SeverityLabels maps severity_bucket numbers to display text.
-// Returned by /logs/facets directly without querying the database.
 var SeverityLabels = []string{"UNSET", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"}
 
-// Facets groups per-dimension top-N counts. Severity is a static list,
-// while resource dimensions are loaded from the database.
 type Facets struct {
 	Severity    []string     `json:"severity_bucket"`
 	Service     []FacetValue `json:"service"`
@@ -98,15 +88,12 @@ type Facets struct {
 	Environment []FacetValue `json:"environment,omitempty"`
 }
 
-// Summary captures compact KPIs for the list view header.
 type Summary struct {
 	Total  uint64 `json:"total"`
 	Errors uint64 `json:"errors"`
 	Warns  uint64 `json:"warns"`
 }
 
-// TrendBucket captures log counts grouped by display-grain and severity tier.
-// Used by front-end to render severity-stacked log trend charts.
 type TrendBucket struct {
 	TimeBucket string `json:"time_bucket"`
 	Total      uint64 `json:"total"`
@@ -116,7 +103,6 @@ type TrendBucket struct {
 	Debug      uint64 `json:"debug"`
 }
 
-// PageInfo carries cursor state.
 type PageInfo struct {
 	HasMore    bool   `json:"hasMore"`
 	NextCursor string `json:"nextCursor,omitempty"`

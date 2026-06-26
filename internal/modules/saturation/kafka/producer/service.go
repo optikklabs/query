@@ -7,11 +7,17 @@ import (
 	"github.com/optikklabs/query/internal/modules/saturation/kafka/filter"
 )
 
-type Service struct {
-	repo *Repository
+// publishRateRepo is the repository surface the service depends on (DIP: lets
+// tests inject synthetic counter rows without a ClickHouse connection).
+type publishRateRepo interface {
+	QueryPublishRateByTopic(ctx context.Context, teamID int64, startMs, endMs int64) ([]TopicCounterRow, error)
 }
 
-func NewService(repo *Repository) *Service {
+type Service struct {
+	repo publishRateRepo
+}
+
+func NewService(repo publishRateRepo) *Service {
 	return &Service{repo: repo}
 }
 

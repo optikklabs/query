@@ -43,8 +43,6 @@ func (s *Service) GetHosts(ctx context.Context, teamID, startMs, endMs int64, se
 	return enrichWithSpans(byHost, spans, endMs-startMs), nil
 }
 
-// foldUtilization folds the (host, metric) rows into one saturation Host per
-// host, preserving first-seen order.
 func foldUtilization(rows []hostMetricRow) (map[string]Host, []string) {
 	metrics := map[string]map[string]float64{}
 	order := []string{}
@@ -76,8 +74,6 @@ func foldUtilization(rows []hostMetricRow) (map[string]Host, []string) {
 	return byHost, order
 }
 
-// enrichWithSpans folds RED traffic onto hosts running the service,
-// ranking them by request volume.
 func enrichWithSpans(byHost map[string]Host, spans []hostSpansRow, windowMs int64) []Host {
 	durationSec := float64(windowMs) / 1000.0
 	if durationSec <= 0 {
@@ -85,7 +81,7 @@ func enrichWithSpans(byHost map[string]Host, spans []hostSpansRow, windowMs int6
 	}
 	out := make([]Host, 0, len(spans))
 	for _, row := range spans {
-		h := byHost[row.Host] // zero saturation if the host has no metrics
+		h := byHost[row.Host]
 		h.Host = row.Host
 
 		total := int64(row.RequestCount)
@@ -110,8 +106,6 @@ func enrichWithSpans(byHost map[string]Host, spans []hostSpansRow, windowMs int6
 	return out
 }
 
-// classifyHost categorizes a host status (error/warn/healthy) based on
-// error rate and p99 latency thresholds.
 func classifyHost(errRate, p99Ms float64) HostStatus {
 	if errRate >= 0.10 || p99Ms >= 2000 {
 		return HostError
@@ -121,8 +115,6 @@ func classifyHost(errRate, p99Ms float64) HostStatus {
 	}
 	return HostHealthy
 }
-
-// Folds mirroring the infra cpu/memory/disk modules.
 
 func foldCPU(m map[string]float64) *float64 {
 	return averagePresent(m,
@@ -146,7 +138,7 @@ func foldMem(m map[string]float64) *float64 {
 }
 
 func foldDisk(m map[string]float64) *float64 {
-	// Only system.disk.utilization is a percentage; raw bytes are rejected.
+
 	return averagePresent(m, infraconsts.MetricSystemDiskUtilization)
 }
 
@@ -162,8 +154,6 @@ func averagePresent(m map[string]float64, metricNames ...string) *float64 {
 	return average(values)
 }
 
-// normalizeUtilization normalizes percentages and rejects NaN/Inf, negatives,
-// and raw byte counts.
 func normalizeUtilization(v float64) *float64 {
 	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > infraconsts.PercentageThreshold*100 {
 		return nil

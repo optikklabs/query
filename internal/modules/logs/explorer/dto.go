@@ -15,7 +15,6 @@ type QueryRequest struct {
 	filter.Filters
 }
 
-// QueryResponse is the wire response for POST /api/v1/logs/query.
 type QueryResponse struct {
 	Results  []models.Log    `json:"results"`
 	PageInfo models.PageInfo `json:"pageInfo"`

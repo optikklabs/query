@@ -25,7 +25,6 @@ const durationStatusCTE = `
 		    GROUP BY fingerprint
 		)`
 
-// APMBackend evaluates APM monitors against spanmetrics.
 type APMBackend struct {
 	db clickhouse.Conn
 }
@@ -116,7 +115,6 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 	return out, nil
 }
 
-// apmTrackValue projects the requested track from the aggregate row.
 func apmTrackValue(track string, row apmAggRow, windowSec int64) float64 {
 	switch track {
 	case "errors":
@@ -132,7 +130,7 @@ func apmTrackValue(track string, row apmAggRow, windowSec int64) float64 {
 	case "latency":
 		return row.P99
 	case "apdex":
-		// Apdex is not yet supported and returns 0.
+
 		return 0
 	}
 	return 0

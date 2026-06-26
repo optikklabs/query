@@ -62,7 +62,6 @@ func (s *Service) GetUsers(teamID int64, limit, offset int) ([]UserListItem, err
 	return items, nil
 }
 
-// GetUserByID retrieves a user by ID.
 func (s *Service) GetUserByID(userID int64) (UserResponse, error) {
 	user, err := s.repo.FindUserByID(userID)
 	if err != nil {
@@ -71,7 +70,6 @@ func (s *Service) GetUserByID(userID int64) (UserResponse, error) {
 	return s.buildUserResponse(user)
 }
 
-// CreateUser registers a new user with their single team association.
 func (s *Service) CreateUser(req CreateUserRequest) (UserResponse, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -101,7 +99,6 @@ func (s *Service) CreateUser(req CreateUserRequest) (UserResponse, error) {
 	return s.buildUserResponse(created)
 }
 
-// GetProfile loads user profile details.
 func (s *Service) GetProfile(userID int64) (ProfileResponse, error) {
 	user, err := s.repo.FindActiveUserByID(userID)
 	if err != nil {
@@ -110,7 +107,6 @@ func (s *Service) GetProfile(userID int64) (ProfileResponse, error) {
 	return s.buildProfileResponse(user)
 }
 
-// UpdateProfile updates user profile name and avatar.
 func (s *Service) UpdateProfile(userID int64, req UpdateProfileRequest) (ProfileResponse, error) {
 	var namePtr *string
 	var avatarPtr *string
@@ -132,7 +128,6 @@ func (s *Service) UpdateProfile(userID int64, req UpdateProfileRequest) (Profile
 	return s.buildProfileResponse(user)
 }
 
-// UpdatePreferences returns user preferences.
 func (s *Service) UpdatePreferences(userID int64, req UpdatePreferencesRequest) (PreferencesResponse, error) {
 	if _, err := s.repo.FindActiveUserByID(userID); err != nil {
 		return PreferencesResponse{}, NewNotFoundError("User not found", err)
@@ -140,17 +135,14 @@ func (s *Service) UpdatePreferences(userID int64, req UpdatePreferencesRequest) 
 	return PreferencesResponse(req), nil
 }
 
-// FindUserByID retrieves a user record by ID.
 func (s *Service) FindUserByID(userID int64) (UserRecord, error) {
 	return s.repo.FindUserByID(userID)
 }
 
-// FindActiveUserByID retrieves an active user record by ID.
 func (s *Service) FindActiveUserByID(userID int64) (UserRecord, error) {
 	return s.repo.FindActiveUserByID(userID)
 }
 
-// UpdateUserTeams updates the teams associated with a user.
 func (s *Service) UpdateUserTeams(userID int64, teamsJSON string) error {
 	return s.repo.UpdateUserTeams(userID, teamsJSON)
 }

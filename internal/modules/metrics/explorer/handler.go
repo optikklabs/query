@@ -40,8 +40,6 @@ func (h *Handler) ListMetricNames(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, FEMetricNamesResponse{Metrics: entries})
 }
 
-// ListTags handles GET /metrics/{metricName}/tags
-// Frontend expects: { "tags": [{ "key", "values": [...] }] }
 func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 	teamID := modulecommon.Tenant(r).TeamID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
@@ -63,8 +61,6 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, FETagsResponse{Tags: tags})
 }
 
-// Query handles POST /metrics/explorer/query
-// Frontend sends FEQueryRequest, expects FEQueryResponse.
 func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	var req FEQueryRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {

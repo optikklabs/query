@@ -26,8 +26,6 @@ const (
 	consumeWhere = filter.AttrSystem + " = 'kafka' AND " + filter.AttrConsumerGroup + " != ''"
 )
 
-// QueryProduceEdges returns produce throughput, errors, and latency per
-// (service, topic) from the spanmetrics duration histogram.
 func (r *Repository) QueryProduceEdges(ctx context.Context, teamID, startMs, endMs int64) ([]produceEdgeRow, error) {
 	query := `
 		WITH series AS (
@@ -56,8 +54,6 @@ func (r *Repository) QueryProduceEdges(ctx context.Context, teamID, startMs, end
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryProduceEdges", &rows, query, chargs.RollupRangeArgs(teamID, startMs, endMs)...)
 }
 
-// QueryConsumeEdges returns consume throughput, errors, and latency per
-// (service, topic, group) from the spanmetrics duration histogram.
 func (r *Repository) QueryConsumeEdges(ctx context.Context, teamID, startMs, endMs int64) ([]consumeEdgeRow, error) {
 	query := `
 		WITH series AS (

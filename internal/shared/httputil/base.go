@@ -22,13 +22,10 @@ import (
 
 var validate = validator.New()
 
-// Tenant returns the tenant resolved by the auth middleware.
 func Tenant(r *http.Request) types.TenantContext {
 	return types.TenantFrom(r.Context())
 }
 
-// ClientIP returns the remote address without the port. Proxy
-// forwarding headers are already resolved by the RealIP middleware.
 func ClientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -37,7 +34,6 @@ func ClientIP(r *http.Request) string {
 	return host
 }
 
-// WriteJSON serializes v to the response with the given status.
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -46,8 +42,6 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
-// DecodeJSON unmarshals the request body into v and, for structs,
-// enforces `validate` tags.
 func DecodeJSON(r *http.Request, v any) error {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		return err
@@ -71,8 +65,6 @@ func RespondError(w http.ResponseWriter, r *http.Request, status int, code, msg 
 	WriteJSON(w, status, types.Failure(code, msg, r.URL.Path))
 }
 
-// RespondErrorWithCause logs the underlying error server-side and appends
-// the cause to the client-facing message.
 func RespondErrorWithCause(w http.ResponseWriter, r *http.Request, status int, code, msg string, err error) {
 	if err != nil {
 		slog.Error("request error",
@@ -159,8 +151,6 @@ func ParseRequiredRange(w http.ResponseWriter, r *http.Request) (startMs, endMs 
 	return start, end, true
 }
 
-// ParseComparisonRange returns an optional comparison time range,
-// auto-calculating it based on the primary range if necessary.
 func ParseComparisonRange(r *http.Request, startMs, endMs int64) (cmpStart, cmpEnd int64, ok bool) {
 	cmpStart = ParseInt64Param(r, "compareStart", 0)
 	cmpEnd = ParseInt64Param(r, "compareEnd", 0)
@@ -182,14 +172,11 @@ func ParseComparisonRange(r *http.Request, startMs, endMs int64) (cmpStart, cmpE
 	}
 }
 
-// ComparisonResponse wraps a primary result with an optional comparison.
 type ComparisonResponse struct {
 	Data       any `json:"data"`
 	Comparison any `json:"comparison,omitempty"`
 }
 
-// WithComparison executes queries for both primary and optional comparison
-// ranges, running them concurrently when comparison is active.
 func WithComparison(r *http.Request, startMs, endMs int64, queryFn func(s, e int64) (any, error)) (ComparisonResponse, error) {
 	cmpStart, cmpEnd, hasCmp := ParseComparisonRange(r, startMs, endMs)
 

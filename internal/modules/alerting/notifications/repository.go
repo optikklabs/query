@@ -118,8 +118,6 @@ func (r *Repository) MarkChannelDelivered(ctx context.Context, id int64, at time
 	return err
 }
 
-// Policies ------------------------------------------------------------------
-
 const policyCols = `id, team_id, name, match_dsl, actions_json, hits_30d,
   last_used_at, enabled, position, created_at, updated_at`
 
@@ -172,8 +170,6 @@ func (r *Repository) ListPolicies(ctx context.Context, teamID int64) ([]models.P
 	return rows, err
 }
 
-// Templates -----------------------------------------------------------------
-
 const templateCols = `id, team_id, name, description, body, used_count, created_at, updated_at`
 
 func (r *Repository) CreateTemplate(ctx context.Context, row models.TemplateRow) (int64, error) {
@@ -225,7 +221,6 @@ func (r *Repository) ListTemplates(ctx context.Context, teamID int64) ([]models.
 	return rows, err
 }
 
-// ChannelInUse checks if any monitor references the given channel.
 func (r *Repository) ChannelInUse(ctx context.Context, channelID, teamID int64) (bool, error) {
 	var cnt int
 	err := dbutil.GetSQL(ctx, r.db, "notifications.ChannelInUse", &cnt, `

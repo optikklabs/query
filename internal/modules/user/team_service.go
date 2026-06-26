@@ -26,7 +26,6 @@ func (s *Service) GetTeams(teamID int64) ([]TeamResponse, error) {
 	return items, nil
 }
 
-// GetMyTeams returns all teams associated with the given user.
 func (s *Service) GetMyTeams(userID int64) ([]TeamSummary, error) {
 	user, err := s.repo.FindActiveUserByID(userID)
 	if err != nil {
@@ -63,7 +62,6 @@ func (s *Service) GetMyTeams(userID int64) ([]TeamSummary, error) {
 	return items, nil
 }
 
-// GetTeamByID retrieves a team by its ID.
 func (s *Service) GetTeamByID(teamID int64) (TeamResponse, error) {
 	team, err := s.repo.FindTeamByID(teamID)
 	if err != nil {
@@ -72,7 +70,6 @@ func (s *Service) GetTeamByID(teamID int64) (TeamResponse, error) {
 	return toTeamResponse(team), nil
 }
 
-// GetTeamBySlug retrieves a team by its slug.
 func (s *Service) GetTeamBySlug(currentTeamID int64, slug string) (TeamResponse, error) {
 	currentTeam, err := s.repo.FindTeamByID(currentTeamID)
 	if err != nil {
@@ -86,7 +83,6 @@ func (s *Service) GetTeamBySlug(currentTeamID int64, slug string) (TeamResponse,
 	return toTeamResponse(team), nil
 }
 
-// CreateTeam inserts a new team with an API key.
 func (s *Service) CreateTeam(req CreateTeamRequest) (TeamResponse, error) {
 	name := strings.TrimSpace(req.TeamName)
 	orgName := strings.TrimSpace(req.OrgName)
@@ -136,7 +132,6 @@ func (s *Service) CreateTeam(req CreateTeamRequest) (TeamResponse, error) {
 	return toTeamResponse(team), nil
 }
 
-// AddUserToTeam adds a user to a team with a specific role.
 func (s *Service) AddUserToTeam(userID, teamID int64, role string) error {
 	user, err := s.repo.FindUserByID(userID)
 	if err != nil {
@@ -166,7 +161,6 @@ func (s *Service) AddUserToTeam(userID, teamID int64, role string) error {
 	return nil
 }
 
-// RemoveUserFromTeam removes a user from a team.
 func (s *Service) RemoveUserFromTeam(userID, teamID int64) error {
 	user, err := s.repo.FindUserByID(userID)
 	if err != nil {
@@ -191,7 +185,6 @@ func (s *Service) RemoveUserFromTeam(userID, teamID int64) error {
 	return nil
 }
 
-// FindTeamIDByAPIKey resolves a team ID from its API key.
 func (s *Service) FindTeamIDByAPIKey(ctx context.Context, apiKey string) (int64, error) {
 	return s.repo.FindTeamIDByAPIKey(ctx, apiKey)
 }

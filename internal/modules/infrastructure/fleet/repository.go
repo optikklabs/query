@@ -35,7 +35,7 @@ func (r *Repository) QueryFleetPods(ctx context.Context, teamID int64, startMs, 
 		           any(` + seriesattr.StatusCode + `) AS status_code
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE pod != ''
+		    WHERE metrics_series.pod != ''
 		    GROUP BY fingerprint
 		)
 		SELECT

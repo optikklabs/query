@@ -21,8 +21,6 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
-// Channels ------------------------------------------------------------------
-
 func (h *Handler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
 	res, err := h.Service.ListChannels(r.Context(), t.TeamID)
@@ -108,8 +106,6 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondOK(w, res)
 }
 
-// Policies ------------------------------------------------------------------
-
 func (h *Handler) ListPolicies(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
 	res, err := h.Service.ListPolicies(r.Context(), t.TeamID)
@@ -166,8 +162,6 @@ func (h *Handler) DeletePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	httputil.RespondOK(w, map[string]any{"deleted": id})
 }
-
-// Templates -----------------------------------------------------------------
 
 func (h *Handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
@@ -226,8 +220,6 @@ func (h *Handler) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondOK(w, map[string]any{"deleted": id})
 }
 
-// Integrations --------------------------------------------------------------
-
 func (h *Handler) ListIntegrations(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
 	res, err := h.Service.ListIntegrations(r.Context(), t.TeamID)
@@ -237,8 +229,6 @@ func (h *Handler) ListIntegrations(w http.ResponseWriter, r *http.Request) {
 	}
 	httputil.RespondOK(w, res)
 }
-
-// Shared helpers ------------------------------------------------------------
 
 func parseIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")

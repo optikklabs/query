@@ -104,8 +104,6 @@ func (s *Service) ListTagValues(ctx context.Context, teamID, startMs, endMs int6
 	return out, nil
 }
 
-// ListTags merges tag keys and their values into the frontend-expected
-// format. If tagKey is non-empty, only that key's values are returned.
 func (s *Service) ListTags(ctx context.Context, teamID, startMs, endMs int64, metricName, tagKey string) ([]FETagEntry, error) {
 	if tagKey != "" {
 		values, err := s.ListTagValues(ctx, teamID, startMs, endMs, metricName, tagKey)
@@ -129,14 +127,11 @@ func (s *Service) ListTags(ctx context.Context, teamID, startMs, endMs int64, me
 		keyNames[i] = k.TagKey
 	}
 
-	// One query for every key's values, instead of one query per key.
 	rows, err := s.repo.ListTagValuesForKeys(ctx, teamID, startMs, endMs, metricName, keyNames)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fold (key, value) rows into per-key value lists. Rows arrive ordered by
-	// (tag_key, count DESC), so the most common values come first per key.
 	valuesByKey := make(map[string][]string, len(keys))
 	for _, row := range rows {
 		valuesByKey[row.TagKey] = append(valuesByKey[row.TagKey], row.TagValue)
@@ -146,7 +141,7 @@ func (s *Service) ListTags(ctx context.Context, teamID, startMs, endMs int64, me
 	for i, k := range keys {
 		vals := valuesByKey[k.TagKey]
 		if vals == nil {
-			// Preserve empty slice instead of null for keys with no values.
+
 			vals = []string{}
 		}
 		tags[i] = FETagEntry{Key: k.TagKey, Values: vals}
@@ -154,8 +149,6 @@ func (s *Service) ListTags(ctx context.Context, teamID, startMs, endMs int64, me
 	return tags, nil
 }
 
-// Query executes queries and returns columnar results.
-// Each query is converted to a typed filter.Filters and validated.
 func (s *Service) Query(ctx context.Context, teamID int64, req FEQueryRequest) (*FEQueryResponse, error) {
 	results := make(map[string]FEQueryResult, len(req.Queries))
 
@@ -165,28 +158,26 @@ func (s *Service) Query(ctx context.Context, teamID int64, req FEQueryRequest) (
 			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
 		}
 
-		cumulative, err := s.repo.IsCumulativeCounter(ctx, f)
+		cumulative, histogram, err := s.repo.ResolveSeriesKind(ctx, f)
 		if err != nil {
 			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
 		}
 		f.Cumulative = cumulative
+		f.Histogram = histogram
 
 		rows, err := s.repo.QueryRollupSeries(ctx, f)
 		if err != nil {
 			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
 		}
 
-		points := applyAggregation(rows, f.Aggregation, f.StartMs, f.EndMs, f.Step, f.Cumulative)
+		points := applyAggregation(rows, f.Aggregation, f.StartMs, f.EndMs, f.Step, f.Cumulative, f.Histogram)
 		results[feq.ID] = buildColumnarResult(points)
 	}
 
 	return &FEQueryResponse{Results: results}, nil
 }
 
-// applyAggregation derives final values from raw rollup aggregates. For a
-// cumulative counter row.Sum already holds the per-bucket increase, so every
-// aggregation maps to that increase (rate scales it per second).
-func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, endMs int64, step string, cumulative bool) []TimeseriesPoint {
+func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, endMs int64, step string, cumulative, histogram bool) []TimeseriesPoint {
 	bucketSeconds := float64(filter.BucketDurationSeconds(startMs, endMs, step))
 	out := make([]TimeseriesPoint, len(rows))
 	for i, row := range rows {
@@ -196,6 +187,25 @@ func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, en
 			val = row.Sum / bucketSeconds
 		case cumulative:
 			val = row.Sum
+
+		case histogram && isPercentile(aggregation):
+			val = quantileFor(row.Quantiles, aggregation)
+		case histogram && aggregation == "sum":
+			val = row.HistSum
+		case histogram && aggregation == "count":
+			val = float64(row.HistCount)
+		case histogram && aggregation == "rate":
+			val = float64(row.HistCount) / bucketSeconds
+		case histogram && aggregation == "min":
+			val = row.Min
+		case histogram && aggregation == "max":
+			val = row.Max
+		case histogram && aggregation == "avg":
+			if row.HistCount > 0 {
+				val = row.HistSum / float64(row.HistCount)
+			}
+		case histogram:
+			val = 0
 		case aggregation == "sum":
 			val = row.Sum
 		case aggregation == "min":
@@ -206,7 +216,7 @@ func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, en
 			val = float64(row.Count)
 		case aggregation == "rate":
 			val = row.Sum / bucketSeconds
-		default: // avg
+		default:
 			if row.Count > 0 {
 				val = row.Sum / float64(row.Count)
 			}
@@ -216,8 +226,14 @@ func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, en
 	return out
 }
 
-// convertFEQuery folds the request-level time range/step plus the per-query
-// frontend filter shape into the typed filter.Filters the repo consumes.
+func quantileFor(qs []float64, aggregation string) float64 {
+	idx := map[string]int{"p50": 0, "p95": 1, "p99": 2}[aggregation]
+	if idx < len(qs) {
+		return qs[idx]
+	}
+	return 0
+}
+
 func convertFEQuery(teamID, startMs, endMs int64, step string, feq FEMetricQuery) filter.Filters {
 	tags := make([]filter.TagFilter, 0, len(feq.Where))
 	for _, w := range feq.Where {
@@ -239,7 +255,6 @@ func convertFEQuery(teamID, startMs, endMs int64, step string, feq FEMetricQuery
 	}
 }
 
-// mapOperator converts frontend operator names to SQL operators.
 func mapOperator(op string) string {
 	switch op {
 	case "eq":
@@ -255,8 +270,6 @@ func mapOperator(op string) string {
 	}
 }
 
-// extractValues normalises the frontend filter value (string or []string)
-// to []string.
 func extractValues(v any) []string {
 	switch val := v.(type) {
 	case string:
@@ -279,8 +292,6 @@ func extractValues(v any) []string {
 	}
 }
 
-// buildColumnarResult converts flat TimeseriesPoint rows into the columnar
-// format the frontend expects: shared timestamps array + values per series.
 func buildColumnarResult(points []TimeseriesPoint) FEQueryResult {
 	if len(points) == 0 {
 		return FEQueryResult{Timestamps: []int64{}, Series: []FESeries{}}
@@ -326,8 +337,6 @@ func buildColumnarResult(points []TimeseriesPoint) FEQueryResult {
 	}
 }
 
-// parseTimestampMs parses a ClickHouse formatted timestamp string to epoch
-// milliseconds.
 func parseTimestampMs(ts string) int64 {
 	t, err := time.Parse("2006-01-02 15:04:00", ts)
 	if err != nil {

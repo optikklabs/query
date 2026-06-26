@@ -19,13 +19,11 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: sqlx.NewDb(db, "mysql")}
 }
 
-// DueMonitor pairs a monitor row with its current state row.
 type DueMonitor struct {
 	Monitor models.MonitorRow
 	State   models.MonitorStateRow
 }
 
-// UpdateStateArgs holds the arguments for updating monitor state.
 type UpdateStateArgs struct {
 	MonitorID          int64
 	PrevStatus         string
@@ -73,7 +71,6 @@ func (r *Repository) LoadDue(ctx context.Context, now time.Time, limit int) ([]D
 	return out, nil
 }
 
-// dueRow flattens the JOIN row for sqlx mapping.
 type dueRow struct {
 	models.MonitorRow
 	SMonitorID        sql.NullInt64   `db:"s_monitor_id"`
@@ -107,7 +104,7 @@ func (r dueRow) toDue() DueMonitor {
 }
 
 func (r *Repository) UpdateState(ctx context.Context, args UpdateStateArgs) error {
-	// Perform CAS on prev status to avoid clobbering concurrent changes.
+
 	q := `
 		UPDATE optikk.monitor_state
 		   SET status = ?, current_value = ?, last_evaluated_at = ?, next_evaluation_at = ?,

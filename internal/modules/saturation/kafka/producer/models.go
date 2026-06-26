@@ -11,8 +11,6 @@ type TopicRatePoint struct {
 	RatePerSec float64 `json:"rate_per_sec"`
 }
 
-// Internal repository row types.
-
 type TopicCounterRow struct {
 	Timestamp time.Time `ch:"timestamp"`
 	Topic     string    `ch:"topic"`

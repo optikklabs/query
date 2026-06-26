@@ -14,12 +14,10 @@ type Request struct {
 	filter.Filters
 }
 
-// SummaryResponse is the wire payload for POST /api/v1/logs/summary.
 type SummaryResponse struct {
 	Summary models.Summary `json:"summary"`
 }
 
-// TrendResponse is the wire payload for POST /api/v1/logs/trend.
 type TrendResponse struct {
 	Trend []models.TrendBucket `json:"trend"`
 }

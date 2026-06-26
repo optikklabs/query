@@ -6,17 +6,14 @@ import (
 	"encoding/json"
 )
 
-// CreateChannelRequest is the wire shape for POST /notifications/channels.
 type CreateChannelRequest struct {
 	Type   string          `json:"type" validate:"required"`
 	Name   string          `json:"name" validate:"required"`
 	Config json.RawMessage `json:"config"`
 }
 
-// UpdateChannelRequest mirrors Create for PUT.
 type UpdateChannelRequest = CreateChannelRequest
 
-// CreatePolicyRequest is POST /notifications/policies.
 type CreatePolicyRequest struct {
 	Name     string          `json:"name" validate:"required"`
 	MatchDSL string          `json:"match_dsl" validate:"required"`
@@ -25,15 +22,12 @@ type CreatePolicyRequest struct {
 	Position *int            `json:"position,omitempty"`
 }
 
-// UpdatePolicyRequest mirrors CreatePolicyRequest for PUT.
 type UpdatePolicyRequest = CreatePolicyRequest
 
-// CreateTemplateRequest is POST /notifications/templates.
 type CreateTemplateRequest struct {
 	Name        string `json:"name" validate:"required"`
 	Description string `json:"description"`
 	Body        string `json:"body" validate:"required"`
 }
 
-// UpdateTemplateRequest mirrors CreateTemplateRequest for PUT.
 type UpdateTemplateRequest = CreateTemplateRequest

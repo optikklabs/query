@@ -19,8 +19,6 @@ const (
 	DefaultUnknown = "unknown"
 )
 
-// hostSeriesCTE resolves host/pod/status_code per fingerprint from the
-// spanmetrics duration series, joined to the histogram rollup on fingerprint.
 const hostSeriesCTE = `
 		WITH series AS (
 		    SELECT fingerprint,

@@ -10,7 +10,6 @@ type Service struct {
 	tokens *token.Service
 }
 
-// NewService creates a new Service instance.
 func NewService(repo *Repository, tokens *token.Service) *Service {
 	return &Service{
 		repo:   repo,

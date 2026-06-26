@@ -53,7 +53,6 @@ func (r *Repository) GetNodes(ctx context.Context, teamID, startMs, endMs int64,
 	return rows, nil
 }
 
-// GetEdges derives directed edges from parent-child span links.
 func (r *Repository) GetEdges(ctx context.Context, teamID, startMs, endMs int64, focusService string) ([]edgeAggRow, error) {
 	query := `
 		WITH series AS (
@@ -92,7 +91,6 @@ func (r *Repository) GetEdges(ctx context.Context, teamID, startMs, endMs int64,
 	return rows, nil
 }
 
-// spanArgs is baseArgs plus the focused-service filter bound for GetEdges.
 func spanArgs(teamID, startMs, endMs int64, focusService string) []any {
 	return append(chargs.RangeArgs(teamID, startMs, endMs), clickhouse.Named("focusService", focusService))
 }

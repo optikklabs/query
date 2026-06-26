@@ -26,14 +26,12 @@ type TopicBacklogRow struct {
 	Backlog        float64 `ch:"backlog"         json:"backlog"`
 }
 
-// Cluster Health (kafkametrics receiver, broker-scraped)
 type ClusterHealthRow struct {
 	BrokerCount               float64 `ch:"broker_count"                json:"broker_count"`
 	ActiveControllers         float64 `ch:"active_controllers"          json:"active_controllers"`
 	UnderReplicatedPartitions uint64  `ch:"under_replicated_partitions" json:"under_replicated_partitions"`
 }
 
-// Consumer Group Domains
 type GroupPartitionsRow struct {
 	ConsumerGroup      string  `ch:"consumer_group"      json:"consumer_group"`
 	AssignedPartitions float64 `ch:"assigned_partitions" json:"assigned_partitions"`
@@ -64,7 +62,6 @@ type GroupHealthRow struct {
 	ConnectionCount        float64 `ch:"connection_count"          json:"connection_count"`
 }
 
-// Legacy Trends and Detail model structures.
 type KafkaTopicTrendPoint struct {
 	Timestamp     string  `json:"timestamp"`
 	BytesPerSec   float64 `json:"bytes_per_sec"`

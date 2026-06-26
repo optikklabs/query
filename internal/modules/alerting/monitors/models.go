@@ -33,13 +33,11 @@ type MonitorResponse struct {
 	UpdatedAt        *time.Time           `json:"updated_at,omitempty"`
 }
 
-// MonitorListResponse pairs a page of monitors with counts by status.
 type MonitorListResponse struct {
 	Items  []MonitorResponse `json:"items"`
 	Counts StatusCounts      `json:"counts"`
 }
 
-// StatusCounts powers the list-page KPI strip.
 type StatusCounts struct {
 	Alert  int `json:"alert"`
 	Warn   int `json:"warn"`
@@ -49,8 +47,6 @@ type StatusCounts struct {
 	Total  int `json:"total"`
 }
 
-// toResponse merges a monitors row + state row into the wire shape.
-// State may be zero-value if no evaluation has happened yet.
 func toResponse(row models.MonitorRow, state models.MonitorStateRow) MonitorResponse {
 	out := MonitorResponse{
 		ID:           row.ID,

@@ -20,10 +20,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-// ErrNotFound indicates the monitor was not found for the team.
 var ErrNotFound = errors.New("monitor not found")
 
-// ErrValidation wraps a user-facing validation message.
 type ErrValidation struct{ Msg string }
 
 func (e ErrValidation) Error() string { return e.Msg }
@@ -102,7 +100,6 @@ func (s *Service) List(ctx context.Context, teamID int64, q ListQuery) (MonitorL
 	return MonitorListResponse{Items: items, Counts: counts}, nil
 }
 
-// buildInsertArgs validates the request and prepares it for the repository.
 func buildInsertArgs(teamID, userID int64, req CreateMonitorRequest) (insertArgs, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -199,7 +196,7 @@ func validateConditions(c models.Conditions) error {
 	switch c.NoDataAs {
 	case "no_data", "alert", "ok":
 	case "":
-		// allowed; default applied later by the evaluator
+
 	default:
 		return ErrValidation{Msg: "conditions.no_data_as must be no_data, alert, or ok"}
 	}
