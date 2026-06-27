@@ -8,11 +8,13 @@ import (
 	alerting_evaluator "github.com/optikklabs/query/internal/modules/alerting/evaluator"
 	alerting_monitors "github.com/optikklabs/query/internal/modules/alerting/monitors"
 	alerting_notifications "github.com/optikklabs/query/internal/modules/alerting/notifications"
+	dashboards "github.com/optikklabs/query/internal/modules/dashboards"
 	infrastructure_cpu "github.com/optikklabs/query/internal/modules/infrastructure/cpu"
 	infrastructure_fleet "github.com/optikklabs/query/internal/modules/infrastructure/fleet"
 	infrastructure_hosts "github.com/optikklabs/query/internal/modules/infrastructure/hosts"
 	infrastructure_memory "github.com/optikklabs/query/internal/modules/infrastructure/memory"
 	infrastructure_nodes "github.com/optikklabs/query/internal/modules/infrastructure/nodes"
+	ingestion "github.com/optikklabs/query/internal/modules/ingestion"
 	log_explorer "github.com/optikklabs/query/internal/modules/logs/explorer"
 	log_facets "github.com/optikklabs/query/internal/modules/logs/facets"
 	log_detail "github.com/optikklabs/query/internal/modules/logs/logdetail"
@@ -58,6 +60,7 @@ func configuredModules(
 		log_trends.NewModule(nativeQuerier),
 		log_trace_logs.NewModule(nativeQuerier),
 		metrics_explorer.NewModule(nativeQuerier),
+		ingestion.NewModule(nativeQuerier),
 		services_errors.NewModule(nativeQuerier),
 		services_redfleet.NewModule(nativeQuerier),
 		services_redservice.NewModule(nativeQuerier),
@@ -80,5 +83,7 @@ func configuredModules(
 		alerting_monitors.NewModule(infraDeps.DB, nativeQuerier),
 		alerting_notifications.NewModule(infraDeps.DB),
 		alerting_evaluator.NewModule(infraDeps.DB, nativeQuerier),
+
+		dashboards.NewModule(infraDeps.DB),
 	}
 }

@@ -158,12 +158,13 @@ func (s *Service) Query(ctx context.Context, teamID int64, req FEQueryRequest) (
 			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
 		}
 
-		cumulative, histogram, err := s.repo.ResolveSeriesKind(ctx, f)
+		kind, err := s.repo.ResolveSeriesKind(ctx, f)
 		if err != nil {
 			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
 		}
-		f.Cumulative = cumulative
-		f.Histogram = histogram
+		f.Cumulative, f.Histogram = resolveSeriesFlags(kind)
+		metricType := metricTypeFrom(kind)
+		fillZero := shouldZeroFill(metricType, f.Aggregation, f.Cumulative)
 
 		rows, err := s.repo.QueryRollupSeries(ctx, f)
 		if err != nil {
@@ -171,59 +172,100 @@ func (s *Service) Query(ctx context.Context, teamID int64, req FEQueryRequest) (
 		}
 
 		points := applyAggregation(rows, f.Aggregation, f.StartMs, f.EndMs, f.Step, f.Cumulative, f.Histogram)
-		results[feq.ID] = buildColumnarResult(points)
+		results[feq.ID] = buildColumnarResult(points, f.StartMs, f.EndMs, f.Step, fillZero)
 	}
 
 	return &FEQueryResponse{Results: results}, nil
 }
 
 func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, endMs int64, step string, cumulative, histogram bool) []TimeseriesPoint {
-	bucketSeconds := float64(filter.BucketDurationSeconds(startMs, endMs, step))
+	bucketSec := float64(filter.BucketDurationSeconds(startMs, endMs, step))
 	out := make([]TimeseriesPoint, len(rows))
 	for i, row := range rows {
-		var val float64
-		switch {
-		case cumulative && aggregation == "rate":
-			val = row.Sum / bucketSeconds
-		case cumulative:
-			val = row.Sum
-
-		case histogram && isPercentile(aggregation):
-			val = quantileFor(row.Quantiles, aggregation)
-		case histogram && aggregation == "sum":
-			val = row.HistSum
-		case histogram && aggregation == "count":
-			val = float64(row.HistCount)
-		case histogram && aggregation == "rate":
-			val = float64(row.HistCount) / bucketSeconds
-		case histogram && aggregation == "min":
-			val = row.Min
-		case histogram && aggregation == "max":
-			val = row.Max
-		case histogram && aggregation == "avg":
-			if row.HistCount > 0 {
-				val = row.HistSum / float64(row.HistCount)
-			}
-		case histogram:
-			val = 0
-		case aggregation == "sum":
-			val = row.Sum
-		case aggregation == "min":
-			val = row.Min
-		case aggregation == "max":
-			val = row.Max
-		case aggregation == "count":
-			val = float64(row.Count)
-		case aggregation == "rate":
-			val = row.Sum / bucketSeconds
-		default:
-			if row.Count > 0 {
-				val = row.Sum / float64(row.Count)
-			}
+		out[i] = TimeseriesPoint{
+			Timestamp: timebucket.FormatDisplayBucket(row.BucketAt),
+			Value:     computeValue(row, aggregation, bucketSec, cumulative, histogram),
 		}
-		out[i] = TimeseriesPoint{Timestamp: timebucket.FormatDisplayBucket(row.BucketAt), Value: val}
 	}
 	return out
+}
+
+// computeValue dispatches to the right value-extraction function based on the
+// metric kind flags.
+func computeValue(row timeseriesPointDTO, agg string, bucketSec float64, cumulative, histogram bool) float64 {
+	switch {
+	case cumulative:
+		return cumulativeValue(row, agg, bucketSec)
+	case histogram:
+		return histogramValue(row, agg, bucketSec)
+	default:
+		return deltaValue(row, agg, bucketSec)
+	}
+}
+
+// cumulativeValue extracts the value for a cumulative counter row.
+// rate scales the per-bucket increase by seconds; everything else returns the
+// increase directly.
+func cumulativeValue(row timeseriesPointDTO, agg string, bucketSec float64) float64 {
+	if agg == "rate" {
+		return row.Sum / bucketSec
+	}
+	return row.Sum
+}
+
+// histogramValue extracts the value for a histogram-type row.
+func histogramValue(row timeseriesPointDTO, agg string, bucketSec float64) float64 {
+	switch agg {
+	case "p50", "p95", "p99":
+		return quantileFor(row.Quantiles, agg)
+	case "sum":
+		return row.HistSum
+	case "count":
+		return float64(row.HistCount)
+	case "rate":
+		return float64(row.HistCount) / bucketSec
+	case "min":
+		return row.Min
+	case "max":
+		return row.Max
+	case "avg":
+		if row.HistCount > 0 {
+			return row.HistSum / float64(row.HistCount)
+		}
+		return 0
+	default:
+		return 0
+	}
+}
+
+// deltaValue extracts the value for a plain delta / gauge row.
+func deltaValue(row timeseriesPointDTO, agg string, bucketSec float64) float64 {
+	switch agg {
+	case "sum":
+		return row.Sum
+	case "min":
+		return row.Min
+	case "max":
+		return row.Max
+	case "count":
+		return float64(row.Count)
+	case "rate":
+		return row.Sum / bucketSec
+	default: // avg
+		if row.Count > 0 {
+			return row.Sum / float64(row.Count)
+		}
+		return 0
+	}
+}
+
+// isPercentile returns true for percentile aggregation names (p50, p95, p99).
+func isPercentile(aggregation string) bool {
+	switch aggregation {
+	case "p50", "p95", "p99":
+		return true
+	}
+	return false
 }
 
 func quantileFor(qs []float64, aggregation string) float64 {
@@ -292,53 +334,105 @@ func extractValues(v any) []string {
 	}
 }
 
-func buildColumnarResult(points []TimeseriesPoint) FEQueryResult {
-	if len(points) == 0 {
+// resolveSeriesFlags derives cumulative and histogram booleans from the raw
+// metricKindDTO returned by the repository. If kind is nil (no series found),
+// both default to false.
+func resolveSeriesFlags(kind *metricKindDTO) (cumulative, histogram bool) {
+	if kind == nil {
+		return false, false
+	}
+	cumulative = kind.Temporality == "Cumulative" && kind.IsMonotonic
+	histogram = strings.EqualFold(kind.MetricType, "histogram")
+	return cumulative, histogram
+}
+
+// metricTypeFrom extracts the raw OTLP metric type string ("Sum", "Gauge",
+// "Histogram", "Summary") from the DTO, returning "" if kind is nil.
+func metricTypeFrom(kind *metricKindDTO) string {
+	if kind == nil {
+		return ""
+	}
+	return kind.MetricType
+}
+
+// shouldZeroFill returns true when empty time buckets should be filled with 0
+// rather than nil. Counters and sum-typed metrics represent accumulated values
+// where absence means "no events" (= 0). Gauges represent instantaneous
+// measurements where absence means "unknown" (= nil / break in line).
+func shouldZeroFill(metricType, aggregation string, cumulative bool) bool {
+	mt := strings.ToLower(metricType)
+	switch {
+	case mt == "sum" || cumulative:
+		return true // counter/sum → 0 in gaps
+	case aggregation == "count" || aggregation == "rate":
+		return true // count/rate on any type → 0 in gaps
+	default:
+		return false // gauge, summary, histogram-percentile → nil
+	}
+}
+
+// buildDenseTimestamps generates an ordered slice of bucket-aligned timestamps
+// covering [startMs, endMs].
+func buildDenseTimestamps(startMs, endMs int64, step string) []int64 {
+	bucketSec := filter.BucketDurationSeconds(startMs, endMs, step)
+	flooredStart := timebucket.FloorMsToBucket(startMs, bucketSec)
+	bucketMs := bucketSec * 1000
+
+	var ts []int64
+	for t := flooredStart; t <= endMs; t += bucketMs {
+		ts = append(ts, t)
+	}
+	return ts
+}
+
+// mapPointsToAxis places each aggregated point into the matching dense-axis
+// slot, returning a sparse values slice (nil = no data).
+func mapPointsToAxis(points []TimeseriesPoint, tsIndex map[int64]int, length int) []*float64 {
+	values := make([]*float64, length)
+	for _, p := range points {
+		ms := parseTimestampMs(p.Timestamp)
+		if idx, ok := tsIndex[ms]; ok {
+			v := p.Value
+			values[idx] = &v
+		}
+	}
+	return values
+}
+
+// zeroFillGaps replaces nil entries in values with a pointer to 0.0.
+func zeroFillGaps(values []*float64) {
+	zero := 0.0
+	for i, v := range values {
+		if v == nil {
+			values[i] = &zero
+		}
+	}
+}
+
+func buildColumnarResult(points []TimeseriesPoint, startMs, endMs int64, step string, fillZero bool) FEQueryResult {
+	timestamps := buildDenseTimestamps(startMs, endMs, step)
+	if len(timestamps) == 0 {
 		return FEQueryResult{Timestamps: []int64{}, Series: []FESeries{}}
 	}
 
-	tsSet := make(map[string]int64, len(points))
-	for _, p := range points {
-		if _, exists := tsSet[p.Timestamp]; !exists {
-			tsSet[p.Timestamp] = parseTimestampMs(p.Timestamp)
-		}
+	tsIndex := make(map[int64]int, len(timestamps))
+	for i, ts := range timestamps {
+		tsIndex[ts] = i
 	}
 
-	timestamps := make([]int64, 0, len(tsSet))
-	for _, ms := range tsSet {
-		timestamps = append(timestamps, ms)
-	}
-	sort.Slice(timestamps, func(i, j int) bool { return timestamps[i] < timestamps[j] })
-
-	tsIndex := make(map[string]int, len(timestamps))
-	for _, p := range points {
-		ms := tsSet[p.Timestamp]
-		for idx, t := range timestamps {
-			if t == ms {
-				tsIndex[p.Timestamp] = idx
-				break
-			}
-		}
-	}
-
-	values := make([]*float64, len(timestamps))
-	for _, p := range points {
-		idx := tsIndex[p.Timestamp]
-		v := p.Value
-		values[idx] = &v
+	values := mapPointsToAxis(points, tsIndex, len(timestamps))
+	if fillZero {
+		zeroFillGaps(values)
 	}
 
 	return FEQueryResult{
 		Timestamps: timestamps,
-		Series: []FESeries{{
-			Tags:   map[string]string{},
-			Values: values,
-		}},
+		Series:     []FESeries{{Tags: map[string]string{}, Values: values}},
 	}
 }
 
 func parseTimestampMs(ts string) int64 {
-	t, err := time.Parse("2006-01-02 15:04:00", ts)
+	t, err := time.Parse("2006-01-02 15:04:05", ts)
 	if err != nil {
 		return 0
 	}

@@ -162,7 +162,7 @@ func (r *Repository) ListTagValuesForKeys(ctx context.Context, teamID, startMs, 
 	return rows, nil
 }
 
-func (r *Repository) ResolveSeriesKind(ctx context.Context, f filter.Filters) (cumulative, histogram bool, err error) {
+func (r *Repository) ResolveSeriesKind(ctx context.Context, f filter.Filters) (*metricKindDTO, error) {
 	query := `
 		SELECT any(temporality)  AS temporality,
 		       any(is_monotonic) AS is_monotonic,
@@ -173,14 +173,12 @@ func (r *Repository) ResolveSeriesKind(ctx context.Context, f filter.Filters) (c
 		     AND timestamp   BETWEEN @start AND @end`
 	var rows []metricKindDTO
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.ResolveSeriesKind", &rows, query, metricArgs(f)...); err != nil {
-		return false, false, err
+		return nil, err
 	}
 	if len(rows) == 0 {
-		return false, false, nil
+		return nil, nil
 	}
-	cumulative = rows[0].Temporality == "Cumulative" && rows[0].IsMonotonic
-	histogram = strings.EqualFold(rows[0].MetricType, "histogram")
-	return cumulative, histogram, nil
+	return &rows[0], nil
 }
 
 func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([]timeseriesPointDTO, error) {
@@ -239,13 +237,6 @@ func histogramQuantileQuery(cte, fromTable, joins, selectCols, groupByCols strin
 		SETTINGS max_execution_time = 30`
 }
 
-func isPercentile(aggregation string) bool {
-	switch aggregation {
-	case "p50", "p95", "p99":
-		return true
-	}
-	return false
-}
 
 func cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
 	perSeries := cte + `
