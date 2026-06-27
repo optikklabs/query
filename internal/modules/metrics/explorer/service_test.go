@@ -89,3 +89,241 @@ func TestApplyAggregationHistogram(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveSeriesFlags(t *testing.T) {
+	cases := []struct {
+		name           string
+		kind           *metricKindDTO
+		wantCumulative bool
+		wantHistogram  bool
+	}{
+		{
+			name:           "nil DTO defaults to false/false",
+			kind:           nil,
+			wantCumulative: false,
+			wantHistogram:  false,
+		},
+		{
+			name:           "Sum + Cumulative + Monotonic = cumulative",
+			kind:           &metricKindDTO{Temporality: "Cumulative", IsMonotonic: true, MetricType: "Sum"},
+			wantCumulative: true,
+			wantHistogram:  false,
+		},
+		{
+			name:           "Sum + Cumulative + non-monotonic = not cumulative",
+			kind:           &metricKindDTO{Temporality: "Cumulative", IsMonotonic: false, MetricType: "Sum"},
+			wantCumulative: false,
+			wantHistogram:  false,
+		},
+		{
+			name:           "Histogram type = histogram flag set",
+			kind:           &metricKindDTO{Temporality: "Delta", IsMonotonic: false, MetricType: "Histogram"},
+			wantCumulative: false,
+			wantHistogram:  true,
+		},
+		{
+			name:           "histogram case insensitive",
+			kind:           &metricKindDTO{Temporality: "Delta", IsMonotonic: false, MetricType: "histogram"},
+			wantCumulative: false,
+			wantHistogram:  true,
+		},
+		{
+			name:           "Gauge = both false",
+			kind:           &metricKindDTO{Temporality: "Delta", IsMonotonic: false, MetricType: "Gauge"},
+			wantCumulative: false,
+			wantHistogram:  false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gotCum, gotHist := resolveSeriesFlags(c.kind)
+			if gotCum != c.wantCumulative || gotHist != c.wantHistogram {
+				t.Errorf("resolveSeriesFlags() = (%v, %v), want (%v, %v)",
+					gotCum, gotHist, c.wantCumulative, c.wantHistogram)
+			}
+		})
+	}
+}
+
+func TestShouldZeroFill(t *testing.T) {
+	cases := []struct {
+		name        string
+		metricType  string
+		aggregation string
+		cumulative  bool
+		want        bool
+	}{
+		{"Sum type = zero fill", "Sum", "avg", false, true},
+		{"sum lowercase = zero fill", "sum", "avg", false, true},
+		{"cumulative flag = zero fill", "Gauge", "avg", true, true},
+		{"count aggregation = zero fill", "Gauge", "count", false, true},
+		{"rate aggregation = zero fill", "Gauge", "rate", false, true},
+		{"gauge + avg = nil fill", "Gauge", "avg", false, false},
+		{"summary + avg = nil fill", "Summary", "avg", false, false},
+		{"histogram + p50 = nil fill", "Histogram", "p50", false, false},
+		{"empty type + avg = nil fill", "", "avg", false, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := shouldZeroFill(c.metricType, c.aggregation, c.cumulative)
+			if got != c.want {
+				t.Errorf("shouldZeroFill(%q, %q, %v) = %v, want %v",
+					c.metricType, c.aggregation, c.cumulative, got, c.want)
+			}
+		})
+	}
+}
+
+// Helper to create a float64 pointer for test assertions.
+func fp(v float64) *float64 { return &v }
+
+// TestBuildColumnarResult_FullBuckets verifies that when every bucket has data,
+// all values are real pointers and the dense axis matches expectations.
+func TestBuildColumnarResult_FullBuckets(t *testing.T) {
+	// 1-hour window with 15m step → 5 buckets: 0, 900000, 1800000, 2700000, 3600000
+	// (endMs=3600000 is inclusive in the dense axis loop)
+	startMs := int64(0)
+	endMs := int64(3600000)
+	step := "15m"
+
+	points := []TimeseriesPoint{
+		{Timestamp: "1970-01-01 00:00:00", Value: 1.0},
+		{Timestamp: "1970-01-01 00:15:00", Value: 2.0},
+		{Timestamp: "1970-01-01 00:30:00", Value: 3.0},
+		{Timestamp: "1970-01-01 00:45:00", Value: 4.0},
+		{Timestamp: "1970-01-01 01:00:00", Value: 5.0},
+	}
+
+	result := buildColumnarResult(points, startMs, endMs, step, true)
+
+	wantTs := []int64{0, 900000, 1800000, 2700000, 3600000}
+	if len(result.Timestamps) != len(wantTs) {
+		t.Fatalf("timestamps length = %d, want %d", len(result.Timestamps), len(wantTs))
+	}
+	for i, ts := range result.Timestamps {
+		if ts != wantTs[i] {
+			t.Errorf("timestamps[%d] = %d, want %d", i, ts, wantTs[i])
+		}
+	}
+
+	if len(result.Series) != 1 {
+		t.Fatalf("series count = %d, want 1", len(result.Series))
+	}
+	wantVals := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+	for i, v := range result.Series[0].Values {
+		if v == nil {
+			t.Errorf("values[%d] = nil, want %v", i, wantVals[i])
+		} else if *v != wantVals[i] {
+			t.Errorf("values[%d] = %v, want %v", i, *v, wantVals[i])
+		}
+	}
+}
+
+// TestBuildColumnarResult_ZeroFill verifies that sparse points with fillZero=true
+// produce 0.0 in missing buckets while preserving real values.
+func TestBuildColumnarResult_ZeroFill(t *testing.T) {
+	// 1-hour window with 15m step → 5 buckets
+	// Supply data only for buckets 0 and 2
+	startMs := int64(0)
+	endMs := int64(3600000)
+	step := "15m"
+
+	points := []TimeseriesPoint{
+		{Timestamp: "1970-01-01 00:00:00", Value: 10.0},
+		{Timestamp: "1970-01-01 00:30:00", Value: 30.0},
+	}
+
+	result := buildColumnarResult(points, startMs, endMs, step, true)
+
+	wantTs := []int64{0, 900000, 1800000, 2700000, 3600000}
+	if len(result.Timestamps) != len(wantTs) {
+		t.Fatalf("timestamps length = %d, want %d", len(result.Timestamps), len(wantTs))
+	}
+
+	if len(result.Series) != 1 {
+		t.Fatalf("series count = %d, want 1", len(result.Series))
+	}
+
+	vals := result.Series[0].Values
+	// Bucket 0: real value 10.0
+	if vals[0] == nil || *vals[0] != 10.0 {
+		t.Errorf("values[0] = %v, want 10.0", vals[0])
+	}
+	// Bucket 1: zero-filled
+	if vals[1] == nil || *vals[1] != 0.0 {
+		t.Errorf("values[1] = %v, want 0.0 (zero-filled)", vals[1])
+	}
+	// Bucket 2: real value 30.0
+	if vals[2] == nil || *vals[2] != 30.0 {
+		t.Errorf("values[2] = %v, want 30.0", vals[2])
+	}
+	// Bucket 3: zero-filled
+	if vals[3] == nil || *vals[3] != 0.0 {
+		t.Errorf("values[3] = %v, want 0.0 (zero-filled)", vals[3])
+	}
+	// Bucket 4: zero-filled
+	if vals[4] == nil || *vals[4] != 0.0 {
+		t.Errorf("values[4] = %v, want 0.0 (zero-filled)", vals[4])
+	}
+}
+
+// TestBuildColumnarResult_NilFill verifies that sparse points with fillZero=false
+// produce nil in missing buckets (gauge behavior).
+func TestBuildColumnarResult_NilFill(t *testing.T) {
+	startMs := int64(0)
+	endMs := int64(3600000)
+	step := "15m"
+
+	points := []TimeseriesPoint{
+		{Timestamp: "1970-01-01 00:00:00", Value: 10.0},
+		{Timestamp: "1970-01-01 00:30:00", Value: 30.0},
+	}
+
+	result := buildColumnarResult(points, startMs, endMs, step, false)
+
+	if len(result.Series) != 1 {
+		t.Fatalf("series count = %d, want 1", len(result.Series))
+	}
+
+	vals := result.Series[0].Values
+	// Bucket 0: real value 10.0
+	if vals[0] == nil || *vals[0] != 10.0 {
+		t.Errorf("values[0] = %v, want 10.0", vals[0])
+	}
+	// Bucket 1: nil (gauge gap)
+	if vals[1] != nil {
+		t.Errorf("values[1] = %v, want nil (gauge gap)", *vals[1])
+	}
+	// Bucket 2: real value 30.0
+	if vals[2] == nil || *vals[2] != 30.0 {
+		t.Errorf("values[2] = %v, want 30.0", vals[2])
+	}
+	// Bucket 3: nil (gauge gap)
+	if vals[3] != nil {
+		t.Errorf("values[3] = %v, want nil (gauge gap)", *vals[3])
+	}
+}
+
+// TestBuildColumnarResult_Empty verifies that no points returns empty arrays.
+func TestBuildColumnarResult_Empty(t *testing.T) {
+	startMs := int64(0)
+	endMs := int64(3600000)
+	step := "15m"
+
+	result := buildColumnarResult(nil, startMs, endMs, step, true)
+
+	// Dense axis should still be generated even with no points.
+	wantTs := []int64{0, 900000, 1800000, 2700000, 3600000}
+	if len(result.Timestamps) != len(wantTs) {
+		t.Fatalf("timestamps length = %d, want %d", len(result.Timestamps), len(wantTs))
+	}
+	if len(result.Series) != 1 {
+		t.Fatalf("series count = %d, want 1", len(result.Series))
+	}
+	// All values should be zero-filled.
+	for i, v := range result.Series[0].Values {
+		if v == nil || *v != 0.0 {
+			t.Errorf("values[%d] = %v, want 0.0 (zero-filled empty)", i, v)
+		}
+	}
+}
