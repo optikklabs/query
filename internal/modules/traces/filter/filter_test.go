@@ -59,13 +59,13 @@ func TestBuildClauses_Base(t *testing.T) {
 		t.Errorf("base clauses should be empty, got rw=%q w=%q", rw, w)
 	}
 	m := namedArgs(args)
-	for _, k := range []string{"teamID", "bucketStart", "bucketEnd", "start", "end"} {
+	for _, k := range []string{"teamID", "start", "end"} {
 		if _, ok := m[k]; !ok {
 			t.Errorf("missing base arg %q", k)
 		}
 	}
-	if len(m) != 5 {
-		t.Errorf("got %d args, want 5 base args: %v", len(m), m)
+	if len(m) != 3 {
+		t.Errorf("got %d args, want 3 base args: %v", len(m), m)
 	}
 }
 

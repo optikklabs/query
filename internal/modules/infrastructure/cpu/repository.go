@@ -39,14 +39,14 @@ func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, teamID i
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint,
-		           any(host)      AS host,
-		           any(pod)       AS pod,
-		           any(container) AS container,
-		           any(service)   AS service
+		           host,
+		           pod,
+		           container,
+		           service
 		    FROM optikk.metrics_series AS mr
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE mr.service != ''
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, host, pod, container, service
 		)
 		SELECT
 		    r.host                        AS host,

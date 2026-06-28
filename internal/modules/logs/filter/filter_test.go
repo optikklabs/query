@@ -55,8 +55,8 @@ func TestBuildClauses_Base(t *testing.T) {
 	if rw != "" || w != "" {
 		t.Errorf("base clauses should be empty, got rw=%q w=%q", rw, w)
 	}
-	if got := len(namedArgs(args)); got != 5 {
-		t.Errorf("got %d args, want 5 base args", got)
+	if got := len(namedArgs(args)); got != 3 {
+		t.Errorf("got %d args, want 3 base args", got)
 	}
 }
 

@@ -17,12 +17,12 @@ import (
 const durationStatusCTE = `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(service)                       AS service,
-		           any(` + seriesattr.StatusCode + `) AS status_code
+		           service,
+		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE ` + seriesattr.ServerKindPred + `
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, service, status_code
 		)`
 
 type Repository struct {
@@ -57,12 +57,12 @@ func (r *Repository) ServiceErrorRateRowsByService(ctx context.Context, teamID i
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(service)                       AS service,
-		           any(` + seriesattr.StatusCode + `) AS status_code
+		           service,
+		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE s.service = @serviceName AND ` + seriesattr.ServerKindPred + `
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, service, status_code
 		)
 		SELECT series.service              AS service,
 		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
@@ -106,12 +106,12 @@ func (r *Repository) ErrorVolumeRowsByService(ctx context.Context, teamID int64,
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(service)                       AS service,
-		           any(` + seriesattr.StatusCode + `) AS status_code
+		           service,
+		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE s.service = @serviceName AND ` + seriesattr.ServerKindPred + `
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, service, status_code
 		)
 		SELECT series.service          AS service,
 		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
@@ -147,7 +147,6 @@ func (r *Repository) ErrorGroupRowsAll(ctx context.Context, teamID int64, startM
 		       min(timestamp)                   AS first_occurrence
 		FROM optikk.spans
 		PREWHERE team_id   = @teamID
-		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE is_error = 1
 		  AND timestamp BETWEEN @start AND @end
 		GROUP BY error_group_id, service, name, http_status_bucket
@@ -179,7 +178,6 @@ func (r *Repository) ErrorGroupRowsByService(ctx context.Context, teamID int64, 
 		       min(timestamp)                   AS first_occurrence
 		FROM optikk.spans
 		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE is_error = 1
 		  AND timestamp BETWEEN @start AND @end
 		  AND service = @serviceName
@@ -204,7 +202,6 @@ func (r *Repository) ErrorGroupSamples(ctx context.Context, teamID int64, startM
 		       argMax(trace_id, timestamp)       AS sample_trace_id
 		FROM optikk.spans
 		PREWHERE team_id   = @teamID
-		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE is_error = 1
 		  AND timestamp BETWEEN @start AND @end
 		  AND error_group_id IN @groupIDs
@@ -228,7 +225,6 @@ func (r *Repository) ErrorGroupDetailRow(ctx context.Context, teamID int64, star
 		       any(exception_type)                  AS exception_type
 		FROM optikk.spans
 		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE is_error = 1
 		  AND timestamp BETWEEN @start AND @end
 		  AND error_group_id = @groupID
@@ -257,7 +253,6 @@ func (r *Repository) ErrorGroupTraceRows(ctx context.Context, teamID int64, star
 		       s.status_code_string             AS status_code
 		FROM optikk.spans s
 		PREWHERE s.team_id     = @teamID
-		     AND s.ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE s.is_error = 1
 		  AND s.timestamp BETWEEN @start AND @end
 		  AND s.error_group_id = @groupID ` + paginationFilter + `
@@ -267,8 +262,6 @@ func (r *Repository) ErrorGroupTraceRows(ctx context.Context, teamID int64, star
 		clickhouse.Named("teamID", uint32(teamID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
-		clickhouse.Named("bucketStart", timebucket.BucketStart(startMs/1000)),
-		clickhouse.Named("bucketEnd", timebucket.BucketStart(endMs/1000)),
 		clickhouse.Named("groupID", groupID),
 		clickhouse.Named("limit", limit),
 		clickhouse.Named("cursorTs", cursor.Timestamp),
@@ -284,7 +277,6 @@ func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, teamID int64,
 		       count()                            AS count
 		FROM optikk.spans
 		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE is_error = 1
 		  AND timestamp BETWEEN @start AND @end
 		  AND error_group_id = @groupID
@@ -295,8 +287,6 @@ func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, teamID int64,
 		clickhouse.Named("teamID", uint32(teamID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
-		clickhouse.Named("bucketStart", timebucket.BucketStart(startMs/1000)),
-		clickhouse.Named("bucketEnd", timebucket.BucketStart(endMs/1000)),
 		clickhouse.Named("groupID", groupID),
 	}
 	var rows []rawTimeBucketCountRow
@@ -320,7 +310,6 @@ func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, teamID i
 		       s.host                      AS host
 		FROM optikk.spans s
 		PREWHERE s.team_id     = @teamID
-		     AND s.ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE s.is_error = 1
 		  AND s.timestamp BETWEEN @start AND @end
 		  AND s.error_group_id = @groupID
@@ -342,7 +331,6 @@ func (r *Repository) ErrorGroupFacetRows(ctx context.Context, teamID int64, star
 		       count()                    AS count
 		FROM optikk.spans
 		PREWHERE team_id     = @teamID
-		     AND ts_bucket   BETWEEN @bucketStart AND @bucketEnd
 		WHERE is_error = 1
 		  AND timestamp BETWEEN @start AND @end
 		  AND error_group_id = @groupID
@@ -366,7 +354,6 @@ func (r *Repository) ErrorHotspotRows(ctx context.Context, teamID int64, startMs
 		       count()                   AS error_count
 		FROM optikk.spans
 		PREWHERE team_id   = @teamID
-		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE is_error = 1
 		  AND timestamp BETWEEN @start AND @end
 		  AND name != ''

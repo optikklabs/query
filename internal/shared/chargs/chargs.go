@@ -16,11 +16,8 @@ func BucketBounds(startMs, endMs int64) (uint32, uint32) {
 }
 
 func RangeArgs(teamID, startMs, endMs int64) []any {
-	bucketStart, bucketEnd := BucketBounds(startMs, endMs)
 	return []any{
 		clickhouse.Named("teamID", uint32(teamID)),
-		clickhouse.Named("bucketStart", bucketStart),
-		clickhouse.Named("bucketEnd", bucketEnd),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 	}

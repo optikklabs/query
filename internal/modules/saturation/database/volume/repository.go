@@ -31,11 +31,11 @@ func (r *Repository) opsSeriesByGroup(ctx context.Context, teamID, startMs, endM
 
 	query := `
 		WITH series AS (
-		    SELECT fingerprint, any(` + groupCol + `) AS group_by
+		    SELECT fingerprint, ` + groupCol + ` AS group_by
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE attributes.` + "`db.system`" + `::String != ''` + filterWhere + `
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, group_by
 		)
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + `                   AS time_bucket,
 		       series.group_by                                                     AS group_by,

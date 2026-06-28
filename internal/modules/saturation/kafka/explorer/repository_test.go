@@ -11,8 +11,8 @@ import (
 // seriesCTE includes only the dimension columns requested, plus the base guard
 // and optional drill-down filter.
 func TestSeriesCTE_Columns(t *testing.T) {
-	topicCol := "any(" + filter.AttrTopic + ") AS topic"
-	groupCol := "any(" + filter.AttrConsumerGroup + ") AS consumer_group"
+	topicCol := filter.AttrTopic + " AS topic"
+	groupCol := filter.AttrConsumerGroup + " AS consumer_group"
 
 	both := seriesCTE(true, true, "base", "AND extra")
 	if !strings.Contains(both, topicCol) || !strings.Contains(both, groupCol) {

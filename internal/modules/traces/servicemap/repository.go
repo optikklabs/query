@@ -18,9 +18,10 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func (r *Repository) GetServiceMapSpans(ctx context.Context, teamID int64, traceID string) ([]serviceMapSpanRow, error) {
 	const query = `
 		WITH trace_loc AS (
-		    SELECT ts_bucket, fingerprint
+		    SELECT timestamp
 		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    LIMIT 1
 		)
 		SELECT span_id,
 		       parent_span_id,
@@ -29,7 +30,8 @@ func (r *Repository) GetServiceMapSpans(ctx context.Context, teamID int64, trace
 		       has_error
 		FROM optikk.spans
 		PREWHERE team_id = @teamID
-		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
+		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
+		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC
 		LIMIT 10000`
@@ -40,9 +42,10 @@ func (r *Repository) GetServiceMapSpans(ctx context.Context, teamID int64, trace
 func (r *Repository) GetTraceErrors(ctx context.Context, teamID int64, traceID string) ([]traceErrorRow, error) {
 	const query = `
 		WITH trace_loc AS (
-		    SELECT ts_bucket, fingerprint
+		    SELECT timestamp
 		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    LIMIT 1
 		)
 		SELECT span_id,
 		       service,
@@ -54,7 +57,8 @@ func (r *Repository) GetTraceErrors(ctx context.Context, teamID int64, traceID s
 		       duration_nano / 1000000.0  AS duration_ms
 		FROM optikk.spans
 		PREWHERE team_id = @teamID
-		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
+		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
+		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
 		WHERE has_error = true OR status_code_string = 'ERROR'
 		ORDER BY timestamp ASC

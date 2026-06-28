@@ -22,13 +22,13 @@ const (
 const hostSeriesCTE = `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(host)                          AS host,
-		           any(pod)                           AS pod,
-		           any(service)                       AS service,
-		           any(` + seriesattr.StatusCode + `) AS status_code
+		           host,
+		           pod,
+		           service,
+		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, host, pod, service, status_code
 		)`
 
 type Repository struct {

@@ -30,13 +30,13 @@ func (r *Repository) QueryProduceEdges(ctx context.Context, teamID, startMs, end
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(service)                       AS service,
-		           any(` + seriesattr.StatusCode + `) AS status_code,
-		           any(` + filter.AttrTopic + `)      AS topic
+		           service,
+		           ` + seriesattr.StatusCode + ` AS status_code,
+		           ` + filter.AttrTopic + `      AS topic
 		    FROM optikk.metrics_series AS s
 		    PREWHERE s.team_id = @teamID AND s.timestamp BETWEEN @start AND @end AND s.metric_name = 'traces.span.metrics.duration' AND s.service != ''
 		    WHERE ` + produceWhere + `
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, service, status_code, topic
 		)
 		SELECT series.service                                                  AS service,
 		       series.topic                                                    AS topic,
@@ -58,14 +58,14 @@ func (r *Repository) QueryConsumeEdges(ctx context.Context, teamID, startMs, end
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(service)                            AS service,
-		           any(` + seriesattr.StatusCode + `)      AS status_code,
-		           any(` + filter.AttrTopic + `)           AS topic,
-		           any(` + filter.AttrConsumerGroup + `)   AS consumer_group
+		           service,
+		           ` + seriesattr.StatusCode + `      AS status_code,
+		           ` + filter.AttrTopic + `           AS topic,
+		           ` + filter.AttrConsumerGroup + `   AS consumer_group
 		    FROM optikk.metrics_series AS s
 		    PREWHERE s.team_id = @teamID AND s.timestamp BETWEEN @start AND @end AND s.metric_name = 'traces.span.metrics.duration' AND s.service != ''
 		    WHERE ` + consumeWhere + `
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, service, status_code, topic, consumer_group
 		)
 		SELECT series.service                                                  AS service,
 		       series.topic                                                    AS topic,

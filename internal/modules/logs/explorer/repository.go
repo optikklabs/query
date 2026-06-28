@@ -19,7 +19,6 @@ const listBareHead = `
 		SELECT ` + models.LogColumns + `
 		FROM optikk.logs
 		PREWHERE team_id = @teamID
-		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		     AND timestamp BETWEEN @start AND @end
 		WHERE timestamp BETWEEN @start AND @end`
 const listTail = `

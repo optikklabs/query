@@ -31,13 +31,13 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, teamID, startMs, 
 
 	query := `
 		WITH fps AS (
-		    SELECT fingerprint, any(host) AS host
+		    SELECT fingerprint, host
 		    FROM optikk.metrics_series AS mr
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE mr.host != ''
 		      AND NOT (metric_name = @cpuUtil AND ` + stateAttr + ` != 'idle')
 		      AND NOT (metric_name = @memUtil AND ` + stateAttr + ` != 'used')
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, host
 		)
 		SELECT
 		    r.host        AS host,
@@ -73,13 +73,13 @@ func (r *Repository) QueryHostSpans(
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(host)                          AS host,
-		           any(environment)                   AS environment,
-		           any(` + seriesattr.StatusCode + `) AS status_code
+		           host,
+		           environment,
+		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE service = @serviceName
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, host, environment, status_code
 		)
 		SELECT
 		    if(series.host != '', series.host, @unknownHost)        AS host,
