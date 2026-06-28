@@ -102,7 +102,12 @@ func toPageResponse(row DashboardPageRow) DashboardPageResponse {
 		CreatedAt:   row.CreatedAt,
 	}
 	if len(row.TagsJSON) > 0 {
-		_ = json.Unmarshal(row.TagsJSON, &out.Tags)
+		if err := json.Unmarshal(row.TagsJSON, &out.Tags); err != nil {
+			out.Tags = []string{}
+		}
+	}
+	if out.Tags == nil {
+		out.Tags = []string{}
 	}
 	if row.Description.Valid {
 		out.Description = row.Description.String

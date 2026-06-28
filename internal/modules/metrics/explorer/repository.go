@@ -241,7 +241,7 @@ func histogramQuantileQuery(cte, fromTable, joins, selectCols, groupByCols strin
 func cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
 	perSeries := cte + `
 		SELECT m.fingerprint AS fingerprint, ` + selectCols + `,
-		       anyLast(m.val_last) AS cval
+		       argMaxMerge(m.val_last) AS cval
 		FROM ` + fromTable + ` AS m` + joins + `
 		PREWHERE m.team_id     = @teamID
 		     AND m.metric_name = @metricName
