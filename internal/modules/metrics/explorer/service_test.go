@@ -174,9 +174,6 @@ func TestShouldZeroFill(t *testing.T) {
 	}
 }
 
-// Helper to create a float64 pointer for test assertions.
-func fp(v float64) *float64 { return &v }
-
 // TestBuildColumnarResult_FullBuckets verifies that when every bucket has data,
 // all values are real pointers and the dense axis matches expectations.
 func TestBuildColumnarResult_FullBuckets(t *testing.T) {
