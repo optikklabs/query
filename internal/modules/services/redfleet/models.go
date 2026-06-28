@@ -14,6 +14,14 @@ type FleetTotals struct {
 	AvgP99Ms       float64 `json:"avg_p99_ms"`
 }
 
+// FleetOverviewResponse combines totals and per-service RED metrics in a single
+// payload so the frontend needs only one request instead of two.
+type FleetOverviewResponse struct {
+	Totals   FleetTotals        `json:"totals"`
+	Services []ServiceREDMetric `json:"services"`
+}
+
+
 type ServiceREDMetric struct {
 	ServiceName  string  `json:"service_name"`
 	RequestCount int64   `json:"request_count"`
@@ -23,14 +31,7 @@ type ServiceREDMetric struct {
 	P99Latency   float64 `json:"p99_latency"`
 }
 
-type ApdexScore struct {
-	ServiceName string  `json:"service_name"`
-	Apdex       float64 `json:"apdex"`
-	Satisfied   int64   `json:"satisfied"`
-	Tolerating  int64   `json:"tolerating"`
-	Frustrated  int64   `json:"frustrated"`
-	TotalCount  int64   `json:"total_count"`
-}
+
 
 type ServicePerformancePoint struct {
 	Timestamp    time.Time `json:"timestamp"    ch:"timestamp"`
@@ -100,9 +101,58 @@ type redMetricsRow struct {
 	P99Ms       float32   `ch:"p99_ms"`
 }
 
-type apdexRow struct {
-	ServiceName string `ch:"service"`
-	TotalCount  uint64 `ch:"total_count"`
-	Satisfied   uint64 `ch:"satisfied"`
-	Tolerating  uint64 `ch:"tolerating"`
+
+// OperationBaseline is the windowed p50/p95/p99 for a single service+operation,
+// powering the Trace Detail Duration card's "N× slower than p50" comparison.
+type OperationBaseline struct {
+	ServiceName   string  `json:"service_name"`
+	OperationName string  `json:"operation_name"`
+	P50Ms         float64 `json:"p50_ms"`
+	P95Ms         float64 `json:"p95_ms"`
+	P99Ms         float64 `json:"p99_ms"`
+	SpanCount     int64   `json:"span_count"`
+}
+
+type ServiceSummaryResponse struct {
+	ServiceName       string  `json:"service_name"`
+	RequestCount      int64   `json:"request_count"`
+	ErrorCount        int64   `json:"error_count"`
+	RPS               float64 `json:"rps"`
+	ErrorRate         float64 `json:"error_rate"`
+	P50Ms             float64 `json:"p50_ms"`
+	P95Ms             float64 `json:"p95_ms"`
+	P99Ms             float64 `json:"p99_ms"`
+	CPUUtilization    float64 `json:"cpu_utilization"`
+	MemoryUtilization float64 `json:"memory_utilization"`
+	DiskUtilization   float64 `json:"disk_utilization"`
+}
+
+type SaturationTimeSeriesPoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	Value     float64   `json:"value"`
+}
+
+type RequestRatePoint struct {
+	Timestamp   time.Time `json:"timestamp"    ch:"bucket_at"`
+	ServiceName string    `json:"service_name" ch:"service_name"`
+	RPS         float64   `json:"rps"`
+}
+
+type operationBaselineRow struct {
+	SpanCount uint64    `ch:"span_count"`
+	QS        []float64 `ch:"qs"`
+	P50Ms     float32   `ch:"p50_ms"`
+	P95Ms     float32   `ch:"p95_ms"`
+	P99Ms     float32   `ch:"p99_ms"`
+}
+
+type serviceMetricRow struct {
+	Service    string  `ch:"service"`
+	MetricName string  `ch:"metric_name"`
+	Value      float64 `ch:"value"`
+}
+
+type saturationTimeSeriesRawRow struct {
+	BucketAt time.Time `ch:"bucket_at"`
+	Value    float64   `ch:"value"`
 }

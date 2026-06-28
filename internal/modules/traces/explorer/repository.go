@@ -55,7 +55,7 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 		query = `
 			SELECT ` + traceIndexColumns + `
 			FROM optikk.spans
-			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+			PREWHERE team_id = @teamID
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
 			ORDER BY timestamp DESC, span_id DESC
 			LIMIT @pgLimit`
@@ -64,11 +64,11 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 			WITH active_fps AS (
 			    SELECT DISTINCT fingerprint
 			    FROM optikk.spans_resource
-			    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
+			    PREWHERE team_id = @teamID` + resourceWhere + `
 			)
 			SELECT ` + traceIndexColumns + `
 			FROM optikk.spans
-			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
+			PREWHERE team_id = @teamID AND fingerprint IN active_fps
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
 			ORDER BY timestamp DESC, span_id DESC
 			LIMIT @pgLimit`
@@ -94,7 +94,7 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets
 			WITH active_fps AS (
 			    SELECT DISTINCT fingerprint
 			    FROM optikk.spans_resource
-			    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
+			    PREWHERE team_id = @teamID` + resourceWhere + `
 			)`
 		prewhereFP = " AND fingerprint IN active_fps"
 	}
@@ -103,7 +103,7 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets
 		return `
 			SELECT '` + dim + `' AS dim, ` + col + ` AS value, count() AS cnt
 			FROM optikk.spans
-			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + prewhereFP + `
+			PREWHERE team_id = @teamID` + prewhereFP + `
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + ` AND ` + col + ` != ''
 			GROUP BY value
 			ORDER BY cnt DESC
@@ -154,7 +154,7 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 			       countIf(is_error = 0)                     AS total,
 			       countIf(is_error = 1)                     AS errors
 			FROM optikk.spans
-			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+			PREWHERE team_id = @teamID
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
 			GROUP BY time_bucket
 			ORDER BY time_bucket ASC`
@@ -163,13 +163,13 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 			WITH active_fps AS (
 			    SELECT DISTINCT fingerprint
 			    FROM optikk.spans_resource
-			    PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
+			    PREWHERE team_id = @teamID` + resourceWhere + `
 			)
 			SELECT ` + grainSQL + `                          AS time_bucket,
 			       countIf(is_error = 0)                     AS total,
 			       countIf(is_error = 1)                     AS errors
 			FROM optikk.spans
-			PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd AND fingerprint IN active_fps
+			PREWHERE team_id = @teamID AND fingerprint IN active_fps
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
 			GROUP BY time_bucket
 			ORDER BY time_bucket ASC`
@@ -200,7 +200,7 @@ func (r *Repository) SuggestScalar(ctx context.Context, teamID, startMs, endMs i
 		SELECT ` + column + `        AS value,
 		       count()               AS count
 		FROM optikk.spans
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		PREWHERE team_id = @teamID
 		WHERE timestamp BETWEEN @startMs AND @endMs
 		  AND ` + column + ` != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
@@ -222,7 +222,7 @@ func (r *Repository) SuggestAttribute(ctx context.Context, teamID, startMs, endM
 	const query = `
 		SELECT attributes[@attrKey]::String AS value, count() AS count
 		FROM optikk.spans
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
+		PREWHERE team_id = @teamID
 		WHERE timestamp BETWEEN @startMs AND @endMs
 		  AND value != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
@@ -246,8 +246,6 @@ func (r *Repository) SuggestAttribute(ctx context.Context, teamID, startMs, endM
 func suggestArgs(teamID, startMs, endMs int64, prefix string, limit int) []any {
 	return []any{
 		clickhouse.Named("teamID", uint32(teamID)),
-		clickhouse.Named("bucketStart", timebucket.BucketStart(startMs/1000)),
-		clickhouse.Named("bucketEnd", timebucket.BucketStart(endMs/1000)+uint32(timebucket.BucketSeconds)),
 		clickhouse.Named("startMs", time.UnixMilli(startMs)),
 		clickhouse.Named("endMs", time.UnixMilli(endMs)),
 		clickhouse.Named("prefix", prefix),

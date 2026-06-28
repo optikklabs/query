@@ -39,13 +39,13 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, teamID, startMs,
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(attributes.` + "`db.system`" + `::String)      AS db_system,
-		           any(attributes.` + "`server.address`" + `::String) AS server_address,
-		           any(` + seriesattr.StatusCode + `)                 AS status_code
+		           attributes.` + "`db.system`" + `::String      AS db_system,
+		           attributes.` + "`server.address`" + `::String AS server_address,
+		           ` + seriesattr.StatusCode + `                 AS status_code
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE attributes.` + "`db.system`" + `::String != ''
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, db_system, server_address, status_code
 		)
 		SELECT series.db_system                                                AS db_system,
 		       sum(m.hist_count)                                               AS query_count,
@@ -73,11 +73,11 @@ func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, teamID, s
 
 	query := `
 		WITH series AS (
-		    SELECT fingerprint, any(attributes.` + "`db.system`" + `::String) AS db_system
+		    SELECT fingerprint, attributes.` + "`db.system`" + `::String AS db_system
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = @metricName
 		    WHERE attributes.` + "`db.system`" + `::String != ''
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, db_system
 		)
 		SELECT series.db_system AS db_system,
 		       ifNotFinite(sum(val_sum) / sum(val_count), 0) AS avg_used

@@ -25,11 +25,11 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func counterSeriesByTopicQuery(windowMs int64) string {
 	return `
 		WITH series AS (
-		    SELECT fingerprint, any(` + filter.AttrTopic + `) AS topic
+		    SELECT fingerprint, ` + filter.AttrTopic + ` AS topic
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE ` + filter.AttrTopic + ` != '' AND lower(` + filter.AttrSystem + `) = 'kafka'
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, topic
 		)
 		SELECT
 		    ` + timebucket.DisplayGrainSQL(windowMs) + ` AS timestamp,
@@ -56,12 +56,12 @@ func consumerLagByGroupTopicQuery(windowMs int64) string {
 	return `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(` + filter.AttrConsumerGroup + `) AS consumer_group,
-		           any(` + filter.AttrTopic + `)         AS topic
+		           ` + filter.AttrConsumerGroup + ` AS consumer_group,
+		           ` + filter.AttrTopic + `         AS topic
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE ` + filter.AttrConsumerGroup + ` != ''
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, consumer_group, topic
 		)
 		SELECT
 		    ` + timebucket.DisplayGrainSQL(windowMs) + ` AS timestamp,

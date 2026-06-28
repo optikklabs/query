@@ -39,7 +39,6 @@ const summaryBareHead = `
 	       countIf(severity_bucket = 3)  AS warns
 	FROM optikk.logs
 	PREWHERE team_id = @teamID
-	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 	     AND timestamp BETWEEN @start AND @end
 	WHERE timestamp BETWEEN @start AND @end`
 
@@ -70,7 +69,6 @@ func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, e
 	SELECT ` + grainSQL + trendSelectTail + `
 	FROM optikk.logs
 	PREWHERE team_id = @teamID
-	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 	     AND timestamp BETWEEN @start AND @end
 	WHERE timestamp BETWEEN @start AND @end`
 

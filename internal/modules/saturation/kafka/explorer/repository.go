@@ -37,18 +37,21 @@ func buildFilterArgs(teamID, startMs, endMs int64, metricNames []string, filterC
 
 func seriesCTE(needTopic, needGroup bool, baseWhere, extraWhere string) string {
 	sel := "fingerprint"
+	grp := "fingerprint"
 	if needTopic {
-		sel += ", any(" + filter.AttrTopic + ") AS topic"
+		sel += ", " + filter.AttrTopic + " AS topic"
+		grp += ", topic"
 	}
 	if needGroup {
-		sel += ", any(" + filter.AttrConsumerGroup + ") AS consumer_group"
+		sel += ", " + filter.AttrConsumerGroup + " AS consumer_group"
+		grp += ", consumer_group"
 	}
 	return `WITH series AS (
 		    SELECT ` + sel + `
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE ` + baseWhere + ` ` + extraWhere + `
-		    GROUP BY fingerprint
+		    GROUP BY ` + grp + `
 		)
 		`
 }

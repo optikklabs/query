@@ -2,11 +2,13 @@ package redfleet
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/infra/utils"
+	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 )
 
 type Service struct {
@@ -17,22 +19,37 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
+// GetFleetOverview queries fleet RED metrics once and returns both the
+// aggregate totals and per-service breakdowns in a single response.
+func (s *Service) GetFleetOverview(ctx context.Context, f REDFilters) (FleetOverviewResponse, error) {
+	rows, err := s.repo.GetFleetREDMetrics(ctx, f)
+	if err != nil {
+		return FleetOverviewResponse{}, err
+	}
+	services := mapFleetServices(rows)
+	return FleetOverviewResponse{
+		Totals:   computeFleetTotals(services, f.StartMs, f.EndMs),
+		Services: services,
+	}, nil
+}
+
 // GetFleetServices returns one RED row per service across the whole fleet.
-func (s *Service) GetFleetServices(ctx context.Context, teamID int64, startMs, endMs int64) ([]ServiceREDMetric, error) {
-	rows, err := s.repo.GetFleetREDMetrics(ctx, teamID, startMs, endMs)
+func (s *Service) GetFleetServices(ctx context.Context, f REDFilters) ([]ServiceREDMetric, error) {
+	overview, err := s.GetFleetOverview(ctx, f)
 	if err != nil {
 		return nil, err
 	}
-	return mapFleetServices(rows), nil
+	return overview.Services, nil
 }
 
-func (s *Service) GetFleetTotals(ctx context.Context, teamID int64, startMs, endMs int64) (FleetTotals, error) {
-	rows, err := s.repo.GetFleetREDMetrics(ctx, teamID, startMs, endMs)
+func (s *Service) GetFleetTotals(ctx context.Context, f REDFilters) (FleetTotals, error) {
+	overview, err := s.GetFleetOverview(ctx, f)
 	if err != nil {
 		return FleetTotals{}, err
 	}
-	return computeFleetTotals(mapFleetServices(rows), startMs, endMs), nil
+	return overview.Totals, nil
 }
+
 
 func mapFleetServices(rows []redMetricsRow) []ServiceREDMetric {
 	services := make([]ServiceREDMetric, len(rows))
@@ -88,57 +105,23 @@ func computeFleetTotals(services []ServiceREDMetric, startMs, endMs int64) Fleet
 	}
 }
 
-func (s *Service) GetApdex(ctx context.Context, teamID int64, startMs, endMs int64, satisfiedMs, toleratingMs float64, serviceName string) ([]ApdexScore, error) {
-	var rows []apdexRow
-	var err error
-	if serviceName != "" {
-		rows, err = s.repo.GetApdexByService(ctx, teamID, startMs, endMs, satisfiedMs, toleratingMs, serviceName)
-	} else {
-		rows, err = s.repo.GetApdex(ctx, teamID, startMs, endMs, satisfiedMs, toleratingMs)
-	}
+
+
+
+func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFilters) ([]ServicePerformancePoint, error) {
+	rows, err := s.repo.GetRequestAndErrorRateTimeSeries(ctx, f)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]ApdexScore, len(rows))
-	for i, row := range rows {
-		total := int64(row.TotalCount)
-		satisfied := int64(row.Satisfied)
-		tolerating := int64(row.Tolerating)
-		frustrated := total - satisfied - tolerating
-		if frustrated < 0 {
-			frustrated = 0
-		}
-		apdex := 0.0
-		if total > 0 {
-			apdex = (float64(satisfied) + float64(tolerating)*0.5) / float64(total)
-		}
-		result[i] = ApdexScore{
-			ServiceName: row.ServiceName,
-			Apdex:       apdex,
-			Satisfied:   satisfied,
-			Tolerating:  tolerating,
-			Frustrated:  frustrated,
-			TotalCount:  total,
-		}
-	}
-	return result, nil
-}
-
-func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, teamID int64, startMs, endMs int64) ([]ServicePerformancePoint, error) {
-	rows, err := s.repo.GetRequestAndErrorRateTimeSeries(ctx, teamID, startMs, endMs)
-	if err != nil {
-		return nil, err
-	}
-
-	grain := timebucket.DisplayGrain(endMs - startMs)
+	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
 	grainSec := float64(grain.Seconds())
 	if grainSec <= 0 {
 		grainSec = 60
 	}
 
-	startTime := time.UnixMilli(startMs).UTC().Truncate(grain)
-	endTime := time.UnixMilli(endMs).UTC().Truncate(grain)
+	startTime := time.UnixMilli(f.StartMs).UTC().Truncate(grain)
+	endTime := time.UnixMilli(f.EndMs).UTC().Truncate(grain)
 
 	rowMap := make(map[int64]requestRateRawRow)
 	for _, row := range rows {
@@ -170,21 +153,63 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, teamID i
 	return points, nil
 }
 
-func (s *Service) GetStatusTimeSeries(
-	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string,
-) ([]StatusTimeSeriesPoint, error) {
-	rows, err := s.repo.GetStatusTimeSeries(ctx, teamID, startMs, endMs, serviceName)
+func (s *Service) GetRequestRateTimeSeries(ctx context.Context, f REDFilters) ([]RequestRatePoint, error) {
+	rows, err := s.repo.GetRequestRateTimeSeries(ctx, f)
 	if err != nil {
 		return nil, err
 	}
-	grain := timebucket.DisplayGrain(endMs - startMs)
+
+	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
 	grainSec := float64(grain.Seconds())
 	if grainSec <= 0 {
 		grainSec = 60
 	}
 
-	startTime := time.UnixMilli(startMs).UTC().Truncate(grain)
-	endTime := time.UnixMilli(endMs).UTC().Truncate(grain)
+	startTime := time.UnixMilli(f.StartMs).UTC().Truncate(grain)
+	endTime := time.UnixMilli(f.EndMs).UTC().Truncate(grain)
+
+	type key struct {
+		serviceName string
+		timestamp   int64
+	}
+	rowMap := make(map[key]uint64)
+	servicesSet := make(map[string]struct{})
+
+	for _, row := range rows {
+		ts := row.BucketAt.UTC().Truncate(grain).Unix()
+		rowMap[key{serviceName: row.ServiceName, timestamp: ts}] = row.RequestCount
+		servicesSet[row.ServiceName] = struct{}{}
+	}
+
+	var points []RequestRatePoint
+	for t := startTime; !t.After(endTime); t = t.Add(grain) {
+		ts := t.Unix()
+		for svc := range servicesSet {
+			reqCount := rowMap[key{serviceName: svc, timestamp: ts}]
+			rps := float64(reqCount) / grainSec
+			points = append(points, RequestRatePoint{
+				Timestamp:   t,
+				ServiceName: svc,
+				RPS:         utils.SanitizeFloat(rps),
+			})
+		}
+	}
+	return points, nil
+}
+
+func (s *Service) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]StatusTimeSeriesPoint, error) {
+	rows, err := s.repo.GetStatusTimeSeries(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
+	grainSec := float64(grain.Seconds())
+	if grainSec <= 0 {
+		grainSec = 60
+	}
+
+	startTime := time.UnixMilli(f.StartMs).UTC().Truncate(grain)
+	endTime := time.UnixMilli(f.EndMs).UTC().Truncate(grain)
 
 	byTs := make(map[int64]*StatusTimeSeriesPoint)
 	for _, row := range rows {
@@ -225,17 +250,15 @@ func writeStatusCount(pt *StatusTimeSeriesPoint, bucket string, count float64) {
 	}
 }
 
-func (s *Service) GetLatencyPercentilesTimeSeries(
-	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string,
-) ([]LatencyPercentilesPoint, error) {
-	rows, err := s.repo.GetLatencyPercentilesTimeSeries(ctx, teamID, startMs, endMs, serviceName)
+func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDFilters) ([]LatencyPercentilesPoint, error) {
+	rows, err := s.repo.GetLatencyPercentilesTimeSeries(ctx, f)
 	if err != nil {
 		return nil, err
 	}
 
-	grain := timebucket.DisplayGrain(endMs - startMs)
-	startTime := time.UnixMilli(startMs).UTC().Truncate(grain)
-	endTime := time.UnixMilli(endMs).UTC().Truncate(grain)
+	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
+	startTime := time.UnixMilli(f.StartMs).UTC().Truncate(grain)
+	endTime := time.UnixMilli(f.EndMs).UTC().Truncate(grain)
 
 	rowMap := make(map[int64]latencyPercentilesTimeseriesRow)
 	for _, row := range rows {
@@ -262,15 +285,13 @@ func (s *Service) GetLatencyPercentilesTimeSeries(
 	return points, nil
 }
 
-func (s *Service) GetREDByEndpointTimeSeries(
-	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string,
-) ([]EndpointRatePoint, error) {
-	rows, err := s.repo.GetREDByEndpointTimeSeries(ctx, teamID, startMs, endMs, serviceName)
+func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters) ([]EndpointRatePoint, error) {
+	rows, err := s.repo.GetREDByEndpointTimeSeries(ctx, f)
 	if err != nil {
 		return nil, err
 	}
 
-	grain := timebucket.DisplayGrain(endMs - startMs)
+	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
 	grainSec := float64(grain.Seconds())
 	if grainSec <= 0 {
 		grainSec = 60
@@ -303,7 +324,7 @@ func (s *Service) GetREDByEndpointTimeSeries(
 		}
 	}
 
-	buckets := denseBuckets(startMs, endMs, grain)
+	buckets := denseBuckets(f.StartMs, f.EndMs, grain)
 	points := make([]EndpointRatePoint, 0, len(buckets)*len(routes))
 	for _, bucket := range buckets {
 		for _, route := range routes {
@@ -329,9 +350,9 @@ func denseBuckets(startMs, endMs int64, grain time.Duration) []time.Time {
 }
 
 func (s *Service) GetTopEndpointsCombined(
-	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, limit int, cursorIn TopEndpointsCursor,
+	ctx context.Context, f REDFilters, limit int, cursorIn TopEndpointsCursor,
 ) (PaginatedEndpoints, error) {
-	rows, err := s.repo.GetTopEndpointsCombined(ctx, teamID, startMs, endMs, serviceName, limit+1, cursorIn)
+	rows, err := s.repo.GetTopEndpointsCombined(ctx, f, limit+1, cursorIn)
 	if err != nil {
 		return PaginatedEndpoints{}, err
 	}
@@ -341,7 +362,7 @@ func (s *Service) GetTopEndpointsCombined(
 		rows = rows[:limit]
 	}
 
-	durationSec := float64(endMs-startMs) / 1000.0
+	durationSec := float64(f.EndMs-f.StartMs) / 1000.0
 	if durationSec <= 0 {
 		durationSec = 1
 	}
@@ -371,9 +392,9 @@ func (s *Service) GetTopEndpointsCombined(
 }
 
 func (s *Service) GetTopDBQueries(
-	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, limit int, cursorIn TopEndpointsCursor,
+	ctx context.Context, f REDFilters, limit int, cursorIn TopEndpointsCursor,
 ) (PaginatedDBQueries, error) {
-	rows, err := s.repo.GetTopDBQueriesCombined(ctx, teamID, startMs, endMs, serviceName, limit+1, cursorIn)
+	rows, err := s.repo.GetTopDBQueriesCombined(ctx, f, limit+1, cursorIn)
 	if err != nil {
 		return PaginatedDBQueries{}, err
 	}
@@ -383,7 +404,7 @@ func (s *Service) GetTopDBQueries(
 		rows = rows[:limit]
 	}
 
-	durationSec := float64(endMs-startMs) / 1000.0
+	durationSec := float64(f.EndMs-f.StartMs) / 1000.0
 	if durationSec <= 0 {
 		durationSec = 1
 	}
@@ -453,4 +474,171 @@ func toTopEndpoint(row topEndpointRow, durationSec float64) TopEndpoint {
 		P95Ms:         utils.SanitizeFloat(float64(row.P95Ms)),
 		P99Ms:         utils.SanitizeFloat(float64(row.P99Ms)),
 	}
+}
+
+func (s *Service) GetOperationBaseline(ctx context.Context, teamID int64, startMs, endMs int64, serviceName, operationName string) (OperationBaseline, error) {
+	row, err := s.repo.GetOperationBaseline(ctx, teamID, startMs, endMs, serviceName, operationName)
+	if err != nil {
+		return OperationBaseline{}, err
+	}
+	return OperationBaseline{
+		ServiceName:   serviceName,
+		OperationName: operationName,
+		P50Ms:         utils.SanitizeFloat(float64(row.P50Ms)),
+		P95Ms:         utils.SanitizeFloat(float64(row.P95Ms)),
+		P99Ms:         utils.SanitizeFloat(float64(row.P99Ms)),
+		SpanCount:     int64(row.SpanCount),
+	}, nil
+}
+
+func (s *Service) GetServiceSummary(ctx context.Context, f REDFilters) (ServiceSummaryResponse, error) {
+	serviceName := f.SingleService()
+	redRows, err := s.repo.GetFleetREDMetrics(ctx, f)
+	if err != nil {
+		return ServiceSummaryResponse{}, err
+	}
+	var redRow *redMetricsRow
+	if len(redRows) > 0 {
+		redRow = &redRows[0]
+	}
+
+	metricNames := []string{
+		infraconsts.MetricSystemCPUUtilization,
+		infraconsts.MetricSystemCPUUsage,
+		infraconsts.MetricProcessCPUUsage,
+		infraconsts.MetricJVMCPUUtilization,
+		infraconsts.MetricSystemMemoryUtilization,
+		infraconsts.MetricSystemDiskUtilization,
+	}
+
+	sats, err := s.repo.GetServiceSaturationAggs(ctx, f.TeamID, f.StartMs, f.EndMs, serviceName, metricNames)
+	if err != nil {
+		sats = nil
+	}
+
+	// Map saturation
+	var cpuValues []float64
+	var memVal float64
+	var diskVal float64
+
+	for _, row := range sats {
+		switch row.MetricName {
+		case infraconsts.MetricSystemCPUUtilization, infraconsts.MetricSystemCPUUsage, infraconsts.MetricProcessCPUUsage, infraconsts.MetricJVMCPUUtilization:
+			if v := normalizeUtilization(row.Value); v != nil {
+				cpuValues = append(cpuValues, *v)
+			}
+		case infraconsts.MetricSystemMemoryUtilization:
+			if v := normalizeUtilization(row.Value); v != nil {
+				memVal = *v
+			}
+		case infraconsts.MetricSystemDiskUtilization:
+			if v := normalizeUtilization(row.Value); v != nil {
+				diskVal = *v
+			}
+		}
+	}
+
+	var cpuVal float64
+	cpuAvg := averageFloats(cpuValues)
+	if cpuAvg != nil {
+		cpuVal = *cpuAvg
+	}
+
+	var reqCount, errCount int64
+	var rps, errRate float64
+	var p50, p95, p99 float64
+
+	durationSec := float64(f.EndMs-f.StartMs) / 1000.0
+	if durationSec <= 0 {
+		durationSec = 1
+	}
+
+	if redRow != nil {
+		reqCount = int64(redRow.TotalCount)
+		errCount = int64(redRow.ErrorCount)
+		rps = float64(reqCount) / durationSec
+		if reqCount > 0 {
+			errRate = float64(errCount) * 100.0 / float64(reqCount)
+		}
+		p50 = utils.SanitizeFloat(float64(redRow.P50Ms))
+		p95 = utils.SanitizeFloat(float64(redRow.P95Ms))
+		p99 = utils.SanitizeFloat(float64(redRow.P99Ms))
+	}
+
+	return ServiceSummaryResponse{
+		ServiceName:       serviceName,
+		RequestCount:      reqCount,
+		ErrorCount:        errCount,
+		RPS:               utils.SanitizeFloat(rps),
+		ErrorRate:         utils.SanitizeFloat(errRate),
+		P50Ms:             p50,
+		P95Ms:             p95,
+		P99Ms:             p99,
+		CPUUtilization:    utils.SanitizeFloat(cpuVal),
+		MemoryUtilization: utils.SanitizeFloat(memVal),
+		DiskUtilization:   utils.SanitizeFloat(diskVal),
+	}, nil
+}
+
+func normalizeUtilization(v float64) *float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > infraconsts.PercentageThreshold*100 {
+		return nil
+	}
+	if v <= infraconsts.PercentageThreshold {
+		v = v * infraconsts.PercentageMultiplier
+	}
+	return &v
+}
+
+func averageFloats(vals []float64) *float64 {
+	if len(vals) == 0 {
+		return nil
+	}
+	sum := 0.0
+	for _, v := range vals {
+		sum += v
+	}
+	avg := sum / float64(len(vals))
+	return &avg
+}
+
+func (s *Service) GetServiceSaturationTimeSeries(ctx context.Context, f REDFilters) ([]SaturationTimeSeriesPoint, error) {
+	serviceName := f.SingleService()
+	metricNames := []string{
+		infraconsts.MetricSystemCPUUtilization,
+		infraconsts.MetricSystemCPUUsage,
+		infraconsts.MetricProcessCPUUsage,
+		infraconsts.MetricJVMCPUUtilization,
+	}
+
+	rows, err := s.repo.GetServiceSaturationTimeSeries(ctx, f.TeamID, f.StartMs, f.EndMs, serviceName, metricNames)
+	if err != nil {
+		return nil, err
+	}
+
+	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
+	startTime := time.UnixMilli(f.StartMs).UTC().Truncate(grain)
+	endTime := time.UnixMilli(f.EndMs).UTC().Truncate(grain)
+
+	rowMap := make(map[int64]saturationTimeSeriesRawRow)
+	for _, row := range rows {
+		ts := row.BucketAt.UTC().Truncate(grain).Unix()
+		rowMap[ts] = row
+	}
+
+	var points []SaturationTimeSeriesPoint
+	for t := startTime; !t.After(endTime); t = t.Add(grain) {
+		row, ok := rowMap[t.Unix()]
+		var val float64
+		if ok {
+			if normalized := normalizeUtilization(row.Value); normalized != nil {
+				val = *normalized
+			}
+		}
+		points = append(points, SaturationTimeSeriesPoint{
+			Timestamp: t,
+			Value:     utils.SanitizeFloat(val),
+		})
+	}
+	return points, nil
 }

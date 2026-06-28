@@ -6,7 +6,6 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
-	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
 type Repository struct {
@@ -20,15 +19,17 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func (r *Repository) GetSpanEvents(ctx context.Context, teamID int64, traceID string) ([]spanEventCombinedRow, error) {
 	const query = `
 		WITH trace_loc AS (
-		    SELECT ts_bucket, fingerprint
+		    SELECT timestamp
 		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    LIMIT 1
 		)
 		SELECT span_id, trace_id, timestamp, events,
 		       exception_type, exception_message, exception_stacktrace
 		FROM optikk.spans
 		PREWHERE team_id = @teamID
-		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
+		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
+		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
 		WHERE NOT empty(events) OR NOT empty(exception_type)`
 	var rows []spanEventCombinedRow
@@ -41,9 +42,10 @@ func (r *Repository) GetSpanEvents(ctx context.Context, teamID int64, traceID st
 func (r *Repository) GetSpanAttributes(ctx context.Context, teamID int64, traceID, spanID string) (*spanAttributeRow, error) {
 	const query = `
 		WITH trace_loc AS (
-		    SELECT ts_bucket, fingerprint
+		    SELECT timestamp
 		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    LIMIT 1
 		)
 		SELECT span_id, trace_id, name AS operation_name, service,
 		       toJSONString(attributes)                AS attributes_json,
@@ -56,7 +58,8 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, teamID int64, traceI
 		       links AS links
 		FROM optikk.spans
 		PREWHERE team_id = @teamID
-		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
+		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
+		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND span_id  = @spanID
 		     AND trace_id = @traceID
 		LIMIT 1`
@@ -81,7 +84,6 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, teamID int64, service
 		    SELECT fingerprint
 		    FROM optikk.spans_resource
 		    PREWHERE team_id = @teamID
-		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         AND service  = @serviceName
 		)
 		SELECT span_id,
@@ -93,7 +95,6 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, teamID int64, service
 		       timestamp                  AS start_time
 		FROM optikk.spans
 		PREWHERE team_id      = @teamID
-		     AND ts_bucket    BETWEEN @bucketStart AND @bucketEnd
 		     AND fingerprint  IN active_fps
 		     AND service      = @serviceName
 		     AND name         = @operationName
@@ -102,11 +103,8 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, teamID int64, service
 		  AND trace_id != @excludeTraceID
 		ORDER BY timestamp DESC
 		LIMIT @limit`
-	bucketStart, bucketEnd := chargs.BucketBounds(startMs, endMs)
 	args := []any{
 		clickhouse.Named("teamID", uint32(teamID)),
-		clickhouse.Named("bucketStart", bucketStart),
-		clickhouse.Named("bucketEnd", bucketEnd),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("serviceName", serviceName),
@@ -121,9 +119,10 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, teamID int64, service
 func (r *Repository) GetTraceSummary(ctx context.Context, teamID int64, traceID string) (*TraceSummary, error) {
 	const query = `
 		WITH trace_loc AS (
-		    SELECT ts_bucket, fingerprint
+		    SELECT timestamp
 		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    LIMIT 1
 		)
 		SELECT trace_id,
 		       timestamp                              AS start_time,
@@ -141,7 +140,8 @@ func (r *Repository) GetTraceSummary(ctx context.Context, teamID int64, traceID 
 		       false                                  AS truncated
 		FROM optikk.spans
 		PREWHERE team_id = @teamID
-		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
+		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
+		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
 		     AND is_root  = 1
 		ORDER BY timestamp DESC
@@ -193,9 +193,10 @@ func (r *Repository) GetTraceSummary(ctx context.Context, teamID int64, traceID 
 func (r *Repository) ListSpansByTrace(ctx context.Context, teamID int64, traceID string) ([]SpanListItem, error) {
 	const query = `
 		WITH trace_loc AS (
-		    SELECT ts_bucket, fingerprint
+		    SELECT timestamp
 		    FROM optikk.trace_index
 		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    LIMIT 1
 		)
 		SELECT span_id,
 		       parent_span_id,
@@ -209,7 +210,8 @@ func (r *Repository) ListSpansByTrace(ctx context.Context, teamID int64, traceID
 		       timestamp
 		FROM optikk.spans
 		PREWHERE team_id = @teamID
-		     AND (ts_bucket, fingerprint) IN (SELECT ts_bucket, fingerprint FROM trace_loc)
+		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
+		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC
 		LIMIT 5000`

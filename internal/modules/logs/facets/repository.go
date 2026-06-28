@@ -44,7 +44,7 @@ func facetArm(dim, resourceWhere string) string {
 	return `
 		SELECT '` + dim + `' AS dim, ` + dim + ` AS value, count() AS cnt
 		FROM optikk.logs_resource
-		PREWHERE team_id = @teamID AND ts_bucket BETWEEN @bucketStart AND @bucketEnd` + resourceWhere + `
+		PREWHERE team_id = @teamID` + resourceWhere + `
 		WHERE ` + dim + ` != ''
 		GROUP BY ` + dim + `
 		ORDER BY cnt DESC

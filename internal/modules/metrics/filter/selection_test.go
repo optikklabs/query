@@ -56,10 +56,10 @@ func TestBuildSelectionGroupByCarriesLabels(t *testing.T) {
 	f := baseFilters()
 	f.GroupBy = []string{"service", "db.name"}
 	_, cte, _, selectCols, groupBy, _ := BuildSelection(f)
-	if !strings.Contains(cte, "any(service) AS g_service") {
+	if !strings.Contains(cte, "service AS g_service") {
 		t.Fatalf("cte missing resource group: %q", cte)
 	}
-	if !strings.Contains(cte, "any(attributes.`db.name`::String) AS g_db.name") {
+	if !strings.Contains(cte, "attributes.`db.name`::String AS g_db.name") {
 		t.Fatalf("cte missing attr group: %q", cte)
 	}
 	for _, want := range []string{"`group_service`", "`group_db.name`"} {

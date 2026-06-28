@@ -14,61 +14,32 @@ type Repository struct {
 
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
-// boundsQuery resolves ts_bucket bounds and fingerprints from trace_index.
-const boundsQuery = `
-	SELECT min(ts_bucket)                    AS min_b,
-	       max(ts_bucket)                    AS max_b,
-	       groupUniqArray(1024)(fingerprint) AS fps,
-	       count()                           AS n
-	FROM optikk.trace_index
-	PREWHERE trace_id = @traceID
-	     AND team_id = @teamID`
+func (r *Repository) FetchLogsByTrace(ctx context.Context, teamID int64, traceID string, limit int) ([]models.LogRow, error) {
+	const query = `
+		WITH trace_loc AS (
+		    SELECT timestamp
+		    FROM optikk.trace_index
+		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    LIMIT 1
+		)
+		SELECT ` + models.LogColumns + `
+		FROM optikk.logs
+		PREWHERE team_id = @teamID
+		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
+		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
+		     AND trace_id = @traceID
+		ORDER BY timestamp ASC
+		LIMIT @limit`
 
-const fetchQuery = `
-	SELECT ` + models.LogColumns + `
-	FROM optikk.logs
-	PREWHERE team_id = @teamID
-	     AND ts_bucket BETWEEN @minB AND @maxB
-	     AND fingerprint IN @fps
-	     AND trace_id = @traceID
-	ORDER BY timestamp ASC
-	LIMIT @limit`
-
-type boundsRow struct {
-	MinB  uint32   `ch:"min_b"`
-	MaxB  uint32   `ch:"max_b"`
-	Fps   []uint64 `ch:"fps"`
-	Count uint64   `ch:"n"`
-}
-
-func (r *Repository) LookupBounds(ctx context.Context, teamID int64, traceID string) (boundsRow, error) {
-	var rows []boundsRow
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "logsTraceLogs.LookupBounds", &rows, boundsQuery, traceIDArgs(teamID, traceID)...); err != nil {
-		return boundsRow{}, err
-	}
-	if len(rows) == 0 {
-		return boundsRow{}, nil
-	}
-	return rows[0], nil
-}
-
-func (r *Repository) FetchByBounds(ctx context.Context, teamID int64, traceID string, minB, maxB uint32, fps []uint64, limit int) ([]models.LogRow, error) {
-	args := append(traceIDArgs(teamID, traceID),
-		clickhouse.Named("minB", minB),
-		clickhouse.Named("maxB", maxB),
-		clickhouse.Named("fps", fps),
+	args := []any{
+		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("traceID", traceID),
 		clickhouse.Named("limit", uint64(limit)),
-	)
+	}
+
 	var rows []models.LogRow
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "logsTraceLogs.FetchByBounds", &rows, fetchQuery, args...); err != nil {
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "logsTraceLogs.FetchLogsByTrace", &rows, query, args...); err != nil {
 		return nil, err
 	}
 	return rows, nil
-}
-
-func traceIDArgs(teamID int64, traceID string) []any {
-	return []any{
-		clickhouse.Named("teamID", uint32(teamID)),
-		clickhouse.Named("traceID", traceID),
-	}
 }

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
 const maxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
@@ -64,8 +63,6 @@ func (f *Filters) Validate() error {
 func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 	args = []any{
 		clickhouse.Named("teamID", uint32(f.TeamID)),
-		clickhouse.Named("bucketStart", timebucket.BucketStart(f.StartMs/1000)),
-		clickhouse.Named("bucketEnd", timebucket.BucketStart(f.EndMs/1000)+uint32(timebucket.BucketSeconds)),
 		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
 		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
 	}
@@ -127,17 +124,31 @@ func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 		idx := strconv.Itoa(i)
 		kName := "akey_" + idx
 		vName := "aval_" + idx
+
+		mapCol := "attributes_string"
+		var val any = af.Value
+
+		if af.Op == "" || af.Op == "neq" {
+			if n, err := strconv.ParseFloat(af.Value, 64); err == nil {
+				mapCol = "attributes_number"
+				val = n
+			} else if b, err := strconv.ParseBool(af.Value); err == nil {
+				mapCol = "attributes_bool"
+				val = b
+			}
+		}
+
 		switch af.Op {
 		case "neq":
-			where += ` AND attributes_string[@` + kName + `] != @` + vName
+			where += ` AND ` + mapCol + `[@` + kName + `] != @` + vName
 		case "contains":
 			where += ` AND positionCaseInsensitive(attributes_string[@` + kName + `], @` + vName + `) > 0`
 		case "regex":
 			where += ` AND match(attributes_string[@` + kName + `], @` + vName + `)`
 		default:
-			where += ` AND attributes_string[@` + kName + `] = @` + vName
+			where += ` AND ` + mapCol + `[@` + kName + `] = @` + vName
 		}
-		args = append(args, clickhouse.Named(kName, af.Key), clickhouse.Named(vName, af.Value))
+		args = append(args, clickhouse.Named(kName, af.Key), clickhouse.Named(vName, val))
 	}
 	return resourceWhere, where, args
 }

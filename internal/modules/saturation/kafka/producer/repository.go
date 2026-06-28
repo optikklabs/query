@@ -27,11 +27,11 @@ var produceCounterMetrics = []string{"kafka.producer.record_send_total"}
 func publishRateByTopicQuery(windowMs int64) string {
 	return `
 		WITH series AS (
-		    SELECT fingerprint, any(` + filter.AttrTopic + `) AS topic
+		    SELECT fingerprint, ` + filter.AttrTopic + ` AS topic
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE ` + filter.AttrTopic + ` != '' AND lower(` + filter.AttrSystem + `) = 'kafka'
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, topic
 		)
 		SELECT
 		    ` + timebucket.DisplayGrainSQL(windowMs) + ` AS timestamp,

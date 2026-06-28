@@ -23,8 +23,11 @@ func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols s
 	}
 
 	fpsSel := "fingerprint"
+	fpsGrp := "fingerprint"
 	for _, key := range f.GroupBy {
-		fpsSel += ", any(" + seriesColumn(key) + ") AS g_" + SanitizeKey(key)
+		alias := "g_" + SanitizeKey(key)
+		fpsSel += ", " + seriesColumn(key) + " AS " + alias
+		fpsGrp += ", " + alias
 	}
 	where := resourceWhere + attrWhere
 	if where != "" {
@@ -34,7 +37,7 @@ func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols s
 		    SELECT ` + fpsSel + `
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND metric_name = @metricName AND timestamp BETWEEN @start AND @end` + where + `
-		    GROUP BY fingerprint
+		    GROUP BY ` + fpsGrp + `
 		)
 `
 	joins = " INNER JOIN fps ON m.fingerprint = fps.fingerprint"

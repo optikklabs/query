@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
 const maxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
@@ -69,8 +68,6 @@ func (f *Filters) Validate() error {
 func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 	args = []any{
 		clickhouse.Named("teamID", uint32(f.TeamID)),
-		clickhouse.Named("bucketStart", timebucket.BucketStart(f.StartMs/1000)),
-		clickhouse.Named("bucketEnd", timebucket.BucketStart(f.EndMs/1000)+uint32(timebucket.BucketSeconds)),
 		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
 		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
 	}

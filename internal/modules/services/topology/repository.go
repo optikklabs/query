@@ -23,12 +23,12 @@ func (r *Repository) GetNodes(ctx context.Context, teamID, startMs, endMs int64,
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(service)                       AS service,
-		           any(` + seriesattr.StatusCode + `) AS status_code
+		           service,
+		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE s.service != ''
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, service, status_code
 		)
 		SELECT series.service                                                       AS service,
 		       sum(m.hist_count)                                                    AS request_count,
@@ -57,16 +57,16 @@ func (r *Repository) GetEdges(ctx context.Context, teamID, startMs, endMs int64,
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
-		           any(` + seriesattr.Client + `)     AS client,
-		           any(` + seriesattr.Server + `)     AS server,
-		           any(` + seriesattr.StatusCode + `) AS status_code
+		           ` + seriesattr.Client + `     AS client,
+		           ` + seriesattr.Server + `     AS server,
+		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series
 		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces_service_graph_request_server'
 		    WHERE ` + seriesattr.Client + ` != ''
 		      AND ` + seriesattr.Server + ` != ''
 		      AND ` + seriesattr.Client + ` != ` + seriesattr.Server + `
 		      AND (@focusService = '' OR ` + seriesattr.Client + ` = @focusService OR ` + seriesattr.Server + ` = @focusService)
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, client, server, status_code
 		)
 		SELECT series.client                                                     AS source,
 		       series.server                                                     AS target,
