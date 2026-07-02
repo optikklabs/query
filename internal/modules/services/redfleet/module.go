@@ -21,7 +21,6 @@ func RegisterRoutes(cfg Config, v1 chi.Router, h *REDFleetHandler) {
 	if !cfg.Enabled || h == nil {
 		return
 	}
-	v1.Get("/spans/red/fleet-totals", h.GetFleetTotals)
 	v1.Get("/spans/red/services", h.GetFleetServices)
 	v1.Get("/spans/red/fleet-overview", h.GetFleetOverview)
 
@@ -36,10 +35,6 @@ func RegisterRoutes(cfg Config, v1 chi.Router, h *REDFleetHandler) {
 	// Flat query-param routes for service summary and saturation.
 	v1.Get("/spans/red/summary", h.GetServiceSummary)
 	v1.Get("/spans/red/saturation-timeseries", h.GetServiceSaturationTimeSeries)
-
-	// Legacy path-param aliases (backwards compat).
-	v1.Get("/spans/red/services/{serviceName}/summary", h.GetServiceSummary)
-	v1.Get("/spans/red/services/{serviceName}/saturation-timeseries", h.GetServiceSaturationTimeSeries)
 
 	v1.Get("/spans/red/operation-baseline", h.GetOperationBaseline)
 }

@@ -8,7 +8,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
-	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
 // MetricBackend evaluates metric monitors against ClickHouse raw metrics.
@@ -99,11 +98,8 @@ func metricSource(agg string) (table, expr string) {
 }
 
 func metricArgs(teamID int64, metricName string, startMs, endMs int64) []any {
-	bs, be := chargs.BucketBounds(startMs, endMs)
 	return []any{
 		teamIDArg(teamID),
-		clickhouse.Named("bucketStart", bs),
-		clickhouse.Named("bucketEnd", be),
 		clickhouse.Named("metricName", metricName),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),

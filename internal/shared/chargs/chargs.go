@@ -10,11 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
-func BucketBounds(startMs, endMs int64) (uint32, uint32) {
-	return timebucket.BucketStart(startMs / 1000),
-		timebucket.BucketStart(endMs/1000) + uint32(timebucket.BucketSeconds)
-}
-
 func RangeArgs(teamID, startMs, endMs int64) []any {
 	return []any{
 		clickhouse.Named("teamID", uint32(teamID)),

@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
 // OTel semantic-convention names and canonical metric names.
@@ -68,36 +67,20 @@ func ParseLimit(r *http.Request, def int) int {
 }
 
 func SpanArgs(teamID, startMs, endMs int64) []any {
-	bucketStart, bucketEnd := SpanBucketBounds(startMs, endMs)
 	return []any{
 		clickhouse.Named("teamID", uint32(teamID)),
-		clickhouse.Named("bucketStart", bucketStart),
-		clickhouse.Named("bucketEnd", bucketEnd),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 	}
 }
 
-func SpanBucketBounds(startMs, endMs int64) (uint32, uint32) {
-	return timebucket.BucketStart(startMs / 1000),
-		timebucket.BucketStart(endMs/1000) + uint32(timebucket.BucketSeconds)
-}
-
 func MetricArgs(teamID, startMs, endMs int64, metricName string) []any {
-	bucketStart, bucketEnd := MetricBucketBounds(startMs, endMs)
 	return []any{
 		clickhouse.Named("teamID", uint32(teamID)),
-		clickhouse.Named("bucketStart", bucketStart),
-		clickhouse.Named("bucketEnd", bucketEnd),
 		clickhouse.Named("metricName", metricName),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 	}
-}
-
-func MetricBucketBounds(startMs, endMs int64) (uint32, uint32) {
-	return timebucket.BucketStart(startMs / 1000),
-		timebucket.BucketStart(endMs/1000) + uint32(timebucket.BucketSeconds)
 }
 
 func BuildSpanClauses(f Filters) (where string, args []any) {

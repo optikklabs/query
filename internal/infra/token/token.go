@@ -16,6 +16,7 @@ type AuthState struct {
 	UserID        int64
 	Email         string
 	Role          string
+	IsAdmin       bool
 	DefaultTeamID int64
 	TeamIDs       []int64
 }
@@ -24,6 +25,7 @@ type accessClaims struct {
 	Typ           string  `json:"typ"`
 	Email         string  `json:"email"`
 	Role          string  `json:"role"`
+	IsAdmin       bool    `json:"adm"`
 	DefaultTeamID int64   `json:"dtid"`
 	TeamIDs       []int64 `json:"tids"`
 	jwt.RegisteredClaims
@@ -56,6 +58,7 @@ func (s *Service) SignAccess(state AuthState) (string, error) {
 		Typ:           typAccess,
 		Email:         state.Email,
 		Role:          state.Role,
+		IsAdmin:       state.IsAdmin,
 		DefaultTeamID: state.DefaultTeamID,
 		TeamIDs:       state.TeamIDs,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -83,6 +86,7 @@ func (s *Service) ParseAccess(raw string) (AuthState, error) {
 		UserID:        userID,
 		Email:         claims.Email,
 		Role:          claims.Role,
+		IsAdmin:       claims.IsAdmin,
 		DefaultTeamID: claims.DefaultTeamID,
 		TeamIDs:       claims.TeamIDs,
 	}, nil

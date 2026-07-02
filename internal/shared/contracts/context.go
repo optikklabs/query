@@ -7,6 +7,7 @@ type TenantContext struct {
 	UserID    int64
 	UserEmail string
 	UserRole  string
+	IsAdmin   bool
 }
 
 type tenantCtxKey struct{}

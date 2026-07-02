@@ -7,7 +7,11 @@ CREATE TABLE IF NOT EXISTS optikk.users
      avatar_url    VARCHAR(255),
      teams         JSON NOT NULL DEFAULT ('[]'),
      active        TINYINT(1) NOT NULL DEFAULT 1,
+     is_admin      TINYINT(1) NOT NULL DEFAULT 0,
      last_login_at DATETIME NULL,
      created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
      INDEX idx_user_email (email)
   );
+
+-- Idempotent upgrade for databases created before is_admin existed.
+ALTER TABLE optikk.users ADD COLUMN IF NOT EXISTS is_admin TINYINT(1) NOT NULL DEFAULT 0;

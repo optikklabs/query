@@ -27,10 +27,22 @@ func (r *Repository) Compute(ctx context.Context, f filter.Filters) ([]dimRow, e
 	resourceWhere, _, args := filter.BuildClauses(f)
 	args = append(args, clickhouse.Named("facetLimit", uint64(facetTopN)))
 
-	query := facetArm("service", resourceWhere) +
-		" UNION ALL " + facetArm("host", resourceWhere) +
-		" UNION ALL " + facetArm("pod", resourceWhere) +
-		" UNION ALL " + facetArm("environment", resourceWhere)
+	// One UNION ALL arm per facet dimension; querying logs_resource directly.
+	arm := func(dim string) string {
+		return `
+			SELECT '` + dim + `' AS dim, ` + dim + ` AS value, count() AS cnt
+			FROM optikk.logs_resource
+			PREWHERE team_id = @teamID` + resourceWhere + `
+			WHERE ` + dim + ` != ''
+			GROUP BY ` + dim + `
+			ORDER BY cnt DESC
+			LIMIT @facetLimit`
+	}
+
+	query := arm("service") +
+		" UNION ALL " + arm("host") +
+		" UNION ALL " + arm("pod") +
+		" UNION ALL " + arm("environment")
 
 	var rows []dimRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "logsFacets.Compute",
@@ -38,15 +50,4 @@ func (r *Repository) Compute(ctx context.Context, f filter.Filters) ([]dimRow, e
 		return nil, err
 	}
 	return rows, nil
-}
-
-func facetArm(dim, resourceWhere string) string {
-	return `
-		SELECT '` + dim + `' AS dim, ` + dim + ` AS value, count() AS cnt
-		FROM optikk.logs_resource
-		PREWHERE team_id = @teamID` + resourceWhere + `
-		WHERE ` + dim + ` != ''
-		GROUP BY ` + dim + `
-		ORDER BY cnt DESC
-		LIMIT @facetLimit`
 }

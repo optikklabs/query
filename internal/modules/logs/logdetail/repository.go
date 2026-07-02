@@ -14,13 +14,6 @@ type Repository struct {
 
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
-const getByIDQuery = `
-	SELECT ` + models.LogColumns + `
-	FROM optikk.logs
-	PREWHERE team_id = @teamID
-	     AND log_id = @logID
-	LIMIT 1`
-
 // GetByID resolves a single log row by its stable log_id.
 // It queries ClickHouse by teamID and logID using the log_id skip-index.
 func (r *Repository) GetByID(ctx context.Context, teamID int64, logID string) (*models.LogRow, error) {
@@ -28,8 +21,15 @@ func (r *Repository) GetByID(ctx context.Context, teamID int64, logID string) (*
 		clickhouse.Named("teamID", uint32(teamID)),
 		clickhouse.Named("logID", logID),
 	}
+
+	query := `
+		SELECT ` + models.LogColumns + `
+		FROM optikk.logs
+		PREWHERE team_id = @teamID AND log_id = @logID
+		LIMIT 1`
+
 	var rows []models.LogRow
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "logsDetail.GetByID", &rows, getByIDQuery, args...); err != nil {
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "logsDetail.GetByID", &rows, query, args...); err != nil {
 		return nil, err
 	}
 	if len(rows) == 0 {

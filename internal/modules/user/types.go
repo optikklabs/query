@@ -17,6 +17,7 @@ type AuthUser struct {
 	Name         string  `db:"name"`
 	AvatarURL    *string `db:"avatar_url"`
 	TeamsJSON    *string `db:"teams"`
+	IsAdmin      bool    `db:"is_admin"`
 }
 
 type UserRecord struct {

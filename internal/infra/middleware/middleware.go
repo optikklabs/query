@@ -117,27 +117,13 @@ var publicPrefixes = []string{
 	"/api/v1/auth/login",
 	"/api/v1/auth/refresh",
 	"/api/v1/auth/logout",
-	"/otlp/",
 	"/health",
 }
 
-var publicPOSTPrefixes = []string{
-	"/api/v1/auth/forgot-password",
-	"/api/v1/users",
-	"/api/v1/teams",
-}
-
-func isPublicRequest(method, path string) bool {
+func isPublicRequest(path string) bool {
 	for _, p := range publicPrefixes {
 		if strings.HasPrefix(path, p) {
 			return true
-		}
-	}
-	if method == http.MethodPost {
-		for _, p := range publicPOSTPrefixes {
-			if strings.HasPrefix(path, p) {
-				return true
-			}
 		}
 	}
 	return false
@@ -171,6 +157,10 @@ func resolveTeam(w http.ResponseWriter, r *http.Request, state token.AuthState) 
 	requested := utils.ToInt64(r.Header.Get("X-Team-Id"), 0)
 	if requested == 0 {
 		if state.DefaultTeamID == 0 {
+			// Platform super-admins provision tenants before owning a team.
+			if state.IsAdmin {
+				return 0, true
+			}
 			abortMissingTeam(w, r, state.Email)
 			return 0, false
 		}
@@ -196,12 +186,24 @@ func bearerAuthState(r *http.Request, tokens *token.Service) (token.AuthState, b
 	return state, true
 }
 
+// RequireAdmin gates routes to platform super-admins. It reads the identity
+// already resolved by TenantMiddleware; it does not re-parse the token.
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !types.TenantFrom(r.Context()).IsAdmin {
+			abortUnauthorized(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func TenantMiddleware(tokens *token.Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authState, ok := bearerAuthState(r, tokens)
 			if !ok {
-				if isPublicRequest(r.Method, r.URL.Path) {
+				if isPublicRequest(r.URL.Path) {
 					next.ServeHTTP(w, r)
 					return
 				}
@@ -224,6 +226,7 @@ func TenantMiddleware(tokens *token.Service) func(http.Handler) http.Handler {
 				UserID:    authState.UserID,
 				UserEmail: authState.Email,
 				UserRole:  role,
+				IsAdmin:   authState.IsAdmin,
 			})
 			metrics.AuthAuthenticated.Inc()
 			next.ServeHTTP(w, r.WithContext(ctx))

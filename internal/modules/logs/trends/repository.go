@@ -33,46 +33,43 @@ type TrendRow struct {
 	Debug      uint64    `ch:"debug"`
 }
 
-const summaryBareHead = `
+func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow, error) {
+	resourceWhere, where, args := filter.BuildClauses(f)
+	cte, prewhereFP := filter.BuildFingerprintCTE(resourceWhere)
+
+	query := cte + `
 	SELECT count()                       AS total,
 	       countIf(severity_bucket >= 4) AS errors,
 	       countIf(severity_bucket = 3)  AS warns
 	FROM optikk.logs
-	PREWHERE team_id = @teamID
+	PREWHERE team_id = @teamID` + prewhereFP + `
 	     AND timestamp BETWEEN @start AND @end
-	WHERE timestamp BETWEEN @start AND @end`
+	WHERE timestamp BETWEEN @start AND @end` + where
 
-func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow, error) {
-	resourceWhere, where, args := filter.BuildClauses(f)
-	query := summaryBareHead + resourceWhere + where
 	var row SummaryRow
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Summary",
 		&row, query, args...)
 }
 
-const trendGroupOrder = `
-	GROUP BY time_bucket
-	ORDER BY time_bucket ASC`
+func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, error) {
+	resourceWhere, where, args := filter.BuildClauses(f)
+	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
+	cte, prewhereFP := filter.BuildFingerprintCTE(resourceWhere)
 
-const trendSelectTail = ` AS time_bucket,
+	query := cte + `
+	SELECT ` + grainSQL + ` AS time_bucket,
 	       count()                       AS total,
 	       countIf(severity_bucket >= 4) AS error,
 	       countIf(severity_bucket = 3)  AS warn,
 	       countIf(severity_bucket = 2)  AS info,
-	       countIf(severity_bucket <= 1) AS debug`
-
-func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, error) {
-	resourceWhere, where, args := filter.BuildClauses(f)
-	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
-
-	trendBareHead := `
-	SELECT ` + grainSQL + trendSelectTail + `
+	       countIf(severity_bucket <= 1) AS debug
 	FROM optikk.logs
-	PREWHERE team_id = @teamID
+	PREWHERE team_id = @teamID` + prewhereFP + `
 	     AND timestamp BETWEEN @start AND @end
-	WHERE timestamp BETWEEN @start AND @end`
+	WHERE timestamp BETWEEN @start AND @end` + where + `
+	GROUP BY time_bucket
+	ORDER BY time_bucket ASC`
 
-	query := trendBareHead + resourceWhere + where + trendGroupOrder
 	var rows []TrendRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Trend",
 		&rows, query, args...)

@@ -47,7 +47,7 @@ func TestBuildFilterArgs(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			where, args := buildFilterArgs(1, 0, 1000, topicLagMetrics, c.col, c.val)
+			where, args := buildFilterArgs(1, 0, 1000, topicThroughputMetrics, c.col, c.val)
 			if where != c.wantWhere {
 				t.Errorf("where = %q, want %q", where, c.wantWhere)
 			}

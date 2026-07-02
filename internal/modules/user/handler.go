@@ -97,14 +97,6 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, response)
 }
 
-func (h *Handler) AuthMe(w http.ResponseWriter, r *http.Request) {
-	response, err := h.Service.AuthContext(modulecommon.Tenant(r).UserID)
-	if err != nil {
-		RespondServiceError(w, r, err, "Not authenticated")
-		return
-	}
-	modulecommon.RespondOK(w, response)
-}
 
 func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	profile, err := h.Service.GetProfile(modulecommon.Tenant(r).UserID)

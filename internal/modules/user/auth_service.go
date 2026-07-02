@@ -88,6 +88,7 @@ func (s *Service) issueTokens(user AuthUser, familyID string) (LoginResponse, st
 		UserID:        user.ID,
 		Email:         user.Email,
 		Role:          response.Team.Role,
+		IsAdmin:       user.IsAdmin,
 		DefaultTeamID: response.Team.ID,
 		TeamIDs:       []int64{response.Team.ID},
 	})
@@ -119,29 +120,6 @@ func (s *Service) Logout(ctx context.Context, tenant contracts.TenantContext, re
 	return MessageResponse{Message: "Logged out successfully"}
 }
 
-func (s *Service) AuthContext(userID int64) (AuthContextResponse, error) {
-	if userID == 0 {
-		return AuthContextResponse{}, NewUnauthorizedError("Not authenticated", nil)
-	}
-
-	user, err := s.repo.FindActiveUserByID(userID)
-	if err != nil {
-		return AuthContextResponse{}, NewUnauthorizedError("Not authenticated", err)
-	}
-
-	authUser := AuthUser{
-		ID:        user.ID,
-		Email:     user.Email,
-		Name:      user.Name,
-		AvatarURL: user.AvatarURL,
-		TeamsJSON: user.TeamsJSON,
-	}
-	response, err := s.buildAuthContextResponse(authUser)
-	if err != nil {
-		return AuthContextResponse{}, NewUnauthorizedError("Not authenticated: no team associated", err)
-	}
-	return response, nil
-}
 
 func (s *Service) ValidateToken(tenant contracts.TenantContext) (ValidateTokenResponse, error) {
 	if tenant.UserID == 0 {
@@ -164,6 +142,11 @@ func (s *Service) ForgotPassword() MessageResponse {
 func (s *Service) buildAuthContextResponse(user AuthUser) (AuthContextResponse, error) {
 	team, err := s.teamForUser(user.TeamsJSON)
 	if err != nil {
+		// Platform super-admins exist before any team; let them log in team-less
+		// so they can provision the first tenant.
+		if user.IsAdmin {
+			return AuthContextResponse{User: AuthUserSummary{ID: user.ID, Email: user.Email, Name: user.Name, AvatarURL: user.AvatarURL}}, nil
+		}
 		slog.Warn("AUTH_EVENT team_fetch_failed", slog.Int64("user_id", user.ID), slog.String("email", user.Email), slog.Any("error", err))
 		return AuthContextResponse{}, NewValidationError("Account has no associated team. Contact your administrator.", err)
 	}

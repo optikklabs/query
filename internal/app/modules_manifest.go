@@ -1,6 +1,8 @@
 package app
 
 import (
+	"log/slog"
+
 	"github.com/ClickHouse/clickhouse-go/v2"
 
 	"github.com/optikklabs/query/internal/app/registry"
@@ -15,6 +17,7 @@ import (
 	infrastructure_memory "github.com/optikklabs/query/internal/modules/infrastructure/memory"
 	infrastructure_nodes "github.com/optikklabs/query/internal/modules/infrastructure/nodes"
 	ingestion "github.com/optikklabs/query/internal/modules/ingestion"
+	llm "github.com/optikklabs/query/internal/modules/llm"
 	log_explorer "github.com/optikklabs/query/internal/modules/logs/explorer"
 	log_facets "github.com/optikklabs/query/internal/modules/logs/facets"
 	log_detail "github.com/optikklabs/query/internal/modules/logs/logdetail"
@@ -23,11 +26,10 @@ import (
 	metrics_explorer "github.com/optikklabs/query/internal/modules/metrics/explorer"
 	saturation_explorer "github.com/optikklabs/query/internal/modules/saturation/database/explorer"
 	saturation_database_latency "github.com/optikklabs/query/internal/modules/saturation/database/latency"
+	saturation_database_querydetail "github.com/optikklabs/query/internal/modules/saturation/database/querydetail"
 	saturation_database_slowqueries "github.com/optikklabs/query/internal/modules/saturation/database/slowqueries"
 	saturation_database_volume "github.com/optikklabs/query/internal/modules/saturation/database/volume"
-	saturation_kafka_consumer "github.com/optikklabs/query/internal/modules/saturation/kafka/consumer"
 	saturation_kafka_explorer "github.com/optikklabs/query/internal/modules/saturation/kafka/explorer"
-	saturation_kafka_producer "github.com/optikklabs/query/internal/modules/saturation/kafka/producer"
 	saturation_kafka_topology "github.com/optikklabs/query/internal/modules/saturation/kafka/topology"
 	services_errors "github.com/optikklabs/query/internal/modules/services/errors"
 	services_redfleet "github.com/optikklabs/query/internal/modules/services/redfleet"
@@ -47,6 +49,11 @@ func configuredModules(
 	userRepo := user.NewRepository(infraDeps.DB, appConfig)
 	userService := user.NewService(userRepo, infraDeps.Tokens)
 
+	// Seed the platform super-admin so the first tenant can be provisioned.
+	if err := userService.EnsureSuperAdmin(appConfig.Admin.Email, appConfig.Admin.Password); err != nil {
+		slog.Error("failed to seed super-admin", slog.Any("error", err))
+	}
+
 	return []registry.Module{
 		infrastructure_cpu.NewModule(nativeQuerier),
 		infrastructure_memory.NewModule(nativeQuerier),
@@ -60,14 +67,14 @@ func configuredModules(
 		log_trace_logs.NewModule(nativeQuerier),
 		metrics_explorer.NewModule(nativeQuerier),
 		ingestion.NewModule(nativeQuerier),
+		llm.NewModule(nativeQuerier),
 		services_errors.NewModule(nativeQuerier),
 		services_redfleet.NewModule(nativeQuerier),
 		saturation_explorer.NewModule(nativeQuerier),
 		saturation_database_latency.NewModule(nativeQuerier),
 		saturation_database_slowqueries.NewModule(nativeQuerier),
+		saturation_database_querydetail.NewModule(nativeQuerier),
 		saturation_database_volume.NewModule(nativeQuerier),
-		saturation_kafka_producer.NewModule(nativeQuerier),
-		saturation_kafka_consumer.NewModule(nativeQuerier),
 		saturation_kafka_explorer.NewModule(nativeQuerier),
 		saturation_kafka_topology.NewModule(nativeQuerier),
 		services_topology.NewModule(nativeQuerier),

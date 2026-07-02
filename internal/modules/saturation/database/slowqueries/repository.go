@@ -18,6 +18,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 }
 
 type patternRawDTO struct {
+	QueryHash      string  `ch:"query_hash"`
 	QueryText      string  `ch:"query_text"`
 	CollectionName string  `ch:"collection_name"`
 	P50Ms          float32 `ch:"p50_ms"`
@@ -33,7 +34,8 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, 
 	}
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
-		SELECT query_text,
+		SELECT query_hash,
+		       query_text,
 		       collection_name,
 		       qs[1]      AS p50_ms,
 		       qs[2]      AS p95_ms,
@@ -41,18 +43,18 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, 
 		       call_count,
 		       error_count
 		FROM (
-		    SELECT db_statement                                          AS query_text,
+		    SELECT query_hash,
+		           any(db_statement_normalized)                          AS query_text,
 		           attributes.'db.collection.name'::String               AS collection_name,
 		           quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
 		           count()                                               AS call_count,
 		           countIf(is_error)                                     AS error_count
 		    FROM optikk.spans
 		    PREWHERE team_id = @teamID
-		         AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		         AND db_system != ''
 		         AND db_statement != ''
 		    WHERE timestamp BETWEEN @start AND @end` + filterWhere + `
-		    GROUP BY query_text, collection_name
+		    GROUP BY query_hash, collection_name
 		)
 		ORDER BY call_count DESC
 		LIMIT @qLimit`
