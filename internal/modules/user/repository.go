@@ -37,7 +37,7 @@ func (r *Repository) FindActiveUserByID(userID int64) (UserRecord, error) {
 func (r *Repository) FindActiveUserByEmail(email string) (AuthUser, error) {
 	var u AuthUser
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindActiveUserByEmail", &u, `
-		SELECT id, email, password_hash, name, avatar_url, teams
+		SELECT id, email, password_hash, name, avatar_url, teams, is_admin
 		FROM users
 		WHERE email = ? AND active = 1
 		LIMIT 1
@@ -204,11 +204,11 @@ func (r *Repository) ListActiveUsersByTeamIDs(teamIDs []int64, limit, offset int
 	return records, err
 }
 
-func (r *Repository) CreateUser(email, passwordHash, name string, avatarURL, teamsJSON *string, createdAt time.Time) (int64, error) {
+func (r *Repository) CreateUser(email, passwordHash, name string, avatarURL, teamsJSON *string, isAdmin bool, createdAt time.Time) (int64, error) {
 	res, err := dbutil.ExecSQL(context.Background(), r.db, "user.CreateUser", `
-		INSERT INTO users (email, password_hash, name, avatar_url, teams, active, created_at)
-		VALUES (?, ?, ?, ?, ?, 1, ?)
-	`, email, NullableString(passwordHash), name, avatarURL, teamsJSON, createdAt)
+		INSERT INTO users (email, password_hash, name, avatar_url, teams, active, is_admin, created_at)
+		VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+	`, email, NullableString(passwordHash), name, avatarURL, teamsJSON, isAdmin, createdAt)
 	if err != nil {
 		return 0, err
 	}

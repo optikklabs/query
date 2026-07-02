@@ -8,7 +8,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
-	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/seriesattr"
 )
 
@@ -137,11 +136,8 @@ func apmTrackValue(track string, row apmAggRow, windowSec int64) float64 {
 }
 
 func apmArgs(teamID int64, service string, startMs, endMs int64) []any {
-	bs, be := chargs.BucketBounds(startMs, endMs)
 	return []any{
 		teamIDArg(teamID),
-		clickhouse.Named("bucketStart", bs),
-		clickhouse.Named("bucketEnd", be),
 		clickhouse.Named("service", service),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),

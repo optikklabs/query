@@ -63,7 +63,6 @@ func (r *Repository) dailyEvents(ctx context.Context, table, op string, teamID, 
 	SELECT toDate(timestamp) AS d, count() AS c
 	FROM optikk.` + table + `
 	PREWHERE team_id = @teamID
-	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 	     AND timestamp BETWEEN @start AND @end
 	WHERE timestamp BETWEEN @start AND @end` + eventDailyTail
 	var rows []dateCountRow
@@ -94,7 +93,6 @@ func (r *Repository) dailyEventsByService(ctx context.Context, table, op string,
 	SELECT toDate(timestamp) AS d, service AS svc, count() AS c
 	FROM optikk.` + table + `
 	PREWHERE team_id = @teamID
-	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 	     AND timestamp BETWEEN @start AND @end
 	WHERE timestamp BETWEEN @start AND @end
 	GROUP BY d, svc
@@ -117,7 +115,6 @@ func (r *Repository) ServiceLogTotals(ctx context.Context, teamID, startMs, endM
 	SELECT service AS svc, any(environment) AS env, count() AS c
 	FROM optikk.logs
 	PREWHERE team_id = @teamID
-	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 	     AND timestamp BETWEEN @start AND @end
 	WHERE timestamp BETWEEN @start AND @end
 	GROUP BY svc
@@ -132,7 +129,6 @@ func (r *Repository) ServiceSpanTotals(ctx context.Context, teamID, startMs, end
 	SELECT service AS svc, '' AS env, count() AS c
 	FROM optikk.spans
 	PREWHERE team_id = @teamID
-	     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 	     AND timestamp BETWEEN @start AND @end
 	WHERE timestamp BETWEEN @start AND @end
 	GROUP BY svc

@@ -60,12 +60,38 @@ func (f *Filters) Validate() error {
 	return nil
 }
 
+// BuildFingerprintCTE turns a resource filter into a fingerprint-pruning CTE.
+// It resolves matching fingerprints from the small logs_resource dimension table
+// so the logs table scan can be pruned by its primary key. Both return values are
+// empty when there is no resource filter.
+func BuildFingerprintCTE(resourceWhere string) (cte, prewhereFP string) {
+	if resourceWhere == "" {
+		return "", ""
+	}
+	cte = `
+		WITH active_fps AS (
+		    SELECT DISTINCT fingerprint
+		    FROM optikk.logs_resource
+		    PREWHERE team_id = @teamID` + resourceWhere + `
+		)`
+	prewhereFP = " AND fingerprint IN active_fps"
+	return cte, prewhereFP
+}
+
 func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
+	startBucket := uint32((f.StartMs / 1000) / 300 * 300)
+	endBucket := uint32((f.EndMs / 1000) / 300 * 300)
+
 	args = []any{
 		clickhouse.Named("teamID", uint32(f.TeamID)),
 		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
 		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
+		clickhouse.Named("startBucket", startBucket),
+		clickhouse.Named("endBucket", endBucket),
 	}
+
+	resourceWhere += ` AND ts_bucket BETWEEN @startBucket AND @endBucket`
+	where += ` AND ts_bucket BETWEEN @startBucket AND @endBucket`
 
 	if len(f.Services) > 0 {
 		resourceWhere += ` AND service IN @services`

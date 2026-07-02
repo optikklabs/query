@@ -1,6 +1,7 @@
 package slowqueries
 
 type SlowQueryPattern struct {
+	QueryHash      string   `json:"query_hash" ch:"query_hash"`
 	QueryText      string   `json:"query_text" ch:"query_text"`
 	CollectionName string   `json:"collection_name" ch:"collection_name"`
 	P50Ms          *float64 `json:"p50_ms" ch:"p50_ms"`

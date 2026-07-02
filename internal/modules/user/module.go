@@ -3,6 +3,7 @@ package user
 import (
 	"github.com/go-chi/chi/v5"
 	"github.com/optikklabs/query/internal/app/registry"
+	"github.com/optikklabs/query/internal/infra/middleware"
 	"github.com/optikklabs/query/internal/infra/token"
 )
 
@@ -24,11 +25,14 @@ func RegisterRoutes(cfg Config, v1 chi.Router, h *Handler) {
 		r.Post("/login", h.Login)
 		r.Post("/refresh", h.Refresh)
 		r.Post("/logout", h.Logout)
-		r.Get("/me", h.AuthMe)
 	})
 
-	v1.Post("/teams", h.CreateTeam)
-	v1.Post("/users", h.CreateUser)
+	// Tenant/user provisioning is restricted to platform super-admins.
+	v1.Group(func(r chi.Router) {
+		r.Use(middleware.RequireAdmin)
+		r.Post("/teams", h.CreateTeam)
+		r.Post("/users", h.CreateUser)
+	})
 
 	v1.Route("/settings", func(r chi.Router) {
 		r.Get("/profile", h.GetProfile)

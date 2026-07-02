@@ -33,11 +33,6 @@ func parseREDFilters(r *http.Request, teamID, startMs, endMs int64) REDFilters {
 	return f
 }
 
-func (h *REDFleetHandler) GetFleetTotals(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query fleet totals", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetFleetTotals(ctx, parseREDFilters(r, teamID, startMs, endMs))
-	})
-}
 
 func (h *REDFleetHandler) GetFleetServices(w http.ResponseWriter, r *http.Request) {
 	modulecommon.HandleRangeQuery(w, r, "Failed to query fleet services", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {

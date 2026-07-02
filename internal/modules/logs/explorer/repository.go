@@ -15,15 +15,7 @@ type Repository struct {
 
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
-const listBareHead = `
-		SELECT ` + models.LogColumns + `
-		FROM optikk.logs
-		PREWHERE team_id = @teamID
-		     AND timestamp BETWEEN @start AND @end
-		WHERE timestamp BETWEEN @start AND @end`
-const listTail = `
-		ORDER BY timestamp DESC, log_id DESC
-		LIMIT @pgLimit`
+
 
 func (r *Repository) getLogs(ctx context.Context, f filter.Filters, limit int, cur models.Cursor) ([]models.LogRow, bool, error) {
 	resourceWhere, where, args := filter.BuildClauses(f)
@@ -37,12 +29,21 @@ func (r *Repository) getLogs(ctx context.Context, f filter.Filters, limit int, c
 	}
 	args = append(args, clickhouse.Named("pgLimit", uint64(limit+1)))
 
-	query := listBareHead + resourceWhere + where + listTail
+	cte, prewhereFP := filter.BuildFingerprintCTE(resourceWhere)
+	query := cte + `
+		SELECT ` + models.LogColumns + `
+		FROM optikk.logs
+		PREWHERE team_id = @teamID` + prewhereFP + `
+		     AND timestamp BETWEEN @start AND @end` + where + `
+		WHERE timestamp BETWEEN @start AND @end
+		ORDER BY timestamp DESC, log_id DESC
+		LIMIT @pgLimit`
 
 	var rows []models.LogRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "logs.ListLogs", &rows, query, args...); err != nil {
 		return nil, false, err
 	}
+
 	hasMore := len(rows) > limit
 	if hasMore {
 		rows = rows[:limit]

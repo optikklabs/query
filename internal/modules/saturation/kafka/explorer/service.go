@@ -16,35 +16,6 @@ func NewService(repo *Repository) *Service {
 func (s *Service) GetTopicThroughput(ctx context.Context, teamID, startMs, endMs int64, topic string) ([]TopicThroughputRow, error) {
 	return s.repo.QueryTopicThroughput(ctx, teamID, startMs, endMs, topic)
 }
-
-func (s *Service) GetTopicLag(ctx context.Context, teamID, startMs, endMs int64, topic string) ([]TopicLagRow, error) {
-	return s.repo.QueryTopicLag(ctx, teamID, startMs, endMs, topic)
-}
-
-func (s *Service) GetTopicConsumers(ctx context.Context, teamID, startMs, endMs int64, topic string) ([]TopicConsumersRow, error) {
-	return s.repo.QueryTopicConsumers(ctx, teamID, startMs, endMs, topic)
-}
-
-func (s *Service) GetTopicBacklog(ctx context.Context, teamID, startMs, endMs int64, topic string) ([]TopicBacklogRow, error) {
-	return s.repo.QueryTopicBacklog(ctx, teamID, startMs, endMs, topic)
-}
-
-func (s *Service) GetClusterHealth(ctx context.Context, teamID, startMs, endMs int64) (ClusterHealthRow, error) {
-	return s.repo.QueryClusterHealth(ctx, teamID, startMs, endMs)
-}
-
 func (s *Service) GetGroupPartitions(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupPartitionsRow, error) {
 	return s.repo.QueryGroupPartitions(ctx, teamID, startMs, endMs, group)
-}
-
-func (s *Service) GetGroupCommits(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupCommitsRow, error) {
-	return s.repo.QueryGroupCommits(ctx, teamID, startMs, endMs, group)
-}
-
-func (s *Service) GetGroupFetches(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupFetchesRow, error) {
-	return s.repo.QueryGroupFetches(ctx, teamID, startMs, endMs, group)
-}
-
-func (s *Service) GetGroupHealth(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupHealthRow, error) {
-	return s.repo.QueryGroupHealth(ctx, teamID, startMs, endMs, group)
 }

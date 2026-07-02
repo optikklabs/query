@@ -87,7 +87,7 @@ func (s *Service) CreateUser(req CreateUserRequest) (UserResponse, error) {
 	}
 
 	teamsJSONPtr := &teamsJSON
-	userID, err := s.repo.CreateUser(req.Email, string(hash), req.Name, req.AvatarURL, teamsJSONPtr, time.Now().UTC())
+	userID, err := s.repo.CreateUser(req.Email, string(hash), req.Name, req.AvatarURL, teamsJSONPtr, false, time.Now().UTC())
 	if err != nil {
 		return UserResponse{}, NewValidationError("Unable to create user", err)
 	}

@@ -23,6 +23,7 @@ func (s *Service) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, end
 	for i, r := range rows {
 		p50, p95, p99 := float64(r.P50Ms), float64(r.P95Ms), float64(r.P99Ms)
 		out[i] = SlowQueryPattern{
+			QueryHash:      r.QueryHash,
 			QueryText:      r.QueryText,
 			CollectionName: r.CollectionName,
 			P50Ms:          &p50,

@@ -42,13 +42,6 @@ func (s *Service) GetFleetServices(ctx context.Context, f REDFilters) ([]Service
 	return overview.Services, nil
 }
 
-func (s *Service) GetFleetTotals(ctx context.Context, f REDFilters) (FleetTotals, error) {
-	overview, err := s.GetFleetOverview(ctx, f)
-	if err != nil {
-		return FleetTotals{}, err
-	}
-	return overview.Totals, nil
-}
 
 
 func mapFleetServices(rows []redMetricsRow) []ServiceREDMetric {

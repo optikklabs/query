@@ -17,6 +17,13 @@ type Config struct {
 	MySQL       MySQLConfig      `yaml:"mysql"`
 	ClickHouse  ClickHouseConfig `yaml:"clickhouse"`
 	Auth        AuthConfig       `yaml:"auth"`
+	Admin       AdminConfig      `yaml:"admin"`
+}
+
+// AdminConfig seeds the platform super-admin at boot (OPTIKK_ADMIN_EMAIL/PASSWORD).
+type AdminConfig struct {
+	Email    string `yaml:"email"`
+	Password string `yaml:"password"`
 }
 
 // Load reads YAML configuration with environment variable overrides.
@@ -112,5 +119,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.cookie_domain", "")
 	v.SetDefault("auth.cookie_secure", false)
 	v.SetDefault("auth.cookie_same_site", "lax")
+
+	v.SetDefault("admin.email", "")
+	v.SetDefault("admin.password", "")
 
 }

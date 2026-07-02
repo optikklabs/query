@@ -52,11 +52,8 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, teamID, startMs, 
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY host, metric_name`
 
-	bucketStart, bucketEnd := chargs.BucketBounds(startMs, endMs)
 	args := []any{
 		clickhouse.Named("teamID", uint32(teamID)),
-		clickhouse.Named("bucketStart", bucketStart),
-		clickhouse.Named("bucketEnd", bucketEnd),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricNames", utilizationMetricNames()),
