@@ -24,6 +24,8 @@ import (
 	log_trace_logs "github.com/optikklabs/query/internal/modules/logs/trace_logs"
 	log_trends "github.com/optikklabs/query/internal/modules/logs/trends"
 	metrics_explorer "github.com/optikklabs/query/internal/modules/metrics/explorer"
+	onboarding "github.com/optikklabs/query/internal/modules/onboarding"
+	onboarding_provisioner "github.com/optikklabs/query/internal/modules/onboarding/provisioner"
 	saturation_explorer "github.com/optikklabs/query/internal/modules/saturation/database/explorer"
 	saturation_database_latency "github.com/optikklabs/query/internal/modules/saturation/database/latency"
 	saturation_database_querydetail "github.com/optikklabs/query/internal/modules/saturation/database/querydetail"
@@ -84,6 +86,9 @@ func configuredModules(
 		traces_servicemap.NewModule(nativeQuerier),
 
 		user.NewModule(userService, infraDeps.Tokens),
+
+		onboarding.NewModule(infraDeps.DB, nativeQuerier),
+		onboarding_provisioner.NewModule(infraDeps.DB),
 
 		alerting_monitors.NewModule(infraDeps.DB, nativeQuerier),
 		alerting_notifications.NewModule(infraDeps.DB),

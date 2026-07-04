@@ -22,9 +22,14 @@ func RegisterRoutes(cfg Config, v1 chi.Router, h *Handler) {
 	}
 
 	v1.Route("/auth", func(r chi.Router) {
+		r.Post("/signup", h.Signup)
 		r.Post("/login", h.Login)
 		r.Post("/refresh", h.Refresh)
 		r.Post("/logout", h.Logout)
+		// Device flow: code/token are pre-auth; approve needs the browser session.
+		r.Post("/device/code", h.DeviceCode)
+		r.Post("/device/token", h.DeviceToken)
+		r.Post("/device/approve", h.DeviceApprove)
 	})
 
 	// Tenant/user provisioning is restricted to platform super-admins.
@@ -38,6 +43,8 @@ func RegisterRoutes(cfg Config, v1 chi.Router, h *Handler) {
 		r.Get("/profile", h.GetProfile)
 		r.Put("/profile", h.UpdateProfile)
 		r.Put("/preferences", h.UpdatePreferences)
+		r.Post("/api-key/rotate", h.RotateAPIKey)
+		r.Post("/api-key/revoke", h.RevokeAPIKey)
 	})
 }
 

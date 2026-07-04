@@ -41,6 +41,18 @@ type RefreshTokenRecord struct {
 	CreatedAt time.Time  `db:"created_at"`
 }
 
+type DeviceCodeRecord struct {
+	ID           int64      `db:"id"`
+	DeviceCode   string     `db:"device_code"`
+	UserCode     string     `db:"user_code"`
+	UserID       *int64     `db:"user_id"`
+	ApprovedAt   *time.Time `db:"approved_at"`
+	ConsumedAt   *time.Time `db:"consumed_at"`
+	LastPolledAt *time.Time `db:"last_polled_at"`
+	ExpiresAt    time.Time  `db:"expires_at"`
+	CreatedAt    time.Time  `db:"created_at"`
+}
+
 type TeamRecord struct {
 	ID          int64     `db:"id"`
 	OrgName     string    `db:"org_name"`

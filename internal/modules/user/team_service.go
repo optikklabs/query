@@ -83,15 +83,22 @@ func (s *Service) GetTeamBySlug(currentTeamID int64, slug string) (TeamResponse,
 	return toTeamResponse(team), nil
 }
 
+// deriveSlug builds a team slug from its name: lowercase, spaces to dashes,
+// capped at 8 chars (legacy convention; not globally unique — see provisioner).
+func deriveSlug(name string) string {
+	slug := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), " ", "-"))
+	if len(slug) > 8 {
+		slug = strings.TrimRight(slug[:8], "-")
+	}
+	return slug
+}
+
 func (s *Service) CreateTeam(req CreateTeamRequest) (TeamResponse, error) {
 	name := strings.TrimSpace(req.TeamName)
 	orgName := strings.TrimSpace(req.OrgName)
 	slug := strings.TrimSpace(req.Slug)
 	if slug == "" {
-		slug = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
-		if len(slug) > 8 {
-			slug = strings.TrimRight(slug[:8], "-")
-		}
+		slug = deriveSlug(name)
 	} else if len(slug) > 50 {
 		slug = strings.TrimRight(slug[:50], "-")
 	}
@@ -187,6 +194,37 @@ func (s *Service) RemoveUserFromTeam(userID, teamID int64) error {
 
 func (s *Service) FindTeamIDByAPIKey(ctx context.Context, apiKey string) (int64, error) {
 	return s.repo.FindTeamIDByAPIKey(ctx, apiKey)
+}
+
+// RotateAPIKey issues a fresh key for the team; the previous key stops working
+// once ingest's positive cache (5m) expires.
+func (s *Service) RotateAPIKey(ctx context.Context, teamID int64) (TeamResponse, error) {
+	apiKey, err := GenerateAPIKey()
+	if err != nil {
+		return TeamResponse{}, NewInternalError("Failed to generate api key", err)
+	}
+	return s.setTeamAPIKey(ctx, teamID, apiKey)
+}
+
+// RevokeAPIKey disables ingest by replacing the key with an unusable sentinel;
+// the team must rotate to obtain a live key again.
+func (s *Service) RevokeAPIKey(ctx context.Context, teamID int64) (TeamResponse, error) {
+	sentinel, err := GenerateRevokedKey()
+	if err != nil {
+		return TeamResponse{}, NewInternalError("Failed to revoke api key", err)
+	}
+	return s.setTeamAPIKey(ctx, teamID, sentinel)
+}
+
+func (s *Service) setTeamAPIKey(ctx context.Context, teamID int64, apiKey string) (TeamResponse, error) {
+	if err := s.repo.UpdateTeamAPIKey(ctx, teamID, apiKey); err != nil {
+		return TeamResponse{}, NewInternalError("Failed to update api key", err)
+	}
+	team, err := s.repo.FindTeamByID(teamID)
+	if err != nil {
+		return TeamResponse{}, NewInternalError("Failed to load team", err)
+	}
+	return toTeamResponse(team), nil
 }
 
 func toTeamResponse(team TeamRecord) TeamResponse {

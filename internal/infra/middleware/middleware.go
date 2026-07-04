@@ -114,9 +114,12 @@ func BodyLimitMiddleware(maxBytes int64) func(http.Handler) http.Handler {
 }
 
 var publicPrefixes = []string{
+	"/api/v1/auth/signup",
 	"/api/v1/auth/login",
 	"/api/v1/auth/refresh",
 	"/api/v1/auth/logout",
+	"/api/v1/auth/device/code",
+	"/api/v1/auth/device/token",
 	"/health",
 }
 

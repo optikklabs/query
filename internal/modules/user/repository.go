@@ -85,6 +85,57 @@ func (r *Repository) RevokeRefreshTokenFamily(familyID string) error {
 	return err
 }
 
+func (r *Repository) InsertDeviceCode(ctx context.Context, deviceCode, userCode string, expiresAt time.Time) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.InsertDeviceCode", `
+		INSERT INTO device_codes (device_code, user_code, expires_at)
+		VALUES (?, ?, ?)
+	`, deviceCode, userCode, expiresAt)
+	return err
+}
+
+func (r *Repository) FindDeviceCode(ctx context.Context, deviceCode string) (DeviceCodeRecord, error) {
+	var d DeviceCodeRecord
+	err := dbutil.GetSQL(ctx, r.db, "user.FindDeviceCode", &d, `
+		SELECT id, device_code, user_code, user_id, approved_at, consumed_at, last_polled_at, expires_at, created_at
+		FROM device_codes
+		WHERE device_code = ?
+		LIMIT 1
+	`, deviceCode)
+	return d, err
+}
+
+func (r *Repository) FindDeviceCodeByUserCode(ctx context.Context, userCode string) (DeviceCodeRecord, error) {
+	var d DeviceCodeRecord
+	err := dbutil.GetSQL(ctx, r.db, "user.FindDeviceCodeByUserCode", &d, `
+		SELECT id, device_code, user_code, user_id, approved_at, consumed_at, last_polled_at, expires_at, created_at
+		FROM device_codes
+		WHERE user_code = ?
+		LIMIT 1
+	`, userCode)
+	return d, err
+}
+
+func (r *Repository) TouchDeviceCodePolled(ctx context.Context, deviceCode string, at time.Time) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.TouchDeviceCodePolled", `
+		UPDATE device_codes SET last_polled_at = ? WHERE device_code = ?
+	`, at, deviceCode)
+	return err
+}
+
+func (r *Repository) ApproveDeviceCode(ctx context.Context, userCode string, userID int64, at time.Time) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.ApproveDeviceCode", `
+		UPDATE device_codes SET approved_at = ?, user_id = ? WHERE user_code = ? AND approved_at IS NULL
+	`, at, userID, userCode)
+	return err
+}
+
+func (r *Repository) ConsumeDeviceCode(ctx context.Context, deviceCode string, at time.Time) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.ConsumeDeviceCode", `
+		UPDATE device_codes SET consumed_at = ? WHERE device_code = ? AND consumed_at IS NULL
+	`, at, deviceCode)
+	return err
+}
+
 func (r *Repository) FindTeamByID(teamID int64) (TeamRecord, error) {
 	var t TeamRecord
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindTeamByID", &t, `
@@ -159,6 +210,65 @@ func (r *Repository) CreateTeam(orgName, name, slug string, description, icon *s
 		return 0, err
 	}
 	return res.LastInsertId()
+}
+
+// NewSignupTeam carries the prepared fields for an atomic signup insert.
+type NewSignupTeam struct {
+	OrgName, Name, Slug, Color, APIKey string
+	Email, UserName, PasswordHash      string
+	CreatedAt                          time.Time
+}
+
+// SignupTeamAndAdmin inserts the org team and its first admin user in one
+// transaction; a failed user insert (e.g. duplicate email) rolls back the
+// team so signup never orphans a team. Returns the new team and user IDs.
+func (r *Repository) SignupTeamAndAdmin(ctx context.Context, t NewSignupTeam) (int64, int64, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer func() { _ = tx.Rollback() }() // no-op once committed
+
+	res, err := tx.ExecContext(ctx, `
+		INSERT INTO teams (org_name, name, slug, active, color, api_key, created_at)
+		VALUES (?, ?, ?, 1, ?, ?, ?)
+	`, t.OrgName, t.Name, t.Slug, t.Color, t.APIKey, t.CreatedAt)
+	if err != nil {
+		return 0, 0, err
+	}
+	teamID, err := res.LastInsertId()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	teamsJSON, err := BuildTeamMembershipsJSON([]TeamMembership{{TeamID: teamID, Role: "admin"}})
+	if err != nil {
+		return 0, 0, err
+	}
+
+	res, err = tx.ExecContext(ctx, `
+		INSERT INTO users (email, password_hash, name, teams, active, is_admin, created_at)
+		VALUES (?, ?, ?, ?, 1, 0, ?)
+	`, t.Email, NullableString(t.PasswordHash), t.UserName, teamsJSON, t.CreatedAt)
+	if err != nil {
+		return 0, 0, err
+	}
+	userID, err := res.LastInsertId()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, 0, err
+	}
+	return teamID, userID, nil
+}
+
+func (r *Repository) UpdateTeamAPIKey(ctx context.Context, teamID int64, apiKey string) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.UpdateTeamAPIKey", `
+		UPDATE teams SET api_key = ? WHERE id = ?
+	`, apiKey, teamID)
+	return err
 }
 
 func (r *Repository) FindTeamIDByAPIKey(ctx context.Context, apiKey string) (int64, error) {
