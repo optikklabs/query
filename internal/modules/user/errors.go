@@ -15,6 +15,7 @@ const (
 	ServiceErrorValidation   ServiceErrorCode = errorcode.Validation
 	ServiceErrorUnauthorized ServiceErrorCode = errorcode.Unauthorized
 	ServiceErrorNotFound     ServiceErrorCode = errorcode.NotFound
+	ServiceErrorConflict     ServiceErrorCode = errorcode.Conflict
 	ServiceErrorInternal     ServiceErrorCode = errorcode.Internal
 )
 
@@ -48,6 +49,10 @@ func NewNotFoundError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorNotFound, Message: message, Cause: cause}
 }
 
+func NewConflictError(message string, cause error) error {
+	return &ServiceError{Code: ServiceErrorConflict, Message: message, Cause: cause}
+}
+
 func NewInternalError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorInternal, Message: message, Cause: cause}
 }
@@ -63,6 +68,8 @@ func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fall
 			status = http.StatusUnauthorized
 		case ServiceErrorNotFound:
 			status = http.StatusNotFound
+		case ServiceErrorConflict:
+			status = http.StatusConflict
 		case ServiceErrorInternal:
 			status = http.StatusInternalServerError
 		}
