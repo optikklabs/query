@@ -10,7 +10,7 @@ import (
 // When Services contains one or more entries, ClickHouse PREWHERE limits
 // fingerprint resolution to only matching services.
 type REDFilters struct {
-	TeamID   int64
+	TenantID int64
 	StartMs  int64
 	EndMs    int64
 	Services []string
@@ -24,7 +24,7 @@ type REDFilters struct {
 //   - single Service  →  seriesWhere = "AND s.service = @serviceName"
 //   - multi  Services →  seriesWhere = "AND s.service IN @services"
 func BuildREDClauses(f REDFilters) (seriesWhere string, args []any) {
-	args = chargs.RollupRangeArgs(f.TeamID, f.StartMs, f.EndMs)
+	args = chargs.RollupRangeArgs(f.TenantID, f.StartMs, f.EndMs)
 	if len(f.Services) == 1 {
 		seriesWhere = "AND s.service = @serviceName"
 		args = append(args, clickhouse.Named("serviceName", f.Services[0]))

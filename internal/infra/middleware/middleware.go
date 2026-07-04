@@ -59,13 +59,13 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 			if r.Method == http.MethodOptions {
 				headers.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 
-				headers.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Team-Id, X-User-Id, X-User-Email, X-User-Role, traceparent, tracestate")
+				headers.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id, X-User-Id, X-User-Email, X-User-Role, traceparent, tracestate")
 				headers.Set("Access-Control-Allow-Credentials", "true")
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
 
-			headers.Set("Access-Control-Expose-Headers", "X-Team-Id")
+			headers.Set("Access-Control-Expose-Headers", "X-Tenant-Id")
 			headers.Set("Access-Control-Allow-Credentials", "true")
 			next.ServeHTTP(w, r)
 		})
@@ -140,37 +140,37 @@ func abortUnauthorized(w http.ResponseWriter, r *http.Request) {
 	))
 }
 
-func abortMissingTeam(w http.ResponseWriter, r *http.Request, email string) {
-	metrics.AuthDenied.WithLabelValues("missing_team").Inc()
-	slog.WarnContext(r.Context(), "AUTH_DENIED", slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.String("code", "MISSING_TEAM"), slog.String("user", email), slog.String("ip", httputil.ClientIP(r)))
+func abortMissingTenant(w http.ResponseWriter, r *http.Request, email string) {
+	metrics.AuthDenied.WithLabelValues("missing_tenant").Inc()
+	slog.WarnContext(r.Context(), "AUTH_DENIED", slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.String("code", "MISSING_TENANT"), slog.String("user", email), slog.String("ip", httputil.ClientIP(r)))
 	httputil.WriteJSON(w, http.StatusForbidden, types.Failure(
-		"MISSING_TEAM", "Session does not contain a valid team_id", r.URL.Path,
+		"MISSING_TENANT", "Session does not contain a valid tenant_id", r.URL.Path,
 	))
 }
 
-func abortForbiddenTeam(w http.ResponseWriter, r *http.Request, email string, requestedTeamID int64) {
-	metrics.AuthDenied.WithLabelValues("forbidden_team").Inc()
-	slog.WarnContext(r.Context(), "AUTH_DENIED", slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.String("code", "FORBIDDEN_TEAM"), slog.String("user", email), slog.Int64("requested_team", requestedTeamID), slog.String("ip", httputil.ClientIP(r)))
+func abortForbiddenTenant(w http.ResponseWriter, r *http.Request, email string, requestedTenantID int64) {
+	metrics.AuthDenied.WithLabelValues("forbidden_tenant").Inc()
+	slog.WarnContext(r.Context(), "AUTH_DENIED", slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.String("code", "FORBIDDEN_TENANT"), slog.String("user", email), slog.Int64("requested_tenant", requestedTenantID), slog.String("ip", httputil.ClientIP(r)))
 	httputil.WriteJSON(w, http.StatusForbidden, types.Failure(
-		"FORBIDDEN_TEAM", "You are not a member of the requested team", r.URL.Path,
+		"FORBIDDEN_TENANT", "You are not a member of the requested tenant", r.URL.Path,
 	))
 }
 
-func resolveTeam(w http.ResponseWriter, r *http.Request, state token.AuthState) (int64, bool) {
-	requested := utils.ToInt64(r.Header.Get("X-Team-Id"), 0)
+func resolveTenant(w http.ResponseWriter, r *http.Request, state token.AuthState) (int64, bool) {
+	requested := utils.ToInt64(r.Header.Get("X-Tenant-Id"), 0)
 	if requested == 0 {
-		if state.DefaultTeamID == 0 {
-			// Platform super-admins provision tenants before owning a team.
+		if state.DefaultTenantID == 0 {
+			// Platform super-admins provision tenants before owning a tenant.
 			if state.IsAdmin {
 				return 0, true
 			}
-			abortMissingTeam(w, r, state.Email)
+			abortMissingTenant(w, r, state.Email)
 			return 0, false
 		}
-		return state.DefaultTeamID, true
+		return state.DefaultTenantID, true
 	}
-	if !authorizedForTeam(state.TeamIDs, state.DefaultTeamID, requested) {
-		abortForbiddenTeam(w, r, state.Email, requested)
+	if !authorizedForTenant(state.TenantIDs, state.DefaultTenantID, requested) {
+		abortForbiddenTenant(w, r, state.Email, requested)
 		return 0, false
 	}
 	return requested, true
@@ -214,7 +214,7 @@ func TenantMiddleware(tokens *token.Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			teamID, ok := resolveTeam(w, r, authState)
+			tenantID, ok := resolveTenant(w, r, authState)
 			if !ok {
 				return
 			}
@@ -225,7 +225,7 @@ func TenantMiddleware(tokens *token.Service) func(http.Handler) http.Handler {
 			}
 
 			ctx := types.WithTenant(r.Context(), types.TenantContext{
-				TeamID:    teamID,
+				TenantID:  tenantID,
 				UserID:    authState.UserID,
 				UserEmail: authState.Email,
 				UserRole:  role,
@@ -237,12 +237,12 @@ func TenantMiddleware(tokens *token.Service) func(http.Handler) http.Handler {
 	}
 }
 
-func authorizedForTeam(teamIDs []int64, defaultTeamID, requestedTeamID int64) bool {
-	if len(teamIDs) == 0 {
-		return defaultTeamID == requestedTeamID
+func authorizedForTenant(tenantIDs []int64, defaultTenantID, requestedTenantID int64) bool {
+	if len(tenantIDs) == 0 {
+		return defaultTenantID == requestedTenantID
 	}
-	for _, teamID := range teamIDs {
-		if teamID == requestedTeamID {
+	for _, tenantID := range tenantIDs {
+		if tenantID == requestedTenantID {
 			return true
 		}
 	}

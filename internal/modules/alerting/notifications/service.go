@@ -31,8 +31,8 @@ type ErrValidation struct{ Msg string }
 
 func (e ErrValidation) Error() string { return e.Msg }
 
-func (s *Service) CreateChannel(ctx context.Context, teamID int64, req CreateChannelRequest) (ChannelResponse, error) {
-	row, err := buildChannelRow(teamID, req)
+func (s *Service) CreateChannel(ctx context.Context, tenantID int64, req CreateChannelRequest) (ChannelResponse, error) {
+	row, err := buildChannelRow(tenantID, req)
 	if err != nil {
 		return ChannelResponse{}, err
 	}
@@ -40,32 +40,32 @@ func (s *Service) CreateChannel(ctx context.Context, teamID int64, req CreateCha
 	if err != nil {
 		return ChannelResponse{}, err
 	}
-	return s.GetChannel(ctx, teamID, id)
+	return s.GetChannel(ctx, tenantID, id)
 }
 
-func (s *Service) UpdateChannel(ctx context.Context, teamID, id int64, req UpdateChannelRequest) (ChannelResponse, error) {
-	row, err := buildChannelRow(teamID, req)
+func (s *Service) UpdateChannel(ctx context.Context, tenantID, id int64, req UpdateChannelRequest) (ChannelResponse, error) {
+	row, err := buildChannelRow(tenantID, req)
 	if err != nil {
 		return ChannelResponse{}, err
 	}
-	if err := s.repo.UpdateChannel(ctx, id, teamID, row); err != nil {
+	if err := s.repo.UpdateChannel(ctx, id, tenantID, row); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ChannelResponse{}, ErrNotFound
 		}
 		return ChannelResponse{}, err
 	}
-	return s.GetChannel(ctx, teamID, id)
+	return s.GetChannel(ctx, tenantID, id)
 }
 
-func (s *Service) DeleteChannel(ctx context.Context, teamID, id int64) error {
-	inUse, err := s.repo.ChannelInUse(ctx, id, teamID)
+func (s *Service) DeleteChannel(ctx context.Context, tenantID, id int64) error {
+	inUse, err := s.repo.ChannelInUse(ctx, id, tenantID)
 	if err != nil {
 		return err
 	}
 	if inUse {
 		return ErrChannelInUse
 	}
-	if err := s.repo.DeleteChannel(ctx, id, teamID); err != nil {
+	if err := s.repo.DeleteChannel(ctx, id, tenantID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -74,24 +74,24 @@ func (s *Service) DeleteChannel(ctx context.Context, teamID, id int64) error {
 	return nil
 }
 
-func (s *Service) GetChannel(ctx context.Context, teamID, id int64) (ChannelResponse, error) {
-	row, err := s.repo.GetChannel(ctx, id, teamID)
+func (s *Service) GetChannel(ctx context.Context, tenantID, id int64) (ChannelResponse, error) {
+	row, err := s.repo.GetChannel(ctx, id, tenantID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ChannelResponse{}, ErrNotFound
 		}
 		return ChannelResponse{}, err
 	}
-	usage, _ := s.repo.CountChannelUsage(ctx, teamID)
+	usage, _ := s.repo.CountChannelUsage(ctx, tenantID)
 	return toChannelResponse(row, usage[row.ID]), nil
 }
 
-func (s *Service) ListChannels(ctx context.Context, teamID int64) ([]ChannelResponse, error) {
-	rows, err := s.repo.ListChannels(ctx, teamID)
+func (s *Service) ListChannels(ctx context.Context, tenantID int64) ([]ChannelResponse, error) {
+	rows, err := s.repo.ListChannels(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
-	usage, _ := s.repo.CountChannelUsage(ctx, teamID)
+	usage, _ := s.repo.CountChannelUsage(ctx, tenantID)
 	out := make([]ChannelResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, toChannelResponse(row, usage[row.ID]))
@@ -99,8 +99,8 @@ func (s *Service) ListChannels(ctx context.Context, teamID int64) ([]ChannelResp
 	return out, nil
 }
 
-func (s *Service) TestChannel(ctx context.Context, teamID, id int64) (map[string]any, error) {
-	row, err := s.repo.GetChannel(ctx, id, teamID)
+func (s *Service) TestChannel(ctx context.Context, tenantID, id int64) (map[string]any, error) {
+	row, err := s.repo.GetChannel(ctx, id, tenantID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -134,7 +134,7 @@ func (s *Service) TestChannel(ctx context.Context, teamID, id int64) (map[string
 	return out, nil
 }
 
-func buildChannelRow(teamID int64, req CreateChannelRequest) (models.ChannelRow, error) {
+func buildChannelRow(tenantID int64, req CreateChannelRequest) (models.ChannelRow, error) {
 	t := strings.TrimSpace(req.Type)
 	if !models.IsValidChannelType(t) {
 		return models.ChannelRow{}, ErrValidation{Msg: "type must be one of " + strings.Join(models.ChannelTypes, ", ")}
@@ -154,15 +154,15 @@ func buildChannelRow(teamID int64, req CreateChannelRequest) (models.ChannelRow,
 		}
 	}
 	return models.ChannelRow{
-		TeamID:     teamID,
+		TenantID:   tenantID,
 		Type:       t,
 		Name:       name,
 		ConfigJSON: cfg,
 	}, nil
 }
 
-func (s *Service) CreatePolicy(ctx context.Context, teamID int64, req CreatePolicyRequest) (PolicyResponse, error) {
-	row, err := buildPolicyRow(teamID, req)
+func (s *Service) CreatePolicy(ctx context.Context, tenantID int64, req CreatePolicyRequest) (PolicyResponse, error) {
+	row, err := buildPolicyRow(tenantID, req)
 	if err != nil {
 		return PolicyResponse{}, err
 	}
@@ -174,13 +174,13 @@ func (s *Service) CreatePolicy(ctx context.Context, teamID int64, req CreatePoli
 	return toPolicyResponse(row), nil
 }
 
-func (s *Service) UpdatePolicy(ctx context.Context, teamID, id int64, req UpdatePolicyRequest) (PolicyResponse, error) {
-	row, err := buildPolicyRow(teamID, req)
+func (s *Service) UpdatePolicy(ctx context.Context, tenantID, id int64, req UpdatePolicyRequest) (PolicyResponse, error) {
+	row, err := buildPolicyRow(tenantID, req)
 	if err != nil {
 		return PolicyResponse{}, err
 	}
 	row.ID = id
-	if err := s.repo.UpdatePolicy(ctx, id, teamID, row); err != nil {
+	if err := s.repo.UpdatePolicy(ctx, id, tenantID, row); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return PolicyResponse{}, ErrNotFound
 		}
@@ -189,8 +189,8 @@ func (s *Service) UpdatePolicy(ctx context.Context, teamID, id int64, req Update
 	return toPolicyResponse(row), nil
 }
 
-func (s *Service) DeletePolicy(ctx context.Context, teamID, id int64) error {
-	if err := s.repo.DeletePolicy(ctx, id, teamID); err != nil {
+func (s *Service) DeletePolicy(ctx context.Context, tenantID, id int64) error {
+	if err := s.repo.DeletePolicy(ctx, id, tenantID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -199,8 +199,8 @@ func (s *Service) DeletePolicy(ctx context.Context, teamID, id int64) error {
 	return nil
 }
 
-func (s *Service) ListPolicies(ctx context.Context, teamID int64) ([]PolicyResponse, error) {
-	rows, err := s.repo.ListPolicies(ctx, teamID)
+func (s *Service) ListPolicies(ctx context.Context, tenantID int64) ([]PolicyResponse, error) {
+	rows, err := s.repo.ListPolicies(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func (s *Service) ListPolicies(ctx context.Context, teamID int64) ([]PolicyRespo
 	return out, nil
 }
 
-func buildPolicyRow(teamID int64, req CreatePolicyRequest) (models.PolicyRow, error) {
+func buildPolicyRow(tenantID int64, req CreatePolicyRequest) (models.PolicyRow, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return models.PolicyRow{}, ErrValidation{Msg: "name is required"}
@@ -233,7 +233,7 @@ func buildPolicyRow(teamID int64, req CreatePolicyRequest) (models.PolicyRow, er
 		position = *req.Position
 	}
 	return models.PolicyRow{
-		TeamID:      teamID,
+		TenantID:    tenantID,
 		Name:        name,
 		MatchDSL:    dsl,
 		ActionsJSON: actions,
@@ -242,8 +242,8 @@ func buildPolicyRow(teamID int64, req CreatePolicyRequest) (models.PolicyRow, er
 	}, nil
 }
 
-func (s *Service) CreateTemplate(ctx context.Context, teamID int64, req CreateTemplateRequest) (TemplateResponse, error) {
-	row, err := buildTemplateRow(teamID, req)
+func (s *Service) CreateTemplate(ctx context.Context, tenantID int64, req CreateTemplateRequest) (TemplateResponse, error) {
+	row, err := buildTemplateRow(tenantID, req)
 	if err != nil {
 		return TemplateResponse{}, err
 	}
@@ -255,13 +255,13 @@ func (s *Service) CreateTemplate(ctx context.Context, teamID int64, req CreateTe
 	return toTemplateResponse(row), nil
 }
 
-func (s *Service) UpdateTemplate(ctx context.Context, teamID, id int64, req UpdateTemplateRequest) (TemplateResponse, error) {
-	row, err := buildTemplateRow(teamID, req)
+func (s *Service) UpdateTemplate(ctx context.Context, tenantID, id int64, req UpdateTemplateRequest) (TemplateResponse, error) {
+	row, err := buildTemplateRow(tenantID, req)
 	if err != nil {
 		return TemplateResponse{}, err
 	}
 	row.ID = id
-	if err := s.repo.UpdateTemplate(ctx, id, teamID, row); err != nil {
+	if err := s.repo.UpdateTemplate(ctx, id, tenantID, row); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return TemplateResponse{}, ErrNotFound
 		}
@@ -270,8 +270,8 @@ func (s *Service) UpdateTemplate(ctx context.Context, teamID, id int64, req Upda
 	return toTemplateResponse(row), nil
 }
 
-func (s *Service) DeleteTemplate(ctx context.Context, teamID, id int64) error {
-	if err := s.repo.DeleteTemplate(ctx, id, teamID); err != nil {
+func (s *Service) DeleteTemplate(ctx context.Context, tenantID, id int64) error {
+	if err := s.repo.DeleteTemplate(ctx, id, tenantID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -280,8 +280,8 @@ func (s *Service) DeleteTemplate(ctx context.Context, teamID, id int64) error {
 	return nil
 }
 
-func (s *Service) ListTemplates(ctx context.Context, teamID int64) ([]TemplateResponse, error) {
-	rows, err := s.repo.ListTemplates(ctx, teamID)
+func (s *Service) ListTemplates(ctx context.Context, tenantID int64) ([]TemplateResponse, error) {
+	rows, err := s.repo.ListTemplates(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +292,7 @@ func (s *Service) ListTemplates(ctx context.Context, teamID int64) ([]TemplateRe
 	return out, nil
 }
 
-func buildTemplateRow(teamID int64, req CreateTemplateRequest) (models.TemplateRow, error) {
+func buildTemplateRow(tenantID int64, req CreateTemplateRequest) (models.TemplateRow, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return models.TemplateRow{}, ErrValidation{Msg: "name is required"}
@@ -306,7 +306,7 @@ func buildTemplateRow(teamID int64, req CreateTemplateRequest) (models.TemplateR
 		desc = sql.NullString{Valid: true, String: d}
 	}
 	return models.TemplateRow{
-		TeamID:      teamID,
+		TenantID:    tenantID,
 		Name:        name,
 		Description: desc,
 		Body:        body,
@@ -329,8 +329,8 @@ var integrationCatalog = []struct {
 	{"jira", "Jira", "Auto-create tickets on trigger", "#2563eb"},
 }
 
-func (s *Service) ListIntegrations(ctx context.Context, teamID int64) ([]IntegrationCatalogEntry, error) {
-	rows, err := s.repo.ListChannels(ctx, teamID)
+func (s *Service) ListIntegrations(ctx context.Context, tenantID int64) ([]IntegrationCatalogEntry, error) {
+	rows, err := s.repo.ListChannels(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}

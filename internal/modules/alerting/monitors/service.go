@@ -26,8 +26,8 @@ type ErrValidation struct{ Msg string }
 
 func (e ErrValidation) Error() string { return e.Msg }
 
-func (s *Service) Create(ctx context.Context, teamID, userID int64, req CreateMonitorRequest) (MonitorResponse, error) {
-	args, err := buildInsertArgs(teamID, userID, req)
+func (s *Service) Create(ctx context.Context, tenantID, userID int64, req CreateMonitorRequest) (MonitorResponse, error) {
+	args, err := buildInsertArgs(tenantID, userID, req)
 	if err != nil {
 		return MonitorResponse{}, err
 	}
@@ -35,25 +35,25 @@ func (s *Service) Create(ctx context.Context, teamID, userID int64, req CreateMo
 	if err != nil {
 		return MonitorResponse{}, err
 	}
-	return s.GetByID(ctx, teamID, id)
+	return s.GetByID(ctx, tenantID, id)
 }
 
-func (s *Service) Update(ctx context.Context, teamID, userID, id int64, req UpdateMonitorRequest) (MonitorResponse, error) {
-	args, err := buildInsertArgs(teamID, userID, req)
+func (s *Service) Update(ctx context.Context, tenantID, userID, id int64, req UpdateMonitorRequest) (MonitorResponse, error) {
+	args, err := buildInsertArgs(tenantID, userID, req)
 	if err != nil {
 		return MonitorResponse{}, err
 	}
-	if err := s.repo.Update(ctx, id, teamID, args); err != nil {
+	if err := s.repo.Update(ctx, id, tenantID, args); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return MonitorResponse{}, ErrNotFound
 		}
 		return MonitorResponse{}, err
 	}
-	return s.GetByID(ctx, teamID, id)
+	return s.GetByID(ctx, tenantID, id)
 }
 
-func (s *Service) Delete(ctx context.Context, teamID, id int64) error {
-	if err := s.repo.Delete(ctx, id, teamID); err != nil {
+func (s *Service) Delete(ctx context.Context, tenantID, id int64) error {
+	if err := s.repo.Delete(ctx, id, tenantID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -62,8 +62,8 @@ func (s *Service) Delete(ctx context.Context, teamID, id int64) error {
 	return nil
 }
 
-func (s *Service) GetByID(ctx context.Context, teamID, id int64) (MonitorResponse, error) {
-	row, state, err := s.repo.GetByID(ctx, id, teamID)
+func (s *Service) GetByID(ctx context.Context, tenantID, id int64) (MonitorResponse, error) {
+	row, state, err := s.repo.GetByID(ctx, id, tenantID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return MonitorResponse{}, ErrNotFound
@@ -73,8 +73,8 @@ func (s *Service) GetByID(ctx context.Context, teamID, id int64) (MonitorRespons
 	return toResponse(row, state), nil
 }
 
-func (s *Service) List(ctx context.Context, teamID int64, q ListQuery) (MonitorListResponse, error) {
-	rows, states, err := s.repo.List(ctx, teamID, q)
+func (s *Service) List(ctx context.Context, tenantID int64, q ListQuery) (MonitorListResponse, error) {
+	rows, states, err := s.repo.List(ctx, tenantID, q)
 	if err != nil {
 		return MonitorListResponse{}, err
 	}
@@ -100,7 +100,7 @@ func (s *Service) List(ctx context.Context, teamID int64, q ListQuery) (MonitorL
 	return MonitorListResponse{Items: items, Counts: counts}, nil
 }
 
-func buildInsertArgs(teamID, userID int64, req CreateMonitorRequest) (insertArgs, error) {
+func buildInsertArgs(tenantID, userID int64, req CreateMonitorRequest) (insertArgs, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return insertArgs{}, ErrValidation{Msg: "name is required"}
@@ -135,7 +135,7 @@ func buildInsertArgs(teamID, userID int64, req CreateMonitorRequest) (insertArgs
 	}
 
 	args := insertArgs{
-		TeamID:         teamID,
+		TenantID:       tenantID,
 		Name:           name,
 		Type:           req.Type,
 		Priority:       priority,

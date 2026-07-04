@@ -17,8 +17,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetSummary(ctx context.Context, teamID, startMs, endMs int64, hash string, f filter.Filters) (*QuerySummary, error) {
-	raw, err := s.repo.GetSummary(ctx, teamID, startMs, endMs, hash, f)
+func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (*QuerySummary, error) {
+	raw, err := s.repo.GetSummary(ctx, tenantID, startMs, endMs, hash, f)
 	if err != nil || raw == nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (s *Service) GetSummary(ctx context.Context, teamID, startMs, endMs int64, 
 	out.AvgMs = raw.AvgMs
 	out.TotalTimeMs = raw.TotalTimeMs
 
-	services, err := s.repo.GetServices(ctx, teamID, startMs, endMs, hash, f)
+	services, err := s.repo.GetServices(ctx, tenantID, startMs, endMs, hash, f)
 	if err != nil {
 		return nil, err
 	}
@@ -64,8 +64,8 @@ func operationName(attr, queryText string) string {
 	return ""
 }
 
-func (s *Service) GetTimeseries(ctx context.Context, teamID, startMs, endMs int64, hash string, f filter.Filters) ([]QueryTimeseriesPoint, error) {
-	rows, err := s.repo.GetTimeseries(ctx, teamID, startMs, endMs, hash, f)
+func (s *Service) GetTimeseries(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) ([]QueryTimeseriesPoint, error) {
+	rows, err := s.repo.GetTimeseries(ctx, tenantID, startMs, endMs, hash, f)
 	if err != nil {
 		return nil, err
 	}
@@ -83,8 +83,8 @@ func (s *Service) GetTimeseries(ctx context.Context, teamID, startMs, endMs int6
 	return out, nil
 }
 
-func (s *Service) GetExecutions(ctx context.Context, teamID, startMs, endMs int64, hash string, f filter.Filters, limit int) ([]QueryExecution, error) {
-	rows, err := s.repo.GetExecutions(ctx, teamID, startMs, endMs, hash, f, limit)
+func (s *Service) GetExecutions(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters, limit int) ([]QueryExecution, error) {
+	rows, err := s.repo.GetExecutions(ctx, tenantID, startMs, endMs, hash, f, limit)
 	if err != nil {
 		return nil, err
 	}

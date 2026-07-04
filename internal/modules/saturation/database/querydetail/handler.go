@@ -29,8 +29,8 @@ func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	modulecommon.HandleRangeQuery(w, r, "Failed to query detail summary", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetSummary(ctx, teamID, startMs, endMs, hash, filter.ParseFilters(r))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query detail summary", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetSummary(ctx, tenantID, startMs, endMs, hash, filter.ParseFilters(r))
 	})
 }
 
@@ -39,8 +39,8 @@ func (h *Handler) GetTimeseries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	modulecommon.HandleRangeQuery(w, r, "Failed to query detail timeseries", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetTimeseries(ctx, teamID, startMs, endMs, hash, filter.ParseFilters(r))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query detail timeseries", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetTimeseries(ctx, tenantID, startMs, endMs, hash, filter.ParseFilters(r))
 	})
 }
 
@@ -49,7 +49,7 @@ func (h *Handler) GetExecutions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	modulecommon.HandleRangeQuery(w, r, "Failed to query detail executions", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetExecutions(ctx, teamID, startMs, endMs, hash, filter.ParseFilters(r), filter.ParseLimit(r, 50))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query detail executions", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetExecutions(ctx, tenantID, startMs, endMs, hash, filter.ParseFilters(r), filter.ParseLimit(r, 50))
 	})
 }

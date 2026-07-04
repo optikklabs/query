@@ -21,7 +21,6 @@ type FleetOverviewResponse struct {
 	Services []ServiceREDMetric `json:"services"`
 }
 
-
 type ServiceREDMetric struct {
 	ServiceName  string  `json:"service_name"`
 	RequestCount int64   `json:"request_count"`
@@ -30,8 +29,6 @@ type ServiceREDMetric struct {
 	P95Latency   float64 `json:"p95_latency"`
 	P99Latency   float64 `json:"p99_latency"`
 }
-
-
 
 type ServicePerformancePoint struct {
 	Timestamp    time.Time `json:"timestamp"    ch:"timestamp"`
@@ -100,7 +97,6 @@ type redMetricsRow struct {
 	P95Ms       float32   `ch:"p95_ms"`
 	P99Ms       float32   `ch:"p99_ms"`
 }
-
 
 // OperationBaseline is the windowed p50/p95/p99 for a single service+operation,
 // powering the Trace Detail Duration card's "N× slower than p50" comparison.

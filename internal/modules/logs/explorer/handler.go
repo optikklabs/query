@@ -25,7 +25,7 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
 		return
 	}
-	req.Filters.TeamID = modulecommon.Tenant(r).TeamID
+	req.Filters.TenantID = modulecommon.Tenant(r).TenantID
 	req.Filters.StartMs = req.StartTime
 	req.Filters.EndMs = req.EndTime
 	if err := req.Filters.Validate(); err != nil {

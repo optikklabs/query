@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS optikk.dashboard_pages
   (
      id                   BIGINT AUTO_INCREMENT PRIMARY KEY,
-     team_id              BIGINT NOT NULL,
+     tenant_id              BIGINT NOT NULL,
      name                 VARCHAR(300) NOT NULL,
      description          VARCHAR(1000) NULL,
      icon                 VARCHAR(64) NOT NULL DEFAULT 'layout-grid',
@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS optikk.dashboard_pages
      created_by_user_id   BIGINT NULL,
      created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
      updated_at           DATETIME NULL,
-     INDEX idx_dp_team (team_id)
+     INDEX idx_dp_tenant (tenant_id)
   );

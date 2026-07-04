@@ -13,7 +13,7 @@ type Handler struct {
 
 // GetHosts retrieves the host saturation list, optionally filtered by service.
 func (h *Handler) GetHosts(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query hosts", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetHosts(ctx, teamID, startMs, endMs, r.URL.Query().Get("service"))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query hosts", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetHosts(ctx, tenantID, startMs, endMs, r.URL.Query().Get("service"))
 	})
 }

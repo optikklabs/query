@@ -6,7 +6,7 @@ package infraconsts
 const (
 	TableMetrics = "optikk.metrics"
 
-	ColTeamID      = "team_id"
+	ColTenantID    = "tenant_id"
 	ColTimestamp   = "timestamp"
 	ColMetricName  = "metric_name"
 	ColValue       = "value"

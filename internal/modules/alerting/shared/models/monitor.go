@@ -8,7 +8,7 @@ import (
 
 type MonitorRow struct {
 	ID                int64          `db:"id"`
-	TeamID            int64          `db:"team_id"`
+	TenantID          int64          `db:"tenant_id"`
 	Name              string         `db:"name"`
 	Type              string         `db:"type"`
 	Priority          string         `db:"priority"`
@@ -45,7 +45,7 @@ type MonitorStateRow struct {
 type MonitorEventRow struct {
 	ID         int64           `db:"id"`
 	MonitorID  int64           `db:"monitor_id"`
-	TeamID     int64           `db:"team_id"`
+	TenantID   int64           `db:"tenant_id"`
 	Kind       string          `db:"kind"`
 	Value      sql.NullFloat64 `db:"value"`
 	Threshold  sql.NullFloat64 `db:"threshold"`

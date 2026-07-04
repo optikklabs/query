@@ -38,7 +38,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		b := mv == "true" || mv == "1"
 		q.Muted = &b
 	}
-	res, err := h.Service.List(r.Context(), tenant.TeamID, q)
+	res, err := h.Service.List(r.Context(), tenant.TenantID, q)
 	if err != nil {
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.QueryFailed, "failed to list monitors", err)
 		return
@@ -52,7 +52,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := h.Service.GetByID(r.Context(), tenant.TeamID, id)
+	res, err := h.Service.GetByID(r.Context(), tenant.TenantID, id)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -67,7 +67,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.Create(r.Context(), tenant.TeamID, tenant.UserID, req)
+	res, err := h.Service.Create(r.Context(), tenant.TenantID, tenant.UserID, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -86,7 +86,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.Update(r.Context(), tenant.TeamID, tenant.UserID, id, req)
+	res, err := h.Service.Update(r.Context(), tenant.TenantID, tenant.UserID, id, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -100,7 +100,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.Service.Delete(r.Context(), tenant.TeamID, id); err != nil {
+	if err := h.Service.Delete(r.Context(), tenant.TenantID, id); err != nil {
 		respondServiceError(w, r, err)
 		return
 	}

@@ -21,7 +21,7 @@ func NewRepository(db *sql.DB) *Repository {
 
 // pageInsertArgs bundles the column values for page INSERT/UPDATE.
 type pageInsertArgs struct {
-	TeamID          int64
+	TenantID        int64
 	Name            string
 	Description     sql.NullString
 	Icon            string
@@ -33,7 +33,7 @@ type pageInsertArgs struct {
 
 const insertPage = `
 INSERT INTO optikk.dashboard_pages
-  (team_id, name, description, icon, icon_color, tags_json, is_favorite,
+  (tenant_id, name, description, icon, icon_color, tags_json, is_favorite,
    created_by_user_id, created_at)
 VALUES
   (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -41,7 +41,7 @@ VALUES
 
 func (r *Repository) CreatePage(ctx context.Context, row pageInsertArgs) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.CreatePage", insertPage,
-		row.TeamID, row.Name, row.Description, row.Icon, row.IconColor,
+		row.TenantID, row.Name, row.Description, row.Icon, row.IconColor,
 		row.TagsJSON, row.IsFavorite, row.CreatedByUserID, time.Now().UTC())
 	if err != nil {
 		return 0, err
@@ -53,13 +53,13 @@ const updatePage = `
 UPDATE optikk.dashboard_pages
    SET name = ?, description = ?, icon = ?, icon_color = ?,
        tags_json = ?, is_favorite = ?, updated_at = ?
- WHERE id = ? AND team_id = ?
+ WHERE id = ? AND tenant_id = ?
 `
 
-func (r *Repository) UpdatePage(ctx context.Context, id, teamID int64, row pageInsertArgs) error {
+func (r *Repository) UpdatePage(ctx context.Context, id, tenantID int64, row pageInsertArgs) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.UpdatePage", updatePage,
 		row.Name, row.Description, row.Icon, row.IconColor,
-		row.TagsJSON, row.IsFavorite, time.Now().UTC(), id, teamID)
+		row.TagsJSON, row.IsFavorite, time.Now().UTC(), id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -70,9 +70,9 @@ func (r *Repository) UpdatePage(ctx context.Context, id, teamID int64, row pageI
 	return nil
 }
 
-func (r *Repository) DeletePage(ctx context.Context, id, teamID int64) error {
+func (r *Repository) DeletePage(ctx context.Context, id, tenantID int64) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.DeletePage",
-		`DELETE FROM optikk.dashboard_pages WHERE id = ? AND team_id = ?`, id, teamID)
+		`DELETE FROM optikk.dashboard_pages WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (r *Repository) DeletePage(ctx context.Context, id, teamID int64) error {
 // selectPageCols resolves widget_count via a scoped subquery and the owner name
 // via a left join, so the catalog never needs a GROUP BY.
 const selectPageCols = `
-  p.id, p.team_id, p.name, p.description, p.icon, p.icon_color,
+  p.id, p.tenant_id, p.name, p.description, p.icon, p.icon_color,
   p.tags_json, p.is_favorite, p.created_by_user_id, p.created_at, p.updated_at,
   (SELECT COUNT(*) FROM optikk.dashboards d WHERE d.page_id = p.id) AS widget_count,
   u.name AS owner_name
@@ -94,17 +94,17 @@ const selectPageCols = `
   LEFT JOIN optikk.users u ON u.id = p.created_by_user_id
 `
 
-func (r *Repository) GetPageByID(ctx context.Context, id, teamID int64) (DashboardPageRow, error) {
+func (r *Repository) GetPageByID(ctx context.Context, id, tenantID int64) (DashboardPageRow, error) {
 	var row DashboardPageRow
-	q := fmt.Sprintf("SELECT %s WHERE p.id = ? AND p.team_id = ? LIMIT 1", selectPageCols)
-	if err := dbutil.GetSQL(ctx, r.db, "dashboards.GetPageByID", &row, q, id, teamID); err != nil {
+	q := fmt.Sprintf("SELECT %s WHERE p.id = ? AND p.tenant_id = ? LIMIT 1", selectPageCols)
+	if err := dbutil.GetSQL(ctx, r.db, "dashboards.GetPageByID", &row, q, id, tenantID); err != nil {
 		return row, err
 	}
 	return row, nil
 }
 
-func (r *Repository) ListPages(ctx context.Context, teamID int64, q ListPagesQuery) ([]DashboardPageRow, int, error) {
-	where, args := pageFilters(teamID, q)
+func (r *Repository) ListPages(ctx context.Context, tenantID int64, q ListPagesQuery) ([]DashboardPageRow, int, error) {
+	where, args := pageFilters(tenantID, q)
 	whereSQL := strings.Join(where, " AND ")
 
 	var total int
@@ -134,9 +134,9 @@ func (r *Repository) ListPages(ctx context.Context, teamID int64, q ListPagesQue
 }
 
 // pageFilters builds the shared WHERE clause for list and count.
-func pageFilters(teamID int64, q ListPagesQuery) ([]string, []any) {
-	where := []string{"p.team_id = ?"}
-	args := []any{teamID}
+func pageFilters(tenantID int64, q ListPagesQuery) ([]string, []any) {
+	where := []string{"p.tenant_id = ?"}
+	args := []any{tenantID}
 	if q.Search != "" {
 		where = append(where, "p.name LIKE ?")
 		args = append(args, "%"+q.Search+"%")
@@ -154,7 +154,7 @@ func pageFilters(teamID int64, q ListPagesQuery) ([]string, []any) {
 // widgetInsertArgs bundles the column values for widget INSERT/UPDATE.
 type widgetInsertArgs struct {
 	PageID        int64
-	TeamID        int64
+	TenantID      int64
 	Title         sql.NullString
 	PanelType     string
 	LayoutVariant sql.NullString
@@ -164,41 +164,41 @@ type widgetInsertArgs struct {
 }
 
 const selectWidgetCols = `
-  id, page_id, team_id, title, panel_type, layout_variant,
+  id, page_id, tenant_id, title, panel_type, layout_variant,
   spec_json, layout_json, position, created_at, updated_at
 `
 
-func (r *Repository) ListWidgets(ctx context.Context, pageID, teamID int64) ([]DashboardRow, error) {
+func (r *Repository) ListWidgets(ctx context.Context, pageID, tenantID int64) ([]DashboardRow, error) {
 	q := fmt.Sprintf(`SELECT %s FROM optikk.dashboards
-		WHERE page_id = ? AND team_id = ?
+		WHERE page_id = ? AND tenant_id = ?
 		ORDER BY position ASC, id ASC`, selectWidgetCols)
 	var rows []DashboardRow
-	if err := dbutil.SelectSQL(ctx, r.db, "dashboards.ListWidgets", &rows, q, pageID, teamID); err != nil {
+	if err := dbutil.SelectSQL(ctx, r.db, "dashboards.ListWidgets", &rows, q, pageID, tenantID); err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
-func (r *Repository) GetWidgetByID(ctx context.Context, id, pageID, teamID int64) (DashboardRow, error) {
+func (r *Repository) GetWidgetByID(ctx context.Context, id, pageID, tenantID int64) (DashboardRow, error) {
 	var row DashboardRow
 	q := fmt.Sprintf(`SELECT %s FROM optikk.dashboards
-		WHERE id = ? AND page_id = ? AND team_id = ? LIMIT 1`, selectWidgetCols)
-	if err := dbutil.GetSQL(ctx, r.db, "dashboards.GetWidgetByID", &row, q, id, pageID, teamID); err != nil {
+		WHERE id = ? AND page_id = ? AND tenant_id = ? LIMIT 1`, selectWidgetCols)
+	if err := dbutil.GetSQL(ctx, r.db, "dashboards.GetWidgetByID", &row, q, id, pageID, tenantID); err != nil {
 		return row, err
 	}
 	return row, nil
 }
 
-func (r *Repository) CountWidgets(ctx context.Context, pageID, teamID int64) (int, error) {
+func (r *Repository) CountWidgets(ctx context.Context, pageID, tenantID int64) (int, error) {
 	var n int
 	err := dbutil.GetSQL(ctx, r.db, "dashboards.CountWidgets", &n,
-		`SELECT COUNT(*) FROM optikk.dashboards WHERE page_id = ? AND team_id = ?`, pageID, teamID)
+		`SELECT COUNT(*) FROM optikk.dashboards WHERE page_id = ? AND tenant_id = ?`, pageID, tenantID)
 	return n, err
 }
 
 const insertWidget = `
 INSERT INTO optikk.dashboards
-  (page_id, team_id, title, panel_type, layout_variant, spec_json, layout_json,
+  (page_id, tenant_id, title, panel_type, layout_variant, spec_json, layout_json,
    position, created_at)
 VALUES
   (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -206,7 +206,7 @@ VALUES
 
 func (r *Repository) CreateWidget(ctx context.Context, row widgetInsertArgs) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.CreateWidget", insertWidget,
-		row.PageID, row.TeamID, row.Title, row.PanelType, row.LayoutVariant,
+		row.PageID, row.TenantID, row.Title, row.PanelType, row.LayoutVariant,
 		row.SpecJSON, row.LayoutJSON, row.Position, time.Now().UTC())
 	if err != nil {
 		return 0, err
@@ -218,14 +218,14 @@ const updateWidget = `
 UPDATE optikk.dashboards
    SET title = ?, panel_type = ?, layout_variant = ?,
        spec_json = ?, layout_json = ?, position = ?, updated_at = ?
- WHERE id = ? AND page_id = ? AND team_id = ?
+ WHERE id = ? AND page_id = ? AND tenant_id = ?
 `
 
 func (r *Repository) UpdateWidget(ctx context.Context, id int64, row widgetInsertArgs) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.UpdateWidget", updateWidget,
 		row.Title, row.PanelType, row.LayoutVariant,
 		row.SpecJSON, row.LayoutJSON, row.Position, time.Now().UTC(),
-		id, row.PageID, row.TeamID)
+		id, row.PageID, row.TenantID)
 	if err != nil {
 		return err
 	}
@@ -236,10 +236,10 @@ func (r *Repository) UpdateWidget(ctx context.Context, id int64, row widgetInser
 	return nil
 }
 
-func (r *Repository) DeleteWidget(ctx context.Context, id, pageID, teamID int64) error {
+func (r *Repository) DeleteWidget(ctx context.Context, id, pageID, tenantID int64) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.DeleteWidget",
-		`DELETE FROM optikk.dashboards WHERE id = ? AND page_id = ? AND team_id = ?`,
-		id, pageID, teamID)
+		`DELETE FROM optikk.dashboards WHERE id = ? AND page_id = ? AND tenant_id = ?`,
+		id, pageID, tenantID)
 	if err != nil {
 		return err
 	}
@@ -250,10 +250,10 @@ func (r *Repository) DeleteWidget(ctx context.Context, id, pageID, teamID int64)
 	return nil
 }
 
-// PageExists confirms a page belongs to the team before widget operations.
-func (r *Repository) PageExists(ctx context.Context, pageID, teamID int64) (bool, error) {
+// PageExists confirms a page belongs to the tenant before widget operations.
+func (r *Repository) PageExists(ctx context.Context, pageID, tenantID int64) (bool, error) {
 	var n int
 	err := dbutil.GetSQL(ctx, r.db, "dashboards.PageExists", &n,
-		`SELECT COUNT(*) FROM optikk.dashboard_pages WHERE id = ? AND team_id = ?`, pageID, teamID)
+		`SELECT COUNT(*) FROM optikk.dashboard_pages WHERE id = ? AND tenant_id = ?`, pageID, tenantID)
 	return n > 0, err
 }

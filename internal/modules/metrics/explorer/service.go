@@ -19,8 +19,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) ListMetricNames(ctx context.Context, teamID, startMs, endMs int64, search string) ([]MetricNameResult, error) {
-	rows, err := s.repo.ListMetricNames(ctx, teamID, startMs, endMs, search)
+func (s *Service) ListMetricNames(ctx context.Context, tenantID, startMs, endMs int64, search string) ([]MetricNameResult, error) {
+	rows, err := s.repo.ListMetricNames(ctx, tenantID, startMs, endMs, search)
 	if err != nil {
 		return nil, err
 	}
@@ -53,8 +53,8 @@ func normalizeMetricType(t string) string {
 	}
 }
 
-func (s *Service) ListTagKeys(ctx context.Context, teamID, startMs, endMs int64, metricName string) ([]TagKeyResult, error) {
-	rows, err := s.repo.ListAttributeTagKeys(ctx, teamID, startMs, endMs, metricName)
+func (s *Service) ListTagKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]TagKeyResult, error) {
+	rows, err := s.repo.ListAttributeTagKeys(ctx, tenantID, startMs, endMs, metricName)
 	if err != nil {
 		return nil, err
 	}
@@ -86,13 +86,13 @@ func (s *Service) ListTagKeys(ctx context.Context, teamID, startMs, endMs int64,
 	return out, nil
 }
 
-func (s *Service) ListTagValues(ctx context.Context, teamID, startMs, endMs int64, metricName, tagKey string) ([]TagValueResult, error) {
+func (s *Service) ListTagValues(ctx context.Context, tenantID, startMs, endMs int64, metricName, tagKey string) ([]TagValueResult, error) {
 	var rows []tagValueDTO
 	var err error
 	if canonical := filter.Canonical(tagKey); canonical != "" {
-		rows, err = s.repo.ListResourceTagValues(ctx, teamID, startMs, endMs, metricName, canonical)
+		rows, err = s.repo.ListResourceTagValues(ctx, tenantID, startMs, endMs, metricName, canonical)
 	} else {
-		rows, err = s.repo.ListAttributeTagValues(ctx, teamID, startMs, endMs, metricName, tagKey)
+		rows, err = s.repo.ListAttributeTagValues(ctx, tenantID, startMs, endMs, metricName, tagKey)
 	}
 	if err != nil {
 		return nil, err
@@ -104,9 +104,9 @@ func (s *Service) ListTagValues(ctx context.Context, teamID, startMs, endMs int6
 	return out, nil
 }
 
-func (s *Service) ListTags(ctx context.Context, teamID, startMs, endMs int64, metricName, tagKey string) ([]FETagEntry, error) {
+func (s *Service) ListTags(ctx context.Context, tenantID, startMs, endMs int64, metricName, tagKey string) ([]FETagEntry, error) {
 	if tagKey != "" {
-		values, err := s.ListTagValues(ctx, teamID, startMs, endMs, metricName, tagKey)
+		values, err := s.ListTagValues(ctx, tenantID, startMs, endMs, metricName, tagKey)
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +117,7 @@ func (s *Service) ListTags(ctx context.Context, teamID, startMs, endMs int64, me
 		return []FETagEntry{{Key: tagKey, Values: vals}}, nil
 	}
 
-	keys, err := s.ListTagKeys(ctx, teamID, startMs, endMs, metricName)
+	keys, err := s.ListTagKeys(ctx, tenantID, startMs, endMs, metricName)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (s *Service) ListTags(ctx context.Context, teamID, startMs, endMs int64, me
 		keyNames[i] = k.TagKey
 	}
 
-	rows, err := s.repo.ListTagValuesForKeys(ctx, teamID, startMs, endMs, metricName, keyNames)
+	rows, err := s.repo.ListTagValuesForKeys(ctx, tenantID, startMs, endMs, metricName, keyNames)
 	if err != nil {
 		return nil, err
 	}
@@ -149,11 +149,11 @@ func (s *Service) ListTags(ctx context.Context, teamID, startMs, endMs int64, me
 	return tags, nil
 }
 
-func (s *Service) Query(ctx context.Context, teamID int64, req FEQueryRequest) (*FEQueryResponse, error) {
+func (s *Service) Query(ctx context.Context, tenantID int64, req FEQueryRequest) (*FEQueryResponse, error) {
 	results := make(map[string]FEQueryResult, len(req.Queries))
 
 	for _, feq := range req.Queries {
-		f := convertFEQuery(teamID, req.StartTime, req.EndTime, req.Step, feq)
+		f := convertFEQuery(tenantID, req.StartTime, req.EndTime, req.Step, feq)
 		if err := f.Validate(); err != nil {
 			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
 		}
@@ -276,7 +276,7 @@ func quantileFor(qs []float64, aggregation string) float64 {
 	return 0
 }
 
-func convertFEQuery(teamID, startMs, endMs int64, step string, feq FEMetricQuery) filter.Filters {
+func convertFEQuery(tenantID, startMs, endMs int64, step string, feq FEMetricQuery) filter.Filters {
 	tags := make([]filter.TagFilter, 0, len(feq.Where))
 	for _, w := range feq.Where {
 		tags = append(tags, filter.TagFilter{
@@ -286,7 +286,7 @@ func convertFEQuery(teamID, startMs, endMs int64, step string, feq FEMetricQuery
 		})
 	}
 	return filter.Filters{
-		TeamID:      teamID,
+		TenantID:    tenantID,
 		StartMs:     startMs,
 		EndMs:       endMs,
 		MetricName:  feq.MetricName,

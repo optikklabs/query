@@ -12,14 +12,14 @@ func HandleRangeQuery(
 	w http.ResponseWriter,
 	r *http.Request,
 	errMessage string,
-	query func(ctx context.Context, teamID, startMs, endMs int64) (any, error),
+	query func(ctx context.Context, tenantID, startMs, endMs int64) (any, error),
 ) {
-	teamID := Tenant(r).TeamID
+	tenantID := Tenant(r).TenantID
 	startMs, endMs, ok := ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
-	resp, err := query(r.Context(), teamID, startMs, endMs)
+	resp, err := query(r.Context(), tenantID, startMs, endMs)
 	if err != nil {
 		RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, errMessage, err)
 		return

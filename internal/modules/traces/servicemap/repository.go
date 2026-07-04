@@ -15,12 +15,12 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) GetServiceMapSpans(ctx context.Context, teamID int64, traceID string) ([]serviceMapSpanRow, error) {
+func (r *Repository) GetServiceMapSpans(ctx context.Context, tenantID int64, traceID string) ([]serviceMapSpanRow, error) {
 	const query = `
 		WITH trace_loc AS (
 		    SELECT timestamp
 		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
 		    LIMIT 1
 		)
 		SELECT span_id,
@@ -29,22 +29,22 @@ func (r *Repository) GetServiceMapSpans(ctx context.Context, teamID int64, trace
 		       duration_nano / 1000000.0 AS duration_ms,
 		       has_error
 		FROM optikk.spans
-		PREWHERE team_id = @teamID
+		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
 		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC
 		LIMIT 10000`
 	var rows []serviceMapSpanRow
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetServiceMapSpans", &rows, query, traceIDArgs(teamID, traceID)...)
+	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetServiceMapSpans", &rows, query, traceIDArgs(tenantID, traceID)...)
 }
 
-func (r *Repository) GetTraceErrors(ctx context.Context, teamID int64, traceID string) ([]traceErrorRow, error) {
+func (r *Repository) GetTraceErrors(ctx context.Context, tenantID int64, traceID string) ([]traceErrorRow, error) {
 	const query = `
 		WITH trace_loc AS (
 		    SELECT timestamp
 		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
 		    LIMIT 1
 		)
 		SELECT span_id,
@@ -56,7 +56,7 @@ func (r *Repository) GetTraceErrors(ctx context.Context, teamID int64, traceID s
 		       timestamp                  AS start_time,
 		       duration_nano / 1000000.0  AS duration_ms
 		FROM optikk.spans
-		PREWHERE team_id = @teamID
+		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
 		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
@@ -64,12 +64,12 @@ func (r *Repository) GetTraceErrors(ctx context.Context, teamID int64, traceID s
 		ORDER BY timestamp ASC
 		LIMIT 1000`
 	var rows []traceErrorRow
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetTraceErrors", &rows, query, traceIDArgs(teamID, traceID)...)
+	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetTraceErrors", &rows, query, traceIDArgs(tenantID, traceID)...)
 }
 
-func traceIDArgs(teamID int64, traceID string) []any {
+func traceIDArgs(tenantID int64, traceID string) []any {
 	return []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("traceID", traceID),
 	}
 }

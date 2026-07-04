@@ -14,8 +14,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetInfrastructureNodes(ctx context.Context, teamID int64, startMs, endMs int64) ([]InfrastructureNode, error) {
-	rows, err := s.repo.QueryInfrastructureNodes(ctx, teamID, startMs, endMs)
+func (s *Service) GetInfrastructureNodes(ctx context.Context, tenantID int64, startMs, endMs int64) ([]InfrastructureNode, error) {
+	rows, err := s.repo.QueryInfrastructureNodes(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return nil, err
 	}
@@ -40,10 +40,10 @@ func (s *Service) GetInfrastructureNodes(ctx context.Context, teamID int64, star
 	return out, nil
 }
 
-func (s *Service) GetInfrastructureNodeSummary(ctx context.Context, teamID int64, startMs, endMs int64) (InfrastructureNodeSummary, error) {
-	row, err := s.repo.QueryInfrastructureNodeSummary(ctx, teamID, startMs, endMs)
+func (s *Service) GetInfrastructureNodeSummary(ctx context.Context, tenantID int64, startMs, endMs int64) (InfrastructureNodeSummary, error) {
+	row, err := s.repo.QueryInfrastructureNodeSummary(ctx, tenantID, startMs, endMs)
 	if err != nil {
-		slog.ErrorContext(ctx, "nodes: GetInfrastructureNodeSummary failed", slog.Any("error", err), slog.Int64("team_id", teamID))
+		slog.ErrorContext(ctx, "nodes: GetInfrastructureNodeSummary failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID))
 		return InfrastructureNodeSummary{}, err
 	}
 	var totalPods int64
@@ -58,8 +58,8 @@ func (s *Service) GetInfrastructureNodeSummary(ctx context.Context, teamID int64
 	}, nil
 }
 
-func (s *Service) GetInfrastructureNodeServices(ctx context.Context, teamID int64, host string, startMs, endMs int64) ([]InfrastructureNodeService, error) {
-	rows, err := s.repo.QueryInfrastructureNodeServices(ctx, teamID, host, startMs, endMs)
+func (s *Service) GetInfrastructureNodeServices(ctx context.Context, tenantID int64, host string, startMs, endMs int64) ([]InfrastructureNodeService, error) {
+	rows, err := s.repo.QueryInfrastructureNodeServices(ctx, tenantID, host, startMs, endMs)
 	if err != nil {
 		return nil, err
 	}

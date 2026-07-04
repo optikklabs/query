@@ -32,7 +32,7 @@ func (r *Repository) Compute(ctx context.Context, f filter.Filters) ([]dimRow, e
 		return `
 			SELECT '` + dim + `' AS dim, ` + dim + ` AS value, count() AS cnt
 			FROM optikk.logs_resource
-			PREWHERE team_id = @teamID` + resourceWhere + `
+			PREWHERE tenant_id = @tenantID` + resourceWhere + `
 			WHERE ` + dim + ` != ''
 			GROUP BY ` + dim + `
 			ORDER BY cnt DESC

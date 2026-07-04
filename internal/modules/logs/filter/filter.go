@@ -12,9 +12,9 @@ import (
 const maxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
 
 type Filters struct {
-	TeamID  int64 `json:"-"`
-	StartMs int64 `json:"-"`
-	EndMs   int64 `json:"-"`
+	TenantID int64 `json:"-"`
+	StartMs  int64 `json:"-"`
+	EndMs    int64 `json:"-"`
 
 	Services     []string `json:"services,omitempty"`
 	Hosts        []string `json:"hosts,omitempty"`
@@ -72,7 +72,7 @@ func BuildFingerprintCTE(resourceWhere string) (cte, prewhereFP string) {
 		WITH active_fps AS (
 		    SELECT DISTINCT fingerprint
 		    FROM optikk.logs_resource
-		    PREWHERE team_id = @teamID` + resourceWhere + `
+		    PREWHERE tenant_id = @tenantID` + resourceWhere + `
 		)`
 	prewhereFP = " AND fingerprint IN active_fps"
 	return cte, prewhereFP
@@ -83,7 +83,7 @@ func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 	endBucket := uint32((f.EndMs / 1000) / 300 * 300)
 
 	args = []any{
-		clickhouse.Named("teamID", uint32(f.TeamID)),
+		clickhouse.Named("tenantID", uint32(f.TenantID)),
 		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
 		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
 		clickhouse.Named("startBucket", startBucket),

@@ -21,7 +21,7 @@ func (h *Handler) Apps(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	resp, err := h.svc.Apps(r.Context(), modulecommon.Tenant(r).TeamID, startMs, endMs)
+	resp, err := h.svc.Apps(r.Context(), modulecommon.Tenant(r).TenantID, startMs, endMs)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM apps", err)
 		return
@@ -45,7 +45,7 @@ func (h *Handler) Timeseries(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "metric must be one of tokens_by_vendor, latency, spend")
 		return
 	}
-	resp, err := h.svc.Timeseries(r.Context(), modulecommon.Tenant(r).TeamID, startMs, endMs, metric)
+	resp, err := h.svc.Timeseries(r.Context(), modulecommon.Tenant(r).TenantID, startMs, endMs, metric)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM timeseries", err)
 		return
@@ -67,7 +67,7 @@ func (h *Handler) CostBreakdown(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "groupBy must be one of service, vendor, model")
 		return
 	}
-	resp, err := h.svc.CostBreakdown(r.Context(), modulecommon.Tenant(r).TeamID, startMs, endMs, groupBy)
+	resp, err := h.svc.CostBreakdown(r.Context(), modulecommon.Tenant(r).TenantID, startMs, endMs, groupBy)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM cost breakdown", err)
 		return
@@ -85,7 +85,7 @@ func (h *Handler) TracesQuery(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required")
 		return
 	}
-	resp, err := h.svc.QueryTraces(r.Context(), modulecommon.Tenant(r).TeamID, req)
+	resp, err := h.svc.QueryTraces(r.Context(), modulecommon.Tenant(r).TenantID, req)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM traces", err)
 		return
@@ -99,7 +99,7 @@ func (h *Handler) TraceDetail(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "traceId is required")
 		return
 	}
-	resp, err := h.svc.TraceDetail(r.Context(), modulecommon.Tenant(r).TeamID, traceID)
+	resp, err := h.svc.TraceDetail(r.Context(), modulecommon.Tenant(r).TenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to load LLM trace", err)
 		return

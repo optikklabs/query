@@ -25,7 +25,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "log id required")
 		return
 	}
-	resp, err := h.svc.GetByID(r.Context(), modulecommon.Tenant(r).TeamID, id)
+	resp, err := h.svc.GetByID(r.Context(), modulecommon.Tenant(r).TenantID, id)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch log", err)
 		return

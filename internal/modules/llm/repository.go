@@ -24,7 +24,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) AppAggregates(ctx context.Context, teamID, startMs, endMs int64) ([]appAggRow, error) {
+func (r *Repository) AppAggregates(ctx context.Context, tenantID, startMs, endMs int64) ([]appAggRow, error) {
 	query := `
 		SELECT service,
 		       sumIf(span_count, gen_ai_operation = 'chat' AND gen_ai_request_model != '') AS llm_spans,
@@ -39,15 +39,15 @@ func (r *Repository) AppAggregates(ctx context.Context, teamID, startMs, endMs i
 		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs,
 		       sum(` + tokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
 		FROM ` + rollupTable + `
-		PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
 		GROUP BY service
 		ORDER BY llm_spans DESC`
-	args := append(chargs.RangeArgs(teamID, startMs, endMs), priceArgs()...)
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs), priceArgs()...)
 	var rows []appAggRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.AppAggregates", &rows, query, args...)
 }
 
-func (r *Repository) ModelBreakdown(ctx context.Context, teamID, startMs, endMs int64) ([]modelBreakdownRow, error) {
+func (r *Repository) ModelBreakdown(ctx context.Context, tenantID, startMs, endMs int64) ([]modelBreakdownRow, error) {
 	query := `
 		SELECT service,
 		       gen_ai_system        AS vendor,
@@ -57,76 +57,76 @@ func (r *Repository) ModelBreakdown(ctx context.Context, teamID, startMs, endMs 
 		       sum(output_tokens)   AS out_tokens,
 		       sum(` + tokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
 		FROM ` + rollupTable + `
-		PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
 		WHERE gen_ai_request_model != ''
 		GROUP BY service, vendor, model
 		ORDER BY cost DESC`
-	args := append(chargs.RangeArgs(teamID, startMs, endMs), priceArgs()...)
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs), priceArgs()...)
 	var rows []modelBreakdownRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.ModelBreakdown", &rows, query, args...)
 }
 
-func (r *Repository) AppTrends(ctx context.Context, teamID, startMs, endMs int64) ([]trendRow, error) {
+func (r *Repository) AppTrends(ctx context.Context, tenantID, startMs, endMs int64) ([]trendRow, error) {
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       service,
 		       sum(span_count) AS cnt
 		FROM ` + rollupTable + `
-		PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
 		GROUP BY bucket_at, service
 		ORDER BY bucket_at ASC`
 	var rows []trendRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.AppTrends", &rows, query,
-		chargs.RangeArgs(teamID, startMs, endMs)...)
+		chargs.RangeArgs(tenantID, startMs, endMs)...)
 }
 
-func (r *Repository) TokensByVendor(ctx context.Context, teamID, startMs, endMs int64) ([]keyedBucketRow, error) {
+func (r *Repository) TokensByVendor(ctx context.Context, tenantID, startMs, endMs int64) ([]keyedBucketRow, error) {
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       gen_ai_system AS key,
 		       toFloat64(sum(input_tokens + output_tokens)) AS value
 		FROM ` + rollupTable + `
-		PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
 		WHERE gen_ai_system != ''
 		GROUP BY bucket_at, key
 		ORDER BY bucket_at ASC`
 	var rows []keyedBucketRow
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "llm.TokensByVendor", &rows, query,
-		chargs.RangeArgs(teamID, startMs, endMs)...)
+		chargs.RangeArgs(tenantID, startMs, endMs)...)
 }
 
-func (r *Repository) SpendByVendor(ctx context.Context, teamID, startMs, endMs int64) ([]keyedBucketRow, error) {
+func (r *Repository) SpendByVendor(ctx context.Context, tenantID, startMs, endMs int64) ([]keyedBucketRow, error) {
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       gen_ai_system AS key,
 		       sum(` + tokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS value
 		FROM ` + rollupTable + `
-		PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
 		WHERE gen_ai_request_model != ''
 		GROUP BY bucket_at, key
 		ORDER BY bucket_at ASC`
-	args := append(chargs.RangeArgs(teamID, startMs, endMs), priceArgs()...)
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs), priceArgs()...)
 	var rows []keyedBucketRow
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "llm.SpendByVendor", &rows, query, args...)
 }
 
-func (r *Repository) LatencyPercentiles(ctx context.Context, teamID, startMs, endMs int64) ([]latencyBucketRow, error) {
+func (r *Repository) LatencyPercentiles(ctx context.Context, tenantID, startMs, endMs int64) ([]latencyBucketRow, error) {
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs
 		FROM ` + rollupTable + `
-		PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 	var rows []latencyBucketRow
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "llm.LatencyPercentiles", &rows, query,
-		chargs.RangeArgs(teamID, startMs, endMs)...)
+		chargs.RangeArgs(tenantID, startMs, endMs)...)
 }
 
 // QueryTraces lists root spans of traces containing gen_ai spans, joined
 // with per-trace token/cost totals aggregated from the gen_ai spans.
-func (r *Repository) QueryTraces(ctx context.Context, teamID int64, req TracesQueryRequest) ([]llmTraceRow, bool, error) {
-	where, args := buildTraceFilters(teamID, req)
+func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, bool, error) {
+	where, args := buildTraceFilters(tenantID, req)
 	cur, _ := decodeTraceCursor(req.Cursor)
 	if cur.SpanID != "" {
 		where += ` AND (s.timestamp, s.span_id) < (@curStart, @curSpanID)`
@@ -149,7 +149,7 @@ func (r *Repository) QueryTraces(ctx context.Context, teamID int64, req TracesQu
 		           countIf(gen_ai_operation = 'chat' AND gen_ai_request_model != '') AS llm_calls,
 		           sum(` + tokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
 		    FROM optikk.spans
-		    PREWHERE team_id = @teamID
+		    PREWHERE tenant_id = @tenantID
 		    WHERE timestamp BETWEEN @start AND @end AND is_gen_ai
 		    GROUP BY trace_id
 		)
@@ -169,7 +169,7 @@ func (r *Repository) QueryTraces(ctx context.Context, teamID int64, req TracesQu
 		       llm.cost             AS cost
 		FROM optikk.spans AS s
 		INNER JOIN llm ON s.trace_id = llm.trace_id
-		PREWHERE s.team_id = @teamID
+		PREWHERE s.tenant_id = @tenantID
 		WHERE s.timestamp BETWEEN @start AND @end AND s.is_root = 1` + where + `
 		ORDER BY s.timestamp DESC, s.span_id DESC
 		LIMIT @pgLimit`
@@ -185,8 +185,8 @@ func (r *Repository) QueryTraces(ctx context.Context, teamID int64, req TracesQu
 	return rows, hasMore, nil
 }
 
-func buildTraceFilters(teamID int64, req TracesQueryRequest) (string, []any) {
-	args := chargs.RangeArgs(teamID, req.StartTime, req.EndTime)
+func buildTraceFilters(tenantID int64, req TracesQueryRequest) (string, []any) {
+	args := chargs.RangeArgs(tenantID, req.StartTime, req.EndTime)
 	where := ""
 	if len(req.Services) > 0 {
 		where += ` AND s.service IN @services`
@@ -215,12 +215,12 @@ func buildTraceFilters(teamID int64, req TracesQueryRequest) (string, []any) {
 
 // TraceSpans fetches every span of one trace, located via trace_index to
 // keep the raw-spans scan bounded.
-func (r *Repository) TraceSpans(ctx context.Context, teamID int64, traceID string) ([]traceSpanRow, error) {
+func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID string) ([]traceSpanRow, error) {
 	query := `
 		WITH trace_loc AS (
 		    SELECT timestamp
 		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
 		    LIMIT 1
 		)
 		SELECT span_id, parent_span_id, timestamp, duration_nano, name, service,
@@ -229,14 +229,14 @@ func (r *Repository) TraceSpans(ctx context.Context, teamID int64, traceID strin
 		       coalesce(toString(attributes.` + "`gen_ai.prompt`" + `), '')     AS prompt,
 		       coalesce(toString(attributes.` + "`gen_ai.completion`" + `), '') AS completion
 		FROM optikk.spans
-		PREWHERE team_id = @teamID
+		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
 		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC`
 	var rows []traceSpanRow
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.TraceSpans", &rows, query,
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("traceID", traceID),
 	)
 }

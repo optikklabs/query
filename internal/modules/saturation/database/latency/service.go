@@ -15,8 +15,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetLatencyBySystem(ctx context.Context, teamID, startMs, endMs int64, f filter.Filters) ([]LatencyTimeSeries, error) {
-	rows, err := s.repo.GetLatencyBySystem(ctx, teamID, startMs, endMs, f)
+func (s *Service) GetLatencyBySystem(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters) ([]LatencyTimeSeries, error) {
+	rows, err := s.repo.GetLatencyBySystem(ctx, tenantID, startMs, endMs, f)
 	return foldLatency(rows), err
 }
 

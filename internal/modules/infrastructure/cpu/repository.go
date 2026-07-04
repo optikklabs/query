@@ -18,22 +18,22 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) QueryCPUUtilizationAgg(ctx context.Context, teamID int64, startMs, endMs int64) ([]CPUMetricNameRow, error) {
+func (r *Repository) QueryCPUUtilizationAgg(ctx context.Context, tenantID int64, startMs, endMs int64) ([]CPUMetricNameRow, error) {
 	query := `
 		SELECT
 		    metric_name AS metric_name,
 		    sum(val_sum) / sum(val_count)  AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
-		PREWHERE team_id        = @teamID
+		PREWHERE tenant_id        = @tenantID
 		     AND metric_name   IN @metricNames
 		     AND timestamp   BETWEEN @start AND @end
 		GROUP BY metric_name`
-	args := chargs.WithMetricNames(chargs.RollupRangeArgs(teamID, startMs, endMs), infraconsts.CPUMetrics)
+	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), infraconsts.CPUMetrics)
 	var rows []CPUMetricNameRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "cpu.QueryCPUUtilizationAgg", &rows, query, args...)
 }
 
-func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, teamID int64, startMs, endMs int64) ([]CPUInstanceMetricRow, error) {
+func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, tenantID int64, startMs, endMs int64) ([]CPUInstanceMetricRow, error) {
 	// Resource dims (host/pod/container/service) live in metrics_series;
 	// resolve them per fingerprint and join the scalar rollup on fingerprint.
 	query := `
@@ -44,7 +44,7 @@ func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, teamID i
 		           container,
 		           service
 		    FROM optikk.metrics_series AS mr
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE mr.service != ''
 		    GROUP BY fingerprint, host, pod, container, service
 		)
@@ -57,12 +57,12 @@ func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, teamID i
 		    sum(m.val_sum) / sum(m.val_count) AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN fps AS r ON m.fingerprint = r.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY host, pod, container, service, metric_name
 		ORDER BY service, pod`
-	args := chargs.WithMetricNames(chargs.RollupRangeArgs(teamID, startMs, endMs), infraconsts.CPUMetrics)
+	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), infraconsts.CPUMetrics)
 	var rows []CPUInstanceMetricRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "cpu.QueryCPUUtilizationByInstance", &rows, query, args...)
 }

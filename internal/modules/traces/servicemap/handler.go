@@ -19,13 +19,13 @@ func NewHandler(svc *Service) *Handler {
 }
 
 func (h *Handler) GetServiceMap(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
 		return
 	}
-	resp, err := h.svc.GetServiceMap(r.Context(), teamID, traceID)
+	resp, err := h.svc.GetServiceMap(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to compute service map", err)
 		return
@@ -34,13 +34,13 @@ func (h *Handler) GetServiceMap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetTraceErrors(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
 		return
 	}
-	groups, err := h.svc.GetTraceErrors(r.Context(), teamID, traceID)
+	groups, err := h.svc.GetTraceErrors(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch trace errors", err)
 		return

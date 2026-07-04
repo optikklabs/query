@@ -14,13 +14,13 @@ type MemoryHandler struct {
 }
 
 func (h *MemoryHandler) GetAvgMemory(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query avg memory", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetAvgMemory(ctx, teamID, startMs, endMs)
+	modulecommon.HandleRangeQuery(w, r, "Failed to query avg memory", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetAvgMemory(ctx, tenantID, startMs, endMs)
 	})
 }
 
 func (h *MemoryHandler) GetMemoryByInstance(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
 		return
@@ -33,7 +33,7 @@ func (h *MemoryHandler) GetMemoryByInstance(w http.ResponseWriter, r *http.Reque
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "serviceName is required")
 		return
 	}
-	resp, err := h.Service.GetMemoryByInstance(r.Context(), teamID, host, pod, container, serviceName, startMs, endMs)
+	resp, err := h.Service.GetMemoryByInstance(r.Context(), tenantID, host, pod, container, serviceName, startMs, endMs)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query memory by instance", err)
 		return

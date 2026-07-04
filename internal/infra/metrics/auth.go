@@ -10,7 +10,7 @@ var (
 		Namespace: "optikk",
 		Subsystem: "auth",
 		Name:      "denied_total",
-		Help:      "Authentication/authorisation denials by reason (unauthorized, missing_team, forbidden_team, forbidden_role).",
+		Help:      "Authentication/authorisation denials by reason (unauthorized, missing_tenant, forbidden_tenant, forbidden_role).",
 	}, []string{"reason"})
 
 	AuthAuthenticated = promauto.NewCounter(prometheus.CounterOpts{

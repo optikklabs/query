@@ -22,7 +22,7 @@ func NewRepository(db *sql.DB) *Repository {
 
 // insertArgs bundles the column values for INSERT/UPDATE operations.
 type insertArgs struct {
-	TeamID           int64
+	TenantID         int64
 	Name             string
 	Type             string
 	Priority         string
@@ -40,7 +40,7 @@ type insertArgs struct {
 
 const insertMonitor = `
 INSERT INTO optikk.monitors
-  (team_id, name, type, priority, scope_json, query_json, conditions_json, notify_json,
+  (tenant_id, name, type, priority, scope_json, query_json, conditions_json, notify_json,
    message_body, runbook_url, tags_json, eval_every_sec, renotify_every_sec,
    active, created_at, created_by_user_id)
 VALUES
@@ -63,7 +63,7 @@ func (r *Repository) Create(ctx context.Context, row insertArgs) (int64, error) 
 
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, insertMonitor,
-		row.TeamID, row.Name, row.Type, row.Priority,
+		row.TenantID, row.Name, row.Type, row.Priority,
 		row.ScopeJSON, row.QueryJSON, row.ConditionsJSON, row.NotifyJSON,
 		row.MessageBody, row.RunbookURL, row.TagsJSON,
 		row.EvalEverySec, row.RenotifyEverySec,
@@ -91,16 +91,16 @@ UPDATE optikk.monitors
        message_body = ?, runbook_url = ?, tags_json = ?,
        eval_every_sec = ?, renotify_every_sec = ?,
        updated_at = ?
- WHERE id = ? AND team_id = ?
+ WHERE id = ? AND tenant_id = ?
 `
 
-func (r *Repository) Update(ctx context.Context, id, teamID int64, row insertArgs) error {
+func (r *Repository) Update(ctx context.Context, id, tenantID int64, row insertArgs) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "monitors.Update", updateMonitor,
 		row.Name, row.Type, row.Priority,
 		row.ScopeJSON, row.QueryJSON, row.ConditionsJSON, row.NotifyJSON,
 		row.MessageBody, row.RunbookURL, row.TagsJSON,
 		row.EvalEverySec, row.RenotifyEverySec,
-		time.Now().UTC(), id, teamID)
+		time.Now().UTC(), id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func (r *Repository) Update(ctx context.Context, id, teamID int64, row insertArg
 	return nil
 }
 
-func (r *Repository) Delete(ctx context.Context, id, teamID int64) error {
+func (r *Repository) Delete(ctx context.Context, id, tenantID int64) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
@@ -119,7 +119,7 @@ func (r *Repository) Delete(ctx context.Context, id, teamID int64) error {
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.ExecContext(ctx,
-		`DELETE FROM optikk.monitors WHERE id = ? AND team_id = ?`, id, teamID)
+		`DELETE FROM optikk.monitors WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -139,7 +139,7 @@ func (r *Repository) Delete(ctx context.Context, id, teamID int64) error {
 }
 
 const selectMonitorCols = `
-  m.id, m.team_id, m.name, m.type, m.priority,
+  m.id, m.tenant_id, m.name, m.type, m.priority,
   m.scope_json, m.query_json, m.conditions_json, m.notify_json,
   m.message_template_id, m.message_body, m.runbook_url, m.tags_json,
   m.eval_every_sec, m.renotify_every_sec, m.muted_until, m.active,
@@ -152,18 +152,18 @@ const selectStateCols = `
   s.evaluation_count, s.acked_by_user_id, s.acked_at
 `
 
-func (r *Repository) GetByID(ctx context.Context, id, teamID int64) (models.MonitorRow, models.MonitorStateRow, error) {
+func (r *Repository) GetByID(ctx context.Context, id, tenantID int64) (models.MonitorRow, models.MonitorStateRow, error) {
 	var row models.MonitorRow
 	var state models.MonitorStateRow
 	q := fmt.Sprintf(`
 		SELECT %s, %s
 		  FROM optikk.monitors m
 		  LEFT JOIN optikk.monitor_state s ON s.monitor_id = m.id
-		 WHERE m.id = ? AND m.team_id = ?
+		 WHERE m.id = ? AND m.tenant_id = ?
 		 LIMIT 1
 	`, selectMonitorCols, selectStateCols)
 	var combined monitorWithState
-	if err := dbutil.GetSQL(ctx, r.db, "monitors.GetByID", &combined, q, id, teamID); err != nil {
+	if err := dbutil.GetSQL(ctx, r.db, "monitors.GetByID", &combined, q, id, tenantID); err != nil {
 		return row, state, err
 	}
 	return combined.toRows()
@@ -202,9 +202,9 @@ func (m monitorWithState) toRows() (models.MonitorRow, models.MonitorStateRow, e
 	return m.MonitorRow, state, nil
 }
 
-func (r *Repository) List(ctx context.Context, teamID int64, q ListQuery) ([]models.MonitorRow, []models.MonitorStateRow, error) {
-	where := []string{"m.team_id = ?"}
-	args := []any{teamID}
+func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]models.MonitorRow, []models.MonitorStateRow, error) {
+	where := []string{"m.tenant_id = ?"}
+	args := []any{tenantID}
 	if q.Type != "" {
 		where = append(where, "m.type = ?")
 		args = append(args, q.Type)

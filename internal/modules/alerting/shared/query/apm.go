@@ -19,7 +19,7 @@ const durationStatusCTE = `
 		           any(service)                       AS service,
 		           any(` + seriesattr.StatusCode + `) AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE s.service = @service
 		    GROUP BY fingerprint
 		)`
@@ -47,11 +47,11 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		       quantilesPrometheusHistogramMerge(0.99)(quantilesPrometheusHistogramArrayState(0.99)(m.hist_buckets, arrayCumSum(m.hist_counts))) AS qs
 		FROM optikk.metrics AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		WHERE m.timestamp BETWEEN @start AND @end`
 
-	args := apmArgs(m.TeamID, q.APM.Service, startMs, endMs)
+	args := apmArgs(m.TenantID, q.APM.Service, startMs, endMs)
 	var rows []apmAggRow
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.apm.Scalar", &rows, query, args...); err != nil {
 		return ScalarResult{}, err
@@ -87,13 +87,13 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 		       quantilesPrometheusHistogramMerge(0.99)(quantilesPrometheusHistogramArrayState(0.99)(m.hist_buckets, arrayCumSum(m.hist_counts))) AS qs
 		FROM optikk.metrics AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		WHERE m.timestamp BETWEEN @start AND @end
 		GROUP BY bucket
 		ORDER BY bucket`
 
-	args := apmArgs(m.TeamID, q.APM.Service, startMs, endMs)
+	args := apmArgs(m.TenantID, q.APM.Service, startMs, endMs)
 	var rows []apmSeriesRow
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.apm.Series", &rows, query, args...); err != nil {
 		return nil, err
@@ -135,9 +135,9 @@ func apmTrackValue(track string, row apmAggRow, windowSec int64) float64 {
 	return 0
 }
 
-func apmArgs(teamID int64, service string, startMs, endMs int64) []any {
+func apmArgs(tenantID int64, service string, startMs, endMs int64) []any {
 	return []any{
-		teamIDArg(teamID),
+		tenantIDArg(tenantID),
 		clickhouse.Named("service", service),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),

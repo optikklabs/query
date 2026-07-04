@@ -24,16 +24,16 @@ func qsAt(qs []float64, i int) float64 {
 	return 0
 }
 
-func (s *Service) Apps(ctx context.Context, teamID, startMs, endMs int64) (AppsResponse, error) {
-	aggs, err := s.repo.AppAggregates(ctx, teamID, startMs, endMs)
+func (s *Service) Apps(ctx context.Context, tenantID, startMs, endMs int64) (AppsResponse, error) {
+	aggs, err := s.repo.AppAggregates(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return AppsResponse{}, err
 	}
-	models, err := s.repo.ModelBreakdown(ctx, teamID, startMs, endMs)
+	models, err := s.repo.ModelBreakdown(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return AppsResponse{}, err
 	}
-	trends, err := s.repo.AppTrends(ctx, teamID, startMs, endMs)
+	trends, err := s.repo.AppTrends(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return AppsResponse{}, err
 	}
@@ -79,9 +79,9 @@ func (s *Service) Apps(ctx context.Context, teamID, startMs, endMs int64) (AppsR
 	return AppsResponse{Apps: apps}, nil
 }
 
-func (s *Service) Timeseries(ctx context.Context, teamID, startMs, endMs int64, metric string) (TimeseriesResponse, error) {
+func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64, metric string) (TimeseriesResponse, error) {
 	if metric == "latency" {
-		rows, err := s.repo.LatencyPercentiles(ctx, teamID, startMs, endMs)
+		rows, err := s.repo.LatencyPercentiles(ctx, tenantID, startMs, endMs)
 		if err != nil {
 			return TimeseriesResponse{}, err
 		}
@@ -100,9 +100,9 @@ func (s *Service) Timeseries(ctx context.Context, teamID, startMs, endMs int64, 
 		err  error
 	)
 	if metric == "spend" {
-		rows, err = s.repo.SpendByVendor(ctx, teamID, startMs, endMs)
+		rows, err = s.repo.SpendByVendor(ctx, tenantID, startMs, endMs)
 	} else {
-		rows, err = s.repo.TokensByVendor(ctx, teamID, startMs, endMs)
+		rows, err = s.repo.TokensByVendor(ctx, tenantID, startMs, endMs)
 	}
 	if err != nil {
 		return TimeseriesResponse{}, err
@@ -123,8 +123,8 @@ func (s *Service) Timeseries(ctx context.Context, teamID, startMs, endMs int64, 
 	return TimeseriesResponse{Series: series}, nil
 }
 
-func (s *Service) CostBreakdown(ctx context.Context, teamID, startMs, endMs int64, groupBy string) (CostBreakdownResponse, error) {
-	rows, err := s.repo.ModelBreakdown(ctx, teamID, startMs, endMs)
+func (s *Service) CostBreakdown(ctx context.Context, tenantID, startMs, endMs int64, groupBy string) (CostBreakdownResponse, error) {
+	rows, err := s.repo.ModelBreakdown(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return CostBreakdownResponse{}, err
 	}
@@ -163,9 +163,9 @@ func (s *Service) CostBreakdown(ctx context.Context, teamID, startMs, endMs int6
 	return CostBreakdownResponse{GroupBy: groupBy, Rows: out}, nil
 }
 
-func (s *Service) QueryTraces(ctx context.Context, teamID int64, req TracesQueryRequest) (TracesQueryResponse, error) {
+func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) (TracesQueryResponse, error) {
 	req.Limit = pickLimit(req.Limit, 50, 500)
-	rows, hasMore, err := s.repo.QueryTraces(ctx, teamID, req)
+	rows, hasMore, err := s.repo.QueryTraces(ctx, tenantID, req)
 	if err != nil {
 		return TracesQueryResponse{}, err
 	}
@@ -209,8 +209,8 @@ func pickLimit(v, def, max int) int {
 	return v
 }
 
-func (s *Service) TraceDetail(ctx context.Context, teamID int64, traceID string) (TraceDetailResponse, error) {
-	rows, err := s.repo.TraceSpans(ctx, teamID, traceID)
+func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID string) (TraceDetailResponse, error) {
+	rows, err := s.repo.TraceSpans(ctx, tenantID, traceID)
 	if err != nil || len(rows) == 0 {
 		return TraceDetailResponse{}, err
 	}

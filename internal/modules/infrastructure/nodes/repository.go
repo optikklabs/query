@@ -27,7 +27,7 @@ const hostSeriesCTE = `
 		           service,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    GROUP BY fingerprint, host, pod, service, status_code
 		)`
 
@@ -39,7 +39,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) QueryInfrastructureNodes(ctx context.Context, teamID int64, startMs, endMs int64) ([]NodeAggregateRow, error) {
+func (r *Repository) QueryInfrastructureNodes(ctx context.Context, tenantID int64, startMs, endMs int64) ([]NodeAggregateRow, error) {
 	query := hostSeriesCTE + `
 		SELECT
 		    if(series.host != '', series.host, @defaultUnknown)                   AS host,
@@ -51,13 +51,13 @@ func (r *Repository) QueryInfrastructureNodes(ctx context.Context, teamID int64,
 		    max(m.timestamp)                                                      AS last_seen
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY host
 		ORDER BY request_count DESC
 		LIMIT @maxNodes`
-	args := chargs.RollupRangeArgs(teamID, startMs, endMs)
+	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
 	args = append(args,
 		clickhouse.Named("defaultUnknown", DefaultUnknown),
 		clickhouse.Named("maxNodes", uint64(MaxNodes)),
@@ -66,7 +66,7 @@ func (r *Repository) QueryInfrastructureNodes(ctx context.Context, teamID int64,
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "nodes.QueryInfrastructureNodes", &rows, query, args...)
 }
 
-func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, teamID int64, startMs, endMs int64) (NodeSummaryRow, error) {
+func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, tenantID int64, startMs, endMs int64) (NodeSummaryRow, error) {
 	query := hostSeriesCTE + `
 		SELECT
 		    series.host                                            AS host,
@@ -75,11 +75,11 @@ func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, teamID 
 		    uniqIf(series.pod, series.pod != '')                  AS pod_count
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY host`
-	args := chargs.RollupRangeArgs(teamID, startMs, endMs)
+	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
 	type nodeRawSummaryRow struct {
 		Host         string `ch:"host"`
 		ErrorCount   uint64 `ch:"error_count"`
@@ -116,7 +116,7 @@ func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, teamID 
 	}, nil
 }
 
-func (r *Repository) QueryInfrastructureNodeServices(ctx context.Context, teamID int64, host string, startMs, endMs int64) ([]NodeServiceAggregateRow, error) {
+func (r *Repository) QueryInfrastructureNodeServices(ctx context.Context, tenantID int64, host string, startMs, endMs int64) ([]NodeServiceAggregateRow, error) {
 	query := hostSeriesCTE + `
 		SELECT
 		    series.service                                                       AS service,
@@ -127,14 +127,14 @@ func (r *Repository) QueryInfrastructureNodeServices(ctx context.Context, teamID
 		    uniqIf(series.pod, series.pod != '')                                 AS pod_count
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		WHERE if(series.host != '', series.host, @defaultUnknown) = @host
 		GROUP BY service
 		ORDER BY request_count DESC
 		LIMIT @maxServices`
-	args := chargs.RollupRangeArgs(teamID, startMs, endMs)
+	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
 	args = append(args,
 		clickhouse.Named("host", host),
 		clickhouse.Named("defaultUnknown", DefaultUnknown),

@@ -55,7 +55,7 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 		query = `
 			SELECT ` + traceIndexColumns + `
 			FROM optikk.spans
-			PREWHERE team_id = @teamID
+			PREWHERE tenant_id = @tenantID
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
 			ORDER BY timestamp DESC, span_id DESC
 			LIMIT @pgLimit`
@@ -64,11 +64,11 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 			WITH active_fps AS (
 			    SELECT DISTINCT fingerprint
 			    FROM optikk.spans_resource
-			    PREWHERE team_id = @teamID` + resourceWhere + `
+			    PREWHERE tenant_id = @tenantID` + resourceWhere + `
 			)
 			SELECT ` + traceIndexColumns + `
 			FROM optikk.spans
-			PREWHERE team_id = @teamID AND fingerprint IN active_fps
+			PREWHERE tenant_id = @tenantID AND fingerprint IN active_fps
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
 			ORDER BY timestamp DESC, span_id DESC
 			LIMIT @pgLimit`
@@ -94,7 +94,7 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets
 			WITH active_fps AS (
 			    SELECT DISTINCT fingerprint
 			    FROM optikk.spans_resource
-			    PREWHERE team_id = @teamID` + resourceWhere + `
+			    PREWHERE tenant_id = @tenantID` + resourceWhere + `
 			)`
 		prewhereFP = " AND fingerprint IN active_fps"
 	}
@@ -103,7 +103,7 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets
 		return `
 			SELECT '` + dim + `' AS dim, ` + col + ` AS value, count() AS cnt
 			FROM optikk.spans
-			PREWHERE team_id = @teamID` + prewhereFP + `
+			PREWHERE tenant_id = @tenantID` + prewhereFP + `
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + ` AND ` + col + ` != ''
 			GROUP BY value
 			ORDER BY cnt DESC
@@ -154,7 +154,7 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 			       countIf(is_error = 0)                     AS total,
 			       countIf(is_error = 1)                     AS errors
 			FROM optikk.spans
-			PREWHERE team_id = @teamID
+			PREWHERE tenant_id = @tenantID
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
 			GROUP BY time_bucket
 			ORDER BY time_bucket ASC`
@@ -163,13 +163,13 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 			WITH active_fps AS (
 			    SELECT DISTINCT fingerprint
 			    FROM optikk.spans_resource
-			    PREWHERE team_id = @teamID` + resourceWhere + `
+			    PREWHERE tenant_id = @tenantID` + resourceWhere + `
 			)
 			SELECT ` + grainSQL + `                          AS time_bucket,
 			       countIf(is_error = 0)                     AS total,
 			       countIf(is_error = 1)                     AS errors
 			FROM optikk.spans
-			PREWHERE team_id = @teamID AND fingerprint IN active_fps
+			PREWHERE tenant_id = @tenantID AND fingerprint IN active_fps
 			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
 			GROUP BY time_bucket
 			ORDER BY time_bucket ASC`
@@ -194,13 +194,13 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 	return out, nil
 }
 
-func (r *Repository) SuggestScalar(ctx context.Context, teamID, startMs, endMs int64, field, prefix string, limit int) ([]Suggestion, error) {
+func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs int64, field, prefix string, limit int) ([]Suggestion, error) {
 	column := scalarFieldExpr(field)
 	query := `
 		SELECT ` + column + `        AS value,
 		       count()               AS count
 		FROM optikk.spans
-		PREWHERE team_id = @teamID
+		PREWHERE tenant_id = @tenantID
 		WHERE timestamp BETWEEN @startMs AND @endMs
 		  AND ` + column + ` != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
@@ -208,7 +208,7 @@ func (r *Repository) SuggestScalar(ctx context.Context, teamID, startMs, endMs i
 		ORDER BY count DESC
 		LIMIT @limit`
 	var rows []suggestionRow
-	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestScalar", &rows, query, suggestArgs(teamID, startMs, endMs, prefix, limit)...); err != nil {
+	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestScalar", &rows, query, suggestArgs(tenantID, startMs, endMs, prefix, limit)...); err != nil {
 		return nil, err
 	}
 	out := make([]Suggestion, len(rows))
@@ -218,18 +218,18 @@ func (r *Repository) SuggestScalar(ctx context.Context, teamID, startMs, endMs i
 	return out, nil
 }
 
-func (r *Repository) SuggestAttribute(ctx context.Context, teamID, startMs, endMs int64, attrKey, prefix string, limit int) ([]Suggestion, error) {
+func (r *Repository) SuggestAttribute(ctx context.Context, tenantID, startMs, endMs int64, attrKey, prefix string, limit int) ([]Suggestion, error) {
 	const query = `
 		SELECT attributes[@attrKey]::String AS value, count() AS count
 		FROM optikk.spans
-		PREWHERE team_id = @teamID
+		PREWHERE tenant_id = @tenantID
 		WHERE timestamp BETWEEN @startMs AND @endMs
 		  AND value != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
 		ORDER BY count DESC
 		LIMIT @limit`
-	args := append(suggestArgs(teamID, startMs, endMs, prefix, limit),
+	args := append(suggestArgs(tenantID, startMs, endMs, prefix, limit),
 		clickhouse.Named("attrKey", strings.TrimPrefix(attrKey, "@")),
 	)
 	var rows []suggestionRow
@@ -243,9 +243,9 @@ func (r *Repository) SuggestAttribute(ctx context.Context, teamID, startMs, endM
 	return out, nil
 }
 
-func suggestArgs(teamID, startMs, endMs int64, prefix string, limit int) []any {
+func suggestArgs(tenantID, startMs, endMs int64, prefix string, limit int) []any {
 	return []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("startMs", time.UnixMilli(startMs)),
 		clickhouse.Named("endMs", time.UnixMilli(endMs)),
 		clickhouse.Named("prefix", prefix),

@@ -15,8 +15,6 @@ type Repository struct {
 
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
-
-
 func (r *Repository) getLogs(ctx context.Context, f filter.Filters, limit int, cur models.Cursor) ([]models.LogRow, bool, error) {
 	resourceWhere, where, args := filter.BuildClauses(f)
 	if !cur.IsZero() {
@@ -33,7 +31,7 @@ func (r *Repository) getLogs(ctx context.Context, f filter.Filters, limit int, c
 	query := cte + `
 		SELECT ` + models.LogColumns + `
 		FROM optikk.logs
-		PREWHERE team_id = @teamID` + prewhereFP + `
+		PREWHERE tenant_id = @tenantID` + prewhereFP + `
 		     AND timestamp BETWEEN @start AND @end` + where + `
 		WHERE timestamp BETWEEN @start AND @end
 		ORDER BY timestamp DESC, log_id DESC

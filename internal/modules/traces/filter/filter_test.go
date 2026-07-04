@@ -54,12 +54,12 @@ func TestValidate(t *testing.T) {
 
 // No filters -> only the five base bind args, no predicate fragments.
 func TestBuildClauses_Base(t *testing.T) {
-	rw, w, args := BuildClauses(Filters{TeamID: 1, StartMs: 1000, EndMs: 2000})
+	rw, w, args := BuildClauses(Filters{TenantID: 1, StartMs: 1000, EndMs: 2000})
 	if rw != "" || w != "" {
 		t.Errorf("base clauses should be empty, got rw=%q w=%q", rw, w)
 	}
 	m := namedArgs(args)
-	for _, k := range []string{"teamID", "start", "end"} {
+	for _, k := range []string{"tenantID", "start", "end"} {
 		if _, ok := m[k]; !ok {
 			t.Errorf("missing base arg %q", k)
 		}

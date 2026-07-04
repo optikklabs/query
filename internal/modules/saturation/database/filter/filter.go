@@ -66,17 +66,17 @@ func ParseLimit(r *http.Request, def int) int {
 	return def
 }
 
-func SpanArgs(teamID, startMs, endMs int64) []any {
+func SpanArgs(tenantID, startMs, endMs int64) []any {
 	return []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 	}
 }
 
-func MetricArgs(teamID, startMs, endMs int64, metricName string) []any {
+func MetricArgs(tenantID, startMs, endMs int64, metricName string) []any {
 	return []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("metricName", metricName),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),

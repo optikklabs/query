@@ -10,19 +10,19 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
-func RangeArgs(teamID, startMs, endMs int64) []any {
+func RangeArgs(tenantID, startMs, endMs int64) []any {
 	return []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 	}
 }
 
-func RollupRangeArgs(teamID, startMs, endMs int64) []any {
+func RollupRangeArgs(tenantID, startMs, endMs int64) []any {
 	if timebucket.UseHourRollup(endMs - startMs) {
 		startMs = timebucket.FloorMsToHour(startMs)
 	}
-	return RangeArgs(teamID, startMs, endMs)
+	return RangeArgs(tenantID, startMs, endMs)
 }
 
 func WithMetricNames(args []any, names []string) []any {

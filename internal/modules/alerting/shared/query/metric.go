@@ -32,11 +32,11 @@ func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, q model
 	query := `
 		SELECT ` + expr + ` AS value
 		FROM optikk.` + table + `
-		PREWHERE team_id     = @teamID
+		PREWHERE tenant_id     = @tenantID
 		     AND metric_name = @metricName
 		WHERE timestamp BETWEEN @start AND @end`
 
-	args := metricArgs(m.TeamID, q.Metric.Metric, startMs, endMs)
+	args := metricArgs(m.TenantID, q.Metric.Metric, startMs, endMs)
 	var rows []scalarRow
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.metric.Scalar", &rows, query, args...); err != nil {
 		return ScalarResult{}, err
@@ -60,13 +60,13 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q model
 		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket, ` +
 		expr + ` AS value
 		FROM optikk.` + table + `
-		PREWHERE team_id     = @teamID
+		PREWHERE tenant_id     = @tenantID
 		     AND metric_name = @metricName
 		WHERE timestamp BETWEEN @start AND @end
 		GROUP BY bucket
 		ORDER BY bucket`
 
-	args := metricArgs(m.TeamID, q.Metric.Metric, startMs, endMs)
+	args := metricArgs(m.TenantID, q.Metric.Metric, startMs, endMs)
 	var rows []bucketRow
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.metric.Series", &rows, query, args...); err != nil {
 		return nil, err
@@ -97,9 +97,9 @@ func metricSource(agg string) (table, expr string) {
 	}
 }
 
-func metricArgs(teamID int64, metricName string, startMs, endMs int64) []any {
+func metricArgs(tenantID int64, metricName string, startMs, endMs int64) []any {
 	return []any{
-		teamIDArg(teamID),
+		tenantIDArg(tenantID),
 		clickhouse.Named("metricName", metricName),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),

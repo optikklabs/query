@@ -15,17 +15,17 @@ type Repository struct {
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
 // GetByID resolves a single log row by its stable log_id.
-// It queries ClickHouse by teamID and logID using the log_id skip-index.
-func (r *Repository) GetByID(ctx context.Context, teamID int64, logID string) (*models.LogRow, error) {
+// It queries ClickHouse by tenantID and logID using the log_id skip-index.
+func (r *Repository) GetByID(ctx context.Context, tenantID int64, logID string) (*models.LogRow, error) {
 	args := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("logID", logID),
 	}
 
 	query := `
 		SELECT ` + models.LogColumns + `
 		FROM optikk.logs
-		PREWHERE team_id = @teamID AND log_id = @logID
+		PREWHERE tenant_id = @tenantID AND log_id = @logID
 		LIMIT 1`
 
 	var rows []models.LogRow

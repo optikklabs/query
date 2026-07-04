@@ -15,9 +15,9 @@ import (
 // alert or warn status.
 var ErrNotAlerting = errors.New("monitor is not currently alerting")
 
-func (s *Service) Ack(ctx context.Context, teamID, userID, id int64) error {
+func (s *Service) Ack(ctx context.Context, tenantID, userID, id int64) error {
 	r := s.repo
-	if err := r.Ack(ctx, id, teamID, userID, time.Now().UTC()); err != nil {
+	if err := r.Ack(ctx, id, tenantID, userID, time.Now().UTC()); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotAlerting
 		}
@@ -26,13 +26,13 @@ func (s *Service) Ack(ctx context.Context, teamID, userID, id int64) error {
 	return nil
 }
 
-func (s *Service) Mute(ctx context.Context, teamID, id int64, durationSec int) error {
+func (s *Service) Mute(ctx context.Context, tenantID, id int64, durationSec int) error {
 	r := s.repo
 	var until sql.NullTime
 	if durationSec > 0 {
 		until = sql.NullTime{Valid: true, Time: time.Now().UTC().Add(time.Duration(durationSec) * time.Second)}
 	}
-	if err := r.Mute(ctx, id, teamID, until); err != nil {
+	if err := r.Mute(ctx, id, tenantID, until); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -41,8 +41,8 @@ func (s *Service) Mute(ctx context.Context, teamID, id int64, durationSec int) e
 	return nil
 }
 
-func (s *Service) Unmute(ctx context.Context, teamID, id int64) error {
-	return s.Mute(ctx, teamID, id, 0)
+func (s *Service) Unmute(ctx context.Context, tenantID, id int64) error {
+	return s.Mute(ctx, tenantID, id, 0)
 }
 
 type TestResult struct {
@@ -52,8 +52,8 @@ type TestResult struct {
 	Threshold     float64 `json:"threshold"`
 }
 
-func (s *Service) Test(ctx context.Context, teamID, id int64, queries query.Registry) (TestResult, error) {
-	row, state, err := s.repo.GetByID(ctx, id, teamID)
+func (s *Service) Test(ctx context.Context, tenantID, id int64, queries query.Registry) (TestResult, error) {
+	row, state, err := s.repo.GetByID(ctx, id, tenantID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return TestResult{}, ErrNotFound
@@ -90,8 +90,8 @@ func (s *Service) Test(ctx context.Context, teamID, id int64, queries query.Regi
 	}, nil
 }
 
-func (s *Service) Series(ctx context.Context, teamID, id int64, queries query.Registry, windowMs int64) (SeriesResponse, error) {
-	row, _, err := s.repo.GetByID(ctx, id, teamID)
+func (s *Service) Series(ctx context.Context, tenantID, id int64, queries query.Registry, windowMs int64) (SeriesResponse, error) {
+	row, _, err := s.repo.GetByID(ctx, id, tenantID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return SeriesResponse{}, ErrNotFound
@@ -124,35 +124,35 @@ type SeriesResponse struct {
 	RecoveryThreshold *float64      `json:"recovery_threshold,omitempty"`
 }
 
-func (s *Service) Events(ctx context.Context, teamID, id int64, limit int) ([]MonitorEventResponse, error) {
+func (s *Service) Events(ctx context.Context, tenantID, id int64, limit int) ([]MonitorEventResponse, error) {
 	r := s.repo
-	rows, err := r.Events(ctx, id, teamID, limit)
+	rows, err := r.Events(ctx, id, tenantID, limit)
 	if err != nil {
 		return nil, err
 	}
 	return toEventResponses(rows), nil
 }
 
-func (s *Service) Activity(ctx context.Context, teamID int64, sinceMs int64, limit int) ([]MonitorEventResponse, error) {
+func (s *Service) Activity(ctx context.Context, tenantID int64, sinceMs int64, limit int) ([]MonitorEventResponse, error) {
 	r := s.repo
 	since := time.Now().UTC().Add(-1 * time.Hour)
 	if sinceMs > 0 {
 		since = time.UnixMilli(sinceMs).UTC()
 	}
-	rows, err := r.Activity(ctx, teamID, since, limit)
+	rows, err := r.Activity(ctx, tenantID, since, limit)
 	if err != nil {
 		return nil, err
 	}
 	return toEventResponses(rows), nil
 }
 
-func (s *Service) StatusTimeline(ctx context.Context, teamID, id int64, windowMs int64) (StatusTimelineResponse, error) {
+func (s *Service) StatusTimeline(ctx context.Context, tenantID, id int64, windowMs int64) (StatusTimelineResponse, error) {
 	r := s.repo
 	if windowMs <= 0 {
 		windowMs = 24 * 60 * 60 * 1000
 	}
 	since := time.Now().UTC().Add(-time.Duration(windowMs) * time.Millisecond)
-	rows, err := r.StatusTimelineRows(ctx, id, teamID, since)
+	rows, err := r.StatusTimelineRows(ctx, id, tenantID, since)
 	if err != nil {
 		return StatusTimelineResponse{}, err
 	}

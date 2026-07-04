@@ -42,7 +42,7 @@ func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow,
 	       countIf(severity_bucket >= 4) AS errors,
 	       countIf(severity_bucket = 3)  AS warns
 	FROM optikk.logs
-	PREWHERE team_id = @teamID` + prewhereFP + `
+	PREWHERE tenant_id = @tenantID` + prewhereFP + `
 	     AND timestamp BETWEEN @start AND @end
 	WHERE timestamp BETWEEN @start AND @end` + where
 
@@ -64,7 +64,7 @@ func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, e
 	       countIf(severity_bucket = 2)  AS info,
 	       countIf(severity_bucket <= 1) AS debug
 	FROM optikk.logs
-	PREWHERE team_id = @teamID` + prewhereFP + `
+	PREWHERE tenant_id = @tenantID` + prewhereFP + `
 	     AND timestamp BETWEEN @start AND @end
 	WHERE timestamp BETWEEN @start AND @end` + where + `
 	GROUP BY time_bucket

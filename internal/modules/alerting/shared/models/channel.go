@@ -8,7 +8,7 @@ import (
 // ChannelRow is the raw row for optikk.notification_channels.
 type ChannelRow struct {
 	ID             int64          `db:"id"`
-	TeamID         int64          `db:"team_id"`
+	TenantID       int64          `db:"tenant_id"`
 	Type           string         `db:"type"`
 	Name           string         `db:"name"`
 	ConfigJSON     []byte         `db:"config_json"`
@@ -22,7 +22,7 @@ type ChannelRow struct {
 
 type PolicyRow struct {
 	ID          int64        `db:"id"`
-	TeamID      int64        `db:"team_id"`
+	TenantID    int64        `db:"tenant_id"`
 	Name        string       `db:"name"`
 	MatchDSL    string       `db:"match_dsl"`
 	ActionsJSON []byte       `db:"actions_json"`
@@ -36,7 +36,7 @@ type PolicyRow struct {
 
 type TemplateRow struct {
 	ID          int64          `db:"id"`
-	TeamID      int64          `db:"team_id"`
+	TenantID    int64          `db:"tenant_id"`
 	Name        string         `db:"name"`
 	Description sql.NullString `db:"description"`
 	Body        string         `db:"body"`

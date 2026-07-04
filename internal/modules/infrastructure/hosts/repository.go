@@ -26,14 +26,14 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) QueryHostUtilization(ctx context.Context, teamID, startMs, endMs int64) ([]hostMetricRow, error) {
+func (r *Repository) QueryHostUtilization(ctx context.Context, tenantID, startMs, endMs int64) ([]hostMetricRow, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint, host
 		    FROM optikk.metrics_series AS mr
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE mr.host != ''
 		      AND NOT (metric_name = @cpuUtil AND ` + stateAttr + ` != 'idle')
 		      AND NOT (metric_name = @memUtil AND ` + stateAttr + ` != 'used')
@@ -47,13 +47,13 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, teamID, startMs, 
 		       sum(m.val_sum) / sum(m.val_count)) AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN fps AS r ON m.fingerprint = r.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY host, metric_name`
 
 	args := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricNames", utilizationMetricNames()),
@@ -65,7 +65,7 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, teamID, startMs, 
 }
 
 func (r *Repository) QueryHostSpans(
-	ctx context.Context, teamID, startMs, endMs int64, serviceName string,
+	ctx context.Context, tenantID, startMs, endMs int64, serviceName string,
 ) ([]hostSpansRow, error) {
 	query := `
 		WITH series AS (
@@ -74,7 +74,7 @@ func (r *Repository) QueryHostSpans(
 		           environment,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE service = @serviceName
 		    GROUP BY fingerprint, host, environment, status_code
 		)
@@ -87,12 +87,12 @@ func (r *Repository) QueryHostSpans(
 		    max(m.timestamp)                                        AS last_seen
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY host
 		ORDER BY request_count DESC`
-	args := append(chargs.RollupRangeArgs(teamID, startMs, endMs),
+	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("unknownHost", defaultUnknownHost),
 	)

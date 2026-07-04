@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS optikk.dashboards
   (
      id                   BIGINT AUTO_INCREMENT PRIMARY KEY,
      page_id              BIGINT NOT NULL,
-     team_id              BIGINT NOT NULL,
+     tenant_id              BIGINT NOT NULL,
      title                VARCHAR(300) NULL,
      panel_type           VARCHAR(64) NOT NULL,
      layout_variant       VARCHAR(64) NULL,

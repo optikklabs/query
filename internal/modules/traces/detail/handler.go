@@ -21,13 +21,13 @@ func NewHandler(svc *Service) *Handler {
 }
 
 func (h *Handler) GetTraceSummary(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
 		return
 	}
-	resp, err := h.svc.GetTraceSummary(r.Context(), teamID, traceID)
+	resp, err := h.svc.GetTraceSummary(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch trace", err)
 		return
@@ -40,13 +40,13 @@ func (h *Handler) GetTraceSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetSpanEvents(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
 		return
 	}
-	events, err := h.svc.GetSpanEvents(r.Context(), teamID, traceID)
+	events, err := h.svc.GetSpanEvents(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query span events", err)
 		return
@@ -55,7 +55,7 @@ func (h *Handler) GetSpanEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	spanID := chi.URLParam(r, "spanId")
 	if traceID == "" {
@@ -67,7 +67,7 @@ func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	attrs, err := h.svc.GetSpanAttributes(r.Context(), teamID, traceID, spanID)
+	attrs, err := h.svc.GetSpanAttributes(r.Context(), tenantID, traceID, spanID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query span attributes", err)
 		return
@@ -80,7 +80,7 @@ func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
@@ -103,7 +103,7 @@ func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
 		limit = defaultRelatedLimit
 	}
 
-	traces, err := h.svc.GetRelatedTraces(r.Context(), teamID, serviceName, operationName, startMs, endMs, traceID, limit)
+	traces, err := h.svc.GetRelatedTraces(r.Context(), tenantID, serviceName, operationName, startMs, endMs, traceID, limit)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query related traces", err)
 		return
@@ -112,13 +112,13 @@ func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetTraceSpans(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
 		return
 	}
-	items, err := h.svc.ListSpansByTrace(r.Context(), teamID, traceID)
+	items, err := h.svc.ListSpansByTrace(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to list trace spans", err)
 		return

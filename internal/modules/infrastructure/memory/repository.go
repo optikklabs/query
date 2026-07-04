@@ -27,40 +27,40 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) QueryMemoryUtilizationAgg(ctx context.Context, teamID int64, startMs, endMs int64) ([]MemoryMetricNameRow, error) {
+func (r *Repository) QueryMemoryUtilizationAgg(ctx context.Context, tenantID int64, startMs, endMs int64) ([]MemoryMetricNameRow, error) {
 	query := `
 		SELECT
 		    metric_name AS metric_name,
 		    sum(val_sum) / sum(val_count)  AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
-		PREWHERE team_id        = @teamID
+		PREWHERE tenant_id        = @tenantID
 		     AND metric_name   IN @metricNames
 		     AND timestamp   BETWEEN @start AND @end
 		GROUP BY metric_name`
-	args := chargs.WithMetricNames(chargs.RollupRangeArgs(teamID, startMs, endMs), memMetricNames)
+	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), memMetricNames)
 	var rows []MemoryMetricNameRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "memory.QueryMemoryUtilizationAgg", &rows, query, args...)
 }
 
-func (r *Repository) QueryMemoryUtilizationForInstance(ctx context.Context, teamID int64, startMs, endMs int64, host, pod, serviceName string) ([]MemoryMetricNameRow, error) {
+func (r *Repository) QueryMemoryUtilizationForInstance(ctx context.Context, tenantID int64, startMs, endMs int64, host, pod, serviceName string) ([]MemoryMetricNameRow, error) {
 
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint
 		    FROM optikk.metrics_series
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE host = @host AND service = @serviceName AND pod = @pod
 		)
 		SELECT
 		    metric_name AS metric_name,
 		    sum(val_sum) / sum(val_count)  AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
-		PREWHERE team_id        = @teamID
+		PREWHERE tenant_id        = @tenantID
 		     AND metric_name   IN @metricNames
 		     AND timestamp   BETWEEN @start AND @end
 		WHERE fingerprint IN fps
 		GROUP BY metric_name`
-	args := chargs.WithMetricNames(chargs.RollupRangeArgs(teamID, startMs, endMs), memMetricNames)
+	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), memMetricNames)
 	args = append(args,
 		clickhouse.Named("host", host),
 		clickhouse.Named("pod", pod),

@@ -19,14 +19,14 @@ func NewRepository(db clickhouse.Conn) *Repository {
 }
 
 // GetNodes returns per-service RED aggregates and p50/p95/p99 latency.
-func (r *Repository) GetNodes(ctx context.Context, teamID, startMs, endMs int64, _ string) ([]nodeAggRow, error) {
+func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int64, _ string) ([]nodeAggRow, error) {
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
 		           service,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE s.service != ''
 		    GROUP BY fingerprint, service, status_code
 		)
@@ -36,11 +36,11 @@ func (r *Repository) GetNodes(ctx context.Context, teamID, startMs, endMs int64,
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state)  AS qs
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id = @teamID AND m.timestamp BETWEEN @start AND @end
+		PREWHERE m.tenant_id = @tenantID AND m.timestamp BETWEEN @start AND @end
 		  AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY service`
 	var rows []nodeAggRow
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetNodes", &rows, query, chargs.RollupRangeArgs(teamID, startMs, endMs)...); err != nil {
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetNodes", &rows, query, chargs.RollupRangeArgs(tenantID, startMs, endMs)...); err != nil {
 		return nil, err
 	}
 	for i := range rows {
@@ -53,7 +53,7 @@ func (r *Repository) GetNodes(ctx context.Context, teamID, startMs, endMs int64,
 	return rows, nil
 }
 
-func (r *Repository) GetEdges(ctx context.Context, teamID, startMs, endMs int64, focusService string) ([]edgeAggRow, error) {
+func (r *Repository) GetEdges(ctx context.Context, tenantID, startMs, endMs int64, focusService string) ([]edgeAggRow, error) {
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
@@ -61,7 +61,7 @@ func (r *Repository) GetEdges(ctx context.Context, teamID, startMs, endMs int64,
 		           ` + seriesattr.Server + `     AS server,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces_service_graph_request_server'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces_service_graph_request_server'
 		    WHERE ` + seriesattr.Client + ` != ''
 		      AND ` + seriesattr.Server + ` != ''
 		      AND ` + seriesattr.Client + ` != ` + seriesattr.Server + `
@@ -75,11 +75,11 @@ func (r *Repository) GetEdges(ctx context.Context, teamID, startMs, endMs int64,
 		       quantilesPrometheusHistogramMerge(0.5, 0.95)(m.latency_state)      AS qs
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id = @teamID AND m.timestamp BETWEEN @start AND @end
+		PREWHERE m.tenant_id = @tenantID AND m.timestamp BETWEEN @start AND @end
 		  AND m.metric_name = 'traces_service_graph_request_server'
 		GROUP BY source, target`
 	var rows []edgeAggRow
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetEdges", &rows, query, spanArgs(teamID, startMs, endMs, focusService)...); err != nil {
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetEdges", &rows, query, spanArgs(tenantID, startMs, endMs, focusService)...); err != nil {
 		return nil, err
 	}
 	for i := range rows {
@@ -91,6 +91,6 @@ func (r *Repository) GetEdges(ctx context.Context, teamID, startMs, endMs int64,
 	return rows, nil
 }
 
-func spanArgs(teamID, startMs, endMs int64, focusService string) []any {
-	return append(chargs.RangeArgs(teamID, startMs, endMs), clickhouse.Named("focusService", focusService))
+func spanArgs(tenantID, startMs, endMs int64, focusService string) []any {
+	return append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("focusService", focusService))
 }

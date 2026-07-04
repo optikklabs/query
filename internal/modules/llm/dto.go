@@ -86,8 +86,8 @@ type latencyBucketRow struct {
 
 // CostBreakdownResponse groups spend by service, vendor or model.
 type CostBreakdownResponse struct {
-	GroupBy string           `json:"groupBy"`
-	Rows    []CostBreakdown  `json:"rows"`
+	GroupBy string          `json:"groupBy"`
+	Rows    []CostBreakdown `json:"rows"`
 }
 
 type CostBreakdown struct {
@@ -162,17 +162,17 @@ type traceCursor struct {
 
 // TraceDetailResponse is the waterfall + prompt/output view of one trace.
 type TraceDetailResponse struct {
-	TraceID      string     `json:"traceId"`
-	Service      string     `json:"service"`
-	StartMs      int64      `json:"startMs"`
-	DurationMs   float64    `json:"durationMs"`
-	HasError     bool       `json:"hasError"`
-	Prompt       string     `json:"prompt"`
-	Output       string     `json:"output"`
-	InputTokens  uint64     `json:"inputTokens"`
-	OutputTokens uint64     `json:"outputTokens"`
-	Cost         float64    `json:"cost"`
-	Spans        []LLMSpan  `json:"spans"`
+	TraceID      string    `json:"traceId"`
+	Service      string    `json:"service"`
+	StartMs      int64     `json:"startMs"`
+	DurationMs   float64   `json:"durationMs"`
+	HasError     bool      `json:"hasError"`
+	Prompt       string    `json:"prompt"`
+	Output       string    `json:"output"`
+	InputTokens  uint64    `json:"inputTokens"`
+	OutputTokens uint64    `json:"outputTokens"`
+	Cost         float64   `json:"cost"`
+	Spans        []LLMSpan `json:"spans"`
 }
 
 type LLMSpan struct {

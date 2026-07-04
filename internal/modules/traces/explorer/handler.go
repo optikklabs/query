@@ -24,7 +24,7 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
 		return
 	}
-	req.Filters.TeamID = modulecommon.Tenant(r).TeamID
+	req.Filters.TenantID = modulecommon.Tenant(r).TenantID
 	req.Filters.StartMs = req.StartTime
 	req.Filters.EndMs = req.EndTime
 	if err := req.Filters.Validate(); err != nil {
@@ -45,7 +45,7 @@ func (h *Handler) QueryFacets(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
 		return
 	}
-	req.Filters.TeamID = modulecommon.Tenant(r).TeamID
+	req.Filters.TenantID = modulecommon.Tenant(r).TenantID
 	req.Filters.StartMs = req.StartTime
 	req.Filters.EndMs = req.EndTime
 	if err := req.Filters.Validate(); err != nil {
@@ -66,7 +66,7 @@ func (h *Handler) QueryTrend(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
 		return
 	}
-	req.Filters.TeamID = modulecommon.Tenant(r).TeamID
+	req.Filters.TenantID = modulecommon.Tenant(r).TenantID
 	req.Filters.StartMs = req.StartTime
 	req.Filters.EndMs = req.EndTime
 	if err := req.Filters.Validate(); err != nil {
@@ -100,7 +100,7 @@ func (h *Handler) Suggest(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "unknown field")
 		return
 	}
-	resp, err := h.svc.Suggest(r.Context(), req, modulecommon.Tenant(r).TeamID)
+	resp, err := h.svc.Suggest(r.Context(), req, modulecommon.Tenant(r).TenantID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch suggestions", err)
 		return

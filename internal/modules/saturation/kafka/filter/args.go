@@ -11,9 +11,9 @@ const MessagingSystemKafka = "kafka"
 
 const MaxTopQueues = 50
 
-func MetricArgs(teamID int64, startMs, endMs int64) []any {
+func MetricArgs(tenantID int64, startMs, endMs int64) []any {
 	return []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 	}

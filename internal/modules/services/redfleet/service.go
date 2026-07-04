@@ -42,8 +42,6 @@ func (s *Service) GetFleetServices(ctx context.Context, f REDFilters) ([]Service
 	return overview.Services, nil
 }
 
-
-
 func mapFleetServices(rows []redMetricsRow) []ServiceREDMetric {
 	services := make([]ServiceREDMetric, len(rows))
 	for i, row := range rows {
@@ -97,9 +95,6 @@ func computeFleetTotals(services []ServiceREDMetric, startMs, endMs int64) Fleet
 		AvgP99Ms:       utils.SanitizeFloat(avgP99),
 	}
 }
-
-
-
 
 func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFilters) ([]ServicePerformancePoint, error) {
 	rows, err := s.repo.GetRequestAndErrorRateTimeSeries(ctx, f)
@@ -469,8 +464,8 @@ func toTopEndpoint(row topEndpointRow, durationSec float64) TopEndpoint {
 	}
 }
 
-func (s *Service) GetOperationBaseline(ctx context.Context, teamID int64, startMs, endMs int64, serviceName, operationName string) (OperationBaseline, error) {
-	row, err := s.repo.GetOperationBaseline(ctx, teamID, startMs, endMs, serviceName, operationName)
+func (s *Service) GetOperationBaseline(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName, operationName string) (OperationBaseline, error) {
+	row, err := s.repo.GetOperationBaseline(ctx, tenantID, startMs, endMs, serviceName, operationName)
 	if err != nil {
 		return OperationBaseline{}, err
 	}
@@ -504,7 +499,7 @@ func (s *Service) GetServiceSummary(ctx context.Context, f REDFilters) (ServiceS
 		infraconsts.MetricSystemDiskUtilization,
 	}
 
-	sats, err := s.repo.GetServiceSaturationAggs(ctx, f.TeamID, f.StartMs, f.EndMs, serviceName, metricNames)
+	sats, err := s.repo.GetServiceSaturationAggs(ctx, f.TenantID, f.StartMs, f.EndMs, serviceName, metricNames)
 	if err != nil {
 		sats = nil
 	}
@@ -604,7 +599,7 @@ func (s *Service) GetServiceSaturationTimeSeries(ctx context.Context, f REDFilte
 		infraconsts.MetricJVMCPUUtilization,
 	}
 
-	rows, err := s.repo.GetServiceSaturationTimeSeries(ctx, f.TeamID, f.StartMs, f.EndMs, serviceName, metricNames)
+	rows, err := s.repo.GetServiceSaturationTimeSeries(ctx, f.TenantID, f.StartMs, f.EndMs, serviceName, metricNames)
 	if err != nil {
 		return nil, err
 	}

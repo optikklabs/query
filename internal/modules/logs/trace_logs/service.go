@@ -12,9 +12,9 @@ type Service struct {
 
 func NewService(repo *Repository) *Service { return &Service{repo: repo} }
 
-// GetByTraceID resolves all logs for a (team_id, trace_id) pair.
-func (s *Service) GetByTraceID(ctx context.Context, teamID int64, traceID string, limit int) ([]models.Log, error) {
-	rows, err := s.repo.FetchLogsByTrace(ctx, teamID, traceID, limit)
+// GetByTraceID resolves all logs for a (tenant_id, trace_id) pair.
+func (s *Service) GetByTraceID(ctx context.Context, tenantID int64, traceID string, limit int) ([]models.Log, error) {
+	rows, err := s.repo.FetchLogsByTrace(ctx, tenantID, traceID, limit)
 	if err != nil {
 		return nil, err
 	}

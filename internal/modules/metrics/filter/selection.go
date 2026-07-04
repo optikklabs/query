@@ -36,7 +36,7 @@ func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols s
 	cte = `WITH fps AS (
 		    SELECT ` + fpsSel + `
 		    FROM optikk.metrics_series
-		    PREWHERE team_id = @teamID AND metric_name = @metricName AND timestamp BETWEEN @start AND @end` + where + `
+		    PREWHERE tenant_id = @tenantID AND metric_name = @metricName AND timestamp BETWEEN @start AND @end` + where + `
 		    GROUP BY ` + fpsGrp + `
 		)
 `
@@ -71,7 +71,7 @@ func BuildTagValueArms(keys []string) (arms []string, args []any) {
 		arms = append(arms, `
 			SELECT @`+label+` AS tag_key, `+col+` AS tag_value, count() AS c
 			FROM optikk.metrics_series
-			PREWHERE team_id     = @teamID
+			PREWHERE tenant_id     = @tenantID
 			     AND timestamp   BETWEEN @start AND @end
 			     AND metric_name = @metricName
 			WHERE `+col+` != ''

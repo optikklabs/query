@@ -15,14 +15,14 @@ type Handler struct {
 // ListMetricNames handles GET /metrics/names
 // Frontend expects: { "metrics": [{ "name", "type", "unit", "description" }] }
 func (h *Handler) ListMetricNames(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
 	search := r.URL.Query().Get("search")
 
-	results, err := h.Service.ListMetricNames(r.Context(), teamID, startMs, endMs, search)
+	results, err := h.Service.ListMetricNames(r.Context(), tenantID, startMs, endMs, search)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to list metric names", err)
 		return
@@ -41,7 +41,7 @@ func (h *Handler) ListMetricNames(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
 		return
@@ -53,7 +53,7 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 	}
 	tagKey := r.URL.Query().Get("tagKey")
 
-	tags, err := h.Service.ListTags(r.Context(), teamID, startMs, endMs, metricName, tagKey)
+	tags, err := h.Service.ListTags(r.Context(), tenantID, startMs, endMs, metricName, tagKey)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to list tags", err)
 		return
@@ -76,8 +76,8 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teamID := modulecommon.Tenant(r).TeamID
-	result, err := h.Service.Query(r.Context(), teamID, req)
+	tenantID := modulecommon.Tenant(r).TenantID
+	result, err := h.Service.Query(r.Context(), tenantID, req)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to execute explorer query", err)
 		return

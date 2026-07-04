@@ -100,24 +100,24 @@ func (s *Service) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBuck
 	return s.repo.QueryTrend(ctx, req)
 }
 
-func (s *Service) Suggest(ctx context.Context, req SuggestRequest, teamID int64) (SuggestResponse, error) {
+func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int64) (SuggestResponse, error) {
 	limit := pickSuggestLimit(req.Limit)
-	rows, err := s.fetchSuggest(ctx, teamID, req, limit)
+	rows, err := s.fetchSuggest(ctx, tenantID, req, limit)
 	if err != nil {
-		slog.ErrorContext(ctx, "suggest: Suggest failed", slog.Any("error", err), slog.Int64("team_id", teamID), slog.String("field", req.Field))
+		slog.ErrorContext(ctx, "suggest: Suggest failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("field", req.Field))
 		return SuggestResponse{}, err
 	}
 	return SuggestResponse{Suggestions: rows}, nil
 }
 
-func (s *Service) fetchSuggest(ctx context.Context, teamID int64, req SuggestRequest, limit int) ([]Suggestion, error) {
+func (s *Service) fetchSuggest(ctx context.Context, tenantID int64, req SuggestRequest, limit int) ([]Suggestion, error) {
 	if strings.HasPrefix(req.Field, "@") {
-		return s.repo.SuggestAttribute(ctx, teamID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
+		return s.repo.SuggestAttribute(ctx, tenantID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
 	}
 	if !IsScalarField(req.Field) {
 		return nil, fmt.Errorf("suggest: unknown scalar field %q", req.Field)
 	}
-	return s.repo.SuggestScalar(ctx, teamID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
+	return s.repo.SuggestScalar(ctx, tenantID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
 }
 
 func pickSuggestLimit(v int) int {

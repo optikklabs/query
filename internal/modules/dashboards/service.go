@@ -27,8 +27,8 @@ func (e ErrValidation) Error() string { return e.Msg }
 
 // --- Pages ---
 
-func (s *Service) CreatePage(ctx context.Context, teamID, userID int64, req CreatePageRequest) (DashboardPageResponse, error) {
-	args, err := buildPageArgs(teamID, userID, req)
+func (s *Service) CreatePage(ctx context.Context, tenantID, userID int64, req CreatePageRequest) (DashboardPageResponse, error) {
+	args, err := buildPageArgs(tenantID, userID, req)
 	if err != nil {
 		return DashboardPageResponse{}, err
 	}
@@ -36,46 +36,46 @@ func (s *Service) CreatePage(ctx context.Context, teamID, userID int64, req Crea
 	if err != nil {
 		return DashboardPageResponse{}, err
 	}
-	return s.GetPage(ctx, teamID, id)
+	return s.GetPage(ctx, tenantID, id)
 }
 
-func (s *Service) UpdatePage(ctx context.Context, teamID, userID, id int64, req UpdatePageRequest) (DashboardPageResponse, error) {
-	args, err := buildPageArgs(teamID, userID, req)
+func (s *Service) UpdatePage(ctx context.Context, tenantID, userID, id int64, req UpdatePageRequest) (DashboardPageResponse, error) {
+	args, err := buildPageArgs(tenantID, userID, req)
 	if err != nil {
 		return DashboardPageResponse{}, err
 	}
-	if err := s.repo.UpdatePage(ctx, id, teamID, args); err != nil {
+	if err := s.repo.UpdatePage(ctx, id, tenantID, args); err != nil {
 		return DashboardPageResponse{}, mapNotFound(err)
 	}
-	return s.GetPage(ctx, teamID, id)
+	return s.GetPage(ctx, tenantID, id)
 }
 
-func (s *Service) DeletePage(ctx context.Context, teamID, id int64) error {
-	return mapNotFound(s.repo.DeletePage(ctx, id, teamID))
+func (s *Service) DeletePage(ctx context.Context, tenantID, id int64) error {
+	return mapNotFound(s.repo.DeletePage(ctx, id, tenantID))
 }
 
-func (s *Service) GetPage(ctx context.Context, teamID, id int64) (DashboardPageResponse, error) {
-	row, err := s.repo.GetPageByID(ctx, id, teamID)
+func (s *Service) GetPage(ctx context.Context, tenantID, id int64) (DashboardPageResponse, error) {
+	row, err := s.repo.GetPageByID(ctx, id, tenantID)
 	if err != nil {
 		return DashboardPageResponse{}, mapNotFound(err)
 	}
 	return toPageResponse(row), nil
 }
 
-func (s *Service) GetPageDetail(ctx context.Context, teamID, id int64) (DashboardPageDetailResponse, error) {
-	page, err := s.GetPage(ctx, teamID, id)
+func (s *Service) GetPageDetail(ctx context.Context, tenantID, id int64) (DashboardPageDetailResponse, error) {
+	page, err := s.GetPage(ctx, tenantID, id)
 	if err != nil {
 		return DashboardPageDetailResponse{}, err
 	}
-	widgets, err := s.ListWidgets(ctx, teamID, id)
+	widgets, err := s.ListWidgets(ctx, tenantID, id)
 	if err != nil {
 		return DashboardPageDetailResponse{}, err
 	}
 	return DashboardPageDetailResponse{DashboardPageResponse: page, Widgets: widgets}, nil
 }
 
-func (s *Service) ListPages(ctx context.Context, teamID int64, q ListPagesQuery) (DashboardPageListResponse, error) {
-	rows, total, err := s.repo.ListPages(ctx, teamID, q)
+func (s *Service) ListPages(ctx context.Context, tenantID int64, q ListPagesQuery) (DashboardPageListResponse, error) {
+	rows, total, err := s.repo.ListPages(ctx, tenantID, q)
 	if err != nil {
 		return DashboardPageListResponse{}, err
 	}
@@ -88,8 +88,8 @@ func (s *Service) ListPages(ctx context.Context, teamID int64, q ListPagesQuery)
 
 // --- Widgets ---
 
-func (s *Service) ListWidgets(ctx context.Context, teamID, pageID int64) ([]WidgetResponse, error) {
-	rows, err := s.repo.ListWidgets(ctx, pageID, teamID)
+func (s *Service) ListWidgets(ctx context.Context, tenantID, pageID int64) ([]WidgetResponse, error) {
+	rows, err := s.repo.ListWidgets(ctx, pageID, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -100,18 +100,18 @@ func (s *Service) ListWidgets(ctx context.Context, teamID, pageID int64) ([]Widg
 	return out, nil
 }
 
-func (s *Service) CreateWidget(ctx context.Context, teamID, pageID int64, req CreateWidgetRequest) (WidgetResponse, error) {
-	if err := s.ensurePage(ctx, pageID, teamID); err != nil {
+func (s *Service) CreateWidget(ctx context.Context, tenantID, pageID int64, req CreateWidgetRequest) (WidgetResponse, error) {
+	if err := s.ensurePage(ctx, pageID, tenantID); err != nil {
 		return WidgetResponse{}, err
 	}
-	count, err := s.repo.CountWidgets(ctx, pageID, teamID)
+	count, err := s.repo.CountWidgets(ctx, pageID, tenantID)
 	if err != nil {
 		return WidgetResponse{}, err
 	}
 	if count >= maxWidgetsPerPage {
 		return WidgetResponse{}, ErrValidation{Msg: fmt.Sprintf("page already has the maximum of %d widgets", maxWidgetsPerPage)}
 	}
-	args, err := buildWidgetArgs(teamID, pageID, req)
+	args, err := buildWidgetArgs(tenantID, pageID, req)
 	if err != nil {
 		return WidgetResponse{}, err
 	}
@@ -119,11 +119,11 @@ func (s *Service) CreateWidget(ctx context.Context, teamID, pageID int64, req Cr
 	if err != nil {
 		return WidgetResponse{}, err
 	}
-	return s.getWidget(ctx, teamID, pageID, id)
+	return s.getWidget(ctx, tenantID, pageID, id)
 }
 
-func (s *Service) UpdateWidget(ctx context.Context, teamID, pageID, widgetID int64, req UpdateWidgetRequest) (WidgetResponse, error) {
-	args, err := buildWidgetArgs(teamID, pageID, req)
+func (s *Service) UpdateWidget(ctx context.Context, tenantID, pageID, widgetID int64, req UpdateWidgetRequest) (WidgetResponse, error) {
+	args, err := buildWidgetArgs(tenantID, pageID, req)
 	if err != nil {
 		return WidgetResponse{}, err
 	}
@@ -131,23 +131,23 @@ func (s *Service) UpdateWidget(ctx context.Context, teamID, pageID, widgetID int
 	if err := s.repo.UpdateWidget(ctx, widgetID, args); err != nil {
 		return WidgetResponse{}, mapNotFound(err)
 	}
-	return s.getWidget(ctx, teamID, pageID, widgetID)
+	return s.getWidget(ctx, tenantID, pageID, widgetID)
 }
 
-func (s *Service) DeleteWidget(ctx context.Context, teamID, pageID, widgetID int64) error {
-	return mapNotFound(s.repo.DeleteWidget(ctx, widgetID, pageID, teamID))
+func (s *Service) DeleteWidget(ctx context.Context, tenantID, pageID, widgetID int64) error {
+	return mapNotFound(s.repo.DeleteWidget(ctx, widgetID, pageID, tenantID))
 }
 
-func (s *Service) getWidget(ctx context.Context, teamID, pageID, widgetID int64) (WidgetResponse, error) {
-	row, err := s.repo.GetWidgetByID(ctx, widgetID, pageID, teamID)
+func (s *Service) getWidget(ctx context.Context, tenantID, pageID, widgetID int64) (WidgetResponse, error) {
+	row, err := s.repo.GetWidgetByID(ctx, widgetID, pageID, tenantID)
 	if err != nil {
 		return WidgetResponse{}, mapNotFound(err)
 	}
 	return toWidgetResponse(row), nil
 }
 
-func (s *Service) ensurePage(ctx context.Context, pageID, teamID int64) error {
-	ok, err := s.repo.PageExists(ctx, pageID, teamID)
+func (s *Service) ensurePage(ctx context.Context, pageID, tenantID int64) error {
+	ok, err := s.repo.PageExists(ctx, pageID, tenantID)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func (s *Service) ensurePage(ctx context.Context, pageID, teamID int64) error {
 
 // --- Validation + serialization ---
 
-func buildPageArgs(teamID, userID int64, req CreatePageRequest) (pageInsertArgs, error) {
+func buildPageArgs(tenantID, userID int64, req CreatePageRequest) (pageInsertArgs, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return pageInsertArgs{}, ErrValidation{Msg: "name is required"}
@@ -177,7 +177,7 @@ func buildPageArgs(teamID, userID int64, req CreatePageRequest) (pageInsertArgs,
 		tagsJSON = []byte("[]")
 	}
 	args := pageInsertArgs{
-		TeamID:     teamID,
+		TenantID:   tenantID,
 		Name:       name,
 		Icon:       icon,
 		IconColor:  iconColor,
@@ -193,13 +193,13 @@ func buildPageArgs(teamID, userID int64, req CreatePageRequest) (pageInsertArgs,
 	return args, nil
 }
 
-func buildWidgetArgs(teamID, pageID int64, req CreateWidgetRequest) (widgetInsertArgs, error) {
+func buildWidgetArgs(tenantID, pageID int64, req CreateWidgetRequest) (widgetInsertArgs, error) {
 	if err := validateWidget(req); err != nil {
 		return widgetInsertArgs{}, err
 	}
 	args := widgetInsertArgs{
 		PageID:     pageID,
-		TeamID:     teamID,
+		TenantID:   tenantID,
 		PanelType:  req.PanelType,
 		SpecJSON:   []byte(req.Spec),
 		LayoutJSON: []byte(req.Layout),
@@ -274,7 +274,7 @@ type querySpecProbe struct {
 // validateQuery accepts either a curated-endpoint widget or a metrics
 // query-builder widget. The endpoint variant stays restricted to the safe
 // allowlist; the builder variant is validated structurally — its query is
-// replayed against the team-scoped metrics engine, so no SQL is persisted.
+// replayed against the tenant-scoped metrics engine, so no SQL is persisted.
 func validateQuery(spec json.RawMessage) error {
 	var probe querySpecProbe
 	if err := json.Unmarshal(spec, &probe); err != nil {

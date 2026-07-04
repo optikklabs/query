@@ -74,24 +74,24 @@ func pct(part, whole uint64) float64 {
 }
 
 // Summary assembles the KPI strip, by-type breakdown and metrics-pillar facts.
-func (s *Service) Summary(ctx context.Context, teamID, startMs, endMs int64) (SummaryResponse, error) {
-	logs, err := s.repo.DailyLogs(ctx, teamID, startMs, endMs)
+func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (SummaryResponse, error) {
+	logs, err := s.repo.DailyLogs(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return SummaryResponse{}, fmt.Errorf("ingestion.Summary logs: %w", err)
 	}
-	spans, err := s.repo.DailySpans(ctx, teamID, startMs, endMs)
+	spans, err := s.repo.DailySpans(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return SummaryResponse{}, fmt.Errorf("ingestion.Summary spans: %w", err)
 	}
-	metrics, err := s.repo.DailyMetricDatapoints(ctx, teamID, startMs, endMs)
+	metrics, err := s.repo.DailyMetricDatapoints(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return SummaryResponse{}, fmt.Errorf("ingestion.Summary metrics: %w", err)
 	}
-	activeTS, err := s.repo.ActiveTimeseries(ctx, teamID, startMs, endMs)
+	activeTS, err := s.repo.ActiveTimeseries(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return SummaryResponse{}, fmt.Errorf("ingestion.Summary timeseries: %w", err)
 	}
-	topMetric, err := s.repo.TopCardinalityMetric(ctx, teamID, startMs, endMs)
+	topMetric, err := s.repo.TopCardinalityMetric(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return SummaryResponse{}, fmt.Errorf("ingestion.Summary cardinality: %w", err)
 	}
@@ -145,23 +145,23 @@ func (s *Service) Summary(ctx context.Context, teamID, startMs, endMs int64) (Su
 }
 
 // Timeseries builds the daily stacked series, grouped by signal type or by service.
-func (s *Service) Timeseries(ctx context.Context, teamID, startMs, endMs int64, groupBy string) (TimeseriesResponse, error) {
+func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64, groupBy string) (TimeseriesResponse, error) {
 	dates := buildDateAxis(startMs, endMs)
 	idx := axisIndex(dates)
 
 	if groupBy == "service" {
-		return s.timeseriesByService(ctx, teamID, startMs, endMs, dates, idx)
+		return s.timeseriesByService(ctx, tenantID, startMs, endMs, dates, idx)
 	}
 
-	logs, err := s.repo.DailyLogs(ctx, teamID, startMs, endMs)
+	logs, err := s.repo.DailyLogs(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries logs: %w", err)
 	}
-	spans, err := s.repo.DailySpans(ctx, teamID, startMs, endMs)
+	spans, err := s.repo.DailySpans(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries spans: %w", err)
 	}
-	metrics, err := s.repo.DailyMetricDatapoints(ctx, teamID, startMs, endMs)
+	metrics, err := s.repo.DailyMetricDatapoints(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries metrics: %w", err)
 	}
@@ -177,12 +177,12 @@ func (s *Service) Timeseries(ctx context.Context, teamID, startMs, endMs int64, 
 	}, nil
 }
 
-func (s *Service) timeseriesByService(ctx context.Context, teamID, startMs, endMs int64, dates []string, idx map[string]int) (TimeseriesResponse, error) {
-	logs, err := s.repo.DailyLogsByService(ctx, teamID, startMs, endMs)
+func (s *Service) timeseriesByService(ctx context.Context, tenantID, startMs, endMs int64, dates []string, idx map[string]int) (TimeseriesResponse, error) {
+	logs, err := s.repo.DailyLogsByService(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries svc logs: %w", err)
 	}
-	spans, err := s.repo.DailySpansByService(ctx, teamID, startMs, endMs)
+	spans, err := s.repo.DailySpansByService(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries svc spans: %w", err)
 	}
@@ -239,38 +239,38 @@ func rankByTotal(perService map[string][]uint64) []string {
 }
 
 // Services builds the top-ingesting-services table, including a prior-period delta.
-func (s *Service) Services(ctx context.Context, teamID, startMs, endMs int64) (ServicesResponse, error) {
-	logTotals, err := s.repo.ServiceLogTotals(ctx, teamID, startMs, endMs)
+func (s *Service) Services(ctx context.Context, tenantID, startMs, endMs int64) (ServicesResponse, error) {
+	logTotals, err := s.repo.ServiceLogTotals(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services logs: %w", err)
 	}
-	spanTotals, err := s.repo.ServiceSpanTotals(ctx, teamID, startMs, endMs)
+	spanTotals, err := s.repo.ServiceSpanTotals(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services spans: %w", err)
 	}
-	tsTotals, err := s.repo.ServiceTimeseries(ctx, teamID, startMs, endMs)
+	tsTotals, err := s.repo.ServiceTimeseries(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services timeseries: %w", err)
 	}
 
 	// Prior equal-length window for the delta column.
 	span := endMs - startMs
-	priorLogs, err := s.repo.ServiceLogTotals(ctx, teamID, startMs-span, startMs)
+	priorLogs, err := s.repo.ServiceLogTotals(ctx, tenantID, startMs-span, startMs)
 	if err != nil {
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services prior logs: %w", err)
 	}
-	priorSpans, err := s.repo.ServiceSpanTotals(ctx, teamID, startMs-span, startMs)
+	priorSpans, err := s.repo.ServiceSpanTotals(ctx, tenantID, startMs-span, startMs)
 	if err != nil {
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services prior spans: %w", err)
 	}
 
 	dates := buildDateAxis(startMs, endMs)
 	idx := axisIndex(dates)
-	dailyLogs, err := s.repo.DailyLogsByService(ctx, teamID, startMs, endMs)
+	dailyLogs, err := s.repo.DailyLogsByService(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services daily logs: %w", err)
 	}
-	dailySpans, err := s.repo.DailySpansByService(ctx, teamID, startMs, endMs)
+	dailySpans, err := s.repo.DailySpansByService(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services daily spans: %w", err)
 	}

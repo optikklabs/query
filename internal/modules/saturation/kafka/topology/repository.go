@@ -26,7 +26,7 @@ const (
 	consumeWhere = filter.AttrSystem + " = 'kafka' AND " + filter.AttrConsumerGroup + " != ''"
 )
 
-func (r *Repository) QueryProduceEdges(ctx context.Context, teamID, startMs, endMs int64) ([]produceEdgeRow, error) {
+func (r *Repository) QueryProduceEdges(ctx context.Context, tenantID, startMs, endMs int64) ([]produceEdgeRow, error) {
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
@@ -34,7 +34,7 @@ func (r *Repository) QueryProduceEdges(ctx context.Context, teamID, startMs, end
 		           ` + seriesattr.StatusCode + ` AS status_code,
 		           ` + filter.AttrTopic + `      AS topic
 		    FROM optikk.metrics_series AS s
-		    PREWHERE s.team_id = @teamID AND s.timestamp BETWEEN @start AND @end AND s.metric_name = 'traces.span.metrics.duration' AND s.service != ''
+		    PREWHERE s.tenant_id = @tenantID AND s.timestamp BETWEEN @start AND @end AND s.metric_name = 'traces.span.metrics.duration' AND s.service != ''
 		    WHERE ` + produceWhere + `
 		    GROUP BY fingerprint, service, status_code, topic
 		)
@@ -45,16 +45,16 @@ func (r *Repository) QueryProduceEdges(ctx context.Context, teamID, startMs, end
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id = @teamID
+		PREWHERE m.tenant_id = @tenantID
 		     AND m.timestamp BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY service, topic
 		ORDER BY call_count DESC`
 	var rows []produceEdgeRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryProduceEdges", &rows, query, chargs.RollupRangeArgs(teamID, startMs, endMs)...)
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryProduceEdges", &rows, query, chargs.RollupRangeArgs(tenantID, startMs, endMs)...)
 }
 
-func (r *Repository) QueryConsumeEdges(ctx context.Context, teamID, startMs, endMs int64) ([]consumeEdgeRow, error) {
+func (r *Repository) QueryConsumeEdges(ctx context.Context, tenantID, startMs, endMs int64) ([]consumeEdgeRow, error) {
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
@@ -63,7 +63,7 @@ func (r *Repository) QueryConsumeEdges(ctx context.Context, teamID, startMs, end
 		           ` + filter.AttrTopic + `           AS topic,
 		           ` + filter.AttrConsumerGroup + `   AS consumer_group
 		    FROM optikk.metrics_series AS s
-		    PREWHERE s.team_id = @teamID AND s.timestamp BETWEEN @start AND @end AND s.metric_name = 'traces.span.metrics.duration' AND s.service != ''
+		    PREWHERE s.tenant_id = @tenantID AND s.timestamp BETWEEN @start AND @end AND s.metric_name = 'traces.span.metrics.duration' AND s.service != ''
 		    WHERE ` + consumeWhere + `
 		    GROUP BY fingerprint, service, status_code, topic, consumer_group
 		)
@@ -75,11 +75,11 @@ func (r *Repository) QueryConsumeEdges(ctx context.Context, teamID, startMs, end
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id = @teamID
+		PREWHERE m.tenant_id = @tenantID
 		     AND m.timestamp BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY service, topic, consumer_group
 		ORDER BY call_count DESC`
 	var rows []consumeEdgeRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryConsumeEdges", &rows, query, chargs.RollupRangeArgs(teamID, startMs, endMs)...)
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryConsumeEdges", &rows, query, chargs.RollupRangeArgs(tenantID, startMs, endMs)...)
 }

@@ -64,6 +64,6 @@ func DecodeConditions(row models.MonitorRow) models.Conditions {
 	return c
 }
 
-func teamIDArg(teamID int64) any {
-	return clickhouse.Named("teamID", uint32(teamID))
+func tenantIDArg(tenantID int64) any {
+	return clickhouse.Named("tenantID", uint32(tenantID))
 }

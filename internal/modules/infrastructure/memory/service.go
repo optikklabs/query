@@ -15,8 +15,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetAvgMemory(ctx context.Context, teamID int64, startMs, endMs int64) (MetricValue, error) {
-	rows, err := s.repo.QueryMemoryUtilizationAgg(ctx, teamID, startMs, endMs)
+func (s *Service) GetAvgMemory(ctx context.Context, tenantID int64, startMs, endMs int64) (MetricValue, error) {
+	rows, err := s.repo.QueryMemoryUtilizationAgg(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return MetricValue{}, err
 	}
@@ -27,9 +27,9 @@ func (s *Service) GetAvgMemory(ctx context.Context, teamID int64, startMs, endMs
 	return MetricValue{Value: *avg}, nil
 }
 
-func (s *Service) GetMemoryByInstance(ctx context.Context, teamID int64, host, pod, container, serviceName string, startMs, endMs int64) (*float64, error) {
+func (s *Service) GetMemoryByInstance(ctx context.Context, tenantID int64, host, pod, container, serviceName string, startMs, endMs int64) (*float64, error) {
 	_ = container
-	rows, err := s.repo.QueryMemoryUtilizationForInstance(ctx, teamID, startMs, endMs, host, pod, serviceName)
+	rows, err := s.repo.QueryMemoryUtilizationForInstance(ctx, tenantID, startMs, endMs, host, pod, serviceName)
 	if err != nil {
 		return nil, err
 	}

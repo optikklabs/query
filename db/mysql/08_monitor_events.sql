@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS optikk.monitor_events
   (
      id           BIGINT AUTO_INCREMENT PRIMARY KEY,
      monitor_id   BIGINT NOT NULL,
-     team_id      BIGINT NOT NULL,
+     tenant_id      BIGINT NOT NULL,
      kind         ENUM('triggered','recovered','acked','muted','test') NOT NULL,
      value        DOUBLE NULL,
      threshold    DOUBLE NULL,
@@ -12,5 +12,5 @@ CREATE TABLE IF NOT EXISTS optikk.monitor_events
      peak_value   DOUBLE NULL,
      note         VARCHAR(500) NULL,
      INDEX idx_me_monitor (monitor_id, started_at),
-     INDEX idx_me_team (team_id, started_at)
+     INDEX idx_me_tenant (tenant_id, started_at)
   );

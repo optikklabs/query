@@ -13,7 +13,7 @@ type Handler struct {
 
 // GetTopology returns the Kafka producers->topics->consumers graph.
 func (h *Handler) GetTopology(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to build kafka topology", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetTopology(ctx, teamID, startMs, endMs, "")
+	modulecommon.HandleRangeQuery(w, r, "Failed to build kafka topology", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetTopology(ctx, tenantID, startMs, endMs, "")
 	})
 }

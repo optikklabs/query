@@ -14,19 +14,19 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetCriticalPath(ctx context.Context, teamID int64, traceID string) ([]CriticalPathSpan, error) {
-	rows, err := s.repo.GetCriticalPath(ctx, teamID, traceID)
+func (s *Service) GetCriticalPath(ctx context.Context, tenantID int64, traceID string) ([]CriticalPathSpan, error) {
+	rows, err := s.repo.GetCriticalPath(ctx, tenantID, traceID)
 	if err != nil {
-		slog.ErrorContext(ctx, "paths: GetCriticalPath failed", slog.Any("error", err), slog.Int64("team_id", teamID), slog.String("trace_id", traceID))
+		slog.ErrorContext(ctx, "paths: GetCriticalPath failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
 	}
 	return buildCriticalPath(rows), nil
 }
 
-func (s *Service) GetErrorPath(ctx context.Context, teamID int64, traceID string) ([]ErrorPathSpan, error) {
-	rows, err := s.repo.GetErrorPath(ctx, teamID, traceID)
+func (s *Service) GetErrorPath(ctx context.Context, tenantID int64, traceID string) ([]ErrorPathSpan, error) {
+	rows, err := s.repo.GetErrorPath(ctx, tenantID, traceID)
 	if err != nil {
-		slog.ErrorContext(ctx, "paths: GetErrorPath failed", slog.Any("error", err), slog.Int64("team_id", teamID), slog.String("trace_id", traceID))
+		slog.ErrorContext(ctx, "paths: GetErrorPath failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
 	}
 	return buildErrorPath(rows), nil

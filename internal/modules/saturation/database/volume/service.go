@@ -15,8 +15,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetOpsBySystem(ctx context.Context, teamID, startMs, endMs int64, f filter.Filters) ([]OpsTimeSeries, error) {
-	rows, err := s.repo.GetOpsBySystem(ctx, teamID, startMs, endMs, f)
+func (s *Service) GetOpsBySystem(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters) ([]OpsTimeSeries, error) {
+	rows, err := s.repo.GetOpsBySystem(ctx, tenantID, startMs, endMs, f)
 	return mapOpsRate(rows), err
 }
 

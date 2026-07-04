@@ -32,12 +32,12 @@ func (b *LogBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 	const query = `
 		SELECT count() AS value
 		FROM optikk.logs
-		PREWHERE team_id   = @teamID
+		PREWHERE tenant_id   = @tenantID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @start AND @end
 		  AND (@searchTerm = '' OR hasToken(body, @searchTerm))`
 
-	args := logArgs(m.TeamID, q.Log.Query, startMs, endMs)
+	args := logArgs(m.TenantID, q.Log.Query, startMs, endMs)
 	var rows []logCountRow
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.log.Scalar", &rows, query, args...); err != nil {
 		return ScalarResult{}, err
@@ -59,14 +59,14 @@ func (b *LogBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket,
 		       count() AS value
 		FROM optikk.logs
-		PREWHERE team_id   = @teamID
+		PREWHERE tenant_id   = @tenantID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
 		WHERE timestamp BETWEEN @start AND @end
 		  AND (@searchTerm = '' OR hasToken(body, @searchTerm))
 		GROUP BY bucket
 		ORDER BY bucket`
 
-	args := logArgs(m.TeamID, q.Log.Query, startMs, endMs)
+	args := logArgs(m.TenantID, q.Log.Query, startMs, endMs)
 	var rows []logBucketRow
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.log.Series", &rows, query, args...); err != nil {
 		return nil, err
@@ -78,9 +78,9 @@ func (b *LogBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 	return out, nil
 }
 
-func logArgs(teamID int64, queryText string, startMs, endMs int64) []any {
+func logArgs(tenantID int64, queryText string, startMs, endMs int64) []any {
 	return []any{
-		teamIDArg(teamID),
+		tenantIDArg(tenantID),
 		clickhouse.Named("searchTerm", strings.ToLower(strings.TrimSpace(queryText))),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),

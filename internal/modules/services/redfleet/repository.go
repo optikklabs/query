@@ -35,7 +35,7 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 		           service,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
 		          AND ` + seriesattr.ServerKindPred + `
@@ -47,7 +47,7 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
 		FROM ` + timebucket.MetricsHistRollup(f.EndMs-f.StartMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		     AND m.fingerprint IN (SELECT fingerprint FROM series)
@@ -63,7 +63,6 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 	return rows, nil
 }
 
-
 type requestRateRawRow struct {
 	BucketAt     time.Time `ch:"bucket_at"`
 	RequestCount uint64    `ch:"request_count"`
@@ -77,7 +76,7 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f RED
 		    SELECT fingerprint,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
 		          AND ` + seriesattr.ServerKindPred + `
@@ -88,7 +87,7 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f RED
 		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `) AS error_count
 		FROM ` + timebucket.MetricsHistRollup(f.EndMs-f.StartMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		     AND m.fingerprint IN (SELECT fingerprint FROM series)
@@ -155,7 +154,7 @@ func (r *Repository) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]s
 		    SELECT fingerprint,
 		           ` + seriesattr.HTTPStatusCode + ` AS http_status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
 		          AND ` + seriesattr.ServerKindPred + `
@@ -166,7 +165,7 @@ func (r *Repository) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]s
 		       sum(m.hist_count)       AS request_count
 		FROM ` + timebucket.MetricsHistRollup(f.EndMs-f.StartMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		     AND m.fingerprint IN (SELECT fingerprint FROM series)
@@ -185,7 +184,7 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDF
 		WITH series AS (
 		    SELECT fingerprint
 		    FROM optikk.metrics_series AS s
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
 		          AND ` + seriesattr.ServerKindPred + `
@@ -195,7 +194,7 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDF
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
 		FROM ` + timebucket.MetricsHistRollup(f.EndMs-f.StartMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		     AND m.fingerprint IN (SELECT fingerprint FROM series)
@@ -221,7 +220,7 @@ func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilter
 		           ` + seriesattr.HTTPRoute + `  AS http_route,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
 		          AND ` + seriesattr.ServerKindPred + `
@@ -234,7 +233,7 @@ func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilter
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
 		FROM ` + timebucket.MetricsHistRollup(f.EndMs-f.StartMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		     AND m.fingerprint IN (SELECT fingerprint FROM series)
@@ -264,7 +263,7 @@ func (r *Repository) GetTopEndpointsCombined(
 		           ` + seriesattr.HTTPRoute + `  AS http_route,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
 		          AND ` + seriesattr.ServerKindPred + `
@@ -279,7 +278,7 @@ func (r *Repository) GetTopEndpointsCombined(
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state)  AS qs
 		FROM ` + timebucket.MetricsHistRollup(f.EndMs-f.StartMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		     AND m.fingerprint IN (SELECT fingerprint FROM series)
@@ -320,7 +319,7 @@ func (r *Repository) GetTopDBQueriesCombined(
 		           ` + seriesattr.DBSystem + `   AS db_system,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
 		          AND ` + seriesattr.DBSpanPred + `
@@ -334,7 +333,7 @@ func (r *Repository) GetTopDBQueriesCombined(
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state)  AS qs
 		FROM ` + timebucket.MetricsHistRollup(f.EndMs-f.StartMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		     AND m.fingerprint IN (SELECT fingerprint FROM series)
@@ -371,7 +370,7 @@ func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters)
 		    SELECT fingerprint,
 		           service AS service_name
 		    FROM optikk.metrics_series AS s
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
 		          AND ` + seriesattr.ServerKindPred + `
@@ -382,7 +381,7 @@ func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters)
 		       sum(m.hist_count)                                       AS request_count
 		FROM ` + timebucket.MetricsHistRollup(f.EndMs-f.StartMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		     AND m.fingerprint IN (SELECT fingerprint FROM series)
@@ -394,12 +393,12 @@ func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters)
 		&rows, query, args...)
 }
 
-func (r *Repository) GetOperationBaseline(ctx context.Context, teamID int64, startMs, endMs int64, serviceName, operationName string) (operationBaselineRow, error) {
+func (r *Repository) GetOperationBaseline(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName, operationName string) (operationBaselineRow, error) {
 	query := `
 		WITH series AS (
 		    SELECT fingerprint
 		    FROM optikk.metrics_series
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE ` + seriesattr.SpanName + ` = @operationName AND service = @serviceName
 		    GROUP BY fingerprint
 		)
@@ -407,10 +406,10 @@ func (r *Repository) GetOperationBaseline(ctx context.Context, teamID int64, sta
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'`
-	args := append(chargs.RollupRangeArgs(teamID, startMs, endMs),
+	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("operationName", operationName),
 	)
@@ -432,13 +431,13 @@ func (r *Repository) GetOperationBaseline(ctx context.Context, teamID int64, sta
 }
 
 func (r *Repository) GetServiceSaturationAggs(
-	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, metricNames []string,
+	ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, metricNames []string,
 ) ([]serviceMetricRow, error) {
 
 	hostQuery := `
 		SELECT DISTINCT host
 		FROM optikk.metrics_series
-		PREWHERE team_id     = @teamID
+		PREWHERE tenant_id     = @tenantID
 		     AND metric_name = 'traces.span.metrics.duration'
 		WHERE service = @serviceName
 		  AND host    != ''`
@@ -446,7 +445,7 @@ func (r *Repository) GetServiceSaturationAggs(
 		Host string `ch:"host"`
 	}
 	hostArgs := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("serviceName", serviceName),
 	}
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetServiceHosts",
@@ -466,14 +465,14 @@ func (r *Repository) GetServiceSaturationAggs(
 		    sum(m.val_sum) / sum(m.val_count) AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN optikk.metrics_series AS s ON m.fingerprint = s.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
 		WHERE s.service = @serviceName
 		   OR (s.host != '' AND s.host IN @hosts)
 		GROUP BY metric_name`
 
-	args := append(chargs.RollupRangeArgs(teamID, startMs, endMs),
+	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("metricNames", metricNames),
 		clickhouse.Named("hosts", hosts),
@@ -487,13 +486,13 @@ func (r *Repository) GetServiceSaturationAggs(
 }
 
 func (r *Repository) GetServiceSaturationTimeSeries(
-	ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, metricNames []string,
+	ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, metricNames []string,
 ) ([]saturationTimeSeriesRawRow, error) {
 
 	hostQuery := `
 		SELECT DISTINCT host
 		FROM optikk.metrics_series
-		PREWHERE team_id     = @teamID
+		PREWHERE tenant_id     = @tenantID
 		     AND metric_name = 'traces.span.metrics.duration'
 		WHERE service = @serviceName
 		  AND host    != ''`
@@ -501,7 +500,7 @@ func (r *Repository) GetServiceSaturationTimeSeries(
 		Host string `ch:"host"`
 	}
 	hostArgs := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("serviceName", serviceName),
 	}
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetServiceHosts",
@@ -521,7 +520,7 @@ func (r *Repository) GetServiceSaturationTimeSeries(
 		    sum(m.val_sum) / sum(m.val_count) AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN optikk.metrics_series AS s ON m.fingerprint = s.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
 		WHERE s.service = @serviceName
@@ -529,7 +528,7 @@ func (r *Repository) GetServiceSaturationTimeSeries(
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 
-	args := append(chargs.RollupRangeArgs(teamID, startMs, endMs),
+	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("metricNames", metricNames),
 		clickhouse.Named("hosts", hosts),

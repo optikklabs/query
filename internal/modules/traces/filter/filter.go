@@ -14,9 +14,9 @@ import (
 const maxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
 
 type Filters struct {
-	TeamID  int64 `json:"-"`
-	StartMs int64 `json:"-"`
-	EndMs   int64 `json:"-"`
+	TenantID int64 `json:"-"`
+	StartMs  int64 `json:"-"`
+	EndMs    int64 `json:"-"`
 
 	Services      []string `json:"services,omitempty"`
 	Operations    []string `json:"operations,omitempty"`
@@ -67,7 +67,7 @@ func (f *Filters) Validate() error {
 
 func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 	args = []any{
-		clickhouse.Named("teamID", uint32(f.TeamID)),
+		clickhouse.Named("tenantID", uint32(f.TenantID)),
 		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
 		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
 	}

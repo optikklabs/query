@@ -13,7 +13,7 @@ type Handler struct {
 }
 
 func (h *Handler) GetOpsBySystem(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query ops by system", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetOpsBySystem(ctx, teamID, startMs, endMs, filter.ParseFilters(r))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query ops by system", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetOpsBySystem(ctx, tenantID, startMs, endMs, filter.ParseFilters(r))
 	})
 }

@@ -14,7 +14,7 @@ func (h *Handler) Ack(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.Service.Ack(r.Context(), tenant.TeamID, tenant.UserID, id); err != nil {
+	if err := h.Service.Ack(r.Context(), tenant.TenantID, tenant.UserID, id); err != nil {
 		if errors.Is(err, ErrNotAlerting) {
 			httputil.RespondError(w, r, http.StatusConflict, errorcode.Conflict, "monitor is not currently alerting")
 			return
@@ -36,7 +36,7 @@ func (h *Handler) Mute(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	if err := h.Service.Mute(r.Context(), tenant.TeamID, id, req.DurationSec); err != nil {
+	if err := h.Service.Mute(r.Context(), tenant.TenantID, id, req.DurationSec); err != nil {
 		respondServiceError(w, r, err)
 		return
 	}
@@ -49,7 +49,7 @@ func (h *Handler) Unmute(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.Service.Unmute(r.Context(), tenant.TeamID, id); err != nil {
+	if err := h.Service.Unmute(r.Context(), tenant.TenantID, id); err != nil {
 		respondServiceError(w, r, err)
 		return
 	}
@@ -62,7 +62,7 @@ func (h *Handler) Test(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := h.Service.Test(r.Context(), tenant.TeamID, id, h.Queries)
+	res, err := h.Service.Test(r.Context(), tenant.TenantID, id, h.Queries)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -77,7 +77,7 @@ func (h *Handler) Series(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	windowMs := int64(httputil.ParseIntParam(r, "window_ms", 3_600_000))
-	res, err := h.Service.Series(r.Context(), tenant.TeamID, id, h.Queries, windowMs)
+	res, err := h.Service.Series(r.Context(), tenant.TenantID, id, h.Queries, windowMs)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -92,7 +92,7 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit := httputil.ParseIntParam(r, "limit", 20)
-	res, err := h.Service.Events(r.Context(), tenant.TeamID, id, limit)
+	res, err := h.Service.Events(r.Context(), tenant.TenantID, id, limit)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -104,7 +104,7 @@ func (h *Handler) Activity(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
 	since := httputil.ParseInt64Param(r, "since", 0)
 	limit := httputil.ParseIntParam(r, "limit", 20)
-	res, err := h.Service.Activity(r.Context(), tenant.TeamID, since, limit)
+	res, err := h.Service.Activity(r.Context(), tenant.TenantID, since, limit)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -119,7 +119,7 @@ func (h *Handler) StatusTimeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	windowMs := int64(httputil.ParseIntParam(r, "window_ms", 24*60*60*1000))
-	res, err := h.Service.StatusTimeline(r.Context(), tenant.TeamID, id, windowMs)
+	res, err := h.Service.StatusTimeline(r.Context(), tenant.TenantID, id, windowMs)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return

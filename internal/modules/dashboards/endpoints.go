@@ -5,9 +5,9 @@ package dashboards
 // optimized GET endpoint plus query params. Anything outside these sets is
 // rejected at create/update time.
 
-// dashboardSafeEndpoints is the allowlist of time-bounded, team-scoped module
+// dashboardSafeEndpoints is the allowlist of time-bounded, tenant-scoped module
 // endpoints a widget query may target. All are GET endpoints that already apply
-// PREWHERE team_id + WHERE timestamp BETWEEN @start AND @end.
+// PREWHERE tenant_id + WHERE timestamp BETWEEN @start AND @end.
 var dashboardSafeEndpoints = map[string]struct{}{
 	"/spans/red/fleet-totals":                   {},
 	"/spans/red/apdex":                          {},

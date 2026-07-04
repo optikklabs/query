@@ -6,7 +6,7 @@ import "testing"
 
 // Day-window base filters route to the 5m grain on the 5m rollup tier.
 func baseFilters() Filters {
-	return Filters{TeamID: 1, StartMs: 1_000_000, EndMs: 1_000_000 + 24*3_600_000, MetricName: "m"}
+	return Filters{TenantID: 1, StartMs: 1_000_000, EndMs: 1_000_000 + 24*3_600_000, MetricName: "m"}
 }
 
 func TestBuildSelectionShortWindowUsesMinuteRollup(t *testing.T) {

@@ -16,8 +16,8 @@ func NewService(repo *Repository) *Service {
 }
 
 // GetAvgCPU folds the 3-metric utilization family across the window.
-func (s *Service) GetAvgCPU(ctx context.Context, teamID int64, startMs, endMs int64) (MetricValue, error) {
-	rows, err := s.repo.QueryCPUUtilizationAgg(ctx, teamID, startMs, endMs)
+func (s *Service) GetAvgCPU(ctx context.Context, tenantID int64, startMs, endMs int64) (MetricValue, error) {
+	rows, err := s.repo.QueryCPUUtilizationAgg(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return MetricValue{}, err
 	}
@@ -28,8 +28,8 @@ func (s *Service) GetAvgCPU(ctx context.Context, teamID int64, startMs, endMs in
 	return MetricValue{Value: *avg}, nil
 }
 
-func (s *Service) GetCPUByInstance(ctx context.Context, teamID int64, startMs, endMs int64) ([]CPUInstanceMetric, error) {
-	rows, err := s.repo.QueryCPUUtilizationByInstance(ctx, teamID, startMs, endMs)
+func (s *Service) GetCPUByInstance(ctx context.Context, tenantID int64, startMs, endMs int64) ([]CPUInstanceMetric, error) {
+	rows, err := s.repo.QueryCPUUtilizationByInstance(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return nil, err
 	}

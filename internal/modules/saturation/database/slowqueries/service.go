@@ -14,8 +14,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, endMs int64, f filter.Filters, limit int) ([]SlowQueryPattern, error) {
-	rows, err := s.repo.GetSlowQueryPatterns(ctx, teamID, startMs, endMs, f, limit)
+func (s *Service) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters, limit int) ([]SlowQueryPattern, error) {
+	rows, err := s.repo.GetSlowQueryPatterns(ctx, tenantID, startMs, endMs, f, limit)
 	if err != nil {
 		return nil, err
 	}

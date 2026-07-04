@@ -1,0 +1,44 @@
+package tenant
+
+import (
+	"context"
+	"database/sql"
+
+	"github.com/jmoiron/sqlx"
+	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/modules/user/shared"
+)
+
+// Repository holds the tenant MySQL access (lookup + api-key updates).
+type Repository struct {
+	db *sqlx.DB
+}
+
+func NewRepository(db *sql.DB) *Repository {
+	return &Repository{db: sqlx.NewDb(db, "mysql")}
+}
+
+func (r *Repository) FindTenantByID(tenantID int64) (shared.TenantRecord, error) {
+	var t shared.TenantRecord
+	err := dbutil.GetSQL(context.Background(), r.db, "user.FindTenantByID", &t, `
+		SELECT id, name, active, api_key, created_at
+		FROM tenant
+		WHERE id = ?
+		LIMIT 1
+	`, tenantID)
+	return t, err
+}
+
+func (r *Repository) UpdateTenantAPIKey(ctx context.Context, tenantID int64, apiKey string) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.UpdateTenantAPIKey", `
+		UPDATE tenant SET api_key = ? WHERE id = ?
+	`, apiKey, tenantID)
+	return err
+}
+
+func (r *Repository) UpdateTenantActive(ctx context.Context, tenantID int64, active bool) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.UpdateTenantActive", `
+		UPDATE tenant SET active = ? WHERE id = ?
+	`, active, tenantID)
+	return err
+}

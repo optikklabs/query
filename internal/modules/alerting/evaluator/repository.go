@@ -39,7 +39,7 @@ type UpdateStateArgs struct {
 func (r *Repository) LoadDue(ctx context.Context, now time.Time, limit int) ([]DueMonitor, error) {
 	const query = `
 		SELECT
-		  m.id, m.team_id, m.name, m.type, m.priority,
+		  m.id, m.tenant_id, m.name, m.type, m.priority,
 		  m.scope_json, m.query_json, m.conditions_json, m.notify_json,
 		  m.message_template_id, m.message_body, m.runbook_url, m.tags_json,
 		  m.eval_every_sec, m.renotify_every_sec, m.muted_until, m.active,
@@ -126,22 +126,22 @@ func (r *Repository) UpdateState(ctx context.Context, args UpdateStateArgs) erro
 func (r *Repository) InsertEvent(ctx context.Context, e models.MonitorEventRow) error {
 	_, err := dbutil.ExecSQL(ctx, r.db, "evaluator.InsertEvent", `
 		INSERT INTO optikk.monitor_events
-		  (monitor_id, team_id, kind, value, threshold, started_at)
+		  (monitor_id, tenant_id, kind, value, threshold, started_at)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, e.MonitorID, e.TeamID, e.Kind, e.Value, e.Threshold, e.StartedAt)
+	`, e.MonitorID, e.TenantID, e.Kind, e.Value, e.Threshold, e.StartedAt)
 	return err
 }
 
-func (r *Repository) GetChannelsByIDs(ctx context.Context, teamID int64, ids []int64) ([]models.ChannelRow, error) {
+func (r *Repository) GetChannelsByIDs(ctx context.Context, tenantID int64, ids []int64) ([]models.ChannelRow, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
 	q, args, err := sqlx.In(`
-		SELECT id, team_id, type, name, config_json, status,
+		SELECT id, tenant_id, type, name, config_json, status,
 		       last_used_at, last_delivery_at, last_error_text, created_at, updated_at
 		  FROM optikk.notification_channels
-		 WHERE team_id = ? AND id IN (?)
-	`, teamID, ids)
+		 WHERE tenant_id = ? AND id IN (?)
+	`, tenantID, ids)
 	if err != nil {
 		return nil, err
 	}

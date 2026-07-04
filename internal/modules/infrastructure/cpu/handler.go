@@ -12,13 +12,13 @@ type CPUHandler struct {
 }
 
 func (h *CPUHandler) GetAvgCPU(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query avg CPU", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetAvgCPU(ctx, teamID, startMs, endMs)
+	modulecommon.HandleRangeQuery(w, r, "Failed to query avg CPU", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetAvgCPU(ctx, tenantID, startMs, endMs)
 	})
 }
 
 func (h *CPUHandler) GetCPUByInstance(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query CPU by instance", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetCPUByInstance(ctx, teamID, startMs, endMs)
+	modulecommon.HandleRangeQuery(w, r, "Failed to query CPU by instance", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetCPUByInstance(ctx, tenantID, startMs, endMs)
 	})
 }

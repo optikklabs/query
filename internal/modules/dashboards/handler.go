@@ -33,7 +33,7 @@ func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	if fv := r.URL.Query().Get("favorite"); fv == "true" || fv == "1" {
 		q.Favorite = true
 	}
-	res, err := h.Service.ListPages(r.Context(), tenant.TeamID, q)
+	res, err := h.Service.ListPages(r.Context(), tenant.TenantID, q)
 	if err != nil {
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.QueryFailed, "failed to list dashboard pages", err)
 		return
@@ -47,7 +47,7 @@ func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := h.Service.GetPageDetail(r.Context(), tenant.TeamID, id)
+	res, err := h.Service.GetPageDetail(r.Context(), tenant.TenantID, id)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -62,7 +62,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.CreatePage(r.Context(), tenant.TeamID, tenant.UserID, req)
+	res, err := h.Service.CreatePage(r.Context(), tenant.TenantID, tenant.UserID, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -81,7 +81,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.UpdatePage(r.Context(), tenant.TeamID, tenant.UserID, id, req)
+	res, err := h.Service.UpdatePage(r.Context(), tenant.TenantID, tenant.UserID, id, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -95,7 +95,7 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.Service.DeletePage(r.Context(), tenant.TeamID, id); err != nil {
+	if err := h.Service.DeletePage(r.Context(), tenant.TenantID, id); err != nil {
 		respondServiceError(w, r, err)
 		return
 	}
@@ -110,7 +110,7 @@ func (h *Handler) ListWidgets(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := h.Service.ListWidgets(r.Context(), tenant.TeamID, pageID)
+	res, err := h.Service.ListWidgets(r.Context(), tenant.TenantID, pageID)
 	if err != nil {
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.QueryFailed, "failed to list widgets", err)
 		return
@@ -129,7 +129,7 @@ func (h *Handler) CreateWidget(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.CreateWidget(r.Context(), tenant.TeamID, pageID, req)
+	res, err := h.Service.CreateWidget(r.Context(), tenant.TenantID, pageID, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -152,7 +152,7 @@ func (h *Handler) UpdateWidget(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.UpdateWidget(r.Context(), tenant.TeamID, pageID, widgetID, req)
+	res, err := h.Service.UpdateWidget(r.Context(), tenant.TenantID, pageID, widgetID, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -170,7 +170,7 @@ func (h *Handler) DeleteWidget(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.Service.DeleteWidget(r.Context(), tenant.TeamID, pageID, widgetID); err != nil {
+	if err := h.Service.DeleteWidget(r.Context(), tenant.TenantID, pageID, widgetID); err != nil {
 		respondServiceError(w, r, err)
 		return
 	}

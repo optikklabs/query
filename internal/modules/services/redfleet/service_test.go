@@ -70,4 +70,3 @@ func TestAverageFloats(t *testing.T) {
 		t.Errorf("averageFloats([10,20,30]) = %v, want 20", got)
 	}
 }
-

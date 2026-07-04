@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS optikk.monitors
   (
      id                   BIGINT AUTO_INCREMENT PRIMARY KEY,
-     team_id              BIGINT NOT NULL,
+     tenant_id              BIGINT NOT NULL,
      name                 VARCHAR(300) NOT NULL,
      type                 ENUM('metric','apm','log') NOT NULL,
      priority             ENUM('P1','P2','P3','P4') NOT NULL DEFAULT 'P2',
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS optikk.monitors
      created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
      updated_at           DATETIME NULL,
      created_by_user_id   BIGINT NULL,
-     INDEX idx_m_team_active (team_id, active),
-     INDEX idx_m_team_muted (team_id, muted_until),
-     INDEX idx_m_team_priority (team_id, priority)
+     INDEX idx_m_tenant_active (tenant_id, active),
+     INDEX idx_m_tenant_muted (tenant_id, muted_until),
+     INDEX idx_m_tenant_priority (tenant_id, priority)
   );

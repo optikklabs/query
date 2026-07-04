@@ -16,35 +16,35 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) GetSpanEvents(ctx context.Context, teamID int64, traceID string) ([]spanEventCombinedRow, error) {
+func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID string) ([]spanEventCombinedRow, error) {
 	const query = `
 		WITH trace_loc AS (
 		    SELECT timestamp
 		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
 		    LIMIT 1
 		)
 		SELECT span_id, trace_id, timestamp, events,
 		       exception_type, exception_message, exception_stacktrace
 		FROM optikk.spans
-		PREWHERE team_id = @teamID
+		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
 		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
 		WHERE NOT empty(events) OR NOT empty(exception_type)`
 	var rows []spanEventCombinedRow
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanEvents", &rows, query,
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("traceID", traceID),
 	)
 }
 
-func (r *Repository) GetSpanAttributes(ctx context.Context, teamID int64, traceID, spanID string) (*spanAttributeRow, error) {
+func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string) (*spanAttributeRow, error) {
 	const query = `
 		WITH trace_loc AS (
 		    SELECT timestamp
 		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
 		    LIMIT 1
 		)
 		SELECT span_id, trace_id, name AS operation_name, service,
@@ -57,7 +57,7 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, teamID int64, traceI
 			   db_statement,
 		       links AS links
 		FROM optikk.spans
-		PREWHERE team_id = @teamID
+		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
 		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND span_id  = @spanID
@@ -65,7 +65,7 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, teamID int64, traceI
 		LIMIT 1`
 	var rows []spanAttributeRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &rows, query,
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("traceID", traceID),
 		clickhouse.Named("spanID", spanID),
 	); err != nil {
@@ -78,12 +78,12 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, teamID int64, traceI
 	return &row, nil
 }
 
-func (r *Repository) GetRelatedTraces(ctx context.Context, teamID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]RelatedTrace, error) {
+func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]RelatedTrace, error) {
 	const query = `
 		WITH active_fps AS (
 		    SELECT fingerprint
 		    FROM optikk.spans_resource
-		    PREWHERE team_id = @teamID
+		    PREWHERE tenant_id = @tenantID
 		         AND service  = @serviceName
 		)
 		SELECT span_id,
@@ -94,7 +94,7 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, teamID int64, service
 		       status_code_string         AS status,
 		       timestamp                  AS start_time
 		FROM optikk.spans
-		PREWHERE team_id      = @teamID
+		PREWHERE tenant_id      = @tenantID
 		     AND fingerprint  IN active_fps
 		     AND service      = @serviceName
 		     AND name         = @operationName
@@ -104,7 +104,7 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, teamID int64, service
 		ORDER BY timestamp DESC
 		LIMIT @limit`
 	args := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("serviceName", serviceName),
@@ -116,12 +116,12 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, teamID int64, service
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetRelatedTraces", &rows, query, args...)
 }
 
-func (r *Repository) GetTraceSummary(ctx context.Context, teamID int64, traceID string) (*TraceSummary, error) {
+func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string) (*TraceSummary, error) {
 	const query = `
 		WITH trace_loc AS (
 		    SELECT timestamp
 		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
 		    LIMIT 1
 		)
 		SELECT trace_id,
@@ -139,7 +139,7 @@ func (r *Repository) GetTraceSummary(ctx context.Context, teamID int64, traceID 
 		       [service]                              AS service_set,
 		       false                                  AS truncated
 		FROM optikk.spans
-		PREWHERE team_id = @teamID
+		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
 		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
@@ -163,7 +163,7 @@ func (r *Repository) GetTraceSummary(ctx context.Context, teamID int64, traceID 
 		Truncated      bool      `ch:"truncated"`
 	}
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &rows, query,
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("traceID", traceID),
 	); err != nil {
 		return nil, err
@@ -190,12 +190,12 @@ func (r *Repository) GetTraceSummary(ctx context.Context, teamID int64, traceID 
 	}, nil
 }
 
-func (r *Repository) ListSpansByTrace(ctx context.Context, teamID int64, traceID string) ([]SpanListItem, error) {
+func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string) ([]SpanListItem, error) {
 	const query = `
 		WITH trace_loc AS (
 		    SELECT timestamp
 		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND team_id = @teamID
+		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
 		    LIMIT 1
 		)
 		SELECT span_id,
@@ -209,7 +209,7 @@ func (r *Repository) ListSpansByTrace(ctx context.Context, teamID int64, traceID
 		       duration_nano / 1000000.0          AS duration_ms,
 		       timestamp
 		FROM optikk.spans
-		PREWHERE team_id = @teamID
+		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
 		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
 		     AND trace_id = @traceID
@@ -217,7 +217,7 @@ func (r *Repository) ListSpansByTrace(ctx context.Context, teamID int64, traceID
 		LIMIT 5000`
 	var rows []SpanListItem
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.ListSpansByTrace", &rows, query,
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("traceID", traceID),
 	)
 }

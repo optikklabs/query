@@ -13,9 +13,9 @@ import (
 const maxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
 
 type Filters struct {
-	TeamID  int64
-	StartMs int64
-	EndMs   int64
+	TenantID int64
+	StartMs  int64
+	EndMs    int64
 
 	MetricName  string
 	Aggregation string

@@ -92,7 +92,7 @@ func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {
 
 	if decision.Transition && (decision.NewStatus == "alert" || decision.NewStatus == "warn") {
 		_ = s.repo.InsertEvent(ctx, models.MonitorEventRow{
-			MonitorID: m.ID, TeamID: m.TeamID, Kind: "triggered",
+			MonitorID: m.ID, TenantID: m.TenantID, Kind: "triggered",
 			Value:     sql.NullFloat64{Valid: true, Float64: res.Value},
 			Threshold: thresholdForCond(cond),
 			StartedAt: now,
@@ -100,7 +100,7 @@ func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {
 	}
 	if decision.IsRecovery {
 		_ = s.repo.InsertEvent(ctx, models.MonitorEventRow{
-			MonitorID: m.ID, TeamID: m.TeamID, Kind: "recovered",
+			MonitorID: m.ID, TenantID: m.TenantID, Kind: "recovered",
 			Value:     sql.NullFloat64{Valid: true, Float64: res.Value},
 			Threshold: thresholdForCond(cond),
 			StartedAt: now,
@@ -176,7 +176,7 @@ func (s *Service) dispatchAll(ctx context.Context, m models.MonitorRow, cond mod
 	if len(targets.ChannelIDs) == 0 {
 		return
 	}
-	channels, err := s.repo.GetChannelsByIDs(ctx, m.TeamID, targets.ChannelIDs)
+	channels, err := s.repo.GetChannelsByIDs(ctx, m.TenantID, targets.ChannelIDs)
 	if err != nil {
 		slog.WarnContext(ctx, "alerting: load channels failed", slog.Int64("monitor_id", m.ID), slog.Any("error", err))
 		return

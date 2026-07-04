@@ -13,7 +13,7 @@ import (
 // widget_count and the owner name resolved from optikk.users.
 type DashboardPageRow struct {
 	ID              int64          `db:"id"`
-	TeamID          int64          `db:"team_id"`
+	TenantID        int64          `db:"tenant_id"`
 	Name            string         `db:"name"`
 	Description     sql.NullString `db:"description"`
 	Icon            string         `db:"icon"`
@@ -32,7 +32,7 @@ type DashboardPageRow struct {
 type DashboardRow struct {
 	ID            int64          `db:"id"`
 	PageID        int64          `db:"page_id"`
-	TeamID        int64          `db:"team_id"`
+	TenantID      int64          `db:"tenant_id"`
 	Title         sql.NullString `db:"title"`
 	PanelType     string         `db:"panel_type"`
 	LayoutVariant sql.NullString `db:"layout_variant"`

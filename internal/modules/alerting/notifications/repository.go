@@ -23,21 +23,21 @@ func NewRepository(db *sql.DB) *Repository {
 func (r *Repository) CreateChannel(ctx context.Context, row models.ChannelRow) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.CreateChannel", `
 		INSERT INTO optikk.notification_channels
-		  (team_id, type, name, config_json, status, created_at)
+		  (tenant_id, type, name, config_json, status, created_at)
 		VALUES (?, ?, ?, ?, 'ok', ?)
-	`, row.TeamID, row.Type, row.Name, row.ConfigJSON, time.Now().UTC())
+	`, row.TenantID, row.Type, row.Name, row.ConfigJSON, time.Now().UTC())
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-func (r *Repository) UpdateChannel(ctx context.Context, id, teamID int64, row models.ChannelRow) error {
+func (r *Repository) UpdateChannel(ctx context.Context, id, tenantID int64, row models.ChannelRow) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.UpdateChannel", `
 		UPDATE optikk.notification_channels
 		   SET type = ?, name = ?, config_json = ?, updated_at = ?
-		 WHERE id = ? AND team_id = ?
-	`, row.Type, row.Name, row.ConfigJSON, time.Now().UTC(), id, teamID)
+		 WHERE id = ? AND tenant_id = ?
+	`, row.Type, row.Name, row.ConfigJSON, time.Now().UTC(), id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -48,9 +48,9 @@ func (r *Repository) UpdateChannel(ctx context.Context, id, teamID int64, row mo
 	return nil
 }
 
-func (r *Repository) DeleteChannel(ctx context.Context, id, teamID int64) error {
+func (r *Repository) DeleteChannel(ctx context.Context, id, tenantID int64) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.DeleteChannel",
-		`DELETE FROM optikk.notification_channels WHERE id = ? AND team_id = ?`, id, teamID)
+		`DELETE FROM optikk.notification_channels WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -61,34 +61,34 @@ func (r *Repository) DeleteChannel(ctx context.Context, id, teamID int64) error 
 	return nil
 }
 
-const channelCols = `id, team_id, type, name, config_json, status,
+const channelCols = `id, tenant_id, type, name, config_json, status,
   last_used_at, last_delivery_at, last_error_text, created_at, updated_at`
 
-func (r *Repository) GetChannel(ctx context.Context, id, teamID int64) (models.ChannelRow, error) {
+func (r *Repository) GetChannel(ctx context.Context, id, tenantID int64) (models.ChannelRow, error) {
 	var row models.ChannelRow
 	err := dbutil.GetSQL(ctx, r.db, "notifications.GetChannel", &row,
-		`SELECT `+channelCols+` FROM optikk.notification_channels WHERE id = ? AND team_id = ? LIMIT 1`,
-		id, teamID)
+		`SELECT `+channelCols+` FROM optikk.notification_channels WHERE id = ? AND tenant_id = ? LIMIT 1`,
+		id, tenantID)
 	return row, err
 }
 
-func (r *Repository) ListChannels(ctx context.Context, teamID int64) ([]models.ChannelRow, error) {
+func (r *Repository) ListChannels(ctx context.Context, tenantID int64) ([]models.ChannelRow, error) {
 	var rows []models.ChannelRow
 	err := dbutil.SelectSQL(ctx, r.db, "notifications.ListChannels", &rows,
-		`SELECT `+channelCols+` FROM optikk.notification_channels WHERE team_id = ? ORDER BY created_at DESC`,
-		teamID)
+		`SELECT `+channelCols+` FROM optikk.notification_channels WHERE tenant_id = ? ORDER BY created_at DESC`,
+		tenantID)
 	return rows, err
 }
 
-func (r *Repository) CountChannelUsage(ctx context.Context, teamID int64) (map[int64]int, error) {
+func (r *Repository) CountChannelUsage(ctx context.Context, tenantID int64) (map[int64]int, error) {
 	rows, err := r.db.QueryxContext(ctx, `
 		SELECT j.channel_id AS cid, COUNT(*) AS cnt
 		  FROM optikk.monitors m
 		  JOIN JSON_TABLE(m.notify_json, '$.channel_ids[*]'
 		         COLUMNS (channel_id BIGINT PATH '$')) AS j
-		 WHERE m.team_id = ?
+		 WHERE m.tenant_id = ?
 		 GROUP BY j.channel_id
-	`, teamID)
+	`, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -118,27 +118,27 @@ func (r *Repository) MarkChannelDelivered(ctx context.Context, id int64, at time
 	return err
 }
 
-const policyCols = `id, team_id, name, match_dsl, actions_json, hits_30d,
+const policyCols = `id, tenant_id, name, match_dsl, actions_json, hits_30d,
   last_used_at, enabled, position, created_at, updated_at`
 
 func (r *Repository) CreatePolicy(ctx context.Context, row models.PolicyRow) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.CreatePolicy", `
 		INSERT INTO optikk.notification_policies
-		  (team_id, name, match_dsl, actions_json, enabled, position, created_at)
+		  (tenant_id, name, match_dsl, actions_json, enabled, position, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, row.TeamID, row.Name, row.MatchDSL, row.ActionsJSON, row.Enabled, row.Position, time.Now().UTC())
+	`, row.TenantID, row.Name, row.MatchDSL, row.ActionsJSON, row.Enabled, row.Position, time.Now().UTC())
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-func (r *Repository) UpdatePolicy(ctx context.Context, id, teamID int64, row models.PolicyRow) error {
+func (r *Repository) UpdatePolicy(ctx context.Context, id, tenantID int64, row models.PolicyRow) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.UpdatePolicy", `
 		UPDATE optikk.notification_policies
 		   SET name = ?, match_dsl = ?, actions_json = ?, enabled = ?, position = ?, updated_at = ?
-		 WHERE id = ? AND team_id = ?
-	`, row.Name, row.MatchDSL, row.ActionsJSON, row.Enabled, row.Position, time.Now().UTC(), id, teamID)
+		 WHERE id = ? AND tenant_id = ?
+	`, row.Name, row.MatchDSL, row.ActionsJSON, row.Enabled, row.Position, time.Now().UTC(), id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -149,9 +149,9 @@ func (r *Repository) UpdatePolicy(ctx context.Context, id, teamID int64, row mod
 	return nil
 }
 
-func (r *Repository) DeletePolicy(ctx context.Context, id, teamID int64) error {
+func (r *Repository) DeletePolicy(ctx context.Context, id, tenantID int64) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.DeletePolicy",
-		`DELETE FROM optikk.notification_policies WHERE id = ? AND team_id = ?`, id, teamID)
+		`DELETE FROM optikk.notification_policies WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -162,34 +162,34 @@ func (r *Repository) DeletePolicy(ctx context.Context, id, teamID int64) error {
 	return nil
 }
 
-func (r *Repository) ListPolicies(ctx context.Context, teamID int64) ([]models.PolicyRow, error) {
+func (r *Repository) ListPolicies(ctx context.Context, tenantID int64) ([]models.PolicyRow, error) {
 	var rows []models.PolicyRow
 	err := dbutil.SelectSQL(ctx, r.db, "notifications.ListPolicies", &rows,
-		`SELECT `+policyCols+` FROM optikk.notification_policies WHERE team_id = ? ORDER BY position ASC, id ASC`,
-		teamID)
+		`SELECT `+policyCols+` FROM optikk.notification_policies WHERE tenant_id = ? ORDER BY position ASC, id ASC`,
+		tenantID)
 	return rows, err
 }
 
-const templateCols = `id, team_id, name, description, body, used_count, created_at, updated_at`
+const templateCols = `id, tenant_id, name, description, body, used_count, created_at, updated_at`
 
 func (r *Repository) CreateTemplate(ctx context.Context, row models.TemplateRow) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.CreateTemplate", `
 		INSERT INTO optikk.notification_templates
-		  (team_id, name, description, body, created_at)
+		  (tenant_id, name, description, body, created_at)
 		VALUES (?, ?, ?, ?, ?)
-	`, row.TeamID, row.Name, row.Description, row.Body, time.Now().UTC())
+	`, row.TenantID, row.Name, row.Description, row.Body, time.Now().UTC())
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-func (r *Repository) UpdateTemplate(ctx context.Context, id, teamID int64, row models.TemplateRow) error {
+func (r *Repository) UpdateTemplate(ctx context.Context, id, tenantID int64, row models.TemplateRow) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.UpdateTemplate", `
 		UPDATE optikk.notification_templates
 		   SET name = ?, description = ?, body = ?, updated_at = ?
-		 WHERE id = ? AND team_id = ?
-	`, row.Name, row.Description, row.Body, time.Now().UTC(), id, teamID)
+		 WHERE id = ? AND tenant_id = ?
+	`, row.Name, row.Description, row.Body, time.Now().UTC(), id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -200,9 +200,9 @@ func (r *Repository) UpdateTemplate(ctx context.Context, id, teamID int64, row m
 	return nil
 }
 
-func (r *Repository) DeleteTemplate(ctx context.Context, id, teamID int64) error {
+func (r *Repository) DeleteTemplate(ctx context.Context, id, tenantID int64) error {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.DeleteTemplate",
-		`DELETE FROM optikk.notification_templates WHERE id = ? AND team_id = ?`, id, teamID)
+		`DELETE FROM optikk.notification_templates WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -213,23 +213,23 @@ func (r *Repository) DeleteTemplate(ctx context.Context, id, teamID int64) error
 	return nil
 }
 
-func (r *Repository) ListTemplates(ctx context.Context, teamID int64) ([]models.TemplateRow, error) {
+func (r *Repository) ListTemplates(ctx context.Context, tenantID int64) ([]models.TemplateRow, error) {
 	var rows []models.TemplateRow
 	err := dbutil.SelectSQL(ctx, r.db, "notifications.ListTemplates", &rows,
-		`SELECT `+templateCols+` FROM optikk.notification_templates WHERE team_id = ? ORDER BY created_at DESC`,
-		teamID)
+		`SELECT `+templateCols+` FROM optikk.notification_templates WHERE tenant_id = ? ORDER BY created_at DESC`,
+		tenantID)
 	return rows, err
 }
 
-func (r *Repository) ChannelInUse(ctx context.Context, channelID, teamID int64) (bool, error) {
+func (r *Repository) ChannelInUse(ctx context.Context, channelID, tenantID int64) (bool, error) {
 	var cnt int
 	err := dbutil.GetSQL(ctx, r.db, "notifications.ChannelInUse", &cnt, `
 		SELECT COUNT(*)
 		  FROM optikk.monitors m
 		  JOIN JSON_TABLE(m.notify_json, '$.channel_ids[*]'
 		         COLUMNS (channel_id BIGINT PATH '$')) AS j
-		 WHERE m.team_id = ? AND j.channel_id = ?
-	`, teamID, channelID)
+		 WHERE m.tenant_id = ? AND j.channel_id = ?
+	`, tenantID, channelID)
 	if err != nil {
 		return false, err
 	}

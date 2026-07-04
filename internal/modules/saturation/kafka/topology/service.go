@@ -16,19 +16,19 @@ func NewService(repo *Repository) *Service {
 }
 
 // GetTopology builds the producers->topics->consumers graph for the window.
-func (s *Service) GetTopology(ctx context.Context, teamID, startMs, endMs int64, _ string) (TopologyResponse, error) {
+func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int64, _ string) (TopologyResponse, error) {
 	var (
 		produceRows []produceEdgeRow
 		consumeRows []consumeEdgeRow
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		rows, err := s.repo.QueryProduceEdges(gctx, teamID, startMs, endMs)
+		rows, err := s.repo.QueryProduceEdges(gctx, tenantID, startMs, endMs)
 		produceRows = rows
 		return err
 	})
 	g.Go(func() error {
-		rows, err := s.repo.QueryConsumeEdges(gctx, teamID, startMs, endMs)
+		rows, err := s.repo.QueryConsumeEdges(gctx, tenantID, startMs, endMs)
 		consumeRows = rows
 		return err
 	})

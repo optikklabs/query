@@ -18,14 +18,14 @@ func NewService(repo *Repository) *Service {
 }
 
 // GetDatastoreSystems fetches datastore summaries and connections.
-func (s *Service) GetDatastoreSystems(ctx context.Context, teamID, startMs, endMs int64) ([]DatastoreSystemRow, error) {
+func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, endMs int64) ([]DatastoreSystemRow, error) {
 	var (
 		spanRows []systemSummaryRawDTO
 		conns    map[string]int64
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		rows, err := s.repo.GetSystemSummariesRaw(gctx, teamID, startMs, endMs)
+		rows, err := s.repo.GetSystemSummariesRaw(gctx, tenantID, startMs, endMs)
 		if err != nil {
 			return err
 		}
@@ -34,7 +34,7 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, teamID, startMs, endM
 	})
 	g.Go(func() error {
 
-		c, err := s.repo.GetActiveConnectionsBySystem(gctx, teamID, startMs, endMs)
+		c, err := s.repo.GetActiveConnectionsBySystem(gctx, tenantID, startMs, endMs)
 		if err == nil {
 			conns = c
 		}

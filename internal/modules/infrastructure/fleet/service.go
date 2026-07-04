@@ -13,8 +13,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetFleetPods(ctx context.Context, teamID int64, startMs, endMs int64) ([]FleetPod, error) {
-	rows, err := s.repo.QueryFleetPods(ctx, teamID, startMs, endMs)
+func (s *Service) GetFleetPods(ctx context.Context, tenantID int64, startMs, endMs int64) ([]FleetPod, error) {
+	rows, err := s.repo.QueryFleetPods(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return nil, err
 	}

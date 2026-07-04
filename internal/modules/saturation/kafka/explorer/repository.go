@@ -19,9 +19,9 @@ func NewRepository(db clickhouse.Conn) *Repository {
 
 // buildFilterArgs constructs the optional dimension filter (applied in the
 // metrics_series CTE) and the bind args for queries.
-func buildFilterArgs(teamID, startMs, endMs int64, metricNames []string, filterCol, filterVal string) (string, []any) {
+func buildFilterArgs(tenantID, startMs, endMs int64, metricNames []string, filterCol, filterVal string) (string, []any) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
-	args := filter.WithMetricNames(filter.MetricArgs(teamID, startMs, endMs), metricNames)
+	args := filter.WithMetricNames(filter.MetricArgs(tenantID, startMs, endMs), metricNames)
 	var extraWhere string
 	if filterVal != "" {
 		if filterCol == "topic" {
@@ -48,7 +48,7 @@ func seriesCTE(needTopic, needGroup bool, baseWhere, extraWhere string) string {
 	return `WITH series AS (
 		    SELECT ` + sel + `
 		    FROM optikk.metrics_series
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
 		    WHERE ` + baseWhere + ` ` + extraWhere + `
 		    GROUP BY ` + grp + `
 		)
@@ -62,8 +62,8 @@ var topicThroughputMetrics = []string{
 	"kafka.consumer.records_consumed_total",
 }
 
-func (r *Repository) QueryTopicThroughput(ctx context.Context, teamID, startMs, endMs int64, topic string) ([]TopicThroughputRow, error) {
-	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, topicThroughputMetrics, "topic", topic)
+func (r *Repository) QueryTopicThroughput(ctx context.Context, tenantID, startMs, endMs int64, topic string) ([]TopicThroughputRow, error) {
+	extraWhere, args := buildFilterArgs(tenantID, startMs, endMs, topicThroughputMetrics, "topic", topic)
 	query := seriesCTE(true, false, filter.AttrTopic+" != ''", extraWhere) + `
 		SELECT
 		    series.topic AS topic,
@@ -77,7 +77,7 @@ func (r *Repository) QueryTopicThroughput(ctx context.Context, teamID, startMs, 
 		           ifNotFinite(val_sum / val_count, 0), NULL))    AS records_total
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id   = @teamID
+		PREWHERE m.tenant_id   = @tenantID
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp BETWEEN @start AND @end
 		GROUP BY topic
@@ -86,11 +86,10 @@ func (r *Repository) QueryTopicThroughput(ctx context.Context, teamID, startMs, 
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicThroughput", &rows, query, args...)
 }
 
-
 var groupPartitionMetrics = []string{"kafka.consumer_group.lag", "kafka.consumer_group.members"}
 
-func (r *Repository) QueryGroupPartitions(ctx context.Context, teamID, startMs, endMs int64, group string) ([]GroupPartitionsRow, error) {
-	extraWhere, args := buildFilterArgs(teamID, startMs, endMs, groupPartitionMetrics, "consumer_group", group)
+func (r *Repository) QueryGroupPartitions(ctx context.Context, tenantID, startMs, endMs int64, group string) ([]GroupPartitionsRow, error) {
+	extraWhere, args := buildFilterArgs(tenantID, startMs, endMs, groupPartitionMetrics, "consumer_group", group)
 	query := seriesCTE(true, true, filter.AttrConsumerGroup+" != ''", extraWhere) + `
 		SELECT
 		    series.consumer_group AS consumer_group,
@@ -99,7 +98,7 @@ func (r *Repository) QueryGroupPartitions(ctx context.Context, teamID, startMs, 
 		    ifNotFinite(argMaxIf(val_max, timestamp, metric_name = 'kafka.consumer_group.members'), 0) AS members
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id   = @teamID
+		PREWHERE m.tenant_id   = @tenantID
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp BETWEEN @start AND @end
 		GROUP BY consumer_group
@@ -107,4 +106,3 @@ func (r *Repository) QueryGroupPartitions(ctx context.Context, teamID, startMs, 
 	rows := make([]GroupPartitionsRow, 0)
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryGroupPartitions", &rows, query, args...)
 }
-

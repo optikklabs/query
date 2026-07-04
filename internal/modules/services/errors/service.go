@@ -18,15 +18,15 @@ func NewService(repo *Repository) *Service {
 
 // --- Service error rate ---
 
-func (s *Service) GetServiceErrorRate(ctx context.Context, teamID int64, startMs, endMs int64, serviceName string) ([]TimeSeriesPoint, error) {
+func (s *Service) GetServiceErrorRate(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]TimeSeriesPoint, error) {
 	var (
 		raw []rawServiceRateRow
 		err error
 	)
 	if serviceName == "" {
-		raw, err = s.repo.ServiceErrorRateRowsAll(ctx, teamID, startMs, endMs)
+		raw, err = s.repo.ServiceErrorRateRowsAll(ctx, tenantID, startMs, endMs)
 	} else {
-		raw, err = s.repo.ServiceErrorRateRowsByService(ctx, teamID, startMs, endMs, serviceName)
+		raw, err = s.repo.ServiceErrorRateRowsByService(ctx, tenantID, startMs, endMs, serviceName)
 	}
 	if err != nil {
 		return nil, err
@@ -107,15 +107,15 @@ func (s *Service) GetServiceErrorRate(ctx context.Context, teamID int64, startMs
 	return points, nil
 }
 
-func (s *Service) GetErrorVolume(ctx context.Context, teamID int64, startMs, endMs int64, serviceName string) ([]TimeSeriesPoint, error) {
+func (s *Service) GetErrorVolume(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]TimeSeriesPoint, error) {
 	var (
 		raw []rawServiceErrorRow
 		err error
 	)
 	if serviceName == "" {
-		raw, err = s.repo.ErrorVolumeRowsAll(ctx, teamID, startMs, endMs)
+		raw, err = s.repo.ErrorVolumeRowsAll(ctx, tenantID, startMs, endMs)
 	} else {
-		raw, err = s.repo.ErrorVolumeRowsByService(ctx, teamID, startMs, endMs, serviceName)
+		raw, err = s.repo.ErrorVolumeRowsByService(ctx, tenantID, startMs, endMs, serviceName)
 	}
 	if err != nil {
 		return nil, err
@@ -184,8 +184,8 @@ func (s *Service) GetErrorVolume(ctx context.Context, teamID int64, startMs, end
 	return points, nil
 }
 
-func (s *Service) GetErrorGroups(ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, limit int, cursorIn ErrorGroupsCursor) (PaginatedErrorGroups, error) {
-	raw, err := s.fetchErrorGroups(ctx, teamID, startMs, endMs, serviceName, limit+1, cursorIn)
+func (s *Service) GetErrorGroups(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, limit int, cursorIn ErrorGroupsCursor) (PaginatedErrorGroups, error) {
+	raw, err := s.fetchErrorGroups(ctx, tenantID, startMs, endMs, serviceName, limit+1, cursorIn)
 	if err != nil {
 		return PaginatedErrorGroups{}, err
 	}
@@ -194,7 +194,7 @@ func (s *Service) GetErrorGroups(ctx context.Context, teamID int64, startMs, end
 		raw = raw[:limit]
 	}
 
-	samples, err := s.fetchErrorGroupSamples(ctx, teamID, startMs, endMs, raw)
+	samples, err := s.fetchErrorGroupSamples(ctx, tenantID, startMs, endMs, raw)
 	if err != nil {
 		return PaginatedErrorGroups{}, err
 	}
@@ -233,14 +233,14 @@ func (s *Service) GetErrorGroups(ctx context.Context, teamID int64, startMs, end
 	}, nil
 }
 
-func (s *Service) fetchErrorGroups(ctx context.Context, teamID int64, startMs, endMs int64, serviceName string, limit int, cursorIn ErrorGroupsCursor) ([]rawErrorGroupRow, error) {
+func (s *Service) fetchErrorGroups(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, limit int, cursorIn ErrorGroupsCursor) ([]rawErrorGroupRow, error) {
 	if serviceName == "" {
-		return s.repo.ErrorGroupRowsAll(ctx, teamID, startMs, endMs, limit, cursorIn)
+		return s.repo.ErrorGroupRowsAll(ctx, tenantID, startMs, endMs, limit, cursorIn)
 	}
-	return s.repo.ErrorGroupRowsByService(ctx, teamID, startMs, endMs, serviceName, limit, cursorIn)
+	return s.repo.ErrorGroupRowsByService(ctx, tenantID, startMs, endMs, serviceName, limit, cursorIn)
 }
 
-func (s *Service) fetchErrorGroupSamples(ctx context.Context, teamID int64, startMs, endMs int64, groups []rawErrorGroupRow) (map[string]rawErrorGroupSampleRow, error) {
+func (s *Service) fetchErrorGroupSamples(ctx context.Context, tenantID int64, startMs, endMs int64, groups []rawErrorGroupRow) (map[string]rawErrorGroupSampleRow, error) {
 	if len(groups) == 0 {
 		return map[string]rawErrorGroupSampleRow{}, nil
 	}
@@ -248,7 +248,7 @@ func (s *Service) fetchErrorGroupSamples(ctx context.Context, teamID int64, star
 	for i, g := range groups {
 		groupIDs[i] = g.GroupID
 	}
-	rows, err := s.repo.ErrorGroupSamples(ctx, teamID, startMs, endMs, groupIDs)
+	rows, err := s.repo.ErrorGroupSamples(ctx, tenantID, startMs, endMs, groupIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -259,8 +259,8 @@ func (s *Service) fetchErrorGroupSamples(ctx context.Context, teamID int64, star
 	return samples, nil
 }
 
-func (s *Service) GetErrorGroupDetail(ctx context.Context, teamID int64, startMs, endMs int64, groupID string) (*ErrorGroupDetail, error) {
-	row, err := s.repo.ErrorGroupDetailRow(ctx, teamID, startMs, endMs, groupID)
+func (s *Service) GetErrorGroupDetail(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*ErrorGroupDetail, error) {
+	row, err := s.repo.ErrorGroupDetailRow(ctx, tenantID, startMs, endMs, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -281,8 +281,8 @@ func (s *Service) GetErrorGroupDetail(ctx context.Context, teamID int64, startMs
 
 var facetColumns = []string{"service_version", "environment", "pod", "http_route"}
 
-func (s *Service) GetErrorGroupLatestOccurrence(ctx context.Context, teamID int64, startMs, endMs int64, groupID string) (*ErrorLatestOccurrence, error) {
-	row, err := s.repo.ErrorGroupLatestOccurrenceRow(ctx, teamID, startMs, endMs, groupID)
+func (s *Service) GetErrorGroupLatestOccurrence(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*ErrorLatestOccurrence, error) {
+	row, err := s.repo.ErrorGroupLatestOccurrenceRow(ctx, tenantID, startMs, endMs, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -306,10 +306,10 @@ func (s *Service) GetErrorGroupLatestOccurrence(ctx context.Context, teamID int6
 	}, nil
 }
 
-func (s *Service) GetErrorGroupFacets(ctx context.Context, teamID int64, startMs, endMs int64, groupID string) ([]ErrorFacetGroup, error) {
+func (s *Service) GetErrorGroupFacets(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]ErrorFacetGroup, error) {
 	groups := make([]ErrorFacetGroup, 0, len(facetColumns))
 	for _, col := range facetColumns {
-		raw, err := s.repo.ErrorGroupFacetRows(ctx, teamID, startMs, endMs, groupID, col)
+		raw, err := s.repo.ErrorGroupFacetRows(ctx, tenantID, startMs, endMs, groupID, col)
 		if err != nil {
 			return nil, err
 		}
@@ -341,8 +341,8 @@ func facetPct(count, total int64) float64 {
 	return float64(count) * 100.0 / float64(total)
 }
 
-func (s *Service) GetErrorGroupTraces(ctx context.Context, teamID int64, startMs, endMs int64, groupID string, limit int, cursorIn ErrorTracesCursor) (PaginatedErrorTraces, error) {
-	raw, err := s.repo.ErrorGroupTraceRows(ctx, teamID, startMs, endMs, groupID, limit+1, cursorIn)
+func (s *Service) GetErrorGroupTraces(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string, limit int, cursorIn ErrorTracesCursor) (PaginatedErrorTraces, error) {
+	raw, err := s.repo.ErrorGroupTraceRows(ctx, tenantID, startMs, endMs, groupID, limit+1, cursorIn)
 	if err != nil {
 		return PaginatedErrorTraces{}, err
 	}
@@ -378,8 +378,8 @@ func (s *Service) GetErrorGroupTraces(ctx context.Context, teamID int64, startMs
 	}, nil
 }
 
-func (s *Service) GetErrorGroupTimeseries(ctx context.Context, teamID int64, startMs, endMs int64, groupID string) ([]TimeSeriesPoint, error) {
-	raw, err := s.repo.ErrorGroupTimeseriesRows(ctx, teamID, startMs, endMs, groupID)
+func (s *Service) GetErrorGroupTimeseries(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]TimeSeriesPoint, error) {
+	raw, err := s.repo.ErrorGroupTimeseriesRows(ctx, tenantID, startMs, endMs, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -409,8 +409,8 @@ func (s *Service) GetErrorGroupTimeseries(ctx context.Context, teamID int64, sta
 	return points, nil
 }
 
-func (s *Service) GetErrorHotspot(ctx context.Context, teamID int64, startMs, endMs int64) ([]ErrorHotspotCell, error) {
-	raw, err := s.repo.ErrorHotspotRows(ctx, teamID, startMs, endMs)
+func (s *Service) GetErrorHotspot(ctx context.Context, tenantID int64, startMs, endMs int64) ([]ErrorHotspotCell, error) {
+	raw, err := s.repo.ErrorHotspotRows(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return nil, err
 	}

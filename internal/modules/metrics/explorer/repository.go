@@ -19,7 +19,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) ListMetricNames(ctx context.Context, teamID, startMs, endMs int64, search string) ([]metricNameDTO, error) {
+func (r *Repository) ListMetricNames(ctx context.Context, tenantID, startMs, endMs int64, search string) ([]metricNameDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	// Active metric names come from the metrics_series metadata table directly.
 	query := `
@@ -28,14 +28,14 @@ func (r *Repository) ListMetricNames(ctx context.Context, teamID, startMs, endMs
 		       any(unit)        AS unit,
 		       any(description) AS description
 		FROM optikk.metrics_series
-		PREWHERE team_id = @teamID
+		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
 		WHERE metric_name ILIKE @search
 		GROUP BY metric_name
 		ORDER BY metric_name
 		LIMIT 100`
 	args := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("search", "%"+search+"%"),
@@ -47,12 +47,12 @@ func (r *Repository) ListMetricNames(ctx context.Context, teamID, startMs, endMs
 	return rows, nil
 }
 
-func (r *Repository) ListAttributeTagKeys(ctx context.Context, teamID, startMs, endMs int64, metricName string) ([]tagKeyDTO, error) {
+func (r *Repository) ListAttributeTagKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]tagKeyDTO, error) {
 
 	const dynamicQuery = `
 		SELECT DISTINCT arrayJoin(mapKeys(JSONAllPathsWithTypes(attributes))) AS tag_key
 		FROM optikk.metrics_series
-		PREWHERE team_id     = @teamID
+		PREWHERE tenant_id     = @tenantID
 		     AND timestamp   BETWEEN @start AND @end
 		     AND metric_name = @metricName
 		ORDER BY tag_key
@@ -60,7 +60,7 @@ func (r *Repository) ListAttributeTagKeys(ctx context.Context, teamID, startMs, 
 		SETTINGS use_query_cache = 0`
 
 	dynamicArgs := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricName", metricName),
@@ -73,7 +73,7 @@ func (r *Repository) ListAttributeTagKeys(ctx context.Context, teamID, startMs, 
 	return rows, nil
 }
 
-func (r *Repository) ListResourceTagValues(ctx context.Context, teamID, startMs, endMs int64, metricName, canonical string) ([]tagValueDTO, error) {
+func (r *Repository) ListResourceTagValues(ctx context.Context, tenantID, startMs, endMs int64, metricName, canonical string) ([]tagValueDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	col := filter.ResourceColumn(canonical)
 	if col == "" {
@@ -83,7 +83,7 @@ func (r *Repository) ListResourceTagValues(ctx context.Context, teamID, startMs,
 		SELECT ` + col + ` AS tag_value,
 		       count()    AS count
 		FROM optikk.metrics_series
-		PREWHERE team_id     = @teamID
+		PREWHERE tenant_id     = @tenantID
 		     AND timestamp   BETWEEN @start AND @end
 		     AND metric_name = @metricName
 		WHERE ` + col + ` != ''
@@ -91,7 +91,7 @@ func (r *Repository) ListResourceTagValues(ctx context.Context, teamID, startMs,
 		ORDER BY count DESC
 		LIMIT 100`
 	args := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricName", metricName),
@@ -103,13 +103,13 @@ func (r *Repository) ListResourceTagValues(ctx context.Context, teamID, startMs,
 	return rows, nil
 }
 
-func (r *Repository) ListAttributeTagValues(ctx context.Context, teamID, startMs, endMs int64, metricName, tagKey string) ([]tagValueDTO, error) {
+func (r *Repository) ListAttributeTagValues(ctx context.Context, tenantID, startMs, endMs int64, metricName, tagKey string) ([]tagValueDTO, error) {
 	col := filter.AttrColumn(tagKey)
 	query := `
 		SELECT ` + col + ` AS tag_value,
 		       count()      AS count
 		FROM optikk.metrics_series
-		PREWHERE team_id     = @teamID
+		PREWHERE tenant_id     = @tenantID
 		     AND timestamp   BETWEEN @start AND @end
 		     AND metric_name = @metricName
 		WHERE ` + col + ` != ''
@@ -118,7 +118,7 @@ func (r *Repository) ListAttributeTagValues(ctx context.Context, teamID, startMs
 		LIMIT 100`
 
 	args := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricName", metricName),
@@ -130,7 +130,7 @@ func (r *Repository) ListAttributeTagValues(ctx context.Context, teamID, startMs
 	return rows, nil
 }
 
-func (r *Repository) ListTagValuesForKeys(ctx context.Context, teamID, startMs, endMs int64, metricName string, keys []string) ([]tagKeyValueDTO, error) {
+func (r *Repository) ListTagValuesForKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string, keys []string) ([]tagKeyValueDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	if len(keys) == 0 {
 		return nil, nil
@@ -140,7 +140,7 @@ func (r *Repository) ListTagValuesForKeys(ctx context.Context, teamID, startMs, 
 		return nil, nil
 	}
 	args := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricName", metricName),
@@ -168,7 +168,7 @@ func (r *Repository) ResolveSeriesKind(ctx context.Context, f filter.Filters) (*
 		       any(is_monotonic) AS is_monotonic,
 		       any(metric_type)  AS metric_type
 		FROM optikk.metrics_series
-		PREWHERE team_id     = @teamID
+		PREWHERE tenant_id     = @tenantID
 		     AND metric_name = @metricName
 		     AND timestamp   BETWEEN @start AND @end`
 	var rows []metricKindDTO
@@ -214,7 +214,7 @@ func deltaRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) str
 		       sum(hist_sum)   AS hist_sum,
 		       sum(hist_count) AS hist_count
 		FROM ` + fromTable + ` AS m` + joins + `
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name = @metricName
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY ` + groupByCols + `
@@ -228,7 +228,7 @@ func histogramQuantileQuery(cte, fromTable, joins, selectCols, groupByCols strin
 		SELECT ` + selectCols + `,
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(latency_state) AS quantiles
 		FROM ` + fromTable + ` AS m` + joins + `
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name = @metricName
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY ` + groupByCols + `
@@ -237,13 +237,12 @@ func histogramQuantileQuery(cte, fromTable, joins, selectCols, groupByCols strin
 		SETTINGS max_execution_time = 30`
 }
 
-
 func cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
 	perSeries := cte + `
 		SELECT m.fingerprint AS fingerprint, ` + selectCols + `,
 		       argMaxMerge(m.val_last) AS cval
 		FROM ` + fromTable + ` AS m` + joins + `
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name = @metricName
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY m.fingerprint, ` + groupByCols + ``
@@ -271,7 +270,7 @@ func cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols string
 
 func metricArgs(f filter.Filters) []any {
 	return []any{
-		clickhouse.Named("teamID", uint32(f.TeamID)),
+		clickhouse.Named("tenantID", uint32(f.TenantID)),
 		clickhouse.Named("metricName", f.MetricName),
 		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
 		clickhouse.Named("end", time.UnixMilli(f.EndMs)),

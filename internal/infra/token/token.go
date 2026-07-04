@@ -13,21 +13,21 @@ const typAccess = "access"
 
 // AuthState carries the authenticated user identity embedded in tokens.
 type AuthState struct {
-	UserID        int64
-	Email         string
-	Role          string
-	IsAdmin       bool
-	DefaultTeamID int64
-	TeamIDs       []int64
+	UserID          int64
+	Email           string
+	Role            string
+	IsAdmin         bool
+	DefaultTenantID int64
+	TenantIDs       []int64
 }
 
 type accessClaims struct {
-	Typ           string  `json:"typ"`
-	Email         string  `json:"email"`
-	Role          string  `json:"role"`
-	IsAdmin       bool    `json:"adm"`
-	DefaultTeamID int64   `json:"dtid"`
-	TeamIDs       []int64 `json:"tids"`
+	Typ             string  `json:"typ"`
+	Email           string  `json:"email"`
+	Role            string  `json:"role"`
+	IsAdmin         bool    `json:"adm"`
+	DefaultTenantID int64   `json:"dtid"`
+	TenantIDs       []int64 `json:"tids"`
 	jwt.RegisteredClaims
 }
 
@@ -55,12 +55,12 @@ func NewService(cfg config.Config) *Service {
 func (s *Service) SignAccess(state AuthState) (string, error) {
 	now := time.Now()
 	claims := accessClaims{
-		Typ:           typAccess,
-		Email:         state.Email,
-		Role:          state.Role,
-		IsAdmin:       state.IsAdmin,
-		DefaultTeamID: state.DefaultTeamID,
-		TeamIDs:       state.TeamIDs,
+		Typ:             typAccess,
+		Email:           state.Email,
+		Role:            state.Role,
+		IsAdmin:         state.IsAdmin,
+		DefaultTenantID: state.DefaultTenantID,
+		TenantIDs:       state.TenantIDs,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   strconv.FormatInt(state.UserID, 10),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -83,12 +83,12 @@ func (s *Service) ParseAccess(raw string) (AuthState, error) {
 		return AuthState{}, fmt.Errorf("invalid token subject")
 	}
 	return AuthState{
-		UserID:        userID,
-		Email:         claims.Email,
-		Role:          claims.Role,
-		IsAdmin:       claims.IsAdmin,
-		DefaultTeamID: claims.DefaultTeamID,
-		TeamIDs:       claims.TeamIDs,
+		UserID:          userID,
+		Email:           claims.Email,
+		Role:            claims.Role,
+		IsAdmin:         claims.IsAdmin,
+		DefaultTenantID: claims.DefaultTenantID,
+		TenantIDs:       claims.TenantIDs,
 	}, nil
 }
 

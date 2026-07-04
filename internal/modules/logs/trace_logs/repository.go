@@ -14,16 +14,16 @@ type Repository struct {
 
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
-func (r *Repository) FetchLogsByTrace(ctx context.Context, teamID int64, traceID string, limit int) ([]models.LogRow, error) {
+func (r *Repository) FetchLogsByTrace(ctx context.Context, tenantID int64, traceID string, limit int) ([]models.LogRow, error) {
 	const query = `
 		SELECT ` + models.LogColumns + `
 		FROM optikk.logs
-		PREWHERE team_id = @teamID AND trace_id = @traceID
+		PREWHERE tenant_id = @tenantID AND trace_id = @traceID
 		ORDER BY timestamp ASC
 		LIMIT @limit`
 
 	args := []any{
-		clickhouse.Named("teamID", uint32(teamID)),
+		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("traceID", traceID),
 		clickhouse.Named("limit", uint64(limit)),
 	}

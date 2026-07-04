@@ -20,7 +20,7 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetTopology(ctx context.Context, teamID, startMs, endMs int64, focusService string) (TopologyResponse, error) {
+func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int64, focusService string) (TopologyResponse, error) {
 	var (
 		nodeRows []nodeAggRow
 		edgeRows []edgeAggRow
@@ -28,7 +28,7 @@ func (s *Service) GetTopology(ctx context.Context, teamID, startMs, endMs int64,
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		rows, err := s.repo.GetNodes(gctx, teamID, startMs, endMs, focusService)
+		rows, err := s.repo.GetNodes(gctx, tenantID, startMs, endMs, focusService)
 		if err != nil {
 			return err
 		}
@@ -36,7 +36,7 @@ func (s *Service) GetTopology(ctx context.Context, teamID, startMs, endMs int64,
 		return nil
 	})
 	g.Go(func() error {
-		rows, err := s.repo.GetEdges(gctx, teamID, startMs, endMs, focusService)
+		rows, err := s.repo.GetEdges(gctx, tenantID, startMs, endMs, focusService)
 		if err != nil {
 			return err
 		}

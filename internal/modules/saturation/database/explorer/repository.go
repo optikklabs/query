@@ -34,7 +34,7 @@ type connRawRow struct {
 	Avg      float64 `ch:"avg_used"`
 }
 
-func (r *Repository) GetSystemSummariesRaw(ctx context.Context, teamID, startMs, endMs int64) ([]systemSummaryRawDTO, error) {
+func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startMs, endMs int64) ([]systemSummaryRawDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	query := `
 		WITH series AS (
@@ -43,7 +43,7 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, teamID, startMs,
 		           attributes.` + "`server.address`" + `::String AS server_address,
 		           ` + seriesattr.StatusCode + `                 AS status_code
 		    FROM optikk.metrics_series
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE attributes.` + "`db.system`" + `::String != ''
 		    GROUP BY fingerprint, db_system, server_address, status_code
 		)
@@ -56,26 +56,26 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, teamID, startMs,
 		       max(m.timestamp)                                                AS last_seen
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY db_system
 		ORDER BY query_count DESC`
 
-	args := filter.SpanArgs(teamID, startMs, endMs)
+	args := filter.SpanArgs(tenantID, startMs, endMs)
 	var rows []systemSummaryRawDTO
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "datastoreSystems.GetSystemSummariesRaw", &rows, query, args...)
 }
 
 // GetActiveConnectionsBySystem returns active connections by database system.
-func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, teamID, startMs, endMs int64) (map[string]int64, error) {
+func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, tenantID, startMs, endMs int64) (map[string]int64, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 
 	query := `
 		WITH series AS (
 		    SELECT fingerprint, attributes.` + "`db.system`" + `::String AS db_system
 		    FROM optikk.metrics_series
-		    PREWHERE team_id = @teamID AND timestamp BETWEEN @start AND @end AND metric_name = @metricName
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = @metricName
 		    WHERE attributes.` + "`db.system`" + `::String != ''
 		    GROUP BY fingerprint, db_system
 		)
@@ -83,12 +83,12 @@ func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, teamID, s
 		       ifNotFinite(sum(val_sum) / sum(val_count), 0) AS avg_used
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.team_id     = @teamID
+		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name = @metricName
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY db_system`
 
-	args := filter.MetricArgs(teamID, startMs, endMs, filter.MetricDBSQLConnectionOpen)
+	args := filter.MetricArgs(tenantID, startMs, endMs, filter.MetricDBSQLConnectionOpen)
 	var rows []connRawRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "datastoreSystems.GetActiveConnectionsBySystem", &rows, query, args...); err != nil {
 		return nil, err

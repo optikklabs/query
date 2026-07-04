@@ -23,7 +23,7 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
-	res, err := h.Service.ListChannels(r.Context(), t.TeamID)
+	res, err := h.Service.ListChannels(r.Context(), t.TenantID)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -37,7 +37,7 @@ func (h *Handler) GetChannel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := h.Service.GetChannel(r.Context(), t.TeamID, id)
+	res, err := h.Service.GetChannel(r.Context(), t.TenantID, id)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -52,7 +52,7 @@ func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.CreateChannel(r.Context(), t.TeamID, req)
+	res, err := h.Service.CreateChannel(r.Context(), t.TenantID, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -71,7 +71,7 @@ func (h *Handler) UpdateChannel(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.UpdateChannel(r.Context(), t.TeamID, id, req)
+	res, err := h.Service.UpdateChannel(r.Context(), t.TenantID, id, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -85,7 +85,7 @@ func (h *Handler) DeleteChannel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.Service.DeleteChannel(r.Context(), t.TeamID, id); err != nil {
+	if err := h.Service.DeleteChannel(r.Context(), t.TenantID, id); err != nil {
 		respondServiceError(w, r, err)
 		return
 	}
@@ -98,7 +98,7 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := h.Service.TestChannel(r.Context(), t.TeamID, id)
+	res, err := h.Service.TestChannel(r.Context(), t.TenantID, id)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -108,7 +108,7 @@ func (h *Handler) TestChannel(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListPolicies(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
-	res, err := h.Service.ListPolicies(r.Context(), t.TeamID)
+	res, err := h.Service.ListPolicies(r.Context(), t.TenantID)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -123,7 +123,7 @@ func (h *Handler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.CreatePolicy(r.Context(), t.TeamID, req)
+	res, err := h.Service.CreatePolicy(r.Context(), t.TenantID, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -142,7 +142,7 @@ func (h *Handler) UpdatePolicy(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.UpdatePolicy(r.Context(), t.TeamID, id, req)
+	res, err := h.Service.UpdatePolicy(r.Context(), t.TenantID, id, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -156,7 +156,7 @@ func (h *Handler) DeletePolicy(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.Service.DeletePolicy(r.Context(), t.TeamID, id); err != nil {
+	if err := h.Service.DeletePolicy(r.Context(), t.TenantID, id); err != nil {
 		respondServiceError(w, r, err)
 		return
 	}
@@ -165,7 +165,7 @@ func (h *Handler) DeletePolicy(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
-	res, err := h.Service.ListTemplates(r.Context(), t.TeamID)
+	res, err := h.Service.ListTemplates(r.Context(), t.TenantID)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -180,7 +180,7 @@ func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.CreateTemplate(r.Context(), t.TeamID, req)
+	res, err := h.Service.CreateTemplate(r.Context(), t.TenantID, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -199,7 +199,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
 		return
 	}
-	res, err := h.Service.UpdateTemplate(r.Context(), t.TeamID, id, req)
+	res, err := h.Service.UpdateTemplate(r.Context(), t.TenantID, id, req)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return
@@ -213,7 +213,7 @@ func (h *Handler) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.Service.DeleteTemplate(r.Context(), t.TeamID, id); err != nil {
+	if err := h.Service.DeleteTemplate(r.Context(), t.TenantID, id); err != nil {
 		respondServiceError(w, r, err)
 		return
 	}
@@ -222,7 +222,7 @@ func (h *Handler) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListIntegrations(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
-	res, err := h.Service.ListIntegrations(r.Context(), t.TeamID)
+	res, err := h.Service.ListIntegrations(r.Context(), t.TenantID)
 	if err != nil {
 		respondServiceError(w, r, err)
 		return

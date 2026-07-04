@@ -20,8 +20,8 @@ func NewService(repo *Repository) *Service {
 
 // GetHosts returns hosts with CPU/mem/disk utilization and saturation scores,
 // optionally narrowed and enriched with RED traffic for a service.
-func (s *Service) GetHosts(ctx context.Context, teamID, startMs, endMs int64, serviceName string) ([]Host, error) {
-	util, err := s.repo.QueryHostUtilization(ctx, teamID, startMs, endMs)
+func (s *Service) GetHosts(ctx context.Context, tenantID, startMs, endMs int64, serviceName string) ([]Host, error) {
+	util, err := s.repo.QueryHostUtilization(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func (s *Service) GetHosts(ctx context.Context, teamID, startMs, endMs int64, se
 		return out, nil
 	}
 
-	spans, err := s.repo.QueryHostSpans(ctx, teamID, startMs, endMs, serviceName)
+	spans, err := s.repo.QueryHostSpans(ctx, tenantID, startMs, endMs, serviceName)
 	if err != nil {
 		return nil, err
 	}

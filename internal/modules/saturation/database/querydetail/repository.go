@@ -19,15 +19,15 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// prewhere restricts scans to one team's DB spans matching the query hash.
+// prewhere restricts scans to one tenant's DB spans matching the query hash.
 const prewhere = `
-	    PREWHERE team_id = @teamID
+	    PREWHERE tenant_id = @tenantID
 	         AND db_system != ''
 	         AND query_hash = @hash
 	    WHERE timestamp BETWEEN @start AND @end`
 
-func hashArgs(teamID, startMs, endMs int64, hash string) []any {
-	return append(filter.SpanArgs(teamID, startMs, endMs), clickhouse.Named("hash", hash))
+func hashArgs(tenantID, startMs, endMs int64, hash string) []any {
+	return append(filter.SpanArgs(tenantID, startMs, endMs), clickhouse.Named("hash", hash))
 }
 
 type summaryRawDTO struct {
@@ -43,7 +43,7 @@ type summaryRawDTO struct {
 	AvgRows        *float64  `ch:"avg_rows"`
 }
 
-func (r *Repository) GetSummary(ctx context.Context, teamID, startMs, endMs int64, hash string, f filter.Filters) (*summaryRawDTO, error) {
+func (r *Repository) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (*summaryRawDTO, error) {
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
 		SELECT any(db_statement_normalized)                       AS query_text,
@@ -58,7 +58,7 @@ func (r *Repository) GetSummary(ctx context.Context, teamID, startMs, endMs int6
 		       avgOrNull(toFloat64OrNull(toString(attributes.'db.response.returned_rows'))) AS avg_rows
 		FROM optikk.spans` + prewhere + filterWhere
 
-	args := append(hashArgs(teamID, startMs, endMs, hash), filterArgs...)
+	args := append(hashArgs(tenantID, startMs, endMs, hash), filterArgs...)
 	var rows []summaryRawDTO
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetSummary", &rows, query, args...); err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ type serviceRawDTO struct {
 	CallCount uint64 `ch:"call_count"`
 }
 
-func (r *Repository) GetServices(ctx context.Context, teamID, startMs, endMs int64, hash string, f filter.Filters) ([]serviceRawDTO, error) {
+func (r *Repository) GetServices(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) ([]serviceRawDTO, error) {
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
 		SELECT service, count() AS call_count
@@ -83,7 +83,7 @@ func (r *Repository) GetServices(ctx context.Context, teamID, startMs, endMs int
 		ORDER BY call_count DESC
 		LIMIT 10`
 
-	args := append(hashArgs(teamID, startMs, endMs, hash), filterArgs...)
+	args := append(hashArgs(tenantID, startMs, endMs, hash), filterArgs...)
 	var rows []serviceRawDTO
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetServices", &rows, query, args...)
 }
@@ -96,7 +96,7 @@ type timeseriesRawDTO struct {
 	P99Ms      float32   `ch:"p99_ms"`
 }
 
-func (r *Repository) GetTimeseries(ctx context.Context, teamID, startMs, endMs int64, hash string, f filter.Filters) ([]timeseriesRawDTO, error) {
+func (r *Repository) GetTimeseries(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) ([]timeseriesRawDTO, error) {
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
@@ -108,7 +108,7 @@ func (r *Repository) GetTimeseries(ctx context.Context, teamID, startMs, endMs i
 		GROUP BY bucket_at
 		ORDER BY bucket_at`
 
-	args := append(hashArgs(teamID, startMs, endMs, hash), filterArgs...)
+	args := append(hashArgs(tenantID, startMs, endMs, hash), filterArgs...)
 	var rows []timeseriesRawDTO
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetTimeseries", &rows, query, args...)
 }
@@ -124,7 +124,7 @@ type executionRawDTO struct {
 	Rows       *float64  `ch:"row_count"`
 }
 
-func (r *Repository) GetExecutions(ctx context.Context, teamID, startMs, endMs int64, hash string, f filter.Filters, limit int) ([]executionRawDTO, error) {
+func (r *Repository) GetExecutions(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters, limit int) ([]executionRawDTO, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -142,7 +142,7 @@ func (r *Repository) GetExecutions(ctx context.Context, teamID, startMs, endMs i
 		ORDER BY timestamp DESC
 		LIMIT @qLimit`
 
-	args := append(hashArgs(teamID, startMs, endMs, hash), clickhouse.Named("qLimit", uint64(limit)))
+	args := append(hashArgs(tenantID, startMs, endMs, hash), clickhouse.Named("qLimit", uint64(limit)))
 	args = append(args, filterArgs...)
 	var rows []executionRawDTO
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetExecutions", &rows, query, args...)

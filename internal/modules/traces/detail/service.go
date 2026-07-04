@@ -19,19 +19,19 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetTraceSummary(ctx context.Context, teamID int64, traceID string) (*TraceSummary, error) {
-	row, err := s.repo.GetTraceSummary(ctx, teamID, traceID)
+func (s *Service) GetTraceSummary(ctx context.Context, tenantID int64, traceID string) (*TraceSummary, error) {
+	row, err := s.repo.GetTraceSummary(ctx, tenantID, traceID)
 	if err != nil {
-		slog.ErrorContext(ctx, "detail: GetTraceSummary failed", slog.Any("error", err), slog.Int64("team_id", teamID), slog.String("trace_id", traceID))
+		slog.ErrorContext(ctx, "detail: GetTraceSummary failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
 	}
 	return row, nil
 }
 
-func (s *Service) GetSpanEvents(ctx context.Context, teamID int64, traceID string) ([]SpanEvent, error) {
-	combined, err := s.repo.GetSpanEvents(ctx, teamID, traceID)
+func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID string) ([]SpanEvent, error) {
+	combined, err := s.repo.GetSpanEvents(ctx, tenantID, traceID)
 	if err != nil {
-		slog.ErrorContext(ctx, "detail: GetSpanEvents failed", slog.Any("error", err), slog.Int64("team_id", teamID), slog.String("trace_id", traceID))
+		slog.ErrorContext(ctx, "detail: GetSpanEvents failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
 	}
 	eventRows, exceptionRows := splitEventRows(combined)
@@ -93,10 +93,10 @@ func (s *Service) GetSpanEvents(ctx context.Context, teamID int64, traceID strin
 	return events, nil
 }
 
-func (s *Service) GetSpanAttributes(ctx context.Context, teamID int64, traceID, spanID string) (*SpanAttributes, error) {
-	row, err := s.repo.GetSpanAttributes(ctx, teamID, traceID, spanID)
+func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string) (*SpanAttributes, error) {
+	row, err := s.repo.GetSpanAttributes(ctx, tenantID, traceID, spanID)
 	if err != nil {
-		slog.ErrorContext(ctx, "detail: GetSpanAttributes failed", slog.Any("error", err), slog.Int64("team_id", teamID), slog.String("trace_id", traceID), slog.String("span_id", spanID))
+		slog.ErrorContext(ctx, "detail: GetSpanAttributes failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID), slog.String("span_id", spanID))
 		return nil, err
 	}
 	if row == nil {
@@ -128,12 +128,12 @@ func (s *Service) GetSpanAttributes(ctx context.Context, teamID int64, traceID, 
 	}, nil
 }
 
-func (s *Service) GetRelatedTraces(ctx context.Context, teamID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]RelatedTrace, error) {
-	return s.repo.GetRelatedTraces(ctx, teamID, serviceName, operationName, startMs, endMs, excludeTraceID, limit)
+func (s *Service) GetRelatedTraces(ctx context.Context, tenantID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]RelatedTrace, error) {
+	return s.repo.GetRelatedTraces(ctx, tenantID, serviceName, operationName, startMs, endMs, excludeTraceID, limit)
 }
 
-func (s *Service) ListSpansByTrace(ctx context.Context, teamID int64, traceID string) ([]SpanListItem, error) {
-	rows, err := s.repo.ListSpansByTrace(ctx, teamID, traceID)
+func (s *Service) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string) ([]SpanListItem, error) {
+	rows, err := s.repo.ListSpansByTrace(ctx, tenantID, traceID)
 	if err != nil {
 		return nil, err
 	}

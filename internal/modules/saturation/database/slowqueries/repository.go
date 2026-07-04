@@ -28,7 +28,7 @@ type patternRawDTO struct {
 	ErrorCount     uint64  `ch:"error_count"`
 }
 
-func (r *Repository) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, endMs int64, f filter.Filters, limit int) ([]patternRawDTO, error) {
+func (r *Repository) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters, limit int) ([]patternRawDTO, error) {
 	if limit <= 0 {
 		limit = 10
 	}
@@ -50,7 +50,7 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, 
 		           count()                                               AS call_count,
 		           countIf(is_error)                                     AS error_count
 		    FROM optikk.spans
-		    PREWHERE team_id = @teamID
+		    PREWHERE tenant_id = @tenantID
 		         AND db_system != ''
 		         AND db_statement != ''
 		    WHERE timestamp BETWEEN @start AND @end` + filterWhere + `
@@ -59,7 +59,7 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, teamID, startMs, 
 		ORDER BY call_count DESC
 		LIMIT @qLimit`
 
-	args := append(filter.SpanArgs(teamID, startMs, endMs), clickhouse.Named("qLimit", uint64(limit)))
+	args := append(filter.SpanArgs(tenantID, startMs, endMs), clickhouse.Named("qLimit", uint64(limit)))
 	args = append(args, filterArgs...)
 	var rows []patternRawDTO
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "slowqueries.GetSlowQueryPatterns", &rows, query, args...)

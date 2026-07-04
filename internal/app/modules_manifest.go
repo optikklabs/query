@@ -24,8 +24,6 @@ import (
 	log_trace_logs "github.com/optikklabs/query/internal/modules/logs/trace_logs"
 	log_trends "github.com/optikklabs/query/internal/modules/logs/trends"
 	metrics_explorer "github.com/optikklabs/query/internal/modules/metrics/explorer"
-	onboarding "github.com/optikklabs/query/internal/modules/onboarding"
-	onboarding_provisioner "github.com/optikklabs/query/internal/modules/onboarding/provisioner"
 	saturation_explorer "github.com/optikklabs/query/internal/modules/saturation/database/explorer"
 	saturation_database_latency "github.com/optikklabs/query/internal/modules/saturation/database/latency"
 	saturation_database_querydetail "github.com/optikklabs/query/internal/modules/saturation/database/querydetail"
@@ -40,7 +38,11 @@ import (
 	traces_explorer "github.com/optikklabs/query/internal/modules/traces/explorer"
 	traces_paths "github.com/optikklabs/query/internal/modules/traces/paths"
 	traces_servicemap "github.com/optikklabs/query/internal/modules/traces/servicemap"
-	"github.com/optikklabs/query/internal/modules/user"
+	user_auth "github.com/optikklabs/query/internal/modules/user/auth"
+	user_device "github.com/optikklabs/query/internal/modules/user/device"
+	user_signup "github.com/optikklabs/query/internal/modules/user/signup"
+	user_tenant "github.com/optikklabs/query/internal/modules/user/tenant"
+	user_users "github.com/optikklabs/query/internal/modules/user/users"
 )
 
 func configuredModules(
@@ -48,11 +50,16 @@ func configuredModules(
 	appConfig registry.AppConfig,
 	infraDeps *Infra,
 ) []registry.Module {
-	userRepo := user.NewRepository(infraDeps.DB, appConfig)
-	userService := user.NewService(userRepo, infraDeps.Tokens)
+	// Auth owns token issuance, signup, and session lifecycle.
+	// Device flow reuses auth's IssueTokens for CLI login.
+	authService := user_auth.NewService(user_auth.NewRepository(infraDeps.DB), infraDeps.Tokens)
+	deviceService := user_device.NewService(user_device.NewRepository(infraDeps.DB), authService)
+	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService)
+	tenantService := user_tenant.NewService(user_tenant.NewRepository(infraDeps.DB))
+	usersService := user_users.NewService(user_users.NewRepository(infraDeps.DB))
 
 	// Seed the platform super-admin so the first tenant can be provisioned.
-	if err := userService.EnsureSuperAdmin(appConfig.Admin.Email, appConfig.Admin.Password); err != nil {
+	if err := usersService.EnsureSuperAdmin(appConfig.Admin.Email, appConfig.Admin.Password); err != nil {
 		slog.Error("failed to seed super-admin", slog.Any("error", err))
 	}
 
@@ -85,10 +92,11 @@ func configuredModules(
 		traces_paths.NewModule(nativeQuerier),
 		traces_servicemap.NewModule(nativeQuerier),
 
-		user.NewModule(userService, infraDeps.Tokens),
-
-		onboarding.NewModule(infraDeps.DB, nativeQuerier),
-		onboarding_provisioner.NewModule(infraDeps.DB),
+		user_auth.NewModule(authService, infraDeps.Tokens),
+		user_device.NewModule(deviceService, infraDeps.Tokens),
+		user_signup.NewModule(signupService, infraDeps.Tokens),
+		user_tenant.NewModule(tenantService),
+		user_users.NewModule(usersService),
 
 		alerting_monitors.NewModule(infraDeps.DB, nativeQuerier),
 		alerting_notifications.NewModule(infraDeps.DB),

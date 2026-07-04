@@ -19,8 +19,8 @@ type REDFleetHandler struct {
 //   - ?serviceName=X         (single service, legacy)
 //   - ?services=X&services=Y (multi-service, new)
 //   - /{serviceName} path    (chi URL param, backwards compat)
-func parseREDFilters(r *http.Request, teamID, startMs, endMs int64) REDFilters {
-	f := REDFilters{TeamID: teamID, StartMs: startMs, EndMs: endMs}
+func parseREDFilters(r *http.Request, tenantID, startMs, endMs int64) REDFilters {
+	f := REDFilters{TenantID: tenantID, StartMs: startMs, EndMs: endMs}
 	if sn := r.URL.Query().Get("serviceName"); sn != "" {
 		f.Services = []string{sn}
 	}
@@ -33,26 +33,25 @@ func parseREDFilters(r *http.Request, teamID, startMs, endMs int64) REDFilters {
 	return f
 }
 
-
 func (h *REDFleetHandler) GetFleetServices(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query fleet services", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetFleetServices(ctx, parseREDFilters(r, teamID, startMs, endMs))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query fleet services", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetFleetServices(ctx, parseREDFilters(r, tenantID, startMs, endMs))
 	})
 }
 
 func (h *REDFleetHandler) GetFleetOverview(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query fleet overview", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetFleetOverview(ctx, parseREDFilters(r, teamID, startMs, endMs))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query fleet overview", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetFleetOverview(ctx, parseREDFilters(r, tenantID, startMs, endMs))
 	})
 }
 
 func (h *REDFleetHandler) GetRequestAndErrorRateTimeSeries(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
-	f := parseREDFilters(r, teamID, startMs, endMs)
+	f := parseREDFilters(r, tenantID, startMs, endMs)
 	resp, err := modulecommon.WithComparison(r, startMs, endMs, func(s, e int64) (any, error) {
 		cf := f
 		cf.StartMs, cf.EndMs = s, e
@@ -67,30 +66,30 @@ func (h *REDFleetHandler) GetRequestAndErrorRateTimeSeries(w http.ResponseWriter
 
 // GetStatusTimeSeries returns status split by HTTP family over time.
 func (h *REDFleetHandler) GetStatusTimeSeries(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query status time series", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetStatusTimeSeries(ctx, parseREDFilters(r, teamID, startMs, endMs))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query status time series", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetStatusTimeSeries(ctx, parseREDFilters(r, tenantID, startMs, endMs))
 	})
 }
 
 func (h *REDFleetHandler) GetLatencyPercentilesTimeSeries(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query latency percentiles", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetLatencyPercentilesTimeSeries(ctx, parseREDFilters(r, teamID, startMs, endMs))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query latency percentiles", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetLatencyPercentilesTimeSeries(ctx, parseREDFilters(r, tenantID, startMs, endMs))
 	})
 }
 
 func (h *REDFleetHandler) GetREDByEndpointTimeSeries(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query per-endpoint time series", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetREDByEndpointTimeSeries(ctx, parseREDFilters(r, teamID, startMs, endMs))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query per-endpoint time series", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetREDByEndpointTimeSeries(ctx, parseREDFilters(r, tenantID, startMs, endMs))
 	})
 }
 
 func (h *REDFleetHandler) GetTopEndpointsCombined(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
-	f := parseREDFilters(r, teamID, startMs, endMs)
+	f := parseREDFilters(r, tenantID, startMs, endMs)
 	limit := modulecommon.ParsePageSize(r, "limit", 50)
 	cursorStr := r.URL.Query().Get("cursor")
 	var cur TopEndpointsCursor
@@ -112,12 +111,12 @@ func (h *REDFleetHandler) GetTopEndpointsCombined(w http.ResponseWriter, r *http
 }
 
 func (h *REDFleetHandler) GetTopDBQueriesCombined(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
-	f := parseREDFilters(r, teamID, startMs, endMs)
+	f := parseREDFilters(r, tenantID, startMs, endMs)
 	limit := modulecommon.ParsePageSize(r, "limit", 50)
 	cursorStr := r.URL.Query().Get("cursor")
 	var cur TopEndpointsCursor
@@ -139,12 +138,12 @@ func (h *REDFleetHandler) GetTopDBQueriesCombined(w http.ResponseWriter, r *http
 }
 
 func (h *REDFleetHandler) GetRequestRateTimeSeries(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
-	resp, err := h.Service.GetRequestRateTimeSeries(r.Context(), parseREDFilters(r, teamID, startMs, endMs))
+	resp, err := h.Service.GetRequestRateTimeSeries(r.Context(), parseREDFilters(r, tenantID, startMs, endMs))
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query service request rate time series", err)
 		return
@@ -153,12 +152,12 @@ func (h *REDFleetHandler) GetRequestRateTimeSeries(w http.ResponseWriter, r *htt
 }
 
 func (h *REDFleetHandler) GetServiceSummary(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
-	f := parseREDFilters(r, teamID, startMs, endMs)
+	f := parseREDFilters(r, tenantID, startMs, endMs)
 	resp, err := modulecommon.WithComparison(r, startMs, endMs, func(s, e int64) (any, error) {
 		cf := f
 		cf.StartMs, cf.EndMs = s, e
@@ -173,7 +172,7 @@ func (h *REDFleetHandler) GetServiceSummary(w http.ResponseWriter, r *http.Reque
 
 // GetOperationBaseline returns windowed p50/p95/p99 for service + operation.
 func (h *REDFleetHandler) GetOperationBaseline(w http.ResponseWriter, r *http.Request) {
-	teamID := modulecommon.Tenant(r).TeamID
+	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
 	if !ok {
 		return
@@ -184,7 +183,7 @@ func (h *REDFleetHandler) GetOperationBaseline(w http.ResponseWriter, r *http.Re
 		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "service and operation are required")
 		return
 	}
-	resp, err := h.Service.GetOperationBaseline(r.Context(), teamID, startMs, endMs, serviceName, operationName)
+	resp, err := h.Service.GetOperationBaseline(r.Context(), tenantID, startMs, endMs, serviceName, operationName)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query operation baseline", err)
 		return
@@ -193,7 +192,7 @@ func (h *REDFleetHandler) GetOperationBaseline(w http.ResponseWriter, r *http.Re
 }
 
 func (h *REDFleetHandler) GetServiceSaturationTimeSeries(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query service saturation time series", func(ctx context.Context, teamID, startMs, endMs int64) (any, error) {
-		return h.Service.GetServiceSaturationTimeSeries(ctx, parseREDFilters(r, teamID, startMs, endMs))
+	modulecommon.HandleRangeQuery(w, r, "Failed to query service saturation time series", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetServiceSaturationTimeSeries(ctx, parseREDFilters(r, tenantID, startMs, endMs))
 	})
 }

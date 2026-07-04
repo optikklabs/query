@@ -3,7 +3,7 @@ package contracts
 import "context"
 
 type TenantContext struct {
-	TeamID    int64
+	TenantID  int64
 	UserID    int64
 	UserEmail string
 	UserRole  string
