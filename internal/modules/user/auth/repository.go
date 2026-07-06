@@ -76,24 +76,16 @@ func (r *Repository) RevokeRefreshTokenFamily(familyID string) error {
 	return err
 }
 
-func (r *Repository) ListActiveTenantsByIDs(tenantIDs []int64) ([]shared.TenantRecord, error) {
-	if len(tenantIDs) == 0 {
-		return []shared.TenantRecord{}, nil
-	}
-	query, args, err := sqlx.In(`
-		SELECT id, name, active, api_key, created_at
+// FindTenantByID loads a tenant regardless of active state so login can tell a
+// suspended (trial-expired) tenant apart from a genuinely missing one.
+func (r *Repository) FindTenantByID(tenantID int64) (shared.TenantRecord, error) {
+	var t shared.TenantRecord
+	err := dbutil.GetSQL(context.Background(), r.db, "user.FindTenantByID", &t, `
+		SELECT id, name, active, api_key, account_status, trial_ends_at, created_at
 		FROM tenant
-		WHERE id IN (?) AND active = 1
-		ORDER BY created_at DESC
-	`, tenantIDs)
-	if err != nil {
-		return nil, err
-	}
-	query = r.db.Rebind(query)
-	var records []shared.TenantRecord
-	if err := dbutil.SelectSQL(context.Background(), r.db, "user.ListActiveTenantsByIDs", &records, query, args...); err != nil {
-		return nil, err
-	}
-	return records, nil
+		WHERE id = ?
+		LIMIT 1
+	`, tenantID)
+	return t, err
 }
 

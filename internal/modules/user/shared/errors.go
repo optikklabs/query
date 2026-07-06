@@ -17,6 +17,7 @@ const (
 	ServiceErrorNotFound     ServiceErrorCode = errorcode.NotFound
 	ServiceErrorConflict     ServiceErrorCode = errorcode.Conflict
 	ServiceErrorInternal     ServiceErrorCode = errorcode.Internal
+	ServiceErrorTrialExpired ServiceErrorCode = errorcode.TrialExpired
 )
 
 // ServiceError represents an application service error.
@@ -57,6 +58,11 @@ func NewInternalError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorInternal, Message: message, Cause: cause}
 }
 
+// NewTrialExpiredError signals a suspended tenant (trial ended). Maps to 402.
+func NewTrialExpiredError(message string, cause error) error {
+	return &ServiceError{Code: ServiceErrorTrialExpired, Message: message, Cause: cause}
+}
+
 func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fallbackMessage string) {
 	var serviceErr *ServiceError
 	if errors.As(err, &serviceErr) {
@@ -72,6 +78,8 @@ func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fall
 			status = http.StatusConflict
 		case ServiceErrorInternal:
 			status = http.StatusInternalServerError
+		case ServiceErrorTrialExpired:
+			status = http.StatusPaymentRequired
 		}
 
 		message := serviceErr.Message

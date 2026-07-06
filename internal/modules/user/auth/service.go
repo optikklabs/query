@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -138,12 +140,9 @@ func (s *Service) Logout(ctx context.Context, tenant contracts.TenantContext, re
 func (s *Service) buildAuthContextResponse(user shared.AuthUser) (AuthContextResponse, error) {
 	tenant, err := s.tenantForUser(user.TenantID)
 	if err != nil {
-		// Platform super-admins exist before any tenant; let them log in tenant-less
-		// so they can provision the first tenant.
-		if user.IsAdmin {
-		}
 		slog.Warn("AUTH_EVENT tenant_fetch_failed", slog.Int64("user_id", user.ID), slog.String("email", user.Email), slog.Any("error", err))
-		return AuthContextResponse{}, shared.NewValidationError("Account has no associated tenant. Contact your administrator.", err)
+		// Propagate the typed error (e.g. TRIAL_EXPIRED) so callers can react.
+		return AuthContextResponse{}, err
 	}
 
 	return AuthContextResponse{
@@ -161,19 +160,27 @@ func (s *Service) tenantForUser(tenantID int64) (AuthTenantSummary, error) {
 		return AuthTenantSummary{}, shared.NewValidationError("Account has no associated tenant", nil)
 	}
 
-	tenants, err := s.repo.ListActiveTenantsByIDs([]int64{tenantID})
+	tenant, err := s.repo.FindTenantByID(tenantID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return AuthTenantSummary{}, shared.NewValidationError("Account has no active tenant", nil)
+		}
 		return AuthTenantSummary{}, err
 	}
-	if len(tenants) == 0 {
+	if !tenant.Active {
+		if tenant.AccountStatus == "suspended" {
+			return AuthTenantSummary{}, shared.NewTrialExpiredError(
+				"Your free trial has ended. Add a payment method to resume.", nil)
+		}
 		return AuthTenantSummary{}, shared.NewValidationError("Account has no active tenant", nil)
 	}
 
-	tenant := tenants[0]
 	return AuthTenantSummary{
-		ID:   tenant.ID,
-		Name: tenant.Name,
-		Role: "admin", // Default to admin for simplicity, as role is no longer part of memberships
+		ID:            tenant.ID,
+		Name:          tenant.Name,
+		Role:          "admin", // Default to admin for simplicity, as role is no longer part of memberships
+		AccountStatus: tenant.AccountStatus,
+		TrialEndsAt:   tenant.TrialEndsAt,
 	}, nil
 }
 

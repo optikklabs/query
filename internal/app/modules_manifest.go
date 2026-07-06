@@ -10,6 +10,7 @@ import (
 	alerting_evaluator "github.com/optikklabs/query/internal/modules/alerting/evaluator"
 	alerting_monitors "github.com/optikklabs/query/internal/modules/alerting/monitors"
 	alerting_notifications "github.com/optikklabs/query/internal/modules/alerting/notifications"
+	billing "github.com/optikklabs/query/internal/modules/billing"
 	dashboards "github.com/optikklabs/query/internal/modules/dashboards"
 	infrastructure_cpu "github.com/optikklabs/query/internal/modules/infrastructure/cpu"
 	infrastructure_fleet "github.com/optikklabs/query/internal/modules/infrastructure/fleet"
@@ -101,6 +102,8 @@ func configuredModules(
 		alerting_monitors.NewModule(infraDeps.DB, nativeQuerier),
 		alerting_notifications.NewModule(infraDeps.DB),
 		alerting_evaluator.NewModule(infraDeps.DB, nativeQuerier),
+
+		billing.NewModule(infraDeps.DB),
 
 		dashboards.NewModule(infraDeps.DB),
 	}

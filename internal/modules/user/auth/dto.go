@@ -1,5 +1,7 @@
 package auth
 
+import "time"
+
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email" example:"user@example.com"`
 	Password string `json:"password" validate:"required" example:"securePassword123"`
@@ -17,9 +19,11 @@ type AuthUserSummary struct {
 }
 
 type AuthTenantSummary struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	Role string `json:"role"`
+	ID            int64      `json:"id"`
+	Name          string     `json:"name"`
+	Role          string     `json:"role"`
+	AccountStatus string     `json:"accountStatus"`
+	TrialEndsAt   *time.Time `json:"trialEndsAt,omitempty"`
 }
 
 type AuthContextResponse struct {

@@ -23,6 +23,7 @@ This is where the core domain logic and HTTP handlers reside. When adding or mod
 - **`user/`**: Authentication, JWT tokens, tenant management, user signup, and device linking. 
   - Submodules: `auth/`, `device/`, `signup/`, `tenant/`, `users/`, `shared/`
 - **`alerting/`**: Alert configurations, rules, and evaluation schedules.
+- **`billing/`**: Trial lifecycle. Hourly `BackgroundRunner` suspends tenants past `trial_ends_at` (sets `account_status='suspended'`, `active=0`).
 - **`dashboards/`**: User-defined dashboard JSON storage and retrieval.
 - **`infrastructure/`**: Maps hosts, containers, and pods to their respective telemetry.
 - **`saturation/`**: Calculates and serves subsystem health limits and Kafka/DB saturation metrics.

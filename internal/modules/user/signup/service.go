@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
@@ -13,6 +14,9 @@ import (
 // minPasswordLength mirrors the web client's rule; the server is the source of
 // truth so API callers (CLI) can't bypass it.
 const minPasswordLength = 8
+
+// trialDuration is the free-trial window a new tenant starts with.
+const trialDuration = 7 * 24 * time.Hour
 
 // Service provisions a new account + tenant, then delegates session issuance to
 // auth. It composes tenant creation, user creation, and token minting.
@@ -47,7 +51,8 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest) (SignupResponse
 		return SignupResponse{}, "", shared.NewInternalError("Failed to generate api key", err)
 	}
 
-	tenantID, userID, err := s.repo.CreateTenantWithAdmin(ctx, tenantName, apiKey, email, string(hash), name)
+	trialEndsAt := time.Now().UTC().Add(trialDuration)
+	tenantID, userID, err := s.repo.CreateTenantWithAdmin(ctx, tenantName, apiKey, email, string(hash), name, trialEndsAt)
 	if err != nil {
 		if IsDuplicateEmail(err) {
 			return SignupResponse{}, "", shared.NewConflictError("An account with this email already exists", err)

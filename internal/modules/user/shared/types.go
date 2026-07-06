@@ -46,11 +46,13 @@ type DeviceCodeRecord struct {
 }
 
 type TenantRecord struct {
-	ID        int64     `db:"id"`
-	Name      string    `db:"name"`
-	Active    bool      `db:"active"`
-	APIKey    string    `db:"api_key"`
-	CreatedAt time.Time `db:"created_at"`
+	ID            int64      `db:"id"`
+	Name          string     `db:"name"`
+	Active        bool       `db:"active"`
+	APIKey        string     `db:"api_key"`
+	AccountStatus string     `db:"account_status"`
+	TrialEndsAt   *time.Time `db:"trial_ends_at"`
+	CreatedAt     time.Time  `db:"created_at"`
 }
 
 // MessageResponse is a generic single-message API response.

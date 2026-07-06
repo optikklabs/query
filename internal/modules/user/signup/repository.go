@@ -26,7 +26,7 @@ func NewRepository(db *sql.DB) *Repository {
 // transaction so a duplicate email can never leave an orphan tenant. Uses a raw
 // tx because the instrumented helpers only accept *sqlx.DB.
 func (r *Repository) CreateTenantWithAdmin(
-	ctx context.Context, tenantName, apiKey, email, passwordHash, userName string,
+	ctx context.Context, tenantName, apiKey, email, passwordHash, userName string, trialEndsAt time.Time,
 ) (tenantID, userID int64, err error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -38,8 +38,10 @@ func (r *Repository) CreateTenantWithAdmin(
 		}
 	}()
 
+	// account_status/plan default to trialing/free; set the trial deadline.
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO tenant (name, api_key) VALUES (?, ?)`, tenantName, apiKey)
+		`INSERT INTO tenant (name, api_key, trial_ends_at) VALUES (?, ?, ?)`,
+		tenantName, apiKey, trialEndsAt)
 	if err != nil {
 		return 0, 0, err
 	}
