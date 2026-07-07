@@ -21,7 +21,6 @@ const durationStatusCTE = `
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE ` + seriesattr.ServerKindPred + `
 		    GROUP BY fingerprint, service, status_code
 		)`
 
@@ -61,7 +60,7 @@ func (r *Repository) ServiceErrorRateRowsByService(ctx context.Context, tenantID
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE s.service = @serviceName AND ` + seriesattr.ServerKindPred + `
+		    WHERE s.service = @serviceName
 		    GROUP BY fingerprint, service, status_code
 		)
 		SELECT series.service              AS service,
@@ -110,7 +109,7 @@ func (r *Repository) ErrorVolumeRowsByService(ctx context.Context, tenantID int6
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE s.service = @serviceName AND ` + seriesattr.ServerKindPred + `
+		    WHERE s.service = @serviceName
 		    GROUP BY fingerprint, service, status_code
 		)
 		SELECT series.service          AS service,

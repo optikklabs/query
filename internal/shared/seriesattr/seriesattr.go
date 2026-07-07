@@ -6,20 +6,20 @@
 package seriesattr
 
 const (
-	StatusCode     = "attributes.`status.code`::String"
-	HTTPStatusCode = "attributes.`http.status_code`::String"
-	HTTPRoute      = "attributes.`http.route`::String"
-	SpanName       = "attributes.`span.name`::String"
-	SpanKind       = "attributes.`span.kind`::String"
-	DBSystem       = "attributes.`db.system`::String"
-	Client         = "attributes.`client`::String"
-	Server         = "attributes.`server`::String"
+	StatusCode     = "attributes.status.code::String"
+	HTTPStatusCode = "attributes.http.status_code::String"
+	HTTPRoute      = "attributes.http.route::String"
+	SpanName       = "attributes.span.name::String"
+	SpanKind       = "attributes.span.kind::String"
+	DBSystem       = "attributes.db.system::String"
+	Client         = "attributes.client::String"
+	Server         = "attributes.server::String"
 
-	Le = "attributes.`le`::Float64"
+	Le = "attributes.le::Float64"
 )
 
 const StatusErrorPred = "(series.status_code = 'STATUS_CODE_ERROR' OR series.status_code = 'ERROR')"
 
-const ServerKindPred = "attributes.`span.kind`::String = 'SPAN_KIND_SERVER'"
+const ServerKindPred = "(attributes.span.kind::String = 'SPAN_KIND_SERVER' OR attributes.span.kind::String = 'SERVER')"
 
-const DBSpanPred = "attributes.`db.system`::String != ''"
+const DBSpanPred = "attributes.db.system::String != ''"
