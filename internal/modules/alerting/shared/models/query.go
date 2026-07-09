@@ -1,11 +1,32 @@
 package models
 
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+)
+
 // MonitorQuery is a discriminated union over supported monitor types.
 // Dispatches to the corresponding shared/query implementation.
 type MonitorQuery struct {
 	Metric *MetricQuery `json:"metric,omitempty"`
 	APM    *APMQuery    `json:"apm,omitempty"`
 	Log    *LogQuery    `json:"log,omitempty"`
+}
+
+func (q *MonitorQuery) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+	return json.Unmarshal(b, &q)
+}
+
+func (q MonitorQuery) Value() (driver.Value, error) {
+	return json.Marshal(q)
 }
 
 type MetricQuery struct {
@@ -33,6 +54,21 @@ type LogQuery struct {
 
 type NotifyTargets struct {
 	ChannelIDs []int64 `json:"channel_ids"`
+}
+
+func (n *NotifyTargets) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+	return json.Unmarshal(b, &n)
+}
+
+func (n NotifyTargets) Value() (driver.Value, error) {
+	return json.Marshal(n)
 }
 
 var SupportedMonitorTypes = []string{"metric", "apm", "log"}

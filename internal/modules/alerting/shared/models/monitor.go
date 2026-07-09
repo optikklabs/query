@@ -3,6 +3,9 @@ package models
 
 import (
 	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -12,14 +15,14 @@ type MonitorRow struct {
 	Name              string         `db:"name"`
 	Type              string         `db:"type"`
 	Priority          string         `db:"priority"`
-	ScopeJSON         []byte         `db:"scope_json"`
-	QueryJSON         []byte         `db:"query_json"`
-	ConditionsJSON    []byte         `db:"conditions_json"`
-	NotifyJSON        []byte         `db:"notify_json"`
+	Scope             Scope          `db:"scope_json"`
+	Query             MonitorQuery   `db:"query_json"`
+	Conditions        Conditions     `db:"conditions_json"`
+	Notify            NotifyTargets  `db:"notify_json"`
 	MessageTemplateID sql.NullInt64  `db:"message_template_id"`
 	MessageBody       sql.NullString `db:"message_body"`
 	RunbookURL        sql.NullString `db:"runbook_url"`
-	TagsJSON          []byte         `db:"tags_json"`
+	Tags              Tags           `db:"tags_json"`
 	EvalEverySec      int            `db:"eval_every_sec"`
 	RenotifyEverySec  sql.NullInt64  `db:"renotify_every_sec"`
 	MutedUntil        sql.NullTime   `db:"muted_until"`
@@ -60,6 +63,18 @@ type Scope struct {
 	Tags []ScopeTag `json:"tags,omitempty"`
 }
 
+func (s *Scope) Scan(value interface{}) error {
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+	return json.Unmarshal(b, &s)
+}
+
+func (s Scope) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
 type ScopeTag struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
@@ -74,4 +89,37 @@ type Conditions struct {
 
 	NoDataAs  string `json:"no_data_as"`
 	MinSample *int   `json:"min_sample,omitempty"`
+}
+
+func (c *Conditions) Scan(value interface{}) error {
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+	return json.Unmarshal(b, &c)
+}
+
+func (c Conditions) Value() (driver.Value, error) {
+	return json.Marshal(c)
+}
+
+type Tags []string
+
+func (t *Tags) Scan(value interface{}) error {
+	if value == nil {
+		*t = nil
+		return nil
+	}
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+	return json.Unmarshal(b, &t)
+}
+
+func (t Tags) Value() (driver.Value, error) {
+	if t == nil {
+		return []byte("[]"), nil
+	}
+	return json.Marshal(t)
 }

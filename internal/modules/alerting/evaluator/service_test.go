@@ -41,21 +41,27 @@ func TestThresholdForCond(t *testing.T) {
 }
 
 func TestSummarizeScope(t *testing.T) {
-	if got := summarizeScope(models.MonitorRow{ScopeJSON: []byte("bad")}); got != "" {
-		t.Errorf("invalid json -> empty, got %q", got)
+	if got := summarizeScope(models.MonitorRow{}); got != "" {
+		t.Errorf("empty scope -> empty, got %q", got)
 	}
-	m := models.MonitorRow{ScopeJSON: []byte(`{"tags":[{"key":"service","value":"orders"},{"key":"env","value":"prod"}]}`)}
+	m := models.MonitorRow{Scope: models.Scope{Tags: []models.ScopeTag{
+		{Key: "service", Value: "orders"},
+		{Key: "env", Value: "prod"},
+	}}}
 	if got := summarizeScope(m); got != "service:orders env:prod" {
 		t.Errorf("summarizeScope = %q", got)
 	}
 }
 
 func TestServiceFromScope(t *testing.T) {
-	m := models.MonitorRow{ScopeJSON: []byte(`{"tags":[{"key":"env","value":"prod"},{"key":"service","value":"orders"}]}`)}
+	m := models.MonitorRow{Scope: models.Scope{Tags: []models.ScopeTag{
+		{Key: "env", Value: "prod"},
+		{Key: "service", Value: "orders"},
+	}}}
 	if got := serviceFromScope(m); got != "orders" {
 		t.Errorf("serviceFromScope = %q, want orders", got)
 	}
-	if got := serviceFromScope(models.MonitorRow{ScopeJSON: []byte(`{"tags":[]}`)}); got != "" {
+	if got := serviceFromScope(models.MonitorRow{Scope: models.Scope{Tags: []models.ScopeTag{}}}); got != "" {
 		t.Errorf("no service tag -> empty, got %q", got)
 	}
 }

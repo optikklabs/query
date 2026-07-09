@@ -3,12 +3,12 @@ package evaluator
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/optikklabs/query/internal/infra/metrics"
 	"github.com/optikklabs/query/internal/modules/alerting/dispatch"
 	"github.com/optikklabs/query/internal/modules/alerting/shared/expr"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
@@ -18,6 +18,11 @@ import (
 
 // Service runs the per-tick evaluation loop. It's stateless except for the
 // injected dependencies; one Service instance handles all monitors.
+//
+// CONSTRAINT: the evaluator uses a per-process ticker with no leader election,
+// so it MUST run single-replica. Running >1 query replica evaluates and
+// dispatches every monitor once per replica, producing duplicate notifications.
+// Add a distributed lock / leader election before scaling query horizontally.
 type Service struct {
 	repo        *Repository
 	queries     query.Registry
@@ -91,20 +96,10 @@ func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {
 	}
 
 	if decision.Transition && (decision.NewStatus == "alert" || decision.NewStatus == "warn") {
-		_ = s.repo.InsertEvent(ctx, models.MonitorEventRow{
-			MonitorID: m.ID, TenantID: m.TenantID, Kind: "triggered",
-			Value:     sql.NullFloat64{Valid: true, Float64: res.Value},
-			Threshold: thresholdForCond(cond),
-			StartedAt: now,
-		})
+		s.recordEvent(ctx, m, "triggered", res, cond, now)
 	}
 	if decision.IsRecovery {
-		_ = s.repo.InsertEvent(ctx, models.MonitorEventRow{
-			MonitorID: m.ID, TenantID: m.TenantID, Kind: "recovered",
-			Value:     sql.NullFloat64{Valid: true, Float64: res.Value},
-			Threshold: thresholdForCond(cond),
-			StartedAt: now,
-		})
+		s.recordEvent(ctx, m, "recovered", res, cond, now)
 	}
 
 	if decision.ShouldNotify && !isMuted(m, now) {
@@ -156,6 +151,22 @@ func buildUpdateArgs(m models.MonitorRow, state models.MonitorStateRow, d expr.D
 	return args
 }
 
+// recordEvent persists a monitor event best-effort. A failed write is logged
+// and counted rather than silently dropped, so audit-trail loss is observable.
+func (s *Service) recordEvent(ctx context.Context, m models.MonitorRow, kind string, res query.ScalarResult, cond models.Conditions, now time.Time) {
+	err := s.repo.InsertEvent(ctx, models.MonitorEventRow{
+		MonitorID: m.ID, TenantID: m.TenantID, Kind: kind,
+		Value:     sql.NullFloat64{Valid: true, Float64: res.Value},
+		Threshold: thresholdForCond(cond),
+		StartedAt: now,
+	})
+	if err != nil {
+		metrics.AlertingAuditWriteFailures.WithLabelValues("event").Inc()
+		slog.WarnContext(ctx, "alerting: insert event failed",
+			slog.Int64("monitor_id", m.ID), slog.String("kind", kind), slog.Any("error", err))
+	}
+}
+
 func thresholdForCond(c models.Conditions) sql.NullFloat64 {
 	if c.AlertThreshold != nil {
 		return sql.NullFloat64{Valid: true, Float64: *c.AlertThreshold}
@@ -171,8 +182,7 @@ func isMuted(m models.MonitorRow, now time.Time) bool {
 }
 
 func (s *Service) dispatchAll(ctx context.Context, m models.MonitorRow, cond models.Conditions, res query.ScalarResult, d expr.Decision, now time.Time) {
-	var targets models.NotifyTargets
-	_ = json.Unmarshal(m.NotifyJSON, &targets)
+	targets := m.Notify
 	if len(targets.ChannelIDs) == 0 {
 		return
 	}
@@ -193,7 +203,11 @@ func (s *Service) dispatchAll(ctx context.Context, m models.MonitorRow, cond mod
 				slog.String("channel_type", ch.Type),
 				slog.Any("error", err))
 		}
-		_ = s.repo.MarkChannelDelivered(ctx, ch.ID, now, errText)
+		if err := s.repo.MarkChannelDelivered(ctx, ch.ID, now, errText); err != nil {
+			metrics.AlertingAuditWriteFailures.WithLabelValues("delivery").Inc()
+			slog.WarnContext(ctx, "alerting: mark delivered failed",
+				slog.Int64("monitor_id", m.ID), slog.Int64("channel_id", ch.ID), slog.Any("error", err))
+		}
 	}
 }
 
@@ -224,8 +238,8 @@ func buildPayload(m models.MonitorRow, cond models.Conditions, res query.ScalarR
 }
 
 func summarizeScope(m models.MonitorRow) string {
-	var scope models.Scope
-	if err := json.Unmarshal(m.ScopeJSON, &scope); err != nil || len(scope.Tags) == 0 {
+	scope := m.Scope
+	if len(scope.Tags) == 0 {
 		return ""
 	}
 	parts := make([]string, 0, len(scope.Tags))
@@ -266,10 +280,7 @@ func defaultMessage(m models.MonitorRow, value, threshold float64, d expr.Decisi
 }
 
 func serviceFromScope(m models.MonitorRow) string {
-	var scope models.Scope
-	if err := json.Unmarshal(m.ScopeJSON, &scope); err != nil {
-		return ""
-	}
+	scope := m.Scope
 	for _, t := range scope.Tags {
 		if t.Key == "service" {
 			return t.Value

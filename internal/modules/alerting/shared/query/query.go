@@ -4,7 +4,6 @@ package query
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -47,21 +46,15 @@ func (r Registry) For(t string) (Backend, error) {
 }
 
 func DecodeScope(row models.MonitorRow) models.Scope {
-	var s models.Scope
-	_ = json.Unmarshal(row.ScopeJSON, &s)
-	return s
+	return row.Scope
 }
 
 func DecodeQuery(row models.MonitorRow) models.MonitorQuery {
-	var q models.MonitorQuery
-	_ = json.Unmarshal(row.QueryJSON, &q)
-	return q
+	return row.Query
 }
 
 func DecodeConditions(row models.MonitorRow) models.Conditions {
-	var c models.Conditions
-	_ = json.Unmarshal(row.ConditionsJSON, &c)
-	return c
+	return row.Conditions
 }
 
 func tenantIDArg(tenantID int64) any {

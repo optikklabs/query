@@ -28,10 +28,10 @@ func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, q model
 	endMs := now.UnixMilli()
 	startMs := endMs - windowSec*1000
 
-	table, expr := metricSource(q.Metric.Aggregation)
+	expr := metricSource(q.Metric.Aggregation)
 	query := `
 		SELECT ` + expr + ` AS value
-		FROM optikk.` + table + `
+		FROM optikk.metrics
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name = @metricName
 		WHERE timestamp BETWEEN @start AND @end`
@@ -55,11 +55,11 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q model
 	endMs := now.UnixMilli()
 	startMs := endMs - windowMs
 
-	table, expr := metricSource(q.Metric.Aggregation)
+	expr := metricSource(q.Metric.Aggregation)
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket, ` +
 		expr + ` AS value
-		FROM optikk.` + table + `
+		FROM optikk.metrics
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name = @metricName
 		WHERE timestamp BETWEEN @start AND @end
@@ -78,22 +78,22 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q model
 	return out, nil
 }
 
-func metricSource(agg string) (table, expr string) {
+func metricSource(agg string) (expr string) {
 	switch agg {
 	case "sum":
-		return "metrics", "sum(value)"
+		return "sum(value)"
 	case "min":
-		return "metrics", "min(value)"
+		return "min(value)"
 	case "max":
-		return "metrics", "max(value)"
+		return "max(value)"
 	case "p50":
-		return "metrics", "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[1]"
+		return "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[1]"
 	case "p95":
-		return "metrics", "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[2]"
+		return "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[2]"
 	case "p99":
-		return "metrics", "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[3]"
+		return "(quantilesPrometheusHistogramArray(0.50, 0.95, 0.99)(hist_buckets, arrayCumSum(hist_counts)))[3]"
 	default:
-		return "metrics", "avg(value)"
+		return "avg(value)"
 	}
 }
 

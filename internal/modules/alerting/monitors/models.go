@@ -1,7 +1,6 @@
 package monitors
 
 import (
-	"encoding/json"
 	"time"
 
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
@@ -57,14 +56,14 @@ func toResponse(row models.MonitorRow, state models.MonitorStateRow) MonitorResp
 		Active:       row.Active,
 		CreatedAt:    row.CreatedAt,
 		Status:       "no_data",
-		Tags:         []string{},
+		Tags:         row.Tags,
+		Scope:        row.Scope,
+		Query:        row.Query,
+		Conditions:   row.Conditions,
+		Notify:       row.Notify,
 	}
-	_ = json.Unmarshal(row.ScopeJSON, &out.Scope)
-	_ = json.Unmarshal(row.QueryJSON, &out.Query)
-	_ = json.Unmarshal(row.ConditionsJSON, &out.Conditions)
-	_ = json.Unmarshal(row.NotifyJSON, &out.Notify)
-	if len(row.TagsJSON) > 0 {
-		_ = json.Unmarshal(row.TagsJSON, &out.Tags)
+	if out.Tags == nil {
+		out.Tags = []string{}
 	}
 	if row.MessageBody.Valid {
 		out.MessageBody = row.MessageBody.String
