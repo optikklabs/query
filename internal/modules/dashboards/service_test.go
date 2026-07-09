@@ -15,13 +15,12 @@ func validWidget() CreateWidgetRequest {
 	}
 }
 
-func asValidation(t *testing.T, err error) ErrValidation {
+func asValidation(t *testing.T, err error) {
 	t.Helper()
 	var ve ErrValidation
 	if !errors.As(err, &ve) {
 		t.Fatalf("expected ErrValidation, got %v", err)
 	}
-	return ve
 }
 
 func TestValidateWidget_OK(t *testing.T) {

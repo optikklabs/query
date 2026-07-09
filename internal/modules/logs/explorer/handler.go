@@ -32,6 +32,9 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid filters", err)
 		return
 	}
+	if req.Limit <= 0 || req.Limit > 5000 {
+		req.Limit = 5000
+	}
 	resp, err := h.svc.Query(r.Context(), req)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query logs", err)
