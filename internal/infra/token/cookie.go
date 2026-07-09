@@ -3,11 +3,13 @@ package token
 import (
 	"net/http"
 	"strings"
+
+	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
 // RefreshCookiePath scopes the refresh cookie to the auth endpoints so it
 // reaches both /refresh (rotation) and /logout (revocation).
-const RefreshCookiePath = "/api/v1/auth"
+const RefreshCookiePath = httputil.APIV1Base + "/auth"
 
 type cookieOpts struct {
 	name     string

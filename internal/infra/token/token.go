@@ -16,7 +16,6 @@ type AuthState struct {
 	UserID          int64
 	Email           string
 	Role            string
-	IsAdmin         bool
 	DefaultTenantID int64
 	TenantIDs       []int64
 }
@@ -25,7 +24,6 @@ type accessClaims struct {
 	Typ             string  `json:"typ"`
 	Email           string  `json:"email"`
 	Role            string  `json:"role"`
-	IsAdmin         bool    `json:"adm"`
 	DefaultTenantID int64   `json:"dtid"`
 	TenantIDs       []int64 `json:"tids"`
 	jwt.RegisteredClaims
@@ -58,7 +56,6 @@ func (s *Service) SignAccess(state AuthState) (string, error) {
 		Typ:             typAccess,
 		Email:           state.Email,
 		Role:            state.Role,
-		IsAdmin:         state.IsAdmin,
 		DefaultTenantID: state.DefaultTenantID,
 		TenantIDs:       state.TenantIDs,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -86,7 +83,6 @@ func (s *Service) ParseAccess(raw string) (AuthState, error) {
 		UserID:          userID,
 		Email:           claims.Email,
 		Role:            claims.Role,
-		IsAdmin:         claims.IsAdmin,
 		DefaultTenantID: claims.DefaultTenantID,
 		TenantIDs:       claims.TenantIDs,
 	}, nil
