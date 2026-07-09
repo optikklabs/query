@@ -1,11 +1,17 @@
 package users
 
+// CreateUserRequest adds a user to the caller's tenant. The tenant is taken
+// from the authenticated context, so it is intentionally not part of the body.
 type CreateUserRequest struct {
-	Email     string  `json:"email" validate:"required,email"`
-	Name      string  `json:"name" validate:"required"`
-	Role      string  `json:"role"`
-	Password  string  `json:"password" validate:"required"`
-	TenantID  int64   `json:"tenantId" validate:"required,gt=0"`
+	Email    string `json:"email" validate:"required,email"`
+	Name     string `json:"name" validate:"required"`
+	Role     string `json:"role"`
+	Password string `json:"password" validate:"required"`
+}
+
+// UpdateRoleRequest promotes or demotes a user (admin|member).
+type UpdateRoleRequest struct {
+	Role string `json:"role" validate:"required"`
 }
 
 type UserResponse struct {

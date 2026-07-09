@@ -1,8 +1,6 @@
 package app
 
 import (
-	"log/slog"
-
 	"github.com/ClickHouse/clickhouse-go/v2"
 
 	"github.com/optikklabs/query/internal/app/registry"
@@ -58,11 +56,6 @@ func configuredModules(
 	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService)
 	tenantService := user_tenant.NewService(user_tenant.NewRepository(infraDeps.DB))
 	usersService := user_users.NewService(user_users.NewRepository(infraDeps.DB))
-
-	// Seed the platform super-admin so the first tenant can be provisioned.
-	if err := usersService.EnsureSuperAdmin(appConfig.Admin.Email, appConfig.Admin.Password); err != nil {
-		slog.Error("failed to seed super-admin", slog.Any("error", err))
-	}
 
 	return []registry.Module{
 		infrastructure_cpu.NewModule(nativeQuerier),

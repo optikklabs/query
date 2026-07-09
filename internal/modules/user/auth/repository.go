@@ -23,7 +23,7 @@ func NewRepository(db *sql.DB) *Repository {
 func (r *Repository) FindActiveUserByEmail(email string) (shared.AuthUser, error) {
 	var u shared.AuthUser
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindActiveUserByEmail", &u, `
-		SELECT id, email, password_hash, name, tenant_id, is_admin
+		SELECT id, email, password_hash, name, tenant_id, role
 		FROM users
 		WHERE email = ? AND active = 1
 		LIMIT 1
@@ -34,7 +34,7 @@ func (r *Repository) FindActiveUserByEmail(email string) (shared.AuthUser, error
 func (r *Repository) FindActiveUserByID(userID int64) (shared.UserRecord, error) {
 	var u shared.UserRecord
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindActiveUserByID", &u, `
-		SELECT id, email, name, tenant_id, active, created_at
+		SELECT id, email, name, tenant_id, active, role, created_at
 		FROM users
 		WHERE id = ? AND active = 1
 		LIMIT 1

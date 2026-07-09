@@ -29,10 +29,6 @@ func GenerateRevokedKey() (string, error) {
 	return revokedKeyPrefix + hex.EncodeToString(bytes), nil
 }
 
-// IsRevokedAPIKey reports whether a key is a revoke sentinel (no live key).
-func IsRevokedAPIKey(key string) bool {
-	return strings.HasPrefix(key, revokedKeyPrefix)
-}
 
 // userCodeAlphabet excludes ambiguous chars (0/O, 1/I) for typo-free entry.
 const userCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -67,9 +63,3 @@ func NullableString(s string) *string {
 	return &trimmed
 }
 
-func ValueOr(s *string, fallback string) string {
-	if s == nil {
-		return fallback
-	}
-	return *s
-}

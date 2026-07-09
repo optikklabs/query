@@ -80,6 +80,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (LoginRespon
 		Email:    user.Email,
 		Name:     user.Name,
 		TenantID: user.TenantID,
+		Role:     user.Role,
 	}
 	response, refresh, err := s.issueTokens(authUser, stored.FamilyID)
 	if err != nil {
@@ -104,8 +105,7 @@ func (s *Service) issueTokens(user shared.AuthUser, familyID string) (LoginRespo
 	access, err := s.tokens.SignAccess(token.AuthState{
 		UserID:          user.ID,
 		Email:           user.Email,
-		Role:            response.Tenant.Role,
-		IsAdmin:         user.IsAdmin,
+		Role:            user.Role,
 		DefaultTenantID: response.Tenant.ID,
 		TenantIDs:       []int64{response.Tenant.ID},
 	})
@@ -144,6 +144,8 @@ func (s *Service) buildAuthContextResponse(user shared.AuthUser) (AuthContextRes
 		// Propagate the typed error (e.g. TRIAL_EXPIRED) so callers can react.
 		return AuthContextResponse{}, err
 	}
+	// Role is a property of the user within their tenant, not of the tenant.
+	tenant.Role = user.Role
 
 	return AuthContextResponse{
 		User: AuthUserSummary{
@@ -178,7 +180,7 @@ func (s *Service) tenantForUser(tenantID int64) (AuthTenantSummary, error) {
 	return AuthTenantSummary{
 		ID:            tenant.ID,
 		Name:          tenant.Name,
-		Role:          "admin", // Default to admin for simplicity, as role is no longer part of memberships
+		// Role is set by the caller from the user's own role.
 		AccountStatus: tenant.AccountStatus,
 		TrialEndsAt:   tenant.TrialEndsAt,
 	}, nil

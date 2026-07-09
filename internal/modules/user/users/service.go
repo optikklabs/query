@@ -1,63 +1,63 @@
 package users
 
 import (
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Service provisions users: admin-created accounts and the platform super-admin.
-type Service struct {
-	repo *Repository
+// repository is the tenant-scoped persistence the service depends on. Defined
+// here (consumer side) so the service can be unit-tested with a fake.
+type repository interface {
+	CreateUser(email, passwordHash, name string, tenantID int64, role string, createdAt time.Time) (int64, error)
+	FindUserByID(userID, tenantID int64) (shared.UserRecord, error)
+	ListUsersByTenantID(tenantID int64) ([]shared.UserRecord, error)
+	UpdateUserRole(userID, tenantID int64, role string) error
+	CountActiveAdmins(tenantID int64) (int, error)
+	DeactivateUser(userID, tenantID int64) error
 }
 
-func NewService(repo *Repository) *Service {
+// Service provisions and manages users within a single tenant.
+type Service struct {
+	repo repository
+}
+
+func NewService(repo repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) CreateUser(req CreateUserRequest) (UserResponse, error) {
+// CreateUser adds a user to the caller's tenant. The tenant is authoritative
+// from the caller's context, never the request body.
+func (s *Service) CreateUser(req CreateUserRequest, tenantID int64) (UserResponse, error) {
+	role := req.Role
+	if role == "" {
+		role = shared.RoleMember
+	}
+	if !shared.IsValidRole(role) {
+		return UserResponse{}, shared.NewValidationError("role must be 'admin' or 'member'", nil)
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return UserResponse{}, shared.NewInternalError("Failed to hash password", err)
 	}
 
-	role := req.Role
-	if role == "" {
-		role = "member"
-	}
-
-	userID, err := s.repo.CreateUser(req.Email, string(hash), req.Name, req.TenantID, false, time.Now().UTC())
+	userID, err := s.repo.CreateUser(req.Email, string(hash), req.Name, tenantID, role, time.Now().UTC())
 	if err != nil {
 		return UserResponse{}, shared.NewInternalError("Failed to create user", err)
 	}
 
-	created, err := s.repo.FindUserByID(userID)
+	created, err := s.repo.FindUserByID(userID, tenantID)
 	if err != nil {
 		return UserResponse{}, shared.NewInternalError("Failed to load created user", err)
 	}
-	return s.buildUserResponse(created, role), nil
+	return s.buildUserResponse(created), nil
 }
 
-// EnsureSuperAdmin seeds the platform super-admin if it does not already exist.
-// Idempotent: a no-op when the email is unset or the user is already present.
-func (s *Service) EnsureSuperAdmin(email, password string) error {
-	if email == "" || password == "" {
-		return nil
-	}
-	if _, err := s.repo.FindActiveUserByEmail(email); err == nil {
-		return nil // already seeded
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return shared.NewInternalError("Failed to hash admin password", err)
-	}
-	// Super admin needs a valid tenant id, assuming 1 or passing 0 if allowed
-	_, err = s.repo.CreateUser(email, string(hash), "Platform Admin", 1, true, time.Now().UTC())
-	return err
-}
-
-func (s *Service) buildUserResponse(user shared.UserRecord, role string) UserResponse {
+func (s *Service) buildUserResponse(user shared.UserRecord) UserResponse {
 	return UserResponse{
 		ID:        user.ID,
 		Email:     user.Email,
@@ -65,7 +65,7 @@ func (s *Service) buildUserResponse(user shared.UserRecord, role string) UserRes
 		Active:    user.Active,
 		CreatedAt: user.CreatedAt,
 		TenantID:  user.TenantID,
-		Role:      role,
+		Role:      user.Role,
 	}
 }
 
@@ -77,16 +77,71 @@ func (s *Service) ListUsers(tenantID int64) ([]UserResponse, error) {
 	}
 	responses := make([]UserResponse, 0, len(records))
 	for _, record := range records {
-		resp := s.buildUserResponse(record, "member") // Default to member for now
-		responses = append(responses, resp)
+		responses = append(responses, s.buildUserResponse(record))
 	}
 	return responses, nil
 }
 
-// RemoveUser soft-deletes a user by setting active = 0.
-func (s *Service) RemoveUser(userID int64) error {
-	if err := s.repo.DeactivateUser(userID); err != nil {
+// SetUserRole promotes or demotes a user within the caller's tenant. Demoting
+// the last admin is blocked so an org can never be left without one.
+func (s *Service) SetUserRole(userID, tenantID int64, role string) (UserResponse, error) {
+	if !shared.IsValidRole(role) {
+		return UserResponse{}, shared.NewValidationError("role must be 'admin' or 'member'", nil)
+	}
+	user, err := s.findInTenant(userID, tenantID)
+	if err != nil {
+		return UserResponse{}, err
+	}
+	if user.Role == shared.RoleAdmin && role == shared.RoleMember {
+		if err := s.guardLastAdmin(tenantID); err != nil {
+			return UserResponse{}, err
+		}
+	}
+	if err := s.repo.UpdateUserRole(userID, tenantID, role); err != nil {
+		return UserResponse{}, shared.NewInternalError("Failed to update user role", err)
+	}
+	user.Role = role
+	return s.buildUserResponse(user), nil
+}
+
+// RemoveUser soft-deletes a user within the caller's tenant. Removing the last
+// admin is blocked.
+func (s *Service) RemoveUser(userID, tenantID int64) error {
+	user, err := s.findInTenant(userID, tenantID)
+	if err != nil {
+		return err
+	}
+	if user.Role == shared.RoleAdmin {
+		if err := s.guardLastAdmin(tenantID); err != nil {
+			return err
+		}
+	}
+	if err := s.repo.DeactivateUser(userID, tenantID); err != nil {
 		return shared.NewInternalError("Failed to remove user", err)
+	}
+	return nil
+}
+
+// findInTenant loads an active user, mapping a miss to a not-found error so a
+// caller cannot probe or act on users outside their tenant.
+func (s *Service) findInTenant(userID, tenantID int64) (shared.UserRecord, error) {
+	user, err := s.repo.FindUserByID(userID, tenantID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return shared.UserRecord{}, shared.NewNotFoundError("User not found", nil)
+		}
+		return shared.UserRecord{}, shared.NewInternalError("Failed to load user", err)
+	}
+	return user, nil
+}
+
+func (s *Service) guardLastAdmin(tenantID int64) error {
+	admins, err := s.repo.CountActiveAdmins(tenantID)
+	if err != nil {
+		return shared.NewInternalError("Failed to count admins", err)
+	}
+	if admins <= 1 {
+		return shared.NewConflictError("Cannot remove or demote the last admin of the tenant", nil)
 	}
 	return nil
 }

@@ -49,7 +49,6 @@ func NewUnauthorizedError(message string, cause error) error {
 func NewNotFoundError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorNotFound, Message: message, Cause: cause}
 }
-
 func NewConflictError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorConflict, Message: message, Cause: cause}
 }

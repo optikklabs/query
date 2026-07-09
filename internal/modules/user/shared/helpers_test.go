@@ -45,7 +45,7 @@ func TestGenerateRevokedKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateRevokedKey: %v", err)
 	}
-	if !IsRevokedAPIKey(key) {
+	if !strings.HasPrefix(key, revokedKeyPrefix) {
 		t.Errorf("revoked key %q not recognized as revoked", key)
 	}
 	if got, want := len(key), len(revokedKeyPrefix)+64; got != want {
@@ -53,24 +53,6 @@ func TestGenerateRevokedKey(t *testing.T) {
 	}
 }
 
-func TestIsRevokedAPIKey(t *testing.T) {
-	cases := []struct {
-		name, in string
-		want     bool
-	}{
-		{"live ok_ key", "ok_deadbeef", false},
-		{"legacy hex key", "a1b2c3d4", false},
-		{"revoked sentinel", "revoked_a1b2", true},
-		{"empty", "", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := IsRevokedAPIKey(tc.in); got != tc.want {
-				t.Errorf("IsRevokedAPIKey(%q) = %v, want %v", tc.in, got, tc.want)
-			}
-		})
-	}
-}
 
 // A user code must be unambiguous, dash-formatted, and unique per draw.
 func TestGenerateUserCode(t *testing.T) {

@@ -5,13 +5,24 @@ import (
 )
 
 
+// Tenant-scoped user roles.
+const (
+	RoleAdmin  = "admin"
+	RoleMember = "member"
+)
+
+// IsValidRole reports whether role is a recognised tenant-scoped role.
+func IsValidRole(role string) bool {
+	return role == RoleAdmin || role == RoleMember
+}
+
 type AuthUser struct {
 	ID           int64   `db:"id"`
 	Email        string  `db:"email"`
 	PasswordHash *string `db:"password_hash"`
 	Name         string  `db:"name"`
 	TenantID     int64   `db:"tenant_id"`
-	IsAdmin      bool    `db:"is_admin"`
+	Role         string  `db:"role"`
 }
 
 type UserRecord struct {
@@ -20,6 +31,7 @@ type UserRecord struct {
 	Name        string     `db:"name"`
 	TenantID    int64      `db:"tenant_id"`
 	Active      bool       `db:"active"`
+	Role        string     `db:"role"`
 	CreatedAt   time.Time  `db:"created_at"`
 }
 

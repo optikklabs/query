@@ -49,9 +49,10 @@ func (r *Repository) CreateTenantWithAdmin(
 		return 0, 0, err
 	}
 
+	// The signup owner is the first admin of their new tenant.
 	res, err = tx.ExecContext(ctx, `
-		INSERT INTO users (email, password_hash, name, tenant_id, active, is_admin, created_at)
-		VALUES (?, ?, ?, ?, 1, 0, ?)
+		INSERT INTO users (email, password_hash, name, tenant_id, active, role, created_at)
+		VALUES (?, ?, ?, ?, 1, 'admin', ?)
 	`, email, passwordHash, userName, tenantID, time.Now().UTC())
 	if err != nil {
 		return 0, 0, err

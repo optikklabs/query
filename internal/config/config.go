@@ -17,13 +17,6 @@ type Config struct {
 	MySQL       MySQLConfig      `yaml:"mysql"`
 	ClickHouse  ClickHouseConfig `yaml:"clickhouse"`
 	Auth        AuthConfig       `yaml:"auth"`
-	Admin       AdminConfig      `yaml:"admin"`
-}
-
-// AdminConfig seeds the platform super-admin at boot (OPTIKK_ADMIN_EMAIL/PASSWORD).
-type AdminConfig struct {
-	Email    string `yaml:"email"`
-	Password string `yaml:"password"`
 }
 
 // Load reads YAML configuration with environment variable overrides.
@@ -59,7 +52,30 @@ func Load(path ...string) (Config, error) {
 		return Config{}, fmt.Errorf("invalid config in %s: %w", resolved, err)
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+
 	return cfg, nil
+}
+
+// minJWTSecretLen guards against weak HMAC keys for HS256 access tokens.
+const minJWTSecretLen = 32
+
+// Validate rejects a config missing the secrets required to run safely.
+// The service is always deployed in production, so these checks are
+// unconditional. Each failing field is named so the startup log is actionable.
+func (c Config) Validate() error {
+	if len(c.Auth.JWTSecret) < minJWTSecretLen {
+		return fmt.Errorf("auth.jwt_secret must be at least %d bytes", minJWTSecretLen)
+	}
+	if c.MySQL.Password == "" {
+		return errors.New("mysql.password must not be empty")
+	}
+	if c.ClickHouse.Password == "" {
+		return errors.New("clickhouse.password must not be empty")
+	}
+	return nil
 }
 
 func resolveConfigFilePath(p string) (string, error) {
@@ -119,8 +135,5 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.cookie_domain", "")
 	v.SetDefault("auth.cookie_secure", false)
 	v.SetDefault("auth.cookie_same_site", "lax")
-
-	v.SetDefault("admin.email", "")
-	v.SetDefault("admin.password", "")
 
 }

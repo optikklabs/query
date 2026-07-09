@@ -20,6 +20,8 @@ import (
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
+const APIV1Base = "/api/v1"
+
 var validate = validator.New()
 
 func Tenant(r *http.Request) types.TenantContext {
@@ -50,6 +52,15 @@ func DecodeJSON(r *http.Request, v any) error {
 		return validate.Struct(v)
 	}
 	return nil
+}
+
+// DecodeAndValidate parses the JSON body into a new instance of T and validates it.
+func DecodeAndValidate[T any](r *http.Request) (T, error) {
+	var req T
+	if err := DecodeJSON(r, &req); err != nil {
+		return req, err
+	}
+	return req, nil
 }
 
 func RespondOK(w http.ResponseWriter, data any) {
@@ -100,14 +111,6 @@ func ParseIntParam(r *http.Request, key string, fallback int) int {
 	return fallback
 }
 
-func ParseFloatParam(r *http.Request, key string, fallback float64) float64 {
-	if v := r.URL.Query().Get(key); v != "" {
-		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-			return parsed
-		}
-	}
-	return fallback
-}
 
 func ParsePageSize(r *http.Request, key string, fallback int) int {
 	size := ParseIntParam(r, key, fallback)
@@ -211,6 +214,8 @@ func WithComparison(r *http.Request, startMs, endMs int64, queryFn func(s, e int
 	resp := ComparisonResponse{Data: primary}
 	if cmpErr == nil {
 		resp.Comparison = comparison
+	} else {
+		slog.Error("comparison query failed", slog.Any("error", cmpErr))
 	}
 	return resp, nil
 }

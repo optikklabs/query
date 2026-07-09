@@ -38,6 +38,7 @@ func (a *App) setupMetricsRoute(r chi.Router) {
 }
 
 func (a *App) setupGlobalMiddleware(r chi.Router) {
+	r.Use(middleware.RequestID())
 	r.Use(middleware.ErrorRecovery())
 	r.Use(chimw.RealIP)
 	r.Use(middleware.HTTPMetricsMiddleware())
@@ -52,7 +53,7 @@ func (a *App) setupHealthRoutes(r chi.Router) {
 }
 
 func (a *App) setupAPIRoutes(r chi.Router) {
-	r.Route("/api/v1", func(r chi.Router) {
+	r.Route(httputil.APIV1Base, func(r chi.Router) {
 		r.Use(middleware.TenantMiddleware(a.Infra.Tokens))
 		for _, mod := range a.Modules {
 			mod.RegisterRoutes(r)
