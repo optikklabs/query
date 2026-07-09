@@ -8,7 +8,7 @@ type FleetTotals struct {
 	TotalSpanCount int64   `json:"total_span_count"`
 	TotalErrors    int64   `json:"total_errors"`
 	TotalRPS       float64 `json:"total_rps"`
-	AvgErrorPct    float64 `json:"avg_error_pct"`
+	AvgErrorRate   float64 `json:"avg_error_rate"`
 	AvgP50Ms       float64 `json:"avg_p50_ms"`
 	AvgP95Ms       float64 `json:"avg_p95_ms"`
 	AvgP99Ms       float64 `json:"avg_p99_ms"`
@@ -35,7 +35,7 @@ type ServicePerformancePoint struct {
 	RPS          float64   `json:"rps"          ch:"rps"`
 	RequestCount uint64    `json:"request_count"`
 	ErrorCount   uint64    `json:"error_count"`
-	ErrorPct     float64   `json:"error_pct"`
+	ErrorRate    float64   `json:"error_rate"`
 }
 
 type StatusTimeSeriesPoint struct {

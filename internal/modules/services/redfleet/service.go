@@ -74,9 +74,9 @@ func computeFleetTotals(services []ServiceREDMetric, startMs, endMs int64) Fleet
 	}
 	serviceCount := int64(len(services))
 
-	avgErrorPct := 0.0
+	avgErrorRate := 0.0
 	if totalCount > 0 {
-		avgErrorPct = float64(totalErrors) * 100.0 / float64(totalCount)
+		avgErrorRate = float64(totalErrors) / float64(totalCount)
 	}
 	avgP50, avgP95, avgP99 := 0.0, 0.0, 0.0
 	if serviceCount > 0 {
@@ -89,7 +89,7 @@ func computeFleetTotals(services []ServiceREDMetric, startMs, endMs int64) Fleet
 		TotalSpanCount: totalCount,
 		TotalErrors:    totalErrors,
 		TotalRPS:       utils.SanitizeFloat(float64(totalCount) / durationSec),
-		AvgErrorPct:    utils.SanitizeFloat(avgErrorPct),
+		AvgErrorRate:   utils.SanitizeFloat(avgErrorRate),
 		AvgP50Ms:       utils.SanitizeFloat(avgP50),
 		AvgP95Ms:       utils.SanitizeFloat(avgP95),
 		AvgP99Ms:       utils.SanitizeFloat(avgP99),
@@ -121,13 +121,13 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFil
 	for t := startTime; !t.After(endTime); t = t.Add(grain) {
 		row, ok := rowMap[t.Unix()]
 		var reqCount, errCount uint64
-		var rps, errorPct float64
+		var rps, errorRate float64
 		if ok {
 			reqCount = row.RequestCount
 			errCount = row.ErrorCount
 			rps = float64(reqCount) / grainSec
 			if reqCount > 0 {
-				errorPct = (float64(errCount) / float64(reqCount)) * 100.0
+				errorRate = float64(errCount) / float64(reqCount)
 			}
 		}
 		points = append(points, ServicePerformancePoint{
@@ -135,7 +135,7 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFil
 			RPS:          rps,
 			RequestCount: reqCount,
 			ErrorCount:   errCount,
-			ErrorPct:     utils.SanitizeFloat(errorPct),
+			ErrorRate:    utils.SanitizeFloat(errorRate),
 		})
 	}
 	return points, nil
@@ -546,7 +546,7 @@ func (s *Service) GetServiceSummary(ctx context.Context, f REDFilters) (ServiceS
 		errCount = int64(redRow.ErrorCount)
 		rps = float64(reqCount) / durationSec
 		if reqCount > 0 {
-			errRate = float64(errCount) * 100.0 / float64(reqCount)
+			errRate = float64(errCount) / float64(reqCount)
 		}
 		p50 = utils.SanitizeFloat(float64(redRow.P50Ms))
 		p95 = utils.SanitizeFloat(float64(redRow.P95Ms))

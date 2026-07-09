@@ -53,31 +53,64 @@ func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int6
 	return rows, nil
 }
 
+// GetEdges builds directed edges: request/error counts come from the
+// service-graph counters (no status.code dimension) and latency from the server
+// histogram. Counts are authoritative for the edge set; latency LEFT-joins in.
 func (r *Repository) GetEdges(ctx context.Context, tenantID, startMs, endMs int64, focusService string) ([]edgeAggRow, error) {
+	rollup := timebucket.MetricsHistRollup(endMs - startMs)
+	edgeFilter := seriesattr.Client + ` != '' AND ` + seriesattr.Server + ` != '' AND ` +
+		seriesattr.Client + ` != ` + seriesattr.Server + ` AND (@focusService = '' OR ` +
+		seriesattr.Client + ` = @focusService OR ` + seriesattr.Server + ` = @focusService)`
+
 	query := `
-		WITH series AS (
+		WITH counter_series AS (
 		    SELECT fingerprint,
-		           ` + seriesattr.Client + `     AS client,
-		           ` + seriesattr.Server + `     AS server,
-		           ` + seriesattr.StatusCode + ` AS status_code
+		           ` + seriesattr.Client + ` AS client,
+		           ` + seriesattr.Server + ` AS server,
+		           metric_name
+		    FROM optikk.metrics_series
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		      AND metric_name IN ('traces_service_graph_request_total', 'traces_service_graph_request_failed_total')
+		    WHERE ` + edgeFilter + `
+		    GROUP BY fingerprint, client, server, metric_name
+		),
+		counts AS (
+		    SELECT cs.client AS client,
+		           cs.server AS server,
+		           toUInt64(sumIf(m.val_sum, cs.metric_name = 'traces_service_graph_request_total'))        AS call_count,
+		           toUInt64(sumIf(m.val_sum, cs.metric_name = 'traces_service_graph_request_failed_total')) AS error_count
+		    FROM ` + rollup + ` AS m
+		    INNER JOIN counter_series cs ON m.fingerprint = cs.fingerprint
+		    PREWHERE m.tenant_id = @tenantID AND m.timestamp BETWEEN @start AND @end
+		      AND m.metric_name IN ('traces_service_graph_request_total', 'traces_service_graph_request_failed_total')
+		    GROUP BY client, server
+		),
+		hist_series AS (
+		    SELECT fingerprint,
+		           ` + seriesattr.Client + ` AS client,
+		           ` + seriesattr.Server + ` AS server
 		    FROM optikk.metrics_series
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces_service_graph_request_server'
-		    WHERE ` + seriesattr.Client + ` != ''
-		      AND ` + seriesattr.Server + ` != ''
-		      AND ` + seriesattr.Client + ` != ` + seriesattr.Server + `
-		      AND (@focusService = '' OR ` + seriesattr.Client + ` = @focusService OR ` + seriesattr.Server + ` = @focusService)
-		    GROUP BY fingerprint, client, server, status_code
+		    WHERE ` + edgeFilter + `
+		    GROUP BY fingerprint, client, server
+		),
+		latency AS (
+		    SELECT hs.client AS client,
+		           hs.server AS server,
+		           quantilesPrometheusHistogramMerge(0.5, 0.95)(m.latency_state) AS qs
+		    FROM ` + rollup + ` AS m
+		    INNER JOIN hist_series hs ON m.fingerprint = hs.fingerprint
+		    PREWHERE m.tenant_id = @tenantID AND m.timestamp BETWEEN @start AND @end
+		      AND m.metric_name = 'traces_service_graph_request_server'
+		    GROUP BY client, server
 		)
-		SELECT series.client                                                     AS source,
-		       series.server                                                     AS target,
-		       sum(m.hist_count)                                                  AS call_count,
-		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)            AS error_count,
-		       quantilesPrometheusHistogramMerge(0.5, 0.95)(m.latency_state)      AS qs
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id = @tenantID AND m.timestamp BETWEEN @start AND @end
-		  AND m.metric_name = 'traces_service_graph_request_server'
-		GROUP BY source, target`
+		SELECT counts.client  AS source,
+		       counts.server  AS target,
+		       counts.call_count  AS call_count,
+		       counts.error_count AS error_count,
+		       latency.qs         AS qs
+		FROM counts
+		LEFT JOIN latency ON counts.client = latency.client AND counts.server = latency.server`
 	var rows []edgeAggRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetEdges", &rows, query, spanArgs(tenantID, startMs, endMs, focusService)...); err != nil {
 		return nil, err

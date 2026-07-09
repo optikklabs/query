@@ -38,6 +38,7 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
+		          AND ` + seriesattr.EntryKindPred + `
 		    GROUP BY fingerprint, service, status_code
 		)
 		SELECT series.service                                              AS service,
@@ -78,6 +79,7 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f RED
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
+		          AND ` + seriesattr.EntryKindPred + `
 		    GROUP BY fingerprint, status_code
 		)
 		SELECT ` + timebucket.DisplayGrainSQL(f.EndMs-f.StartMs) + ` AS bucket_at,
@@ -155,6 +157,7 @@ func (r *Repository) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]s
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
+		          AND ` + seriesattr.EntryKindPred + `
 		    GROUP BY fingerprint, http_status_code
 		)
 		SELECT ` + grainSQL + ` AS bucket_at,
@@ -184,6 +187,7 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDF
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
+		          AND ` + seriesattr.EntryKindPred + `
 		    GROUP BY fingerprint
 		)
 		SELECT ` + grainSQL + ` AS bucket_at,
@@ -219,6 +223,7 @@ func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilter
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
+		          AND ` + seriesattr.EntryKindPred + `
 		    GROUP BY fingerprint, http_route, status_code
 		)
 		SELECT ` + grainSQL + ` AS bucket_at,
@@ -261,6 +266,7 @@ func (r *Repository) GetTopEndpointsCombined(
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
+		          AND ` + seriesattr.EntryKindPred + `
 		    GROUP BY fingerprint, service, span_name, span_kind, http_route, status_code
 		)
 		SELECT any(series.service)                                                  AS service,
@@ -367,6 +373,7 @@ func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters)
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
 		    WHERE 1=1
 		          ` + seriesWhere + `
+		          AND ` + seriesattr.EntryKindPred + `
 		    GROUP BY fingerprint, service_name
 		)
 		SELECT ` + timebucket.DisplayGrainSQL(f.EndMs-f.StartMs) + ` AS bucket_at,
