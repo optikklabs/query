@@ -10,17 +10,11 @@ import (
 
 const BucketSeconds int64 = 300
 
-func BucketStart(unixSeconds int64) uint32 {
-	return uint32((unixSeconds / BucketSeconds) * BucketSeconds)
-}
 
 func FormatDisplayBucket(t time.Time) string {
 	return t.UTC().Format("2006-01-02 15:04:05")
 }
 
-func DisplayBucket(rowUnixSeconds int64, windowMs int64) time.Time {
-	return bucketAt(rowUnixSeconds, displayGrain(windowMs))
-}
 
 func DisplayGrain(windowMs int64) time.Duration {
 	return displayGrain(windowMs)
@@ -44,9 +38,6 @@ func displayGrain(windowMs int64) time.Duration {
 	return time.Duration(sec) * time.Second
 }
 
-func bucketAt(unixSeconds int64, grain time.Duration) time.Time {
-	return time.Unix(unixSeconds, 0).UTC().Truncate(grain)
-}
 
 func DisplayGrainSQL(windowMs int64) string {
 	return GrainSQL(int64(displayGrain(windowMs).Seconds()))

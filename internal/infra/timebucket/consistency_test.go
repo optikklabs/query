@@ -13,21 +13,6 @@ func TestBucketSecondsInvariant(t *testing.T) {
 	}
 }
 
-func TestBucketStartMatchesMVDerivation(t *testing.T) {
-	cases := []int64{
-		0, 1, 299, 300, 301, 599, 600,
-		1735689600,
-		1735689600 + 7,
-		1735689600 + 299,
-	}
-	for _, s := range cases {
-		want := uint32((s / 300) * 300)
-		if got := BucketStart(s); got != want {
-			t.Errorf("BucketStart(%d) = %d, want %d", s, got, want)
-		}
-	}
-}
-
 func TestDisplayGrainWindows(t *testing.T) {
 	hourMs := int64(time.Hour / time.Millisecond)
 	cases := []struct {
@@ -81,20 +66,3 @@ func TestDisplayGrainSQLDispatch(t *testing.T) {
 	}
 }
 
-func TestDisplayBucketTruncation(t *testing.T) {
-	rowSec := int64(1735693271)
-	cases := []struct {
-		windowMs int64
-		want     string
-	}{
-		{int64(time.Hour / time.Millisecond), "2025-01-01 01:01:00"},
-		{12 * int64(time.Hour/time.Millisecond), "2025-01-01 01:00:00"},
-		{3 * 24 * int64(time.Hour/time.Millisecond), "2025-01-01 01:00:00"},
-		{30 * 24 * int64(time.Hour/time.Millisecond), "2025-01-01 00:00:00"},
-	}
-	for _, c := range cases {
-		if got := FormatDisplayBucket(DisplayBucket(rowSec, c.windowMs)); got != c.want {
-			t.Errorf("DisplayBucket(%d, %dms) = %q, want %q", rowSec, c.windowMs, got, c.want)
-		}
-	}
-}
