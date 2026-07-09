@@ -26,11 +26,19 @@ func IsScalarField(field string) bool {
 	return ok
 }
 
-type Service struct {
-	repo *Repository
+type TraceRepository interface {
+	Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, bool, error)
+	QueryFacets(ctx context.Context, req FacetsRequest) (Facets, error)
+	QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBucket, error)
+	SuggestAttribute(ctx context.Context, tenantID int64, start, end int64, field, prefix string, limit int) ([]Suggestion, error)
+	SuggestScalar(ctx context.Context, tenantID int64, start, end int64, field, prefix string, limit int) ([]Suggestion, error)
 }
 
-func NewService(repo *Repository) *Service {
+type Service struct {
+	repo TraceRepository
+}
+
+func NewService(repo TraceRepository) *Service {
 	return &Service{repo: repo}
 }
 

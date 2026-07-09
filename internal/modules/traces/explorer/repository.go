@@ -2,7 +2,6 @@ package explorer
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"time"
 
@@ -99,22 +98,34 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets
 		prewhereFP = " AND fingerprint IN active_fps"
 	}
 
-	arm := func(dim, col string, limit int) string {
-		return `
-			SELECT '` + dim + `' AS dim, ` + col + ` AS value, count() AS cnt
-			FROM optikk.spans
-			PREWHERE tenant_id = @tenantID` + prewhereFP + `
-			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + ` AND ` + col + ` != ''
-			GROUP BY value
-			ORDER BY cnt DESC
-			LIMIT ` + strconv.Itoa(limit)
-	}
-
-	query := cte + arm("service", "service", 20) +
-		" UNION ALL " + arm("operation", "name", 20) +
-		" UNION ALL " + arm("http_method", "http_method", 10) +
-		" UNION ALL " + arm("http_status", "response_status_code", 15) +
-		" UNION ALL " + arm("status", "status_code_string", 5)
+	query := cte + `
+		SELECT 
+			multiIf(service != '', 'service',
+					name != '', 'operation',
+					http_method != '', 'http_method',
+					response_status_code != '', 'http_status',
+					status_code_string != '', 'status',
+					'') as dim,
+			multiIf(service != '', service,
+					name != '', name,
+					http_method != '', http_method,
+					response_status_code != '', response_status_code,
+					status_code_string != '', status_code_string,
+					'') as value,
+			count() as cnt
+		FROM optikk.spans
+		PREWHERE tenant_id = @tenantID` + prewhereFP + `
+		WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
+		GROUP BY GROUPING SETS (
+			(service),
+			(name),
+			(http_method),
+			(response_status_code),
+			(status_code_string)
+		)
+		HAVING value != ''
+		ORDER BY dim, cnt DESC
+		LIMIT 20 BY dim`
 
 	var rows []facetDimRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "facets.QueryFacets", &rows, query, args...); err != nil {
