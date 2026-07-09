@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	topServiceSeries = 5  // distinct bands in the "by service" chart; remainder folds into "Other"
-	topServiceRows   = 12 // rows returned for the services table
+	topServiceSeries   = 5  // distinct bands in the "by service" chart; rest fold into "Other"
+	topServiceRows     = 12 // rows returned for the services table
+	projectionTrailing = 7  // days of trailing data the month-end projection uses
 )
 
 type Service struct {
@@ -43,15 +44,17 @@ func axisIndex(dates []string) map[string]int {
 	return idx
 }
 
-// fillDaily projects per-day rows onto the date axis.
-func fillDaily(rows []dateCountRow, idx map[string]int, n int) []uint64 {
-	out := make([]uint64, n)
+// fillDaily projects per-day record and byte counts onto the date axis.
+func fillDaily(rows []dateCountRow, idx map[string]int, n int) (counts, bytes []uint64) {
+	counts = make([]uint64, n)
+	bytes = make([]uint64, n)
 	for _, row := range rows {
 		if i, ok := idx[dateKey(row.Day)]; ok {
-			out[i] += row.Count
+			counts[i] += row.Count
+			bytes[i] += row.Bytes
 		}
 	}
-	return out
+	return counts, bytes
 }
 
 func sum(values []uint64) uint64 {
@@ -71,6 +74,21 @@ func pct(part, whole uint64) float64 {
 		return 0
 	}
 	return float64(part) / float64(whole) * 100
+}
+
+// projectMonthEnd extrapolates the month total from the mean of the last
+// projectionTrailing days — a recent-pace estimate, far less noisy than a
+// whole-month average early in the billing period.
+func projectMonthEnd(daily []uint64, totalDays int) uint64 {
+	if len(daily) == 0 {
+		return 0
+	}
+	w := projectionTrailing
+	if w > len(daily) {
+		w = len(daily)
+	}
+	rate := float64(sum(daily[len(daily)-w:])) / float64(w)
+	return uint64(rate * float64(totalDays))
 }
 
 // Summary assembles the KPI strip, by-type breakdown and metrics-pillar facts.
@@ -98,48 +116,67 @@ func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (
 
 	dates := buildDateAxis(startMs, endMs)
 	idx := axisIndex(dates)
-	logsDaily := fillDaily(logs, idx, len(dates))
-	spansDaily := fillDaily(spans, idx, len(dates))
-	metricsDaily := fillDaily(metrics, idx, len(dates))
+	n := len(dates)
+	logsC, logsB := fillDaily(logs, idx, n)
+	spansC, spansB := fillDaily(spans, idx, n)
+	metricsC, metricsB := fillDaily(metrics, idx, n)
 
-	logsTotal, spansTotal, metricsTotal := sum(logsDaily), sum(spansDaily), sum(metricsDaily)
+	logsTotal, spansTotal, metricsTotal := sum(logsC), sum(spansC), sum(metricsC)
+	logsBytes, spansBytes, metricsBytes := sum(logsB), sum(spansB), sum(metricsB)
 	records := logsTotal + spansTotal + metricsTotal
+	bytesTotal := logsBytes + spansBytes + metricsBytes
 
+	// Daily grand totals drive the peak day and the trailing projection.
+	dailyRecords := make([]uint64, n)
+	dailyBytes := make([]uint64, n)
 	peak := PeakDay{}
 	for i, d := range dates {
-		day := logsDaily[i] + spansDaily[i] + metricsDaily[i]
-		if day >= peak.Records {
-			peak = PeakDay{Date: d, Records: day}
+		dailyRecords[i] = logsC[i] + spansC[i] + metricsC[i]
+		dailyBytes[i] = logsB[i] + spansB[i] + metricsB[i]
+		if dailyRecords[i] >= peak.Records {
+			peak = PeakDay{Date: d, Records: dailyRecords[i], Bytes: dailyBytes[i]}
 		}
 	}
 
 	end := time.UnixMilli(endMs).UTC()
 	daysElapsed := end.Day()
 	totalDays := daysInMonth(end)
-	var dailyAvg, projected uint64
+	var dailyAvg, dailyAvgBytes uint64
 	if daysElapsed > 0 {
 		dailyAvg = records / uint64(daysElapsed)
-		projected = dailyAvg * uint64(totalDays)
+		dailyAvgBytes = bytesTotal / uint64(daysElapsed)
 	}
+	projRecords := projectMonthEnd(dailyRecords, totalDays)
+	projBytes := projectMonthEnd(dailyBytes, totalDays)
 
-	commitment := s.cfg.MonthlyRecordCommitment
+	recCommit := s.cfg.MonthlyRecordCommitment
+	byteCommit := s.cfg.MonthlyByteCommitment
 	return SummaryResponse{
-		Totals:               SignalTotals{Logs: logsTotal, Spans: spansTotal, MetricDatapoints: metricsTotal, Records: records},
-		ActiveTimeseries:     activeTS,
-		TopCardinalityMetric: TopMetric{Name: topMetric.Name, Timeseries: topMetric.Count},
-		DailyAverage:         dailyAvg,
-		Peak:                 peak,
-		DaysElapsed:          daysElapsed,
-		DaysInMonth:          totalDays,
-		ProjectedRecords:     projected,
-		CommitmentRecords:    commitment,
-		CommitmentUsedPct:    pct(records, commitment),
-		ProjectedPct:         pct(projected, commitment),
-		OnPace:               projected <= commitment,
+		Totals: SignalTotals{
+			Logs: logsTotal, Spans: spansTotal, MetricDatapoints: metricsTotal, Records: records,
+			LogsBytes: logsBytes, SpansBytes: spansBytes, MetricBytes: metricsBytes, Bytes: bytesTotal,
+		},
+		ActiveTimeseries:       activeTS,
+		TopCardinalityMetric:   TopMetric{Name: topMetric.Name, Timeseries: topMetric.Count},
+		DailyAverage:           dailyAvg,
+		DailyAverageBytes:      dailyAvgBytes,
+		Peak:                   peak,
+		DaysElapsed:            daysElapsed,
+		DaysInMonth:            totalDays,
+		ProjectedRecords:       projRecords,
+		ProjectedBytes:         projBytes,
+		CommitmentRecords:      recCommit,
+		CommitmentBytes:        byteCommit,
+		CommitmentUsedPct:      pct(records, recCommit),
+		CommitmentUsedBytesPct: pct(bytesTotal, byteCommit),
+		ProjectedPct:           pct(projRecords, recCommit),
+		ProjectedBytesPct:      pct(projBytes, byteCommit),
+		OnPace:                 projRecords <= recCommit,
+		OnPaceBytes:            projBytes <= byteCommit,
 		ByType: []TypeShare{
-			{Type: "logs", Label: "Logs", Records: logsTotal, Pct: pct(logsTotal, records)},
-			{Type: "spans", Label: "Spans (APM)", Records: spansTotal, Pct: pct(spansTotal, records)},
-			{Type: "metrics", Label: "Custom metrics", Records: metricsTotal, Pct: pct(metricsTotal, records)},
+			{Type: "logs", Label: "Logs", Records: logsTotal, Pct: pct(logsTotal, records), Bytes: logsBytes, BytesPct: pct(logsBytes, bytesTotal)},
+			{Type: "spans", Label: "Spans (APM)", Records: spansTotal, Pct: pct(spansTotal, records), Bytes: spansBytes, BytesPct: pct(spansBytes, bytesTotal)},
+			{Type: "metrics", Label: "Custom metrics", Records: metricsTotal, Pct: pct(metricsTotal, records), Bytes: metricsBytes, BytesPct: pct(metricsBytes, bytesTotal)},
 		},
 	}, nil
 }
@@ -166,15 +203,43 @@ func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64
 		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries metrics: %w", err)
 	}
 
+	logsC, logsB := fillDaily(logs, idx, len(dates))
+	spansC, spansB := fillDaily(spans, idx, len(dates))
+	metricsC, metricsB := fillDaily(metrics, idx, len(dates))
 	return TimeseriesResponse{
 		GroupBy: "type",
 		Dates:   dates,
 		Series: []TimeseriesSeries{
-			{ID: "logs", Label: "Logs", Data: fillDaily(logs, idx, len(dates))},
-			{ID: "spans", Label: "Spans (APM)", Data: fillDaily(spans, idx, len(dates))},
-			{ID: "metrics", Label: "Custom metrics", Data: fillDaily(metrics, idx, len(dates))},
+			{ID: "logs", Label: "Logs", Data: logsC, ByteData: logsB},
+			{ID: "spans", Label: "Spans (APM)", Data: spansC, ByteData: spansB},
+			{ID: "metrics", Label: "Custom metrics", Data: metricsC, ByteData: metricsB},
 		},
 	}, nil
+}
+
+// svcSeries accumulates a service's daily records and bytes on the date axis.
+type svcSeries struct {
+	counts []uint64
+	bytes  []uint64
+}
+
+// accumulateByService folds per-(service, day) rows into per-service series.
+func accumulateByService(rowSets [][]svcDateCountRow, idx map[string]int, n int) map[string]*svcSeries {
+	perService := map[string]*svcSeries{}
+	for _, rows := range rowSets {
+		for _, row := range rows {
+			ser := perService[row.Service]
+			if ser == nil {
+				ser = &svcSeries{counts: make([]uint64, n), bytes: make([]uint64, n)}
+				perService[row.Service] = ser
+			}
+			if i, ok := idx[dateKey(row.Day)]; ok {
+				ser.counts[i] += row.Count
+				ser.bytes[i] += row.Bytes
+			}
+		}
+	}
+	return perService
 }
 
 func (s *Service) timeseriesByService(ctx context.Context, tenantID, startMs, endMs int64, dates []string, idx map[string]int) (TimeseriesResponse, error) {
@@ -187,55 +252,97 @@ func (s *Service) timeseriesByService(ctx context.Context, tenantID, startMs, en
 		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries svc spans: %w", err)
 	}
 
-	perService := map[string][]uint64{}
-	put := func(rows []svcDateCountRow) {
-		for _, row := range rows {
-			arr, ok := perService[row.Service]
-			if !ok {
-				arr = make([]uint64, len(dates))
-				perService[row.Service] = arr
-			}
-			if i, ok := idx[dateKey(row.Day)]; ok {
-				arr[i] += row.Count
-			}
-		}
-	}
-	put(logs)
-	put(spans)
-
+	perService := accumulateByService([][]svcDateCountRow{logs, spans}, idx, len(dates))
 	ranked := rankByTotal(perService)
 	series := make([]TimeseriesSeries, 0, topServiceSeries+1)
-	other := make([]uint64, len(dates))
+	otherC := make([]uint64, len(dates))
+	otherB := make([]uint64, len(dates))
 	for rank, name := range ranked {
+		ser := perService[name]
 		if rank < topServiceSeries {
-			series = append(series, TimeseriesSeries{ID: name, Label: name, Data: perService[name]})
+			series = append(series, TimeseriesSeries{ID: name, Label: name, Data: ser.counts, ByteData: ser.bytes})
 			continue
 		}
-		for i, v := range perService[name] {
-			other[i] += v
+		for i := range otherC {
+			otherC[i] += ser.counts[i]
+			otherB[i] += ser.bytes[i]
 		}
 	}
 	if len(ranked) > topServiceSeries {
-		series = append(series, TimeseriesSeries{ID: "other", Label: "Other services", Data: other})
+		series = append(series, TimeseriesSeries{ID: "other", Label: "Other services", Data: otherC, ByteData: otherB})
 	}
 
 	return TimeseriesResponse{GroupBy: "service", Dates: dates, Series: series}, nil
 }
 
-// rankByTotal returns service names ordered by descending total volume.
-func rankByTotal(perService map[string][]uint64) []string {
+// rankByTotal returns service names ordered by descending total record volume.
+func rankByTotal(perService map[string]*svcSeries) []string {
 	names := make([]string, 0, len(perService))
 	for name := range perService {
 		names = append(names, name)
 	}
 	sort.Slice(names, func(a, b int) bool {
-		ta, tb := sum(perService[names[a]]), sum(perService[names[b]])
+		ta, tb := sum(perService[names[a]].counts), sum(perService[names[b]].counts)
 		if ta == tb {
 			return names[a] < names[b]
 		}
 		return ta > tb
 	})
 	return names
+}
+
+// serviceAgg is a service's period totals for the top-services table. Records
+// and bytes are logs+spans; timeseries is metric cardinality (a separate axis).
+type serviceAgg struct {
+	env        string
+	logs       uint64
+	spans      uint64
+	timeseries uint64
+	logsBytes  uint64
+	spansBytes uint64
+}
+
+func (a *serviceAgg) records() uint64 { return a.logs + a.spans }
+func (a *serviceAgg) bytes() uint64   { return a.logsBytes + a.spansBytes }
+
+// aggregateServices folds the per-signal totals into one map keyed by service.
+func aggregateServices(logTotals, spanTotals, tsTotals []svcCountRow) map[string]*serviceAgg {
+	services := map[string]*serviceAgg{}
+	get := func(name string) *serviceAgg {
+		a := services[name]
+		if a == nil {
+			a = &serviceAgg{}
+			services[name] = a
+		}
+		return a
+	}
+	for _, row := range logTotals {
+		a := get(row.Service)
+		a.logs, a.logsBytes, a.env = row.Count, row.Bytes, row.Env
+	}
+	for _, row := range spanTotals {
+		a := get(row.Service)
+		a.spans, a.spansBytes = row.Count, row.Bytes
+		if a.env == "" {
+			a.env = row.Env
+		}
+	}
+	for _, row := range tsTotals {
+		get(row.Service).timeseries = row.Count
+	}
+	return services
+}
+
+// priorRecordTotals sums the prior window's records per service for the delta.
+func priorRecordTotals(priorLogs, priorSpans []svcCountRow) map[string]uint64 {
+	totals := map[string]uint64{}
+	for _, row := range priorLogs {
+		totals[row.Service] += row.Count
+	}
+	for _, row := range priorSpans {
+		totals[row.Service] += row.Count
+	}
+	return totals
 }
 
 // Services builds the top-ingesting-services table, including a prior-period delta.
@@ -275,66 +382,30 @@ func (s *Service) Services(ctx context.Context, tenantID, startMs, endMs int64) 
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services daily spans: %w", err)
 	}
 
-	type agg struct {
-		env        string
-		logs       uint64
-		spans      uint64
-		timeseries uint64
-	}
-	services := map[string]*agg{}
-	get := func(name string) *agg {
-		a, ok := services[name]
-		if !ok {
-			a = &agg{}
-			services[name] = a
-		}
-		return a
-	}
-	for _, row := range logTotals {
-		a := get(row.Service)
-		a.logs = row.Count
-		a.env = row.Env
-	}
-	for _, row := range spanTotals {
-		get(row.Service).spans = row.Count
-	}
-	for _, row := range tsTotals {
-		get(row.Service).timeseries = row.Count
-	}
+	services := aggregateServices(logTotals, spanTotals, tsTotals)
+	priorTotals := priorRecordTotals(priorLogs, priorSpans)
+	spark := accumulateByService([][]svcDateCountRow{dailyLogs, dailySpans}, idx, len(dates))
 
-	priorTotals := map[string]uint64{}
-	for _, row := range priorLogs {
-		priorTotals[row.Service] += row.Count
-	}
-	for _, row := range priorSpans {
-		priorTotals[row.Service] += row.Count
-	}
+	return buildServicesResponse(services, priorTotals, spark, len(dates)), nil
+}
 
-	spark := map[string][]uint64{}
-	putSpark := func(rows []svcDateCountRow) {
-		for _, row := range rows {
-			arr, ok := spark[row.Service]
-			if !ok {
-				arr = make([]uint64, len(dates))
-				spark[row.Service] = arr
-			}
-			if i, ok := idx[dateKey(row.Day)]; ok {
-				arr[i] += row.Count
-			}
-		}
-	}
-	putSpark(dailyLogs)
-	putSpark(dailySpans)
-
-	var grandTotal uint64
+// buildServicesResponse ranks services by record volume, keeps the top rows and
+// computes each row's share, delta and sparklines.
+func buildServicesResponse(services map[string]*serviceAgg, prior map[string]uint64, spark map[string]*svcSeries, n int) ServicesResponse {
+	var grandTotal, grandBytes uint64
 	names := make([]string, 0, len(services))
 	for name, a := range services {
-		grandTotal += a.logs + a.spans
+		// Skip unattributable telemetry (e.g. servicegraph edge metrics carry
+		// no service.name); a blank 0-record row is not a real service.
+		if name == "" {
+			continue
+		}
+		grandTotal += a.records()
+		grandBytes += a.bytes()
 		names = append(names, name)
 	}
 	sort.Slice(names, func(i, j int) bool {
-		ti := services[names[i]].logs + services[names[i]].spans
-		tj := services[names[j]].logs + services[names[j]].spans
+		ti, tj := services[names[i]].records(), services[names[j]].records()
 		if ti == tj {
 			return names[i] < names[j]
 		}
@@ -346,20 +417,22 @@ func (s *Service) Services(ctx context.Context, tenantID, startMs, endMs int64) 
 		limit = len(names)
 	}
 	rows := make([]ServiceRow, 0, limit)
-	var topSum uint64
+	var topSum, topByteSum uint64
 	for _, name := range names[:limit] {
 		a := services[name]
-		total := a.logs + a.spans
+		total, bytes := a.records(), a.bytes()
 		topSum += total
+		topByteSum += bytes
 		delta := 0.0
-		if prior := priorTotals[name]; prior > 0 {
-			delta = (float64(total) - float64(prior)) / float64(prior) * 100
+		if p := prior[name]; p > 0 {
+			delta = (float64(total) - float64(p)) / float64(p) * 100
 		}
-		// Metrics-only services have no daily log/span rows; emit a zero-filled
-		// spark so the JSON is never null (nil slices marshal to null).
-		sp := spark[name]
-		if sp == nil {
-			sp = make([]uint64, len(dates))
+		// Zero-fill sparks so JSON is never null (nil slices marshal to null).
+		var spC, spB []uint64
+		if ser := spark[name]; ser != nil {
+			spC, spB = ser.counts, ser.bytes
+		} else {
+			spC, spB = make([]uint64, n), make([]uint64, n)
 		}
 		rows = append(rows, ServiceRow{
 			Name:       name,
@@ -368,15 +441,19 @@ func (s *Service) Services(ctx context.Context, tenantID, startMs, endMs int64) 
 			Spans:      a.spans,
 			Timeseries: a.timeseries,
 			Total:      total,
+			Bytes:      bytes,
 			Pct:        pct(total, grandTotal),
+			BytesPct:   pct(bytes, grandBytes),
 			DeltaPct:   delta,
-			Spark:      sp,
+			Spark:      spC,
+			ByteSpark:  spB,
 		})
 	}
 
 	return ServicesResponse{
-		Services:      rows,
-		TotalServices: len(names),
-		TopSharePct:   pct(topSum, grandTotal),
-	}, nil
+		Services:         rows,
+		TotalServices:    len(names),
+		TopSharePct:      pct(topSum, grandTotal),
+		TopShareBytesPct: pct(topByteSum, grandBytes),
+	}
 }
