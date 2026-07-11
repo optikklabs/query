@@ -21,7 +21,7 @@ func NewRepository(db *sql.DB) *Repository {
 func (r *Repository) FindTenantByID(tenantID int64) (shared.TenantRecord, error) {
 	var t shared.TenantRecord
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindTenantByID", &t, `
-		SELECT id, name, active, api_key, created_at
+		SELECT id, name, active, api_key_prefix, created_at
 		FROM tenant
 		WHERE id = ?
 		LIMIT 1
@@ -29,10 +29,10 @@ func (r *Repository) FindTenantByID(tenantID int64) (shared.TenantRecord, error)
 	return t, err
 }
 
-func (r *Repository) UpdateTenantAPIKey(ctx context.Context, tenantID int64, apiKey string) error {
+func (r *Repository) UpdateTenantAPIKey(ctx context.Context, tenantID int64, apiKeyHash, apiKeyPrefix string) error {
 	_, err := dbutil.ExecSQL(ctx, r.db, "user.UpdateTenantAPIKey", `
-		UPDATE tenant SET api_key = ? WHERE id = ?
-	`, apiKey, tenantID)
+		UPDATE tenant SET api_key_hash = ?, api_key_prefix = ? WHERE id = ?
+	`, apiKeyHash, apiKeyPrefix, tenantID)
 	return err
 }
 

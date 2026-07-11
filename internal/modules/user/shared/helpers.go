@@ -2,6 +2,7 @@ package shared
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"strings"
 )
@@ -16,9 +17,27 @@ func GenerateAPIKey() (string, error) {
 	return "ok_" + hex.EncodeToString(bytes), nil
 }
 
-// revokedKeyPrefix marks a key the client can no longer use. api_key is NOT NULL
-// UNIQUE, so revoke writes a random unique sentinel (not a blank) that no client
-// holds, disabling ingest until the tenant rotates a fresh key.
+// HashAPIKey is the stored form of an API key: hex SHA-256. Keys are
+// 256-bit random values, so a fast unsalted hash is safe and keeps the
+// ingest hot-path lookup cheap. Ingest's authrepo mirrors this hashing.
+func HashAPIKey(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+// APIKeyPrefix is the display fragment stored beside the hash so the UI
+// can identify a key without being able to recover it.
+func APIKeyPrefix(raw string) string {
+	const n = 11 // "ok_" + 8 hex chars
+	if len(raw) < n {
+		return raw
+	}
+	return raw[:n]
+}
+
+// revokedKeyPrefix marks a key the client can no longer use. api_key_hash is
+// NOT NULL UNIQUE, so revoke writes a random unique sentinel (not a blank)
+// that no client holds, disabling ingest until the tenant rotates a fresh key.
 const revokedKeyPrefix = "revoked_"
 
 func GenerateRevokedKey() (string, error) {

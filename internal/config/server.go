@@ -18,6 +18,18 @@ type AuthConfig struct {
 	CookieSameSite    string `yaml:"cookie_same_site"`
 }
 
+// BotConfig controls server-side signup challenge verification.
+type BotConfig struct {
+	TurnstileSecret string `yaml:"turnstile_secret"`
+}
+
+// EmailConfig configures transactional email delivery through Resend's HTTPS API.
+type EmailConfig struct {
+	ResendAPIKey  string `yaml:"resend_api_key"`
+	From          string `yaml:"from"`
+	VerifyBaseURL string `yaml:"verify_base_url"`
+}
+
 func (c Config) AccessTokenTTL() time.Duration {
 	return time.Duration(c.Auth.AccessTTLMs) * time.Millisecond
 }

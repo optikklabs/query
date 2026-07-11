@@ -20,6 +20,10 @@ clickhouse:
   user: default
   password: "" # Use OPTIKK_CLICKHOUSE_PASSWORD environment variable
   secure: false
+  # Per-pod pool; all replicas together should stay near CH's
+  # max_concurrent_queries (default 100). 0 falls back to 40/20.
+  max_open_conns: 40
+  max_idle_conns: 20
 
 auth:
   jwt_secret: "" # Use OPTIKK_AUTH_JWT_SECRET environment variable
@@ -29,3 +33,11 @@ auth:
   cookie_domain: ""
   cookie_secure: false
   cookie_same_site: lax
+
+bot:
+  turnstile_secret: "" # Use OPTIKK_BOT_TURNSTILE_SECRET
+
+email:
+  resend_api_key: "" # Use OPTIKK_EMAIL_RESEND_API_KEY
+  from: "" # Use OPTIKK_EMAIL_FROM
+  verify_base_url: "" # Use OPTIKK_EMAIL_VERIFY_BASE_URL

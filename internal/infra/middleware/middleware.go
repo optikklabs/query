@@ -184,6 +184,7 @@ var publicPrefixes = []string{
 	httputil.APIV1Base + "/auth/logout",
 	httputil.APIV1Base + "/auth/device/code",
 	httputil.APIV1Base + "/auth/device/token",
+	httputil.APIV1Base + "/auth/verify-email",
 	"/health",
 }
 

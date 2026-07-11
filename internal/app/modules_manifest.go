@@ -53,7 +53,7 @@ func configuredModules(
 	// Device flow reuses auth's IssueTokens for CLI login.
 	authService := user_auth.NewService(user_auth.NewRepository(infraDeps.DB), infraDeps.Tokens)
 	deviceService := user_device.NewService(user_device.NewRepository(infraDeps.DB), authService)
-	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService)
+	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService, infraDeps.Config.Bot.TurnstileSecret, infraDeps.Config.Email.ResendAPIKey, infraDeps.Config.Email.From, infraDeps.Config.Email.VerifyBaseURL)
 	tenantService := user_tenant.NewService(user_tenant.NewRepository(infraDeps.DB))
 	usersService := user_users.NewService(user_users.NewRepository(infraDeps.DB))
 

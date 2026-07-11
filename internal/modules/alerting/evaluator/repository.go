@@ -36,7 +36,36 @@ type UpdateStateArgs struct {
 	IncrementEvalCount bool
 }
 
-func (r *Repository) LoadDue(ctx context.Context, now time.Time, limit int) ([]DueMonitor, error) {
+// claimLease is how long a claimed monitor stays invisible to other
+// replicas. UpdateState releases the claim early on completion; the lease
+// only matters when a replica crashes mid-evaluation.
+const claimLease = 5 * time.Minute
+
+// ClaimDue atomically claims up to limit due monitors for one evaluator
+// replica and returns them. MySQL is the only coordinator: the claim UPDATE
+// is atomic, expired leases are reclaimable, so any number of replicas can
+// run the tick loop concurrently without duplicate evaluations.
+func (r *Repository) ClaimDue(ctx context.Context, claimID string, now time.Time, limit int) ([]DueMonitor, error) {
+	// Single-table UPDATE: MySQL forbids ORDER BY/LIMIT on multi-table
+	// updates, so active-monitor filtering uses a subquery instead of a JOIN.
+	const claim = `
+		UPDATE optikk.monitor_state
+		   SET claimed_by = ?, claimed_until = ?
+		 WHERE next_evaluation_at <= ?
+		   AND (claimed_until IS NULL OR claimed_until < ?)
+		   AND monitor_id IN (SELECT id FROM optikk.monitors WHERE active = 1)
+		 ORDER BY next_evaluation_at
+		 LIMIT ?
+	`
+	res, err := dbutil.ExecSQL(ctx, r.db, "evaluator.ClaimDue", claim,
+		claimID, now.Add(claimLease), now, now, limit)
+	if err != nil {
+		return nil, err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return nil, nil
+	}
+
 	const query = `
 		SELECT
 		  m.id, m.tenant_id, m.name, m.type, m.priority,
@@ -56,12 +85,11 @@ func (r *Repository) LoadDue(ctx context.Context, now time.Time, limit int) ([]D
 		  s.acked_at          AS s_acked_at
 		FROM optikk.monitors m
 		JOIN optikk.monitor_state s ON s.monitor_id = m.id
-		WHERE m.active = 1 AND s.next_evaluation_at <= ?
+		WHERE s.claimed_by = ?
 		ORDER BY s.next_evaluation_at
-		LIMIT ?
 	`
 	var raw []dueRow
-	if err := dbutil.SelectSQL(ctx, r.db, "evaluator.LoadDue", &raw, query, now, limit); err != nil {
+	if err := dbutil.SelectSQL(ctx, r.db, "evaluator.LoadClaimed", &raw, query, claimID); err != nil {
 		return nil, err
 	}
 	out := make([]DueMonitor, 0, len(raw))
@@ -105,11 +133,14 @@ func (r dueRow) toDue() DueMonitor {
 
 func (r *Repository) UpdateState(ctx context.Context, args UpdateStateArgs) error {
 
+	// Clearing claimed_by/claimed_until releases the work claim taken by
+	// ClaimDue as soon as this monitor's evaluation completes.
 	q := `
 		UPDATE optikk.monitor_state
 		   SET status = ?, current_value = ?, last_evaluated_at = ?, next_evaluation_at = ?,
 		       triggered_at = ?, last_notified_at = COALESCE(?, last_notified_at),
-		       evaluation_count = evaluation_count + ?
+		       evaluation_count = evaluation_count + ?,
+		       claimed_by = NULL, claimed_until = NULL
 		 WHERE monitor_id = ? AND status = ?
 	`
 	incr := 0

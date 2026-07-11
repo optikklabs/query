@@ -39,6 +39,39 @@ func TestGenerateAPIKeyUnique(t *testing.T) {
 	}
 }
 
+// The stored form must be deterministic hex SHA-256, never the raw key.
+func TestHashAPIKey(t *testing.T) {
+	const key = "ok_0123456789abcdef"
+	h := HashAPIKey(key)
+	if len(h) != 64 {
+		t.Fatalf("hash length = %d, want 64", len(h))
+	}
+	if h != HashAPIKey(key) {
+		t.Error("hash is not deterministic")
+	}
+	if h == HashAPIKey("ok_different") {
+		t.Error("distinct keys produced the same hash")
+	}
+	if strings.Contains(h, key) {
+		t.Error("hash leaks the raw key")
+	}
+}
+
+// The display prefix identifies a key without being able to recover it.
+func TestAPIKeyPrefix(t *testing.T) {
+	key, err := GenerateAPIKey()
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+	p := APIKeyPrefix(key)
+	if len(p) != 11 || !strings.HasPrefix(key, p) {
+		t.Errorf("prefix %q not an 11-char prefix of key", p)
+	}
+	if got := APIKeyPrefix("short"); got != "short" {
+		t.Errorf("short input prefix = %q, want unchanged", got)
+	}
+}
+
 // A revoke sentinel must be unique, prefixed, and never mistaken for a live key.
 func TestGenerateRevokedKey(t *testing.T) {
 	key, err := GenerateRevokedKey()

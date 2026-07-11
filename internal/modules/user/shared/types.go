@@ -57,11 +57,13 @@ type DeviceCodeRecord struct {
 	CreatedAt    time.Time  `db:"created_at"`
 }
 
+// TenantRecord never carries the raw API key: only its display prefix is
+// stored/readable, the raw key exists solely in signup/rotate responses.
 type TenantRecord struct {
 	ID            int64      `db:"id"`
 	Name          string     `db:"name"`
 	Active        bool       `db:"active"`
-	APIKey        string     `db:"api_key"`
+	APIKeyPrefix  string     `db:"api_key_prefix"`
 	AccountStatus string     `db:"account_status"`
 	TrialEndsAt   *time.Time `db:"trial_ends_at"`
 	CreatedAt     time.Time  `db:"created_at"`

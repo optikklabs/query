@@ -25,4 +25,4 @@ bin/
 # Local env files
 .env
 .env.local
-
+.secrets/

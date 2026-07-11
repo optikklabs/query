@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/token"
@@ -16,29 +17,43 @@ import (
 
 // Service handles authentication and session issuance.
 type Service struct {
-	repo   *Repository
-	tokens *token.Service
+	repo     *Repository
+	tokens   *token.Service
+	attempts *loginAttempts
+}
+
+type loginAttempts struct {
+	mu      sync.Mutex
+	entries map[string]attempt
+}
+type attempt struct {
+	failures    int
+	lockedUntil time.Time
 }
 
 func NewService(repo *Repository, tokens *token.Service) *Service {
-	return &Service{repo: repo, tokens: tokens}
+	return &Service{repo: repo, tokens: tokens, attempts: &loginAttempts{entries: make(map[string]attempt)}}
 }
 
 // Login authenticates a user and issues access and refresh tokens.
 func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP string) (LoginResponse, string, error) {
 	email := strings.TrimSpace(req.Email)
 	password := strings.TrimSpace(req.Password)
+	if !s.attempts.allow(email, clientIP) {
+		return LoginResponse{}, "", shared.NewValidationError("Too many login attempts. Try again later.", nil)
+	}
 
 	user, err := s.repo.FindActiveUserByEmail(email)
 	if err != nil {
+		s.attempts.fail(email, clientIP)
 		return LoginResponse{}, "", shared.NewValidationError("Invalid email or password", err)
 	}
 
 	if user.PasswordHash != nil && *user.PasswordHash != "" && bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(password)) != nil {
+		s.attempts.fail(email, clientIP)
 		return LoginResponse{}, "", shared.NewValidationError("Invalid email or password", nil)
 	}
-
-
+	s.attempts.reset(email, clientIP)
 
 	response, refresh, err := s.issueTokens(user, token.NewFamilyID())
 	if err != nil {
@@ -47,6 +62,29 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP string) 
 
 	slog.InfoContext(ctx, "AUTH_EVENT login_success", slog.Int64("user_id", user.ID), slog.String("email", user.Email), slog.String("ip", clientIP))
 	return response, refresh, nil
+}
+
+func (l *loginAttempts) key(email, ip string) string { return strings.ToLower(email) + "|" + ip }
+func (l *loginAttempts) allow(email, ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return !time.Now().Before(l.entries[l.key(email, ip)].lockedUntil)
+}
+func (l *loginAttempts) fail(email, ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	k := l.key(email, ip)
+	a := l.entries[k]
+	a.failures++
+	if a.failures >= 5 {
+		a.lockedUntil = time.Now().Add(time.Duration(1<<min(a.failures-5, 6)) * time.Minute)
+	}
+	l.entries[k] = a
+}
+func (l *loginAttempts) reset(email, ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.entries, l.key(email, ip))
 }
 
 func (s *Service) Refresh(ctx context.Context, refreshToken string) (LoginResponse, string, error) {
@@ -149,9 +187,9 @@ func (s *Service) buildAuthContextResponse(user shared.AuthUser) (AuthContextRes
 
 	return AuthContextResponse{
 		User: AuthUserSummary{
-			ID:        user.ID,
-			Email:     user.Email,
-			Name:      user.Name,
+			ID:    user.ID,
+			Email: user.Email,
+			Name:  user.Name,
 		},
 		Tenant: tenant,
 	}, nil
@@ -178,11 +216,10 @@ func (s *Service) tenantForUser(tenantID int64) (AuthTenantSummary, error) {
 	}
 
 	return AuthTenantSummary{
-		ID:            tenant.ID,
-		Name:          tenant.Name,
+		ID:   tenant.ID,
+		Name: tenant.Name,
 		// Role is set by the caller from the user's own role.
 		AccountStatus: tenant.AccountStatus,
 		TrialEndsAt:   tenant.TrialEndsAt,
 	}, nil
 }
-

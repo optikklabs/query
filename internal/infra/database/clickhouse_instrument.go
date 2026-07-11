@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -32,15 +31,12 @@ func QueryRowCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, 
 	return err
 }
 
+// isNoRows reports whether err means "query matched zero rows".
+// clickhouse-go's QueryRow path returns exactly sql.ErrNoRows for an empty
+// result; matching anything looser (e.g. "EOF" substrings) masks dropped
+// connections as empty results.
 func isNoRows(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return true
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "no rows") || strings.Contains(msg, "EOF")
+	return errors.Is(err, sql.ErrNoRows)
 }
 
 func startCHOp(ctx context.Context) func(error, time.Time, string) {

@@ -81,7 +81,7 @@ func (r *Repository) RevokeRefreshTokenFamily(familyID string) error {
 func (r *Repository) FindTenantByID(tenantID int64) (shared.TenantRecord, error) {
 	var t shared.TenantRecord
 	err := dbutil.GetSQL(context.Background(), r.db, "user.FindTenantByID", &t, `
-		SELECT id, name, active, api_key, account_status, trial_ends_at, created_at
+		SELECT id, name, active, api_key_prefix, account_status, trial_ends_at, created_at
 		FROM tenant
 		WHERE id = ?
 		LIMIT 1

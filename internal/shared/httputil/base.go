@@ -54,15 +54,6 @@ func DecodeJSON(r *http.Request, v any) error {
 	return nil
 }
 
-// DecodeAndValidate parses the JSON body into a new instance of T and validates it.
-func DecodeAndValidate[T any](r *http.Request) (T, error) {
-	var req T
-	if err := DecodeJSON(r, &req); err != nil {
-		return req, err
-	}
-	return req, nil
-}
-
 func RespondOK(w http.ResponseWriter, data any) {
 	WriteJSON(w, http.StatusOK, types.Success(data))
 }

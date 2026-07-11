@@ -2,7 +2,13 @@ package signup
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,6 +20,7 @@ import (
 // minPasswordLength mirrors the web client's rule; the server is the source of
 // truth so API callers (CLI) can't bypass it.
 const minPasswordLength = 8
+const verificationTTL = 24 * time.Hour
 
 // trialDuration is the free-trial window a new tenant starts with.
 const trialDuration = 7 * 24 * time.Hour
@@ -21,58 +28,128 @@ const trialDuration = 7 * 24 * time.Hour
 // Service provisions a new account + tenant, then delegates session issuance to
 // auth. It composes tenant creation, user creation, and token minting.
 type Service struct {
-	repo   *Repository
-	issuer *auth.Service
+	repo            *Repository
+	issuer          *auth.Service
+	turnstileSecret string
+	resendAPIKey    string
+	mailFrom        string
+	verifyBaseURL   string
+	httpClient      *http.Client
 }
 
-func NewService(repo *Repository, issuer *auth.Service) *Service {
-	return &Service{repo: repo, issuer: issuer}
+func NewService(repo *Repository, issuer *auth.Service, turnstileSecret, resendAPIKey, mailFrom, verifyBaseURL string) *Service {
+	return &Service{repo: repo, issuer: issuer, turnstileSecret: turnstileSecret, resendAPIKey: resendAPIKey, mailFrom: mailFrom, verifyBaseURL: verifyBaseURL, httpClient: &http.Client{Timeout: 5 * time.Second}}
 }
 
 // Signup creates the tenant and its first admin user atomically, then issues a
 // session. Returns the response (including api_key) and the raw refresh token.
-func (s *Service) Signup(ctx context.Context, req SignupRequest) (SignupResponse, string, error) {
+func (s *Service) Signup(ctx context.Context, req SignupRequest, remoteIP string) (SignupResponse, error) {
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 	name := strings.TrimSpace(req.Name)
 	tenantName := strings.TrimSpace(req.TenantName)
 	password := strings.TrimSpace(req.Password)
 
 	if err := validateSignup(email, name, tenantName, password); err != nil {
-		return SignupResponse{}, "", err
+		return SignupResponse{}, err
+	}
+	if err := s.verifyTurnstile(ctx, req.TurnstileToken, remoteIP); err != nil {
+		return SignupResponse{}, shared.NewValidationError("Bot verification failed", err)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return SignupResponse{}, "", shared.NewInternalError("Failed to hash password", err)
+		return SignupResponse{}, shared.NewInternalError("Failed to hash password", err)
 	}
 
 	apiKey, err := shared.GenerateAPIKey()
 	if err != nil {
-		return SignupResponse{}, "", shared.NewInternalError("Failed to generate api key", err)
+		return SignupResponse{}, shared.NewInternalError("Failed to generate api key", err)
 	}
+	verificationToken, err := shared.GenerateDeviceCode()
+	if err != nil {
+		return SignupResponse{}, shared.NewInternalError("Failed to generate verification token", err)
+	}
+	sum := sha256.Sum256([]byte(verificationToken))
 
 	trialEndsAt := time.Now().UTC().Add(trialDuration)
-	tenantID, userID, err := s.repo.CreateTenantWithAdmin(ctx, tenantName, apiKey, email, string(hash), name, trialEndsAt)
+	tenantID, userID, err := s.repo.CreateTenantWithAdmin(ctx, tenantName, apiKey, email, string(hash), name, hex.EncodeToString(sum[:]), time.Now().UTC().Add(verificationTTL), trialEndsAt)
 	if err != nil {
 		if IsDuplicateEmail(err) {
-			return SignupResponse{}, "", shared.NewConflictError("An account with this email already exists", err)
+			return SignupResponse{}, shared.NewConflictError("An account with this email already exists", err)
 		}
-		return SignupResponse{}, "", shared.NewInternalError("Failed to create account", err)
+		return SignupResponse{}, shared.NewInternalError("Failed to create account", err)
 	}
-
-	session, refresh, err := s.issuer.IssueTokens(shared.AuthUser{
-		ID:       userID,
-		Email:    email,
-		Name:     name,
-		TenantID: tenantID,
-	})
-	if err != nil {
-		return SignupResponse{}, "", err
+	if err := s.sendVerification(ctx, email, verificationToken); err != nil {
+		return SignupResponse{}, shared.NewInternalError("Failed to send verification email", err)
 	}
 
 	slog.InfoContext(ctx, "AUTH_EVENT signup_success",
 		slog.Int64("user_id", userID), slog.Int64("tenant_id", tenantID), slog.String("email", email))
-	return SignupResponse{LoginResponse: session, APIKey: apiKey}, refresh, nil
+	return SignupResponse{Message: "Check your email to verify your account."}, nil
+}
+
+func (s *Service) VerifyEmail(ctx context.Context, rawToken string) (auth.LoginResponse, string, string, error) {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(rawToken)))
+	user, err := s.repo.ConsumeVerification(ctx, hex.EncodeToString(sum[:]))
+	if err != nil {
+		return auth.LoginResponse{}, "", "", shared.NewValidationError("Verification link is invalid or expired", err)
+	}
+	apiKey, err := shared.GenerateAPIKey()
+	if err != nil {
+		return auth.LoginResponse{}, "", "", shared.NewInternalError("Failed to create API key", err)
+	}
+	if err := s.repo.RotateTenantAPIKey(ctx, user.TenantID, apiKey); err != nil {
+		return auth.LoginResponse{}, "", "", shared.NewInternalError("Failed to activate account", err)
+	}
+	session, refresh, err := s.issuer.IssueTokens(user)
+	if err != nil {
+		return auth.LoginResponse{}, "", "", err
+	}
+	return session, refresh, apiKey, nil
+}
+
+func (s *Service) verifyTurnstile(ctx context.Context, token, remoteIP string) error {
+	form := url.Values{"secret": {s.turnstileSecret}, "response": {token}, "remoteip": {remoteIP}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://challenges.cloudflare.com/turnstile/v0/siteverify", strings.NewReader(form.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Success bool `json:"success"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK || !result.Success {
+		return fmt.Errorf("turnstile rejected token")
+	}
+	return nil
+}
+
+func (s *Service) sendVerification(ctx context.Context, to, token string) error {
+	verifyURL := s.verifyBaseURL + "?token=" + url.QueryEscape(token)
+	body, _ := json.Marshal(map[string]any{"from": s.mailFrom, "to": []string{to}, "subject": "Verify your Optikk email", "html": "<p>Verify your account by opening <a href=\"" + verifyURL + "\">this link</a>. This link expires in 24 hours.</p>"})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.resend.com/emails", strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.resendAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("email provider returned %s", resp.Status)
+	}
+	return nil
 }
 
 func validateSignup(email, name, tenantName, password string) error {

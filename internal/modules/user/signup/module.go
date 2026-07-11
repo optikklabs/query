@@ -18,4 +18,5 @@ func (m *module) Name() string { return "user-signup" }
 
 func (m *module) RegisterRoutes(group chi.Router) {
 	group.Post("/auth/signup", m.handler.Signup)
+	group.Post("/auth/verify-email", m.handler.VerifyEmail)
 }

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/optikklabs/query/internal/infra/metrics"
 	"github.com/optikklabs/query/internal/modules/alerting/dispatch"
 	"github.com/optikklabs/query/internal/modules/alerting/shared/expr"
@@ -19,10 +20,9 @@ import (
 // Service runs the per-tick evaluation loop. It's stateless except for the
 // injected dependencies; one Service instance handles all monitors.
 //
-// CONSTRAINT: the evaluator uses a per-process ticker with no leader election,
-// so it MUST run single-replica. Running >1 query replica evaluates and
-// dispatches every monitor once per replica, producing duplicate notifications.
-// Add a distributed lock / leader election before scaling query horizontally.
+// Safe to run on any number of replicas: each tick atomically claims due
+// monitors via a MySQL lease (Repository.ClaimDue), so no two replicas ever
+// evaluate or notify for the same monitor concurrently.
 type Service struct {
 	repo        *Repository
 	queries     query.Registry
@@ -40,7 +40,7 @@ func NewService(repo *Repository, queries query.Registry, dispatcher *dispatch.D
 }
 
 func (s *Service) Tick(ctx context.Context, now time.Time) error {
-	due, err := s.repo.LoadDue(ctx, now, 500)
+	due, err := s.repo.ClaimDue(ctx, uuid.NewString(), now, 500)
 	if err != nil {
 		return err
 	}

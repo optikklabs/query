@@ -18,6 +18,7 @@ import (
 
 // Infra holds process-wide infrastructure constructed at startup.
 type Infra struct {
+	Config config.Config
 	DB     *sql.DB
 	CH     clickhouse.Conn
 	Tokens *token.Service
@@ -40,6 +41,7 @@ func newInfra(cfg config.Config) (_ *Infra, err error) {
 	}
 
 	return &Infra{
+		Config: cfg,
 		DB:     dbConn,
 		CH:     chConn,
 		Tokens: token.NewService(cfg),
@@ -64,7 +66,7 @@ func openMySQL(cfg config.Config) (*sql.DB, error) {
 }
 
 func openClickHouse(cfg config.Config) (clickhouse.Conn, error) {
-	chConn, err := dbutil.OpenClickHouseConn(cfg.ClickHouseDSN())
+	chConn, err := dbutil.OpenClickHouseConn(cfg.ClickHouseDSN(), cfg.ClickHouseMaxOpenConns(), cfg.ClickHouseMaxIdleConns())
 	if err != nil {
 		return nil, fmt.Errorf("clickhouse: %w", err)
 	}

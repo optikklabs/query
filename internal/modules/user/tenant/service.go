@@ -16,13 +16,20 @@ func NewService(repo *Repository) *Service {
 }
 
 // RotateAPIKey issues a fresh key for the tenant; the previous key stops working
-// once ingest's positive cache (5m) expires.
+// once ingest's positive cache (5m) expires. The response is the ONLY place
+// the raw key ever appears — only its hash is stored, so a lost key cannot
+// be recovered, only rotated again.
 func (s *Service) RotateAPIKey(ctx context.Context, tenantID int64) (TenantResponse, error) {
 	apiKey, err := shared.GenerateAPIKey()
 	if err != nil {
 		return TenantResponse{}, shared.NewInternalError("Failed to generate api key", err)
 	}
-	return s.setTenantAPIKey(ctx, tenantID, apiKey)
+	resp, err := s.setTenantAPIKey(ctx, tenantID, apiKey)
+	if err != nil {
+		return TenantResponse{}, err
+	}
+	resp.APIKey = apiKey
+	return resp, nil
 }
 
 // RevokeAPIKey disables ingest by replacing the key with an unusable sentinel;
@@ -35,8 +42,10 @@ func (s *Service) RevokeAPIKey(ctx context.Context, tenantID int64) (TenantRespo
 	return s.setTenantAPIKey(ctx, tenantID, sentinel)
 }
 
+// setTenantAPIKey stores only the key's hash and display prefix; the raw
+// key never reaches the database.
 func (s *Service) setTenantAPIKey(ctx context.Context, tenantID int64, apiKey string) (TenantResponse, error) {
-	if err := s.repo.UpdateTenantAPIKey(ctx, tenantID, apiKey); err != nil {
+	if err := s.repo.UpdateTenantAPIKey(ctx, tenantID, shared.HashAPIKey(apiKey), shared.APIKeyPrefix(apiKey)); err != nil {
 		return TenantResponse{}, shared.NewInternalError("Failed to update api key", err)
 	}
 	tenant, err := s.repo.FindTenantByID(tenantID)
@@ -48,11 +57,11 @@ func (s *Service) setTenantAPIKey(ctx context.Context, tenantID int64, apiKey st
 
 func toTenantResponse(tenant shared.TenantRecord) TenantResponse {
 	return TenantResponse{
-		ID:        tenant.ID,
-		Name:      tenant.Name,
-		Active:    tenant.Active,
-		APIKey:    tenant.APIKey,
-		CreatedAt: tenant.CreatedAt,
+		ID:           tenant.ID,
+		Name:         tenant.Name,
+		Active:       tenant.Active,
+		APIKeyPrefix: tenant.APIKeyPrefix,
+		CreatedAt:    tenant.CreatedAt,
 	}
 }
 
