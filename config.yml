@@ -9,7 +9,7 @@ mysql:
   port: "13306"
   database: optikk
   user: root
-  password: "" # Use OPTIKK_MYSQL_PASSWORD environment variable
+  password: "localdev" # Overridable by OPTIKK_MYSQL_PASSWORD environment variable
   max_open_conns: 50
   max_idle_conns: 25
 
@@ -18,7 +18,7 @@ clickhouse:
   port: "19000"
   database: optikk
   user: default
-  password: "" # Use OPTIKK_CLICKHOUSE_PASSWORD environment variable
+  password: "localdev" # Overridable by OPTIKK_CLICKHOUSE_PASSWORD environment variable
   secure: false
   # Per-pod pool; all replicas together should stay near CH's
   # max_concurrent_queries (default 100). 0 falls back to 40/20.
