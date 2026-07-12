@@ -28,22 +28,21 @@ const trialDuration = 7 * 24 * time.Hour
 // Service provisions a new account + tenant, then delegates session issuance to
 // auth. It composes tenant creation, user creation, and token minting.
 type Service struct {
-	repo            *Repository
-	issuer          *auth.Service
-	turnstileSecret string
-	resendAPIKey    string
-	mailFrom        string
-	verifyBaseURL   string
-	httpClient      *http.Client
+	repo          *Repository
+	issuer        *auth.Service
+	resendAPIKey  string
+	mailFrom      string
+	verifyBaseURL string
+	httpClient    *http.Client
 }
 
-func NewService(repo *Repository, issuer *auth.Service, turnstileSecret, resendAPIKey, mailFrom, verifyBaseURL string) *Service {
-	return &Service{repo: repo, issuer: issuer, turnstileSecret: turnstileSecret, resendAPIKey: resendAPIKey, mailFrom: mailFrom, verifyBaseURL: verifyBaseURL, httpClient: &http.Client{Timeout: 5 * time.Second}}
+func NewService(repo *Repository, issuer *auth.Service, resendAPIKey, mailFrom, verifyBaseURL string) *Service {
+	return &Service{repo: repo, issuer: issuer, resendAPIKey: resendAPIKey, mailFrom: mailFrom, verifyBaseURL: verifyBaseURL, httpClient: &http.Client{Timeout: 5 * time.Second}}
 }
 
 // Signup creates the tenant and its first admin user atomically, then issues a
 // session. Returns the response (including api_key) and the raw refresh token.
-func (s *Service) Signup(ctx context.Context, req SignupRequest, remoteIP string) (SignupResponse, error) {
+func (s *Service) Signup(ctx context.Context, req SignupRequest) (SignupResponse, error) {
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 	name := strings.TrimSpace(req.Name)
 	tenantName := strings.TrimSpace(req.TenantName)
@@ -51,9 +50,6 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest, remoteIP string
 
 	if err := validateSignup(email, name, tenantName, password); err != nil {
 		return SignupResponse{}, err
-	}
-	if err := s.verifyTurnstile(ctx, req.TurnstileToken, remoteIP); err != nil {
-		return SignupResponse{}, shared.NewValidationError("Bot verification failed", err)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -106,30 +102,6 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) (auth.LoginR
 		return auth.LoginResponse{}, "", "", err
 	}
 	return session, refresh, apiKey, nil
-}
-
-func (s *Service) verifyTurnstile(ctx context.Context, token, remoteIP string) error {
-	form := url.Values{"secret": {s.turnstileSecret}, "response": {token}, "remoteip": {remoteIP}}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://challenges.cloudflare.com/turnstile/v0/siteverify", strings.NewReader(form.Encode()))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	var result struct {
-		Success bool `json:"success"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK || !result.Success {
-		return fmt.Errorf("turnstile rejected token")
-	}
-	return nil
 }
 
 func (s *Service) sendVerification(ctx context.Context, to, token string) error {

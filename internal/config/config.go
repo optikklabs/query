@@ -16,8 +16,8 @@ type Config struct {
 	Server      ServerConfig     `yaml:"server"`
 	MySQL       MySQLConfig      `yaml:"mysql"`
 	ClickHouse  ClickHouseConfig `yaml:"clickhouse"`
+	Alerting    AlertingConfig   `yaml:"alerting"`
 	Auth        AuthConfig       `yaml:"auth"`
-	Bot         BotConfig        `yaml:"bot"`
 	Email       EmailConfig      `yaml:"email"`
 }
 
@@ -77,6 +77,9 @@ func (c Config) Validate() error {
 	if c.ClickHouse.Password == "" {
 		return errors.New("clickhouse.password must not be empty")
 	}
+	if c.Alerting.Kafka.Enabled && len(c.Alerting.Kafka.Brokers()) == 0 {
+		return errors.New("alerting.kafka.brokers must not be empty when alerting.kafka.enabled is true")
+	}
 	if c.Environment == "production" {
 		if !c.Auth.CookieSecure {
 			return errors.New("auth.cookie_secure must be true in production")
@@ -84,8 +87,8 @@ func (c Config) Validate() error {
 		if c.Server.AllowedOrigins == "" || strings.Contains(c.Server.AllowedOrigins, "localhost") || strings.Contains(c.Server.AllowedOrigins, "*") {
 			return errors.New("server.allowed_origins must be an explicit non-local production allowlist")
 		}
-		if c.Bot.TurnstileSecret == "" || c.Email.ResendAPIKey == "" || c.Email.From == "" || c.Email.VerifyBaseURL == "" {
-			return errors.New("bot and email configuration must be set in production")
+		if c.Email.ResendAPIKey == "" || c.Email.From == "" || c.Email.VerifyBaseURL == "" {
+			return errors.New("email configuration must be set in production")
 		}
 	}
 	return nil
@@ -142,6 +145,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("clickhouse.cloud_host", "")
 	v.SetDefault("clickhouse.max_open_conns", 0)
 	v.SetDefault("clickhouse.max_idle_conns", 0)
+	v.SetDefault("alerting.kafka.enabled", false)
+	v.SetDefault("alerting.kafka.broker_list", "")
+	v.SetDefault("alerting.kafka.topic_prefix", "optikk.ingest")
+	v.SetDefault("alerting.kafka.consumer_group", "optikk-query-alerting")
+	v.SetDefault("alerting.kafka.max_poll_records", 1000)
 
 	v.SetDefault("auth.jwt_secret", "")
 	v.SetDefault("auth.access_ttl_ms", 900000)
@@ -150,7 +158,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.cookie_domain", "")
 	v.SetDefault("auth.cookie_secure", false)
 	v.SetDefault("auth.cookie_same_site", "lax")
-	v.SetDefault("bot.turnstile_secret", "")
 	v.SetDefault("email.resend_api_key", "")
 	v.SetDefault("email.from", "")
 	v.SetDefault("email.verify_base_url", "")

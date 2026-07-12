@@ -3,11 +3,10 @@ package signup
 // SignupRequest self-serves an account plus its first tenant. tenant_name is
 // snake_case to match the web and CLI clients that post this body.
 type SignupRequest struct {
-	Email          string `json:"email" validate:"required,email"`
-	Password       string `json:"password" validate:"required,min=8"`
-	Name           string `json:"name" validate:"required"`
-	TenantName     string `json:"tenant_name" validate:"required"`
-	TurnstileToken string `json:"turnstile_token" validate:"required,max=2048"`
+	Email      string `json:"email" validate:"required,email"`
+	Password   string `json:"password" validate:"required,min=8"`
+	Name       string `json:"name" validate:"required"`
+	TenantName string `json:"tenant_name" validate:"required"`
 }
 
 // SignupResponse embeds the standard auth session and adds the tenant api_key.

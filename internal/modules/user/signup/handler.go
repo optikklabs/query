@@ -27,7 +27,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.Service.Signup(r.Context(), req, modulecommon.ClientIP(r))
+	response, err := h.Service.Signup(r.Context(), req)
 	if err != nil {
 		shared.RespondServiceError(w, r, err, "Failed to create account")
 		return

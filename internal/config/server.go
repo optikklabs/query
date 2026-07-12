@@ -1,6 +1,39 @@
 package config
 
-import "time"
+import (
+	"strings"
+	"time"
+)
+
+// AlertingConfig configures the event-driven alert evaluator. It is disabled
+// by default so existing deployments can roll it out deliberately.
+type AlertingConfig struct {
+	Kafka AlertingKafkaConfig `yaml:"kafka"`
+}
+
+type AlertingKafkaConfig struct {
+	Enabled        bool     `yaml:"enabled"`
+	BrokerList     string   `yaml:"broker_list"`
+	BrokersList    []string `yaml:"brokers"`
+	TopicPrefix    string   `yaml:"topic_prefix"`
+	ConsumerGroup  string   `yaml:"consumer_group"`
+	MaxPollRecords int      `yaml:"max_poll_records"`
+}
+
+func (c AlertingKafkaConfig) Brokers() []string {
+	if c.BrokerList != "" {
+		return strings.Split(c.BrokerList, ",")
+	}
+	return c.BrokersList
+}
+
+func (c AlertingKafkaConfig) MetricsTopic() string {
+	prefix := c.TopicPrefix
+	if prefix == "" {
+		prefix = "optikk.ingest"
+	}
+	return prefix + ".metrics"
+}
 
 type ServerConfig struct {
 	Port           string `yaml:"port"`
@@ -16,11 +49,6 @@ type AuthConfig struct {
 	CookieDomain      string `yaml:"cookie_domain"`
 	CookieSecure      bool   `yaml:"cookie_secure"`
 	CookieSameSite    string `yaml:"cookie_same_site"`
-}
-
-// BotConfig controls server-side signup challenge verification.
-type BotConfig struct {
-	TurnstileSecret string `yaml:"turnstile_secret"`
 }
 
 // EmailConfig configures transactional email delivery through Resend's HTTPS API.

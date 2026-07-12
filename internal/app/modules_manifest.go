@@ -5,10 +5,11 @@ import (
 
 	"github.com/optikklabs/query/internal/app/registry"
 
-	alerting_evaluator "github.com/optikklabs/query/internal/modules/alerting/evaluator"
 	alerting_monitors "github.com/optikklabs/query/internal/modules/alerting/monitors"
 	alerting_notifications "github.com/optikklabs/query/internal/modules/alerting/notifications"
+	alerting_stream "github.com/optikklabs/query/internal/modules/alerting/stream"
 	billing "github.com/optikklabs/query/internal/modules/billing"
+	cloud "github.com/optikklabs/query/internal/modules/cloud"
 	dashboards "github.com/optikklabs/query/internal/modules/dashboards"
 	infrastructure_cpu "github.com/optikklabs/query/internal/modules/infrastructure/cpu"
 	infrastructure_fleet "github.com/optikklabs/query/internal/modules/infrastructure/fleet"
@@ -53,7 +54,7 @@ func configuredModules(
 	// Device flow reuses auth's IssueTokens for CLI login.
 	authService := user_auth.NewService(user_auth.NewRepository(infraDeps.DB), infraDeps.Tokens)
 	deviceService := user_device.NewService(user_device.NewRepository(infraDeps.DB), authService)
-	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService, infraDeps.Config.Bot.TurnstileSecret, infraDeps.Config.Email.ResendAPIKey, infraDeps.Config.Email.From, infraDeps.Config.Email.VerifyBaseURL)
+	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService, infraDeps.Config.Email.ResendAPIKey, infraDeps.Config.Email.From, infraDeps.Config.Email.VerifyBaseURL)
 	tenantService := user_tenant.NewService(user_tenant.NewRepository(infraDeps.DB))
 	usersService := user_users.NewService(user_users.NewRepository(infraDeps.DB))
 
@@ -63,6 +64,7 @@ func configuredModules(
 		infrastructure_fleet.NewModule(nativeQuerier),
 		infrastructure_hosts.NewModule(nativeQuerier),
 		infrastructure_nodes.NewModule(nativeQuerier),
+		cloud.NewModule(nativeQuerier),
 		log_explorer.NewModule(nativeQuerier),
 		log_detail.NewModule(nativeQuerier),
 		log_facets.NewModule(nativeQuerier),
@@ -94,7 +96,7 @@ func configuredModules(
 
 		alerting_monitors.NewModule(infraDeps.DB, nativeQuerier),
 		alerting_notifications.NewModule(infraDeps.DB),
-		alerting_evaluator.NewModule(infraDeps.DB, nativeQuerier),
+		alerting_stream.NewModule(infraDeps.DB, infraDeps.Config.Alerting.Kafka),
 
 		billing.NewModule(infraDeps.DB),
 

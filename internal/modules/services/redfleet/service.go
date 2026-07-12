@@ -504,10 +504,32 @@ func (s *Service) GetServiceSummary(ctx context.Context, f REDFilters) (ServiceS
 		sats = nil
 	}
 
-	// Map saturation
+	cpuVal, memVal, diskVal := extractSaturationAverages(sats)
+
+	durationSec := float64(f.EndMs-f.StartMs) / 1000.0
+	if durationSec <= 0 {
+		durationSec = 1
+	}
+
+	reqCount, errCount, rps, errRate, p50, p95, p99 := extractREDMetrics(redRow, durationSec)
+
+	return ServiceSummaryResponse{
+		ServiceName:       serviceName,
+		RequestCount:      reqCount,
+		ErrorCount:        errCount,
+		RPS:               utils.SanitizeFloat(rps),
+		ErrorRate:         utils.SanitizeFloat(errRate),
+		P50Ms:             p50,
+		P95Ms:             p95,
+		P99Ms:             p99,
+		CPUUtilization:    utils.SanitizeFloat(cpuVal),
+		MemoryUtilization: utils.SanitizeFloat(memVal),
+		DiskUtilization:   utils.SanitizeFloat(diskVal),
+	}, nil
+}
+
+func extractSaturationAverages(sats []serviceMetricRow) (cpuVal, memVal, diskVal float64) {
 	var cpuValues []float64
-	var memVal float64
-	var diskVal float64
 
 	for _, row := range sats {
 		switch row.MetricName {
@@ -526,46 +548,29 @@ func (s *Service) GetServiceSummary(ctx context.Context, f REDFilters) (ServiceS
 		}
 	}
 
-	var cpuVal float64
-	cpuAvg := averageFloats(cpuValues)
-	if cpuAvg != nil {
+	if cpuAvg := averageFloats(cpuValues); cpuAvg != nil {
 		cpuVal = *cpuAvg
 	}
 
-	var reqCount, errCount int64
-	var rps, errRate float64
-	var p50, p95, p99 float64
+	return cpuVal, memVal, diskVal
+}
 
-	durationSec := float64(f.EndMs-f.StartMs) / 1000.0
-	if durationSec <= 0 {
-		durationSec = 1
+func extractREDMetrics(redRow *redMetricsRow, durationSec float64) (reqCount, errCount int64, rps, errRate, p50, p95, p99 float64) {
+	if redRow == nil {
+		return
 	}
 
-	if redRow != nil {
-		reqCount = int64(redRow.TotalCount)
-		errCount = int64(redRow.ErrorCount)
-		rps = float64(reqCount) / durationSec
-		if reqCount > 0 {
-			errRate = float64(errCount) / float64(reqCount)
-		}
-		p50 = utils.SanitizeFloat(float64(redRow.P50Ms))
-		p95 = utils.SanitizeFloat(float64(redRow.P95Ms))
-		p99 = utils.SanitizeFloat(float64(redRow.P99Ms))
+	reqCount = int64(redRow.TotalCount)
+	errCount = int64(redRow.ErrorCount)
+	rps = float64(reqCount) / durationSec
+	if reqCount > 0 {
+		errRate = float64(errCount) / float64(reqCount)
 	}
+	p50 = utils.SanitizeFloat(float64(redRow.P50Ms))
+	p95 = utils.SanitizeFloat(float64(redRow.P95Ms))
+	p99 = utils.SanitizeFloat(float64(redRow.P99Ms))
 
-	return ServiceSummaryResponse{
-		ServiceName:       serviceName,
-		RequestCount:      reqCount,
-		ErrorCount:        errCount,
-		RPS:               utils.SanitizeFloat(rps),
-		ErrorRate:         utils.SanitizeFloat(errRate),
-		P50Ms:             p50,
-		P95Ms:             p95,
-		P99Ms:             p99,
-		CPUUtilization:    utils.SanitizeFloat(cpuVal),
-		MemoryUtilization: utils.SanitizeFloat(memVal),
-		DiskUtilization:   utils.SanitizeFloat(diskVal),
-	}, nil
+	return
 }
 
 func normalizeUtilization(v float64) *float64 {

@@ -25,6 +25,16 @@ clickhouse:
   max_open_conns: 40
   max_idle_conns: 20
 
+# The evaluator consumes the same protobuf metrics stream produced by ingest.
+# Enable only after Kafka is reachable from the query deployment.
+alerting:
+  kafka:
+    enabled: false
+    broker_list: "127.0.0.1:9092"
+    topic_prefix: optikk.ingest
+    consumer_group: optikk-query-alerting
+    max_poll_records: 1000
+
 auth:
   jwt_secret: "" # Use OPTIKK_AUTH_JWT_SECRET environment variable
   access_ttl_ms: 900000
@@ -33,9 +43,6 @@ auth:
   cookie_domain: ""
   cookie_secure: false
   cookie_same_site: lax
-
-bot:
-  turnstile_secret: "" # Use OPTIKK_BOT_TURNSTILE_SECRET
 
 email:
   resend_api_key: "" # Use OPTIKK_EMAIL_RESEND_API_KEY
