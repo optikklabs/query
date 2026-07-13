@@ -22,13 +22,13 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	tenant := modulecommon.Tenant(r)
 	if tenant.TenantID == 0 {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return
 	}
 
 	var req CreateUserRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "email, name and password are required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "email, name and password are required", nil)
 		return
 	}
 
@@ -43,19 +43,19 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	tenant := modulecommon.Tenant(r)
 	if tenant.TenantID == 0 {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return
 	}
 
 	userID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || userID <= 0 {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "A valid user id is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "A valid user id is required", nil)
 		return
 	}
 
 	var req UpdateRoleRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "role is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "role is required", nil)
 		return
 	}
 
@@ -70,7 +70,7 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	tenant := modulecommon.Tenant(r)
 	if tenant.TenantID == 0 {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return
 	}
 
@@ -85,13 +85,13 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	tenant := modulecommon.Tenant(r)
 	if tenant.TenantID == 0 {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return
 	}
 
 	userID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || userID <= 0 {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "A valid user id is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "A valid user id is required", nil)
 		return
 	}
 

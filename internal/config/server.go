@@ -53,9 +53,10 @@ type AuthConfig struct {
 
 // EmailConfig configures transactional email delivery through Resend's HTTPS API.
 type EmailConfig struct {
-	ResendAPIKey  string `yaml:"resend_api_key"`
-	From          string `yaml:"from"`
-	VerifyBaseURL string `yaml:"verify_base_url"`
+	ResendVerificationEnabled bool   `yaml:"resend_verification_enabled"`
+	ResendAPIKey              string `yaml:"resend_api_key"`
+	From                      string `yaml:"from"`
+	VerifyBaseURL             string `yaml:"verify_base_url"`
 }
 
 func (c Config) AccessTokenTTL() time.Duration {

@@ -22,7 +22,7 @@ func (h *Handler) GetServiceMap(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
 	resp, err := h.svc.GetServiceMap(r.Context(), tenantID, traceID)
@@ -37,7 +37,7 @@ func (h *Handler) GetTraceErrors(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
 	groups, err := h.svc.GetTraceErrors(r.Context(), tenantID, traceID)

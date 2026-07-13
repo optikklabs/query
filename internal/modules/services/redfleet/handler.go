@@ -180,7 +180,7 @@ func (h *REDFleetHandler) GetOperationBaseline(w http.ResponseWriter, r *http.Re
 	serviceName := r.URL.Query().Get("service")
 	operationName := r.URL.Query().Get("operation")
 	if serviceName == "" || operationName == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "service and operation are required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "service and operation are required", nil)
 		return
 	}
 	resp, err := h.Service.GetOperationBaseline(r.Context(), tenantID, startMs, endMs, serviceName, operationName)

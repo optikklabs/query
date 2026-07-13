@@ -27,7 +27,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) GetByTrace(w http.ResponseWriter, r *http.Request) {
 	traceID := chi.URLParam(r, "traceID")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
 	limit := modulecommon.ParseIntParam(r, "limit", defaultLimit)

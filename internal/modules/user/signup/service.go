@@ -5,13 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/optikklabs/query/internal/config"
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	"golang.org/x/crypto/bcrypt"
@@ -28,60 +31,109 @@ const trialDuration = 7 * 24 * time.Hour
 // Service provisions a new account + tenant, then delegates session issuance to
 // auth. It composes tenant creation, user creation, and token minting.
 type Service struct {
-	repo          *Repository
-	issuer        *auth.Service
-	resendAPIKey  string
-	mailFrom      string
+	repo                 *Repository
+	issuer               *auth.Service
+	verificationRequired bool
+	sender               VerificationSender
+}
+
+type VerificationSender interface {
+	SendVerification(ctx context.Context, to, token string) error
+}
+
+type ResendVerificationSender struct {
+	apiKey        string
+	from          string
 	verifyBaseURL string
 	httpClient    *http.Client
 }
 
-func NewService(repo *Repository, issuer *auth.Service, resendAPIKey, mailFrom, verifyBaseURL string) *Service {
-	return &Service{repo: repo, issuer: issuer, resendAPIKey: resendAPIKey, mailFrom: mailFrom, verifyBaseURL: verifyBaseURL, httpClient: &http.Client{Timeout: 5 * time.Second}}
+func NewService(repo *Repository, issuer *auth.Service, email config.EmailConfig) *Service {
+	sender := VerificationSender(noopVerificationSender{})
+	if email.ResendVerificationEnabled {
+		sender = NewResendVerificationSender(email.ResendAPIKey, email.From, email.VerifyBaseURL)
+	}
+	return &Service{
+		repo:                 repo,
+		issuer:               issuer,
+		verificationRequired: email.ResendVerificationEnabled,
+		sender:               sender,
+	}
+}
+
+func NewResendVerificationSender(apiKey, from, verifyBaseURL string) *ResendVerificationSender {
+	return &ResendVerificationSender{
+		apiKey:        apiKey,
+		from:          from,
+		verifyBaseURL: verifyBaseURL,
+		httpClient:    &http.Client{Timeout: 5 * time.Second},
+	}
+}
+
+type noopVerificationSender struct{}
+
+func (noopVerificationSender) SendVerification(context.Context, string, string) error {
+	return nil
+}
+
+type SignupResult struct {
+	Message      string
+	Session      *auth.LoginResponse
+	RefreshToken string
+	APIKey       string
+}
+
+type normalizedSignup struct {
+	email      string
+	name       string
+	tenantName string
+	password   string
+}
+
+type signupSecrets struct {
+	passwordHash       string
+	apiKey             string
+	verificationToken  string
+	verificationHash   string
+	verificationExpiry time.Time
 }
 
 // Signup creates the tenant and its first admin user atomically, then issues a
 // session. Returns the response (including api_key) and the raw refresh token.
-func (s *Service) Signup(ctx context.Context, req SignupRequest) (SignupResponse, error) {
-	email := strings.TrimSpace(strings.ToLower(req.Email))
-	name := strings.TrimSpace(req.Name)
-	tenantName := strings.TrimSpace(req.TenantName)
-	password := strings.TrimSpace(req.Password)
-
-	if err := validateSignup(email, name, tenantName, password); err != nil {
-		return SignupResponse{}, err
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+func (s *Service) Signup(ctx context.Context, req SignupRequest) (SignupResult, error) {
+	normalized, err := normalizeSignup(req)
 	if err != nil {
-		return SignupResponse{}, shared.NewInternalError("Failed to hash password", err)
+		return SignupResult{}, err
 	}
 
-	apiKey, err := shared.GenerateAPIKey()
+	secrets, err := s.prepareSignupSecrets(normalized.password)
 	if err != nil {
-		return SignupResponse{}, shared.NewInternalError("Failed to generate api key", err)
+		return SignupResult{}, err
 	}
-	verificationToken, err := shared.GenerateDeviceCode()
-	if err != nil {
-		return SignupResponse{}, shared.NewInternalError("Failed to generate verification token", err)
-	}
-	sum := sha256.Sum256([]byte(verificationToken))
 
+	active := !s.verificationRequired
 	trialEndsAt := time.Now().UTC().Add(trialDuration)
-	tenantID, userID, err := s.repo.CreateTenantWithAdmin(ctx, tenantName, apiKey, email, string(hash), name, hex.EncodeToString(sum[:]), time.Now().UTC().Add(verificationTTL), trialEndsAt)
+	user, err := s.provisionSignup(ctx, normalized, secrets, active, trialEndsAt)
 	if err != nil {
-		if IsDuplicateEmail(err) {
-			return SignupResponse{}, shared.NewConflictError("An account with this email already exists", err)
-		}
-		return SignupResponse{}, shared.NewInternalError("Failed to create account", err)
-	}
-	if err := s.sendVerification(ctx, email, verificationToken); err != nil {
-		return SignupResponse{}, shared.NewInternalError("Failed to send verification email", err)
+		return SignupResult{}, err
 	}
 
+	if s.verificationRequired {
+		if err := s.sender.SendVerification(ctx, normalized.email, secrets.verificationToken); err != nil {
+			return SignupResult{}, shared.NewInternalError("Failed to send verification email", err)
+		}
+		slog.InfoContext(ctx, "AUTH_EVENT signup_success",
+			slog.Int64("user_id", user.ID), slog.Int64("tenant_id", user.TenantID), slog.String("email", user.Email))
+		return SignupResult{Message: "Check your email to verify your account."}, nil
+	}
+
+	session, refresh, err := s.issuer.IssueTokens(user)
+	if err != nil {
+		return SignupResult{}, err
+	}
 	slog.InfoContext(ctx, "AUTH_EVENT signup_success",
-		slog.Int64("user_id", userID), slog.Int64("tenant_id", tenantID), slog.String("email", email))
-	return SignupResponse{Message: "Check your email to verify your account."}, nil
+		slog.Int64("user_id", user.ID), slog.Int64("tenant_id", user.TenantID), slog.String("email", user.Email))
+	return SignupResult{Session: &session, RefreshToken: refresh, APIKey: secrets.apiKey}, nil
 }
 
 func (s *Service) VerifyEmail(ctx context.Context, rawToken string) (auth.LoginResponse, string, string, error) {
@@ -104,14 +156,77 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) (auth.LoginR
 	return session, refresh, apiKey, nil
 }
 
-func (s *Service) sendVerification(ctx context.Context, to, token string) error {
+func (s *Service) prepareSignupSecrets(password string) (signupSecrets, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return signupSecrets{}, shared.NewInternalError("Failed to hash password", err)
+	}
+	apiKey, err := shared.GenerateAPIKey()
+	if err != nil {
+		return signupSecrets{}, shared.NewInternalError("Failed to generate api key", err)
+	}
+	secrets := signupSecrets{passwordHash: string(hash), apiKey: apiKey}
+	if !s.verificationRequired {
+		return secrets, nil
+	}
+	token, err := shared.GenerateDeviceCode()
+	if err != nil {
+		return signupSecrets{}, shared.NewInternalError("Failed to generate verification token", err)
+	}
+	sum := sha256.Sum256([]byte(token))
+	secrets.verificationToken = token
+	secrets.verificationHash = hex.EncodeToString(sum[:])
+	secrets.verificationExpiry = time.Now().UTC().Add(verificationTTL)
+	return secrets, nil
+}
+
+func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, secrets signupSecrets, active bool, trialEndsAt time.Time) (shared.AuthUser, error) {
+	user, err := s.repo.CreateTenantWithAdmin(ctx, tenantAdminSignup{
+		TenantName:         req.tenantName,
+		APIKey:             secrets.apiKey,
+		Email:              req.email,
+		PasswordHash:       secrets.passwordHash,
+		UserName:           req.name,
+		Active:             active,
+		VerificationHash:   secrets.verificationHash,
+		VerificationExpiry: secrets.verificationExpiry,
+		TrialEndsAt:        trialEndsAt,
+	})
+	if err == nil {
+		return user, nil
+	}
+	if !IsDuplicateEmail(err) {
+		return shared.AuthUser{}, shared.NewInternalError("Failed to create account", err)
+	}
+
+	user, updateErr := s.repo.UpdateUnverifiedTenantAndAdmin(ctx, tenantAdminSignup{
+		TenantName:         req.tenantName,
+		APIKey:             secrets.apiKey,
+		Email:              req.email,
+		PasswordHash:       secrets.passwordHash,
+		UserName:           req.name,
+		Active:             active,
+		VerificationHash:   secrets.verificationHash,
+		VerificationExpiry: secrets.verificationExpiry,
+		TrialEndsAt:        trialEndsAt,
+	})
+	if updateErr != nil {
+		if errors.Is(updateErr, ErrAlreadyVerified) {
+			return shared.AuthUser{}, shared.NewConflictError("An account with this email already exists", err)
+		}
+		return shared.AuthUser{}, shared.NewInternalError("Failed to update unverified account", updateErr)
+	}
+	return user, nil
+}
+
+func (s *ResendVerificationSender) SendVerification(ctx context.Context, to, token string) error {
 	verifyURL := s.verifyBaseURL + "?token=" + url.QueryEscape(token)
-	body, _ := json.Marshal(map[string]any{"from": s.mailFrom, "to": []string{to}, "subject": "Verify your Optikk email", "html": "<p>Verify your account by opening <a href=\"" + verifyURL + "\">this link</a>. This link expires in 24 hours.</p>"})
+	body, _ := json.Marshal(map[string]any{"from": s.from, "to": []string{to}, "subject": "Verify your Optikk email", "html": "<p>Verify your account by opening <a href=\"" + verifyURL + "\">this link</a>. This link expires in 24 hours.</p>"})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.resend.com/emails", strings.NewReader(string(body)))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+s.resendAPIKey)
+	req.Header.Set("Authorization", "Bearer "+s.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -119,9 +234,23 @@ func (s *Service) sendVerification(ctx context.Context, to, token string) error 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("email provider returned %s", resp.Status)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("email provider returned %s: %s", resp.Status, string(bodyBytes))
 	}
 	return nil
+}
+
+func normalizeSignup(req SignupRequest) (normalizedSignup, error) {
+	normalized := normalizedSignup{
+		email:      strings.TrimSpace(strings.ToLower(req.Email)),
+		name:       strings.TrimSpace(req.Name),
+		tenantName: strings.TrimSpace(req.TenantName),
+		password:   strings.TrimSpace(req.Password),
+	}
+	if err := validateSignup(normalized.email, normalized.name, normalized.tenantName, normalized.password); err != nil {
+		return normalizedSignup{}, err
+	}
+	return normalized, nil
 }
 
 func validateSignup(email, name, tenantName, password string) error {

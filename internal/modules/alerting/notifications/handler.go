@@ -49,7 +49,7 @@ func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
 	var req CreateChannelRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.CreateChannel(r.Context(), t.TenantID, req)
@@ -68,7 +68,7 @@ func (h *Handler) UpdateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UpdateChannelRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.UpdateChannel(r.Context(), t.TenantID, id, req)
@@ -120,7 +120,7 @@ func (h *Handler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
 	var req CreatePolicyRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.CreatePolicy(r.Context(), t.TenantID, req)
@@ -139,7 +139,7 @@ func (h *Handler) UpdatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UpdatePolicyRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.UpdatePolicy(r.Context(), t.TenantID, id, req)
@@ -177,7 +177,7 @@ func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
 	var req CreateTemplateRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.CreateTemplate(r.Context(), t.TenantID, req)
@@ -196,7 +196,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UpdateTemplateRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.UpdateTemplate(r.Context(), t.TenantID, id, req)
@@ -234,7 +234,7 @@ func parseIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid id")
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid id", nil)
 		return 0, false
 	}
 	return id, true
@@ -244,11 +244,11 @@ func respondServiceError(w http.ResponseWriter, r *http.Request, err error) {
 	var ve ErrValidation
 	switch {
 	case errors.Is(err, ErrNotFound):
-		httputil.RespondError(w, r, http.StatusNotFound, errorcode.NotFound, "resource not found")
+		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "resource not found", nil)
 	case errors.Is(err, ErrChannelInUse):
-		httputil.RespondError(w, r, http.StatusConflict, errorcode.Conflict, "channel is in use by one or more monitors")
+		httputil.RespondErrorWithCause(w, r, http.StatusConflict, errorcode.Conflict, "channel is in use by one or more monitors", nil)
 	case errors.As(err, &ve):
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, ve.Msg)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", ve)
 	default:
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "request failed", err)
 	}

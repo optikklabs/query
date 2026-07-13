@@ -24,7 +24,7 @@ func (h *Handler) GetTraceSummary(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
 	resp, err := h.svc.GetTraceSummary(r.Context(), tenantID, traceID)
@@ -33,7 +33,7 @@ func (h *Handler) GetTraceSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resp == nil {
-		modulecommon.RespondError(w, r, http.StatusNotFound, errorcode.NotFound, "trace not found")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "trace not found", nil)
 		return
 	}
 	modulecommon.RespondOK(w, resp)
@@ -43,7 +43,7 @@ func (h *Handler) GetSpanEvents(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
 	events, err := h.svc.GetSpanEvents(r.Context(), tenantID, traceID)
@@ -59,11 +59,11 @@ func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
 	traceID := chi.URLParam(r, "traceId")
 	spanID := chi.URLParam(r, "spanId")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
 	if spanID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "spanId is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "spanId is required", nil)
 		return
 	}
 
@@ -73,7 +73,7 @@ func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if attrs == nil {
-		modulecommon.RespondError(w, r, http.StatusNotFound, errorcode.NotFound, "Span not found")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "Span not found", nil)
 		return
 	}
 	modulecommon.RespondOK(w, attrs)
@@ -83,7 +83,7 @@ func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
 	serviceName := r.URL.Query().Get("service")
@@ -94,7 +94,7 @@ func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if serviceName == "" || operationName == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "service and operation are required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "service and operation are required", nil)
 		return
 	}
 
@@ -115,7 +115,7 @@ func (h *Handler) GetTraceSpans(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
 	items, err := h.svc.ListSpansByTrace(r.Context(), tenantID, traceID)

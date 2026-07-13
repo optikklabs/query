@@ -23,7 +23,7 @@ func NewHandler(service *Service, tokens *token.Service) *Handler {
 func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	var req SignupRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid signup request")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid signup request", nil)
 		return
 	}
 
@@ -32,13 +32,21 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		shared.RespondServiceError(w, r, err, "Failed to create account")
 		return
 	}
-	modulecommon.RespondOK(w, response)
+	if response.Session != nil {
+		h.Tokens.SetRefreshCookie(w, response.RefreshToken)
+		modulecommon.RespondOK(w, struct {
+			auth.LoginResponse
+			APIKey string `json:"api_key"`
+		}{*response.Session, response.APIKey})
+		return
+	}
+	modulecommon.RespondOK(w, SignupResponse{Message: response.Message})
 }
 
 func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req VerifyEmailRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid verification request")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid verification request", nil)
 		return
 	}
 	response, refresh, apiKey, err := h.Service.VerifyEmail(r.Context(), req.Token)

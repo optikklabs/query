@@ -48,7 +48,7 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 	}
 	metricName := chi.URLParam(r, "metricName")
 	if metricName == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "metricName is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "metricName is required", nil)
 		return
 	}
 	tagKey := r.URL.Query().Get("tagKey")
@@ -64,15 +64,15 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	var req FEQueryRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "Invalid request body")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "Invalid request body", nil)
 		return
 	}
 	if req.StartTime <= 0 || req.EndTime <= 0 {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "startTime and endTime are required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "startTime and endTime are required", nil)
 		return
 	}
 	if len(req.Queries) == 0 {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "At least one query is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "At least one query is required", nil)
 		return
 	}
 

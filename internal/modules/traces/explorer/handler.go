@@ -21,7 +21,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	var req QueryRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
 		return
 	}
 	req.Filters.TenantID = modulecommon.Tenant(r).TenantID
@@ -42,7 +42,7 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) QueryFacets(w http.ResponseWriter, r *http.Request) {
 	var req FacetsRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
 		return
 	}
 	req.Filters.TenantID = modulecommon.Tenant(r).TenantID
@@ -63,7 +63,7 @@ func (h *Handler) QueryFacets(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) QueryTrend(w http.ResponseWriter, r *http.Request) {
 	var req TrendRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
 		return
 	}
 	req.Filters.TenantID = modulecommon.Tenant(r).TenantID
@@ -84,20 +84,20 @@ func (h *Handler) QueryTrend(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Suggest(w http.ResponseWriter, r *http.Request) {
 	var req SuggestRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
 		return
 	}
 	if req.StartTime <= 0 || req.EndTime <= 0 || req.StartTime >= req.EndTime {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required", nil)
 		return
 	}
 	req.Field = strings.TrimSpace(req.Field)
 	if req.Field == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "field is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "field is required", nil)
 		return
 	}
 	if !strings.HasPrefix(req.Field, "@") && !IsScalarField(req.Field) {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "unknown field")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "unknown field", nil)
 		return
 	}
 	resp, err := h.svc.Suggest(r.Context(), req, modulecommon.Tenant(r).TenantID)

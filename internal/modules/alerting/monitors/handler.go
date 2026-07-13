@@ -64,7 +64,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
 	var req CreateMonitorRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.Create(r.Context(), tenant.TenantID, tenant.UserID, req)
@@ -83,7 +83,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UpdateMonitorRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.Update(r.Context(), tenant.TenantID, tenant.UserID, id, req)
@@ -111,7 +111,7 @@ func parseIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid monitor id")
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid monitor id", nil)
 		return 0, false
 	}
 	return id, true
@@ -121,9 +121,9 @@ func respondServiceError(w http.ResponseWriter, r *http.Request, err error) {
 	var ve ErrValidation
 	switch {
 	case errors.Is(err, ErrNotFound):
-		httputil.RespondError(w, r, http.StatusNotFound, errorcode.NotFound, "monitor not found")
+		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "monitor not found", nil)
 	case errors.As(err, &ve):
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, ve.Msg)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", ve)
 	default:
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "monitor request failed", err)
 	}

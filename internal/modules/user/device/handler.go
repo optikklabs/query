@@ -33,7 +33,7 @@ func (h *Handler) DeviceCode(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeviceToken(w http.ResponseWriter, r *http.Request) {
 	var req DeviceTokenRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "device_code is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "device_code is required", nil)
 		return
 	}
 
@@ -56,7 +56,7 @@ func (h *Handler) DeviceToken(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeviceApprove(w http.ResponseWriter, r *http.Request) {
 	var req DeviceApproveRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "user_code is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "user_code is required", nil)
 		return
 	}
 

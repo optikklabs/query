@@ -9,8 +9,7 @@ type SignupRequest struct {
 	TenantName string `json:"tenant_name" validate:"required"`
 }
 
-// SignupResponse embeds the standard auth session and adds the tenant api_key.
-// Only signup and settings-rotate ever expose api_key; login/device never do.
+// SignupResponse is returned when email verification is required before login.
 type SignupResponse struct {
 	Message string `json:"message"`
 }

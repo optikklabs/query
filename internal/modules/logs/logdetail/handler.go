@@ -22,7 +22,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "log id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "log id required", nil)
 		return
 	}
 	resp, err := h.svc.GetByID(r.Context(), modulecommon.Tenant(r).TenantID, id)
@@ -31,7 +31,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resp == nil {
-		modulecommon.RespondError(w, r, http.StatusNotFound, errorcode.NotFound, "log not found")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "log not found", nil)
 		return
 	}
 	modulecommon.RespondOK(w, resp)

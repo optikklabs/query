@@ -59,7 +59,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
 	var req CreatePageRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.CreatePage(r.Context(), tenant.TenantID, tenant.UserID, req)
@@ -78,7 +78,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UpdatePageRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.UpdatePage(r.Context(), tenant.TenantID, tenant.UserID, id, req)
@@ -126,7 +126,7 @@ func (h *Handler) CreateWidget(w http.ResponseWriter, r *http.Request) {
 	}
 	var req CreateWidgetRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.CreateWidget(r.Context(), tenant.TenantID, pageID, req)
@@ -149,7 +149,7 @@ func (h *Handler) UpdateWidget(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UpdateWidgetRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	res, err := h.Service.UpdateWidget(r.Context(), tenant.TenantID, pageID, widgetID, req)
@@ -181,7 +181,7 @@ func parseIDParam(w http.ResponseWriter, r *http.Request, key string) (int64, bo
 	raw := chi.URLParam(r, key)
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid "+key)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid "+key, nil)
 		return 0, false
 	}
 	return id, true
@@ -191,9 +191,9 @@ func respondServiceError(w http.ResponseWriter, r *http.Request, err error) {
 	var ve ErrValidation
 	switch {
 	case errors.Is(err, ErrNotFound):
-		httputil.RespondError(w, r, http.StatusNotFound, errorcode.NotFound, "dashboard not found")
+		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "dashboard not found", nil)
 	case errors.As(err, &ve):
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, ve.Msg)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", ve)
 	default:
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "dashboard request failed", err)
 	}

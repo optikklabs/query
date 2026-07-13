@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/optikklabs/query/internal/config"
 )
 
 func TestValidateSignup(t *testing.T) {
@@ -39,5 +40,51 @@ func TestIsDuplicateEmail(t *testing.T) {
 	}
 	if IsDuplicateEmail(errors.New("plain error")) {
 		t.Fatal("plain error must not be a duplicate")
+	}
+}
+
+func TestNewServiceVerificationMode(t *testing.T) {
+	enabled := NewService(nil, nil, config.EmailConfig{ResendVerificationEnabled: true})
+	if !enabled.verificationRequired {
+		t.Fatal("expected resend-enabled service to require verification")
+	}
+	if _, ok := enabled.sender.(*ResendVerificationSender); !ok {
+		t.Fatalf("expected resend sender, got %T", enabled.sender)
+	}
+
+	disabled := NewService(nil, nil, config.EmailConfig{ResendVerificationEnabled: false})
+	if disabled.verificationRequired {
+		t.Fatal("expected resend-disabled service to skip verification")
+	}
+	if _, ok := disabled.sender.(noopVerificationSender); !ok {
+		t.Fatalf("expected noop sender, got %T", disabled.sender)
+	}
+}
+
+func TestPrepareSignupSecretsSkipsVerificationTokenWhenDisabled(t *testing.T) {
+	s := NewService(nil, nil, config.EmailConfig{ResendVerificationEnabled: false})
+	secrets, err := s.prepareSignupSecrets("longenough")
+	if err != nil {
+		t.Fatalf("prepareSignupSecrets() err = %v", err)
+	}
+	if secrets.apiKey == "" {
+		t.Fatal("expected api key")
+	}
+	if secrets.verificationToken != "" || secrets.verificationHash != "" || !secrets.verificationExpiry.IsZero() {
+		t.Fatal("expected verification fields to stay empty when verification is disabled")
+	}
+}
+
+func TestPrepareSignupSecretsIncludesVerificationTokenWhenEnabled(t *testing.T) {
+	s := NewService(nil, nil, config.EmailConfig{ResendVerificationEnabled: true})
+	secrets, err := s.prepareSignupSecrets("longenough")
+	if err != nil {
+		t.Fatalf("prepareSignupSecrets() err = %v", err)
+	}
+	if secrets.apiKey == "" {
+		t.Fatal("expected api key")
+	}
+	if secrets.verificationToken == "" || secrets.verificationHash == "" || secrets.verificationExpiry.IsZero() {
+		t.Fatal("expected verification fields when verification is enabled")
 	}
 }

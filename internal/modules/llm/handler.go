@@ -42,7 +42,7 @@ func (h *Handler) Timeseries(w http.ResponseWriter, r *http.Request) {
 	}
 	metric := r.URL.Query().Get("metric")
 	if _, valid := timeseriesMetrics[metric]; !valid {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "metric must be one of tokens_by_vendor, latency, spend")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "metric must be one of tokens_by_vendor, latency, spend", nil)
 		return
 	}
 	resp, err := h.svc.Timeseries(r.Context(), modulecommon.Tenant(r).TenantID, startMs, endMs, metric)
@@ -64,7 +64,7 @@ func (h *Handler) CostBreakdown(w http.ResponseWriter, r *http.Request) {
 		groupBy = "service"
 	case "service", "vendor", "model":
 	default:
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "groupBy must be one of service, vendor, model")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "groupBy must be one of service, vendor, model", nil)
 		return
 	}
 	resp, err := h.svc.CostBreakdown(r.Context(), modulecommon.Tenant(r).TenantID, startMs, endMs, groupBy)
@@ -78,11 +78,11 @@ func (h *Handler) CostBreakdown(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) TracesQuery(w http.ResponseWriter, r *http.Request) {
 	var req TracesQueryRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
 		return
 	}
 	if req.StartTime <= 0 || req.EndTime <= 0 || req.StartTime >= req.EndTime {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required", nil)
 		return
 	}
 	resp, err := h.svc.QueryTraces(r.Context(), modulecommon.Tenant(r).TenantID, req)
@@ -96,7 +96,7 @@ func (h *Handler) TracesQuery(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) TraceDetail(w http.ResponseWriter, r *http.Request) {
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "traceId is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "traceId is required", nil)
 		return
 	}
 	resp, err := h.svc.TraceDetail(r.Context(), modulecommon.Tenant(r).TenantID, traceID)
@@ -105,7 +105,7 @@ func (h *Handler) TraceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resp.TraceID == "" || len(resp.Spans) == 0 {
-		modulecommon.RespondError(w, r, http.StatusNotFound, errorcode.NotFound, "Trace not found")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "Trace not found", nil)
 		return
 	}
 	modulecommon.RespondOK(w, resp)

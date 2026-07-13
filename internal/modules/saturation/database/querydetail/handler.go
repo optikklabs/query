@@ -18,7 +18,7 @@ type Handler struct {
 func parseHash(w http.ResponseWriter, r *http.Request) (string, bool) {
 	hash := strings.TrimSpace(r.URL.Query().Get("hash"))
 	if hash == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "hash is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "hash is required", nil)
 		return "", false
 	}
 	return hash, true

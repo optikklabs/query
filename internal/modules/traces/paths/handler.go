@@ -22,7 +22,7 @@ func (h *Handler) GetCriticalPath(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
 	path, err := h.svc.GetCriticalPath(r.Context(), tenantID, traceID)
@@ -37,7 +37,7 @@ func (h *Handler) GetErrorPath(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := chi.URLParam(r, "traceId")
 	if traceID == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
 	path, err := h.svc.GetErrorPath(r.Context(), tenantID, traceID)

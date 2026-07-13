@@ -26,7 +26,7 @@ func NewHandler(service *Service, tokens *token.Service) *Handler {
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Email and password are required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Email and password are required", nil)
 		return
 	}
 
@@ -45,7 +45,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(h.Tokens.RefreshCookieName())
 	if err != nil || cookie.Value == "" {
-		modulecommon.RespondError(w, r, http.StatusUnauthorized, errorcode.Unauthorized, "Missing refresh token")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusUnauthorized, errorcode.Unauthorized, "Missing refresh token", nil)
 		return
 	}
 

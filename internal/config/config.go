@@ -87,7 +87,7 @@ func (c Config) Validate() error {
 		if c.Server.AllowedOrigins == "" || strings.Contains(c.Server.AllowedOrigins, "localhost") || strings.Contains(c.Server.AllowedOrigins, "*") {
 			return errors.New("server.allowed_origins must be an explicit non-local production allowlist")
 		}
-		if c.Email.ResendAPIKey == "" || c.Email.From == "" || c.Email.VerifyBaseURL == "" {
+		if c.Email.ResendVerificationEnabled && (c.Email.ResendAPIKey == "" || c.Email.From == "" || c.Email.VerifyBaseURL == "") {
 			return errors.New("email configuration must be set in production")
 		}
 	}
@@ -158,6 +158,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.cookie_domain", "")
 	v.SetDefault("auth.cookie_secure", false)
 	v.SetDefault("auth.cookie_same_site", "lax")
+	v.SetDefault("email.resend_verification_enabled", true)
 	v.SetDefault("email.resend_api_key", "")
 	v.SetDefault("email.from", "")
 	v.SetDefault("email.verify_base_url", "")

@@ -16,7 +16,7 @@ func (h *Handler) Ack(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.Service.Ack(r.Context(), tenant.TenantID, tenant.UserID, id); err != nil {
 		if errors.Is(err, ErrNotAlerting) {
-			httputil.RespondError(w, r, http.StatusConflict, errorcode.Conflict, "monitor is not currently alerting")
+			httputil.RespondErrorWithCause(w, r, http.StatusConflict, errorcode.Conflict, "monitor is not currently alerting", nil)
 			return
 		}
 		respondServiceError(w, r, err)
@@ -33,7 +33,7 @@ func (h *Handler) Mute(w http.ResponseWriter, r *http.Request) {
 	}
 	var req MuteRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, err.Error())
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
 		return
 	}
 	if err := h.Service.Mute(r.Context(), tenant.TenantID, id, req.DurationSec); err != nil {

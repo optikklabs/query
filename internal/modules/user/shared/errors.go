@@ -93,12 +93,12 @@ func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fall
 		if code == "" {
 			code = string(ServiceErrorInternal)
 		}
-		modulecommon.RespondError(w, r, status, code, message)
+		modulecommon.RespondErrorWithCause(w, r, status, code, message, serviceErr.Cause)
 		return
 	}
 
 	if fallbackMessage == "" {
 		fallbackMessage = "Internal error"
 	}
-	modulecommon.RespondError(w, r, http.StatusInternalServerError, string(ServiceErrorInternal), fallbackMessage)
+	modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, string(ServiceErrorInternal), fallbackMessage, err)
 }

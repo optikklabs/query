@@ -58,14 +58,7 @@ func RespondOK(w http.ResponseWriter, data any) {
 	WriteJSON(w, http.StatusOK, types.Success(data))
 }
 
-func RespondError(w http.ResponseWriter, r *http.Request, status int, code, msg string) {
-	if status >= 500 {
-		slog.Error("request error",
-			slog.String("code", code), slog.String("msg", msg),
-			slog.String("method", r.Method), slog.String("path", r.URL.Path))
-	}
-	WriteJSON(w, status, types.Failure(code, msg, r.URL.Path))
-}
+
 
 func RespondErrorWithCause(w http.ResponseWriter, r *http.Request, status int, code, msg string, err error) {
 	if err != nil {
@@ -139,7 +132,7 @@ func ParseRange(r *http.Request) (startMs, endMs int64, err error) {
 func ParseRequiredRange(w http.ResponseWriter, r *http.Request) (startMs, endMs int64, ok bool) {
 	start, end, err := ParseRange(r)
 	if err != nil {
-		RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "start and end time params are required")
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "start and end time params are required", err)
 		return 0, 0, false
 	}
 	return start, end, true

@@ -22,7 +22,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) Facets(w http.ResponseWriter, r *http.Request) {
 	var req Request
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
 		return
 	}
 	req.Filters.TenantID = modulecommon.Tenant(r).TenantID

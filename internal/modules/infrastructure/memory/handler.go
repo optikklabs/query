@@ -30,7 +30,7 @@ func (h *MemoryHandler) GetMemoryByInstance(w http.ResponseWriter, r *http.Reque
 	container := r.URL.Query().Get("container")
 	serviceName := r.URL.Query().Get("serviceName")
 	if serviceName == "" {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "serviceName is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "serviceName is required", nil)
 		return
 	}
 	resp, err := h.Service.GetMemoryByInstance(r.Context(), tenantID, host, pod, container, serviceName, startMs, endMs)

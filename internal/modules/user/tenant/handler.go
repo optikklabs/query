@@ -46,11 +46,11 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 // requireTenantAdmin gates key management to a tenant's admins.
 func (h *Handler) requireTenantAdmin(w http.ResponseWriter, r *http.Request, tenantID int64, role string) bool {
 	if tenantID == 0 {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return false
 	}
 	if role != "admin" {
-		modulecommon.RespondError(w, r, http.StatusForbidden, errorcode.Forbidden, "Only tenant admins can manage this resource")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusForbidden, errorcode.Forbidden, "Only tenant admins can manage this resource", nil)
 		return false
 	}
 	return true

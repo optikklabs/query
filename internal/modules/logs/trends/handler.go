@@ -48,7 +48,7 @@ func (h *Handler) Trend(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) bindFilters(w http.ResponseWriter, r *http.Request) (filter.Filters, bool) {
 	var req Request
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondError(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body")
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
 		return filter.Filters{}, false
 	}
 	req.Filters.TenantID = modulecommon.Tenant(r).TenantID
