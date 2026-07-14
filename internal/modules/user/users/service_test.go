@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -78,8 +79,8 @@ func member(id, tenant int64) shared.UserRecord {
 }
 
 func TestCreateUserRejectsInvalidRole(t *testing.T) {
-	s := NewService(newFakeRepo())
-	_, err := s.CreateUser(CreateUserRequest{Email: "a@b.com", Name: "A", Password: "pw", Role: "superuser"}, 1)
+	s := NewService(newFakeRepo(), nil)
+	_, err := s.CreateUser(context.Background(), CreateUserRequest{Email: "a@b.com", Name: "A", Password: "pw", Role: "superuser"}, 1)
 	if err == nil {
 		t.Fatal("expected invalid role to be rejected")
 	}
@@ -87,8 +88,8 @@ func TestCreateUserRejectsInvalidRole(t *testing.T) {
 
 func TestCreateUserDefaultsToMemberInCallerTenant(t *testing.T) {
 	f := newFakeRepo()
-	s := NewService(f)
-	u, err := s.CreateUser(CreateUserRequest{Email: "a@b.com", Name: "A", Password: "pw"}, 42)
+	s := NewService(f, nil)
+	u, err := s.CreateUser(context.Background(), CreateUserRequest{Email: "a@b.com", Name: "A", Password: "pw"}, 42)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -99,7 +100,7 @@ func TestCreateUserDefaultsToMemberInCallerTenant(t *testing.T) {
 
 func TestSetUserRoleBlocksDemotingLastAdmin(t *testing.T) {
 	f := newFakeRepo(admin(1, 7))
-	s := NewService(f)
+	s := NewService(f, nil)
 	if _, err := s.SetUserRole(1, 7, shared.RoleMember); err == nil {
 		t.Fatal("expected last-admin demotion to be blocked")
 	}
@@ -110,7 +111,7 @@ func TestSetUserRoleBlocksDemotingLastAdmin(t *testing.T) {
 
 func TestSetUserRoleAllowsDemotionWhenAnotherAdminExists(t *testing.T) {
 	f := newFakeRepo(admin(1, 7), admin(2, 7))
-	s := NewService(f)
+	s := NewService(f, nil)
 	if _, err := s.SetUserRole(1, 7, shared.RoleMember); err != nil {
 		t.Fatalf("expected demotion allowed, got %v", err)
 	}
@@ -121,7 +122,7 @@ func TestSetUserRoleAllowsDemotionWhenAnotherAdminExists(t *testing.T) {
 
 func TestSetUserRoleOtherTenantIsNotFound(t *testing.T) {
 	f := newFakeRepo(admin(1, 7), member(2, 7))
-	s := NewService(f)
+	s := NewService(f, nil)
 	// User 1 belongs to tenant 7; caller is tenant 9.
 	if _, err := s.SetUserRole(1, 9, shared.RoleMember); err == nil {
 		t.Fatal("expected cross-tenant role change to be not-found")
@@ -130,7 +131,7 @@ func TestSetUserRoleOtherTenantIsNotFound(t *testing.T) {
 
 func TestRemoveUserBlocksLastAdmin(t *testing.T) {
 	f := newFakeRepo(admin(1, 7))
-	s := NewService(f)
+	s := NewService(f, nil)
 	if err := s.RemoveUser(1, 7); err == nil {
 		t.Fatal("expected removing last admin to be blocked")
 	}
@@ -141,7 +142,7 @@ func TestRemoveUserBlocksLastAdmin(t *testing.T) {
 
 func TestRemoveUserAllowsMember(t *testing.T) {
 	f := newFakeRepo(admin(1, 7), member(2, 7))
-	s := NewService(f)
+	s := NewService(f, nil)
 	if err := s.RemoveUser(2, 7); err != nil {
 		t.Fatalf("expected member removal to succeed, got %v", err)
 	}
@@ -152,7 +153,7 @@ func TestRemoveUserAllowsMember(t *testing.T) {
 
 func TestRemoveUserOtherTenantIsNotFound(t *testing.T) {
 	f := newFakeRepo(member(2, 7))
-	s := NewService(f)
+	s := NewService(f, nil)
 	if err := s.RemoveUser(2, 9); err == nil {
 		t.Fatal("expected cross-tenant removal to be not-found")
 	}
