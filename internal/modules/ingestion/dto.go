@@ -8,6 +8,11 @@ type Config struct {
 	Enabled                 bool
 	MonthlyRecordCommitment uint64
 	MonthlyByteCommitment   uint64
+	// Billing rates the cost estimate applies to metered usage. Logs and traces
+	// bill per ingested GB; metrics bill per DPM (data points per minute).
+	PricePerGBLogsTraces float64
+	PricePerDPMMetrics   float64
+	Currency             string
 }
 
 func DefaultConfig() Config {
@@ -15,6 +20,18 @@ func DefaultConfig() Config {
 		Enabled:                 true,
 		MonthlyRecordCommitment: 5_000_000_000,
 		MonthlyByteCommitment:   50 * 1024 * 1024 * 1024 * 1024, // 50 TiB/month
+		PricePerGBLogsTraces:    0.10,  // USD per GB, logs + traces
+		PricePerDPMMetrics:      0.008, // USD per DPM, metrics
+		Currency:                "USD",
+	}
+}
+
+// Rates projects the billing knobs into the value the cost calculator consumes.
+func (c Config) Rates() Rates {
+	return Rates{
+		Currency:        c.Currency,
+		PerGBLogsTraces: c.PricePerGBLogsTraces,
+		PerDPMMetrics:   c.PricePerDPMMetrics,
 	}
 }
 

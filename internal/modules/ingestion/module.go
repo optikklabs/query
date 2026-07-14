@@ -11,6 +11,7 @@ func RegisterRoutes(cfg Config, v1 chi.Router, h *Handler) {
 		return
 	}
 	v1.Get("/ingestion/summary", h.Summary)
+	v1.Get("/ingestion/cost", h.Cost)
 	v1.Get("/ingestion/timeseries", h.Timeseries)
 	v1.Get("/ingestion/services", h.Services)
 }

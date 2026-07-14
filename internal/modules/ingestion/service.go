@@ -181,6 +181,45 @@ func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (
 	}, nil
 }
 
+// Cost estimates the tenant's bill for the period from metered usage. It reads
+// the same per-signal daily meter as Summary, then applies the configured rates.
+func (s *Service) Cost(ctx context.Context, tenantID, startMs, endMs int64) (CostResponse, error) {
+	logs, err := s.repo.DailyLogs(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return CostResponse{}, fmt.Errorf("ingestion.Cost logs: %w", err)
+	}
+	spans, err := s.repo.DailySpans(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return CostResponse{}, fmt.Errorf("ingestion.Cost spans: %w", err)
+	}
+	metrics, err := s.repo.DailyMetricDatapoints(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return CostResponse{}, fmt.Errorf("ingestion.Cost metrics: %w", err)
+	}
+
+	var logsBytes, spansBytes, metricDPs uint64
+	for _, row := range logs {
+		logsBytes += row.Bytes
+	}
+	for _, row := range spans {
+		spansBytes += row.Bytes
+	}
+	for _, row := range metrics {
+		metricDPs += row.Count
+	}
+
+	end := time.UnixMilli(endMs).UTC()
+	u := usageQuantities{
+		logsBytes:   logsBytes,
+		spansBytes:  spansBytes,
+		metricDPs:   metricDPs,
+		windowMin:   float64(endMs-startMs) / float64(time.Minute/time.Millisecond),
+		daysElapsed: end.Day(),
+		daysInMonth: daysInMonth(end),
+	}
+	return estimateCost(u, s.cfg.Rates()), nil
+}
+
 // Timeseries builds the daily stacked series, grouped by signal type or by service.
 func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64, groupBy string) (TimeseriesResponse, error) {
 	dates := buildDateAxis(startMs, endMs)

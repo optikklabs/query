@@ -20,6 +20,13 @@ func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Cost powers GET /api/v1/ingestion/cost — the tenant's estimated bill.
+func (h *Handler) Cost(w http.ResponseWriter, r *http.Request) {
+	modulecommon.HandleRangeQuery(w, r, "Failed to query ingestion cost", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.svc.Cost(ctx, tenantID, startMs, endMs)
+	})
+}
+
 // Timeseries powers GET /api/v1/ingestion/timeseries?groupBy=type|service.
 func (h *Handler) Timeseries(w http.ResponseWriter, r *http.Request) {
 	groupBy := r.URL.Query().Get("groupBy")
