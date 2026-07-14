@@ -28,6 +28,10 @@ const verificationTTL = 24 * time.Hour
 // trialDuration is the free-trial window a new tenant starts with.
 const trialDuration = 7 * 24 * time.Hour
 
+// termsVersion identifies the Terms/Privacy revision a signup consents to. Bump
+// it when the published terms change so consent is attributable to a version.
+const termsVersion = "2026-07-14"
+
 // Service provisions a new account + tenant, then delegates session issuance to
 // auth. It composes tenant creation, user creation, and token minting.
 type Service struct {
@@ -84,10 +88,11 @@ type SignupResult struct {
 }
 
 type normalizedSignup struct {
-	email      string
-	name       string
-	tenantName string
-	password   string
+	email         string
+	name          string
+	tenantName    string
+	password      string
+	acceptedTerms bool
 }
 
 type signupSecrets struct {
@@ -113,7 +118,8 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest) (SignupResult, 
 
 	active := !s.verificationRequired
 	trialEndsAt := time.Now().UTC().Add(trialDuration)
-	user, err := s.provisionSignup(ctx, normalized, secrets, active, trialEndsAt)
+	acceptedAt := time.Now().UTC()
+	user, err := s.provisionSignup(ctx, normalized, secrets, active, trialEndsAt, acceptedAt)
 	if err != nil {
 		return SignupResult{}, err
 	}
@@ -180,8 +186,8 @@ func (s *Service) prepareSignupSecrets(password string) (signupSecrets, error) {
 	return secrets, nil
 }
 
-func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, secrets signupSecrets, active bool, trialEndsAt time.Time) (shared.AuthUser, error) {
-	user, err := s.repo.CreateTenantWithAdmin(ctx, tenantAdminSignup{
+func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, secrets signupSecrets, active bool, trialEndsAt, acceptedAt time.Time) (shared.AuthUser, error) {
+	signupRow := tenantAdminSignup{
 		TenantName:         req.tenantName,
 		APIKey:             secrets.apiKey,
 		Email:              req.email,
@@ -191,7 +197,10 @@ func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, sec
 		VerificationHash:   secrets.verificationHash,
 		VerificationExpiry: secrets.verificationExpiry,
 		TrialEndsAt:        trialEndsAt,
-	})
+		TermsAcceptedAt:    acceptedAt,
+		TermsVersion:       termsVersion,
+	}
+	user, err := s.repo.CreateTenantWithAdmin(ctx, signupRow)
 	if err == nil {
 		return user, nil
 	}
@@ -199,17 +208,7 @@ func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, sec
 		return shared.AuthUser{}, shared.NewInternalError("Failed to create account", err)
 	}
 
-	user, updateErr := s.repo.UpdateUnverifiedTenantAndAdmin(ctx, tenantAdminSignup{
-		TenantName:         req.tenantName,
-		APIKey:             secrets.apiKey,
-		Email:              req.email,
-		PasswordHash:       secrets.passwordHash,
-		UserName:           req.name,
-		Active:             active,
-		VerificationHash:   secrets.verificationHash,
-		VerificationExpiry: secrets.verificationExpiry,
-		TrialEndsAt:        trialEndsAt,
-	})
+	user, updateErr := s.repo.UpdateUnverifiedTenantAndAdmin(ctx, signupRow)
 	if updateErr != nil {
 		if errors.Is(updateErr, ErrAlreadyVerified) {
 			return shared.AuthUser{}, shared.NewConflictError("An account with this email already exists", err)
@@ -242,27 +241,30 @@ func (s *ResendVerificationSender) SendVerification(ctx context.Context, to, tok
 
 func normalizeSignup(req SignupRequest) (normalizedSignup, error) {
 	normalized := normalizedSignup{
-		email:      strings.TrimSpace(strings.ToLower(req.Email)),
-		name:       strings.TrimSpace(req.Name),
-		tenantName: strings.TrimSpace(req.TenantName),
-		password:   strings.TrimSpace(req.Password),
+		email:         strings.TrimSpace(strings.ToLower(req.Email)),
+		name:          strings.TrimSpace(req.Name),
+		tenantName:    strings.TrimSpace(req.TenantName),
+		password:      strings.TrimSpace(req.Password),
+		acceptedTerms: req.AcceptedTerms,
 	}
-	if err := validateSignup(normalized.email, normalized.name, normalized.tenantName, normalized.password); err != nil {
+	if err := validateSignup(normalized); err != nil {
 		return normalizedSignup{}, err
 	}
 	return normalized, nil
 }
 
-func validateSignup(email, name, tenantName, password string) error {
+func validateSignup(s normalizedSignup) error {
 	switch {
-	case email == "" || !strings.Contains(email, "@"):
+	case s.email == "" || !strings.Contains(s.email, "@"):
 		return shared.NewValidationError("A valid email is required", nil)
-	case name == "":
+	case s.name == "":
 		return shared.NewValidationError("Your name is required", nil)
-	case tenantName == "":
+	case s.tenantName == "":
 		return shared.NewValidationError("An organization name is required", nil)
-	case len(password) < minPasswordLength:
+	case len(s.password) < minPasswordLength:
 		return shared.NewValidationError("Password must be at least 8 characters", nil)
+	case !s.acceptedTerms:
+		return shared.NewValidationError("You must accept the Terms of Service and Privacy Policy", nil)
 	}
 	return nil
 }

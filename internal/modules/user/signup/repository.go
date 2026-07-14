@@ -33,6 +33,8 @@ type tenantAdminSignup struct {
 	VerificationHash   string
 	VerificationExpiry time.Time
 	TrialEndsAt        time.Time
+	TermsAcceptedAt    time.Time
+	TermsVersion       string
 }
 
 // CreateTenantWithAdmin inserts the tenant and its first admin user in one
@@ -64,9 +66,9 @@ func (r *Repository) CreateTenantWithAdmin(ctx context.Context, signup tenantAdm
 
 	// The signup owner is the first admin of their new tenant.
 	res, err = tx.ExecContext(ctx, `
-		INSERT INTO users (email, password_hash, name, tenant_id, active, role, created_at)
-		VALUES (?, ?, ?, ?, ?, 'admin', ?)
-	`, signup.Email, signup.PasswordHash, signup.UserName, tenantID, signup.Active, time.Now().UTC())
+		INSERT INTO users (email, password_hash, name, tenant_id, active, role, created_at, terms_accepted_at, terms_version)
+		VALUES (?, ?, ?, ?, ?, 'admin', ?, ?, ?)
+	`, signup.Email, signup.PasswordHash, signup.UserName, tenantID, signup.Active, time.Now().UTC(), signup.TermsAcceptedAt, signup.TermsVersion)
 	if err != nil {
 		return shared.AuthUser{}, err
 	}
@@ -156,8 +158,8 @@ func (r *Repository) UpdateUnverifiedTenantAndAdmin(ctx context.Context, signup 
 	// Update user. Retry signups stay inactive when verification is required,
 	// or become active immediately when the verification gate is disabled.
 	if _, err = tx.ExecContext(ctx, `
-		UPDATE users SET password_hash=?, name=?, active=? WHERE id=?
-	`, signup.PasswordHash, signup.UserName, signup.Active, uID); err != nil {
+		UPDATE users SET password_hash=?, name=?, active=?, terms_accepted_at=?, terms_version=? WHERE id=?
+	`, signup.PasswordHash, signup.UserName, signup.Active, signup.TermsAcceptedAt, signup.TermsVersion, uID); err != nil {
 		return shared.AuthUser{}, err
 	}
 

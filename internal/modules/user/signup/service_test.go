@@ -12,18 +12,23 @@ func TestValidateSignup(t *testing.T) {
 	cases := []struct {
 		name                           string
 		email, uname, tenant, password string
+		accepted                       bool
 		wantErr                        bool
 	}{
-		{"valid", "a@b.com", "Ada", "Acme", "longenough", false},
-		{"missing email", "", "Ada", "Acme", "longenough", true},
-		{"bad email", "nope", "Ada", "Acme", "longenough", true},
-		{"missing name", "a@b.com", "", "Acme", "longenough", true},
-		{"missing tenant", "a@b.com", "Ada", "", "longenough", true},
-		{"short password", "a@b.com", "Ada", "Acme", "short", true},
+		{"valid", "a@b.com", "Ada", "Acme", "longenough", true, false},
+		{"missing email", "", "Ada", "Acme", "longenough", true, true},
+		{"bad email", "nope", "Ada", "Acme", "longenough", true, true},
+		{"missing name", "a@b.com", "", "Acme", "longenough", true, true},
+		{"missing tenant", "a@b.com", "Ada", "", "longenough", true, true},
+		{"short password", "a@b.com", "Ada", "Acme", "short", true, true},
+		{"terms not accepted", "a@b.com", "Ada", "Acme", "longenough", false, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := validateSignup(c.email, c.uname, c.tenant, c.password)
+			err := validateSignup(normalizedSignup{
+				email: c.email, name: c.uname, tenantName: c.tenant,
+				password: c.password, acceptedTerms: c.accepted,
+			})
 			if (err != nil) != c.wantErr {
 				t.Fatalf("validateSignup(%q) err=%v, wantErr=%v", c.name, err, c.wantErr)
 			}
