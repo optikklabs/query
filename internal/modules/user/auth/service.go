@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/optikklabs/query/internal/config"
 	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	contracts "github.com/optikklabs/query/internal/shared/contracts"
@@ -20,6 +21,7 @@ type Service struct {
 	repo     *Repository
 	tokens   *token.Service
 	attempts *loginAttempts
+	sender   PasswordResetSender
 }
 
 type loginAttempts struct {
@@ -31,8 +33,17 @@ type attempt struct {
 	lockedUntil time.Time
 }
 
-func NewService(repo *Repository, tokens *token.Service) *Service {
-	return &Service{repo: repo, tokens: tokens, attempts: &loginAttempts{entries: make(map[string]attempt)}}
+func NewService(repo *Repository, tokens *token.Service, emailCfg config.EmailConfig) *Service {
+	sender := PasswordResetSender(noopPasswordResetSender{})
+	if emailCfg.ResendVerificationEnabled {
+		sender = NewResendPasswordResetSender(emailCfg.ResendAPIKey, emailCfg.From, emailCfg.VerifyBaseURL+"/reset-password")
+	}
+	return &Service{
+		repo:     repo,
+		tokens:   tokens,
+		attempts: &loginAttempts{entries: make(map[string]attempt)},
+		sender:   sender,
+	}
 }
 
 // Login authenticates a user and issues access and refresh tokens.
@@ -222,4 +233,108 @@ func (s *Service) tenantForUser(tenantID int64) (AuthTenantSummary, error) {
 		AccountStatus: tenant.AccountStatus,
 		TrialEndsAt:   tenant.TrialEndsAt,
 	}, nil
+}
+
+func (s *Service) ForgotPassword(ctx context.Context, email string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" {
+		return shared.NewValidationError("Email is required", nil)
+	}
+
+	user, err := s.repo.FindActiveUserByEmail(email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Do not leak user existence. Return success.
+			return nil
+		}
+		return shared.NewInternalError("Failed to lookup user", err)
+	}
+
+	hash := ""
+	if user.PasswordHash != nil {
+		hash = *user.PasswordHash
+	}
+
+	resetToken, err := s.tokens.SignPasswordReset(user.ID, hash)
+	if err != nil {
+		return shared.NewInternalError("Failed to generate reset token", err)
+	}
+
+	if err := s.sender.SendPasswordReset(ctx, user.Email, resetToken); err != nil {
+		return shared.NewInternalError("Failed to send password reset email", err)
+	}
+
+	slog.InfoContext(ctx, "AUTH_EVENT forgot_password_requested", slog.Int64("user_id", user.ID))
+	return nil
+}
+
+func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPassword string) error {
+	if len(newPassword) < 8 {
+		return shared.NewValidationError("Password must be at least 8 characters", nil)
+	}
+
+	// We don't have the user ID or password hash yet, but ParsePasswordReset can't be called without password hash.
+	// Wait, to parse the token using a dynamic secret, we need the user's current password hash.
+	// But how do we get the user ID to look up the password hash?
+	// We can decode the JWT *without* verifying the signature to extract the Subject (user ID).
+	// Then look up the user, get their password hash, and *then* fully parse and verify the JWT.
+	userID, err := s.tokens.ExtractSubjectWithoutVerify(tokenStr)
+	if err != nil {
+		return shared.NewUnauthorizedError("Invalid reset token", err)
+	}
+
+	user, err := s.repo.FindAuthUserByID(userID)
+	if err != nil {
+		return shared.NewUnauthorizedError("Invalid reset token", err)
+	}
+
+	hash := ""
+	if user.PasswordHash != nil {
+		hash = *user.PasswordHash
+	}
+
+	// Fully verify the token now that we have the password hash
+	verifiedUserID, err := s.tokens.ParsePasswordReset(tokenStr, hash)
+	if err != nil || verifiedUserID != userID {
+		return shared.NewUnauthorizedError("Invalid or expired reset token", err)
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return shared.NewInternalError("Failed to hash password", err)
+	}
+
+	if err := s.repo.UpdatePassword(userID, string(newHash)); err != nil {
+		return shared.NewInternalError("Failed to update password", err)
+	}
+
+	slog.InfoContext(ctx, "AUTH_EVENT password_reset_success", slog.Int64("user_id", userID))
+	return nil
+}
+
+func (s *Service) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
+	if len(newPassword) < 8 {
+		return shared.NewValidationError("New password must be at least 8 characters", nil)
+	}
+
+	user, err := s.repo.FindAuthUserByID(userID)
+	if err != nil {
+		return shared.NewInternalError("Failed to lookup user", err)
+	}
+
+	if user.PasswordHash == nil || *user.PasswordHash == "" || bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(currentPassword)) != nil {
+		return shared.NewValidationError("Invalid current password", nil)
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return shared.NewInternalError("Failed to hash password", err)
+	}
+
+	if err := s.repo.UpdatePassword(userID, string(newHash)); err != nil {
+		return shared.NewInternalError("Failed to update password", err)
+	}
+
+	slog.InfoContext(ctx, "AUTH_EVENT password_changed", slog.Int64("user_id", userID))
+	return nil
 }

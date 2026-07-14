@@ -52,11 +52,11 @@ func configuredModules(
 ) []registry.Module {
 	// Auth owns token issuance, signup, and session lifecycle.
 	// Device flow reuses auth's IssueTokens for CLI login.
-	authService := user_auth.NewService(user_auth.NewRepository(infraDeps.DB), infraDeps.Tokens)
+	authService := user_auth.NewService(user_auth.NewRepository(infraDeps.DB), infraDeps.Tokens, infraDeps.Config.Email)
 	deviceService := user_device.NewService(user_device.NewRepository(infraDeps.DB), authService)
 	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService, infraDeps.Config.Email)
 	tenantService := user_tenant.NewService(user_tenant.NewRepository(infraDeps.DB))
-	usersService := user_users.NewService(user_users.NewRepository(infraDeps.DB))
+	usersService := user_users.NewService(user_users.NewRepository(infraDeps.DB), authService)
 
 	return []registry.Module{
 		infrastructure_cpu.NewModule(nativeQuerier),

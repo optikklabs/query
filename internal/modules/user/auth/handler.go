@@ -68,3 +68,47 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, response)
 }
 
+func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req ForgotPasswordRequest
+	if err := modulecommon.DecodeJSON(r, &req); err != nil {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Email is required", nil)
+		return
+	}
+	if err := h.Service.ForgotPassword(r.Context(), req.Email); err != nil {
+		shared.RespondServiceError(w, r, err, "Failed to process forgot password request")
+		return
+	}
+	modulecommon.RespondOK(w, shared.MessageResponse{Message: "If your email is registered, a password reset link has been sent."})
+}
+
+func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req ResetPasswordRequest
+	if err := modulecommon.DecodeJSON(r, &req); err != nil {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Token and new password are required", nil)
+		return
+	}
+	if err := h.Service.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
+		shared.RespondServiceError(w, r, err, "Failed to reset password")
+		return
+	}
+	modulecommon.RespondOK(w, shared.MessageResponse{Message: "Password has been successfully reset."})
+}
+
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	tenant := modulecommon.Tenant(r)
+	if tenant.UserID <= 0 {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusUnauthorized, errorcode.Unauthorized, "Authentication required", nil)
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := modulecommon.DecodeJSON(r, &req); err != nil {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Current and new password are required", nil)
+		return
+	}
+	if err := h.Service.ChangePassword(r.Context(), tenant.UserID, req.CurrentPassword, req.NewPassword); err != nil {
+		shared.RespondServiceError(w, r, err, "Failed to change password")
+		return
+	}
+	modulecommon.RespondOK(w, shared.MessageResponse{Message: "Password changed successfully."})
+}

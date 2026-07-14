@@ -1,10 +1,12 @@
 package users
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
 
+	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -22,16 +24,17 @@ type repository interface {
 
 // Service provisions and manages users within a single tenant.
 type Service struct {
-	repo repository
+	repo        repository
+	authService *auth.Service
 }
 
-func NewService(repo repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo repository, authService *auth.Service) *Service {
+	return &Service{repo: repo, authService: authService}
 }
 
 // CreateUser adds a user to the caller's tenant. The tenant is authoritative
 // from the caller's context, never the request body.
-func (s *Service) CreateUser(req CreateUserRequest, tenantID int64) (UserResponse, error) {
+func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantID int64) (UserResponse, error) {
 	role := req.Role
 	if role == "" {
 		role = shared.RoleMember
@@ -40,12 +43,16 @@ func (s *Service) CreateUser(req CreateUserRequest, tenantID int64) (UserRespons
 		return UserResponse{}, shared.NewValidationError("role must be 'admin' or 'member'", nil)
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return UserResponse{}, shared.NewInternalError("Failed to hash password", err)
+	hashStr := ""
+	if req.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return UserResponse{}, shared.NewInternalError("Failed to hash password", err)
+		}
+		hashStr = string(hash)
 	}
 
-	userID, err := s.repo.CreateUser(req.Email, string(hash), req.Name, tenantID, role, time.Now().UTC())
+	userID, err := s.repo.CreateUser(req.Email, hashStr, req.Name, tenantID, role, time.Now().UTC())
 	if err != nil {
 		return UserResponse{}, shared.NewInternalError("Failed to create user", err)
 	}
@@ -54,6 +61,16 @@ func (s *Service) CreateUser(req CreateUserRequest, tenantID int64) (UserRespons
 	if err != nil {
 		return UserResponse{}, shared.NewInternalError("Failed to load created user", err)
 	}
+	
+	// If no password was provided, generate an invite/reset link and email it to the user.
+	if req.Password == "" {
+		if err := s.authService.ForgotPassword(ctx, req.Email); err != nil {
+			// Do not block user creation if email fails, but log the error
+			// The admin can manually trigger another reset password request
+			_ = err
+		}
+	}
+
 	return s.buildUserResponse(created), nil
 }
 

@@ -42,6 +42,24 @@ func (r *Repository) FindActiveUserByID(userID int64) (shared.UserRecord, error)
 	return u, err
 }
 
+func (r *Repository) FindAuthUserByID(userID int64) (shared.AuthUser, error) {
+	var u shared.AuthUser
+	err := dbutil.GetSQL(context.Background(), r.db, "user.FindAuthUserByID", &u, `
+		SELECT id, email, password_hash, name, tenant_id, role
+		FROM users
+		WHERE id = ? AND active = 1
+		LIMIT 1
+	`, userID)
+	return u, err
+}
+
+func (r *Repository) UpdatePassword(userID int64, passwordHash string) error {
+	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.UpdatePassword", `
+		UPDATE users SET password_hash = ? WHERE id = ?
+	`, passwordHash, userID)
+	return err
+}
+
 
 func (r *Repository) InsertRefreshToken(userID int64, familyID, tokenHash string, expiresAt time.Time) error {
 	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.InsertRefreshToken", `

@@ -45,7 +45,7 @@ auth:
   cookie_same_site: lax
 
 email:
-  resend_verification_enabled: false # Use OPTIKK_EMAIL_RESEND_VERIFICATION_ENABLED
+  resend_verification_enabled: true # Use OPTIKK_EMAIL_RESEND_VERIFICATION_ENABLED
   resend_api_key: "" # Use OPTIKK_EMAIL_RESEND_API_KEY
   from: "" # Use OPTIKK_EMAIL_FROM
-  verify_base_url: "" # Use OPTIKK_EMAIL_VERIFY_BASE_URL
+  verify_base_url: "http://localhost:3000/login" # Use OPTIKK_EMAIL_VERIFY_BASE_URL

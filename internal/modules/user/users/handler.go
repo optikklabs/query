@@ -28,11 +28,11 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateUserRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "email, name and password are required", nil)
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "email and name are required", nil)
 		return
 	}
 
-	user, err := h.Service.CreateUser(req, tenant.TenantID)
+	user, err := h.Service.CreateUser(r.Context(), req, tenant.TenantID)
 	if err != nil {
 		shared.RespondServiceError(w, r, err, "Failed to create user")
 		return

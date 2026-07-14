@@ -6,7 +6,7 @@ type CreateUserRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Name     string `json:"name" validate:"required"`
 	Role     string `json:"role"`
-	Password string `json:"password" validate:"required"`
+	Password string `json:"password"`
 }
 
 // UpdateRoleRequest promotes or demotes a user (admin|member).

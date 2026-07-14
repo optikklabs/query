@@ -31,3 +31,16 @@ type AuthContextResponse struct {
 	Tenant AuthTenantSummary `json:"tenant"`
 }
 
+type ForgotPasswordRequest struct {
+	Email string `json:"email" validate:"required,email" example:"user@example.com"`
+}
+
+type ResetPasswordRequest struct {
+	Token    string `json:"token" validate:"required"`
+	Password string `json:"password" validate:"required,min=8" example:"securePassword123"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword" validate:"required"`
+	NewPassword     string `json:"newPassword" validate:"required,min=8" example:"securePassword123"`
+}
