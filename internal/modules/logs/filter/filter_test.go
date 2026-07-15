@@ -53,7 +53,7 @@ func TestValidate(t *testing.T) {
 func TestBuildClauses_Base(t *testing.T) {
 	rw, w, args := BuildClauses(Filters{TenantID: 1, StartMs: 1000, EndMs: 2000})
 	wantClause := " AND ts_bucket BETWEEN @startBucket AND @endBucket"
-	if rw != wantClause || w != wantClause {
+	if rw != "" || w != wantClause {
 		t.Errorf("base clauses wrong, got rw=%q w=%q", rw, w)
 	}
 	if got := len(namedArgs(args)); got != 5 {

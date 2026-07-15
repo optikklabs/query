@@ -50,7 +50,6 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		     AND m.fingerprint IN (SELECT fingerprint FROM series)
 		GROUP BY service`
 	var rows []redMetricsRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetFleetREDMetrics",
@@ -90,7 +89,6 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f RED
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		     AND m.fingerprint IN (SELECT fingerprint FROM series)
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 	var rows []requestRateRawRow
@@ -168,7 +166,6 @@ func (r *Repository) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]s
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		     AND m.fingerprint IN (SELECT fingerprint FROM series)
 		GROUP BY bucket_at, http_status_bucket
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
@@ -197,7 +194,6 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDF
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		     AND m.fingerprint IN (SELECT fingerprint FROM series)
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 	var rows []latencyPercentilesTimeseriesRow
@@ -236,7 +232,6 @@ func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilter
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		     AND m.fingerprint IN (SELECT fingerprint FROM series)
 		GROUP BY bucket_at, http_route
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
@@ -281,7 +276,6 @@ func (r *Repository) GetTopEndpointsCombined(
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		     AND m.fingerprint IN (SELECT fingerprint FROM series)
 		GROUP BY operation_name
 		HAVING operation_name != '' ` + paginationFilter + `
 		ORDER BY total_count DESC, operation_name ASC
@@ -336,7 +330,6 @@ func (r *Repository) GetTopDBQueriesCombined(
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		     AND m.fingerprint IN (SELECT fingerprint FROM series)
 		GROUP BY operation_name
 		HAVING operation_name != '' ` + paginationFilter + `
 		ORDER BY total_count DESC, operation_name ASC
@@ -384,7 +377,6 @@ func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters)
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		     AND m.fingerprint IN (SELECT fingerprint FROM series)
 		GROUP BY bucket_at, service_name
 		ORDER BY bucket_at ASC
 		LIMIT 10000`

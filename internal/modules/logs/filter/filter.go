@@ -78,6 +78,16 @@ func BuildFingerprintCTE(resourceWhere string) (cte, prewhereFP string) {
 	return cte, prewhereFP
 }
 
+func (f Filters) HasResourceFilters() bool {
+	return len(f.Services) > 0 ||
+		len(f.ExcludeServices) > 0 ||
+		len(f.Hosts) > 0 ||
+		len(f.ExcludeHosts) > 0 ||
+		len(f.Pods) > 0 ||
+		len(f.Containers) > 0 ||
+		len(f.Environments) > 0
+}
+
 func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 	startBucket := uint32((f.StartMs / 1000) / 300 * 300)
 	endBucket := uint32((f.EndMs / 1000) / 300 * 300)
@@ -90,7 +100,9 @@ func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 		clickhouse.Named("endBucket", endBucket),
 	}
 
-	resourceWhere += ` AND ts_bucket BETWEEN @startBucket AND @endBucket`
+	if f.HasResourceFilters() {
+		resourceWhere += ` AND ts_bucket BETWEEN @startBucket AND @endBucket`
+	}
 	where += ` AND ts_bucket BETWEEN @startBucket AND @endBucket`
 
 	if len(f.Services) > 0 {
