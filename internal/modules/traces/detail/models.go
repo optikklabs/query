@@ -70,8 +70,8 @@ type SpanListItem struct {
 	TraceID       string    `json:"trace_id"       ch:"trace_id"`
 	ServiceName   string    `json:"service_name"   ch:"service"`
 	OperationName string    `json:"operation_name" ch:"name"`
-	KindString    string    `json:"kind"           ch:"kind_string"`
-	StatusCode    string    `json:"status_code"    ch:"status_code_string"`
+	KindString    string    `json:"span_kind"      ch:"kind_string"`
+	StatusCode    string    `json:"status"         ch:"status_code_string"`
 	HasError      bool      `json:"has_error"      ch:"has_error"`
 	DurationMs    float64   `json:"duration_ms"    ch:"duration_ms"`
 	Timestamp     time.Time `json:"-"              ch:"timestamp"`
