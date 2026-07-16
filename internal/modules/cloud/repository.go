@@ -135,14 +135,23 @@ func (r *Repository) QueryProviderHealth(ctx context.Context, tenantID, startMs,
 // Empty when the collector does not export kubeletstats k8s metrics.
 func (r *Repository) QueryRestarts(ctx context.Context, tenantID, startMs, endMs int64) ([]RestartRow, error) {
 	query := `
-		SELECT provider, toUInt64(sum(latest)) AS restarts
-		FROM (
-		    SELECT attributes.cloud.provider::String AS provider,
-		           pod,
-		           argMax(value, timestamp)          AS latest
-		    FROM optikk.metrics
+		WITH series AS (
+		    SELECT fingerprint,
+		           attributes.cloud.provider::String AS provider,
+		           pod
+		    FROM optikk.metrics_series
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = '` + restartMetric + `'
 		    WHERE attributes.cloud.provider::String != ''
+		    GROUP BY fingerprint, provider, pod
+		)
+		SELECT provider, toUInt64(sum(latest)) AS restarts
+		FROM (
+		    SELECT s.provider                        AS provider,
+		           s.pod                             AS pod,
+		           argMax(m.value, m.timestamp)      AS latest
+		    FROM optikk.metrics AS m
+		    INNER JOIN series AS s ON m.fingerprint = s.fingerprint
+		    PREWHERE m.tenant_id = @tenantID AND m.timestamp BETWEEN @start AND @end AND m.metric_name = '` + restartMetric + `'
 		    GROUP BY provider, pod
 		)
 		GROUP BY provider`
