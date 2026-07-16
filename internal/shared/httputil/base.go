@@ -8,12 +8,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"reflect"
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/go-playground/validator/v10"
 
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	types "github.com/optikklabs/query/internal/shared/contracts"
@@ -21,8 +18,6 @@ import (
 )
 
 const APIV1Base = "/api/v1"
-
-var validate = validator.New()
 
 func Tenant(r *http.Request) types.TenantContext {
 	return types.TenantFrom(r.Context())
@@ -45,13 +40,7 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func DecodeJSON(r *http.Request, v any) error {
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		return err
-	}
-	if reflect.Indirect(reflect.ValueOf(v)).Kind() == reflect.Struct {
-		return validate.Struct(v)
-	}
-	return nil
+	return json.NewDecoder(r.Body).Decode(v)
 }
 
 func RespondOK(w http.ResponseWriter, data any) {
