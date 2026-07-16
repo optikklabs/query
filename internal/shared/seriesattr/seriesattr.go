@@ -20,9 +20,5 @@ const (
 
 const StatusErrorPred = "(series.status_code = 'STATUS_CODE_ERROR' OR series.status_code = 'ERROR')"
 
-// EntryKindPred matches inbound "entry-point" spans. In OTel both SERVER and
-// CONSUMER receive work (HTTP servers and messaging consumers), so RED metrics
-// for a service are computed over both.
-const EntryKindPred = "(attributes.span.kind::String IN ('SPAN_KIND_SERVER','SERVER','SPAN_KIND_CONSUMER','CONSUMER'))"
 
 const DBSpanPred = "attributes.db.system::String != ''"
