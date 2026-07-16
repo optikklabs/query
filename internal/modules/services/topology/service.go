@@ -6,10 +6,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Health thresholds for node coloring (fractions, not percentages).
+// Health thresholds for node coloring. Error-rate API values are percentages.
 const (
-	unhealthyErrorRate = 0.05
-	degradedErrorRate  = 0.01
+	unhealthyErrorRate = 5.0
+	degradedErrorRate  = 1.0
 )
 
 type Service struct {

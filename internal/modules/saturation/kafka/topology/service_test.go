@@ -9,8 +9,8 @@ func TestErrRate(t *testing.T) {
 	if got := errRate(5, 0); got != 0 {
 		t.Errorf("errRate(5,0) = %v, want 0", got)
 	}
-	if got := errRate(3, 12); got != 0.25 {
-		t.Errorf("errRate(3,12) = %v, want 0.25", got)
+	if got := errRate(3, 12); got != 25 {
+		t.Errorf("errRate(3,12) = %v, want 25", got)
 	}
 }
 
@@ -48,8 +48,8 @@ func TestBuildGraph_Flow(t *testing.T) {
 		t.Fatalf("got %d producers, want 2: %+v", len(g.Producers), g.Producers)
 	}
 	pa := g.Producers[0]
-	if pa.Service != "svcA" || pa.RatePerSec != 15 || pa.P95Ms != 8 || pa.ErrorRate != 10.0/150.0 {
-		t.Errorf("producer svcA = %+v, want rate 15, p95 8, errRate 10/150", pa)
+	if pa.Service != "svcA" || pa.RatePerSec != 15 || pa.P95Ms != 8 || pa.ErrorRate != 1000.0/150.0 {
+		t.Errorf("producer svcA = %+v, want rate 15, p95 8, error rate 10/150", pa)
 	}
 	if g.Producers[1].Service != "svcB" || g.Producers[1].RatePerSec != 2 {
 		t.Errorf("producer[1] = %+v, want svcB rate 2 (sorted)", g.Producers[1])
@@ -70,8 +70,8 @@ func TestBuildGraph_Flow(t *testing.T) {
 	for _, cn := range g.Consumers {
 		cons[cn.Service+"|"+cn.Group] = cn
 	}
-	if c := cons["consumer1|g1"]; c.RatePerSec != 12 || c.P95Ms != 6 || c.ErrorRate != 4.0/120.0 {
-		t.Errorf("consumer1|g1 = %+v, want rate 12, p95 6, errRate 4/120", c)
+	if c := cons["consumer1|g1"]; c.RatePerSec != 12 || c.P95Ms != 6 || c.ErrorRate != 400.0/120.0 {
+		t.Errorf("consumer1|g1 = %+v, want rate 12, p95 6, error rate 4/120", c)
 	}
 	if c := cons["consumer2|g2"]; c.RatePerSec != 1 {
 		t.Errorf("consumer2|g2 = %+v, want rate 1", c)
@@ -98,8 +98,8 @@ func TestBuildGraph_Flow(t *testing.T) {
 			t.Errorf("orders pathway producer = %q, want svcA (top producer)", pw.Producer)
 		}
 		if pw.Group == "g1" && pw.Topic == "orders" {
-			if pw.ConsumeRatePerSec != 8 || pw.ProduceRatePerSec != 12 || pw.ErrorRate != 4.0/80.0 {
-				t.Errorf("orders/g1 pathway = %+v, want consume 8, produce 12, errRate 4/80", pw)
+			if pw.ConsumeRatePerSec != 8 || pw.ProduceRatePerSec != 12 || pw.ErrorRate != 400.0/80.0 {
+				t.Errorf("orders/g1 pathway = %+v, want consume 8, produce 12, error rate 4/80", pw)
 			}
 		}
 	}

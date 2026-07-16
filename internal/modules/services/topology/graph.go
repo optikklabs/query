@@ -1,5 +1,7 @@
 package topology
 
+import "github.com/optikklabs/query/internal/shared/metrics"
+
 // NodeAgg is the source-agnostic per-service aggregate that feeds BuildGraph.
 type NodeAgg struct {
 	Service      string
@@ -29,10 +31,7 @@ func BuildGraph(nodeAggs []NodeAgg, edgeAggs []EdgeAgg) TopologyResponse {
 func buildNodes(rows []NodeAgg) []ServiceNode {
 	out := make([]ServiceNode, 0, len(rows))
 	for _, r := range rows {
-		var errRate float64
-		if r.RequestCount > 0 {
-			errRate = float64(r.ErrorCount) / float64(r.RequestCount)
-		}
+		errRate := metrics.PercentageInt(r.ErrorCount, r.RequestCount)
 		out = append(out, ServiceNode{
 			Name:         r.Service,
 			RequestCount: r.RequestCount,
@@ -50,10 +49,7 @@ func buildNodes(rows []NodeAgg) []ServiceNode {
 func buildEdges(rows []EdgeAgg) []ServiceEdge {
 	out := make([]ServiceEdge, 0, len(rows))
 	for _, r := range rows {
-		var errRate float64
-		if r.CallCount > 0 {
-			errRate = float64(r.ErrorCount) / float64(r.CallCount)
-		}
+		errRate := metrics.PercentageInt(r.ErrorCount, r.CallCount)
 		out = append(out, ServiceEdge{
 			Source:       r.Source,
 			Target:       r.Target,

@@ -25,7 +25,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) QueryFleetPods(ctx context.Context, tenantID int64, startMs, endMs int64) ([]FleetPodAggregateRow, error) {
+func (r *Repository) QueryFleetPods(ctx context.Context, tenantID int64, startMs, endMs int64, host string) ([]FleetPodAggregateRow, error) {
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
@@ -35,7 +35,7 @@ func (r *Repository) QueryFleetPods(ctx context.Context, tenantID int64, startMs
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE metrics_series.pod != ''
+		    WHERE metrics_series.pod != '' AND (@hostFilter = '' OR metrics_series.host = @hostFilter)
 		    GROUP BY fingerprint, host, pod, service, status_code
 		)
 		SELECT
@@ -59,6 +59,7 @@ func (r *Repository) QueryFleetPods(ctx context.Context, tenantID int64, startMs
 	args = append(args,
 		clickhouse.Named("defaultUnknown", defaultUnknown),
 		clickhouse.Named("maxFleetPods", uint64(maxFleetPods)),
+		clickhouse.Named("hostFilter", host),
 	)
 	var rows []FleetPodAggregateRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "fleet.QueryFleetPods", &rows, query, args...)

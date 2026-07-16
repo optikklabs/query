@@ -7,6 +7,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
+	"github.com/optikklabs/query/internal/shared/metrics"
 	"github.com/optikklabs/query/internal/shared/seriesattr"
 )
 
@@ -94,10 +95,7 @@ func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, tenantI
 	var healthy, degraded, unhealthy, totalPods uint64
 	for _, raw := range rawRows {
 		totalPods += raw.PodCount
-		var errorRate float64
-		if raw.RequestCount > 0 {
-			errorRate = float64(raw.ErrorCount) * 100.0 / float64(raw.RequestCount)
-		}
+		errorRate := metrics.Percentage(raw.ErrorCount, raw.RequestCount)
 		switch {
 		case errorRate > 10:
 			unhealthy++

@@ -3,6 +3,8 @@ package fleet
 import (
 	"context"
 	"time"
+
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 type Service struct {
@@ -13,8 +15,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetFleetPods(ctx context.Context, tenantID int64, startMs, endMs int64) ([]FleetPod, error) {
-	rows, err := s.repo.QueryFleetPods(ctx, tenantID, startMs, endMs)
+func (s *Service) GetFleetPods(ctx context.Context, tenantID int64, startMs, endMs int64, host string) ([]FleetPod, error) {
+	rows, err := s.repo.QueryFleetPods(ctx, tenantID, startMs, endMs, host)
 	if err != nil {
 		return nil, err
 	}
@@ -45,5 +47,5 @@ func redDerivations(reqCount, errCount uint64, durationMsSum float64) (errorRate
 		return 0, 0
 	}
 	rc := float64(reqCount)
-	return float64(errCount) * 100.0 / rc, durationMsSum / rc
+	return metrics.Percentage(errCount, reqCount), durationMsSum / rc
 }

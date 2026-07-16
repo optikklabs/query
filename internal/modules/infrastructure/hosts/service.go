@@ -8,6 +8,7 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/utils"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 type Service struct {
@@ -86,10 +87,7 @@ func enrichWithSpans(byHost map[string]Host, spans []hostSpansRow, windowMs int6
 
 		total := int64(row.RequestCount)
 		errs := int64(row.ErrorCount)
-		errRate := 0.0
-		if total > 0 {
-			errRate = float64(errs) / float64(total)
-		}
+		errRate := metrics.PercentageInt(errs, total)
 		rps := float64(total) / durationSec
 		p99 := utils.SanitizeFloat(float64(row.P99Ms))
 

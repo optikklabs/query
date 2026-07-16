@@ -6,6 +6,7 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 type Service struct {
@@ -438,10 +439,7 @@ func httpBucketToCode(bucket string) int {
 }
 
 func computeErrorRate(errs, total int64) float64 {
-	if total <= 0 {
-		return 0
-	}
-	return float64(errs) * 100.0 / float64(total)
+	return metrics.PercentageInt(errs, total)
 }
 
 func computeAvgLatency(sumMs float64, count uint64) float64 {

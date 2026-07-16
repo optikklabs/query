@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/optikklabs/query/internal/infra/cursor"
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 type Service struct {
@@ -67,9 +68,7 @@ func (s *Service) Apps(ctx context.Context, tenantID, startMs, endMs int64) (App
 			Cost:           a.Cost,
 			Trend:          trendByService[a.Service],
 		}
-		if a.TotalSpans > 0 {
-			app.ErrorRate = float64(a.ErrorSpans) / float64(a.TotalSpans) * 100
-		}
+		app.ErrorRate = metrics.Percentage(a.ErrorSpans, a.TotalSpans)
 		if best, ok := primary[a.Service]; ok {
 			app.Vendor = best.Vendor
 			app.PrimaryModel = best.Model

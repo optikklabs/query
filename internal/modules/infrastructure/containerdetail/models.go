@@ -1,0 +1,46 @@
+package containerdetail
+
+import "time"
+
+// SeriesPoint is one display-grain bucket of one named series.
+type SeriesPoint struct {
+	TimeBucket time.Time `json:"time_bucket" ch:"time_bucket"`
+	Series     string    `json:"series"      ch:"series"`
+	Value      float64   `json:"value"       ch:"value"`
+}
+
+// PodOverview is the container detail header payload: identity metadata plus
+// range RED aggregates from span metrics. RequestCount 0 means the pod's
+// services reported no traffic in the selected range.
+type PodOverview struct {
+	Pod              string   `json:"pod"`
+	Host             string   `json:"host,omitempty"`
+	LastSeen         string   `json:"last_seen,omitempty"`
+	Containers       []string `json:"containers"`
+	Services         []string `json:"services"`
+	Environments     []string `json:"environments"`
+	Namespaces       []string `json:"namespaces"`
+	RequestCount     int64    `json:"request_count"`
+	ErrorCount       int64    `json:"error_count"`
+	ErrorRate        float64  `json:"error_rate"`
+	AvgLatencyMs     float64  `json:"avg_latency_ms"`
+	P95LatencyMs     float64  `json:"p95_latency_ms"`
+	AvailableMetrics []string `json:"available_metrics"`
+}
+
+type podMetaRow struct {
+	LastSeen     time.Time `ch:"last_seen"`
+	Host         string    `ch:"host"`
+	Containers   []string  `ch:"containers"`
+	Services     []string  `ch:"services"`
+	Environments []string  `ch:"environments"`
+	Namespaces   []string  `ch:"namespaces"`
+	MetricNames  []string  `ch:"metric_names"`
+}
+
+type podREDRow struct {
+	RequestCount  uint64  `ch:"request_count"`
+	ErrorCount    uint64  `ch:"error_count"`
+	DurationMsSum float64 `ch:"duration_ms_sum"`
+	P95LatencyMs  float32 `ch:"p95_latency_ms"`
+}

@@ -11,9 +11,9 @@ func TestClassifyHealth(t *testing.T) {
 	}{
 		{0, HealthHealthy},
 		{degradedErrorRate, HealthHealthy},
-		{0.02, HealthDegraded},
+		{2, HealthDegraded},
 		{unhealthyErrorRate, HealthDegraded},
-		{0.06, HealthUnhealthy},
+		{6, HealthUnhealthy},
 	}
 	for _, c := range cases {
 		if got := classifyHealth(c.errRate); got != c.want {
@@ -32,8 +32,8 @@ func TestBuildGraph_Nodes(t *testing.T) {
 		t.Fatalf("got %d nodes, want 2", len(g.Nodes))
 	}
 	a := g.Nodes[0]
-	if a.ErrorRate != 0.1 || a.Health != HealthUnhealthy || a.P95LatencyMs != 5 {
-		t.Errorf("node a = %+v, want errRate 0.1, unhealthy, p95 5", a)
+	if a.ErrorRate != 10 || a.Health != HealthUnhealthy || a.P95LatencyMs != 5 {
+		t.Errorf("node a = %+v, want error rate 10%%, unhealthy, p95 5", a)
 	}
 	if b := g.Nodes[1]; b.ErrorRate != 0 || b.Health != HealthHealthy {
 		t.Errorf("node b = %+v, want errRate 0 (no div-by-zero), healthy", b)
@@ -56,8 +56,8 @@ func TestBuildGraph_AddsMissingEdgeNodes(t *testing.T) {
 	if names["b"] != HealthHealthy {
 		t.Errorf("synthesized node health = %q, want healthy", names["b"])
 	}
-	if len(g.Edges) != 1 || g.Edges[0].ErrorRate != 0.2 {
-		t.Errorf("edge = %+v, want errRate 0.2", g.Edges)
+	if len(g.Edges) != 1 || g.Edges[0].ErrorRate != 20 {
+		t.Errorf("edge = %+v, want error rate 20%%", g.Edges)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 
+	"github.com/optikklabs/query/internal/shared/metrics"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -51,10 +52,7 @@ func p95(qs []float64) float64 {
 }
 
 func errRate(errors, calls uint64) float64 {
-	if calls == 0 {
-		return 0
-	}
-	return float64(errors) / float64(calls)
+	return metrics.Percentage(errors, calls)
 }
 
 type nodeAgg struct {

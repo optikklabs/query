@@ -9,6 +9,7 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/infra/utils"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 type Service struct {
@@ -74,10 +75,7 @@ func computeFleetTotals(services []ServiceREDMetric, startMs, endMs int64) Fleet
 	}
 	serviceCount := int64(len(services))
 
-	avgErrorRate := 0.0
-	if totalCount > 0 {
-		avgErrorRate = float64(totalErrors) / float64(totalCount)
-	}
+	avgErrorRate := metrics.PercentageInt(totalErrors, totalCount)
 	avgP50, avgP95, avgP99 := 0.0, 0.0, 0.0
 	if serviceCount > 0 {
 		avgP50 = totalP50 / float64(serviceCount)
@@ -126,9 +124,7 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFil
 			reqCount = row.RequestCount
 			errCount = row.ErrorCount
 			rps = float64(reqCount) / grainSec
-			if reqCount > 0 {
-				errorRate = float64(errCount) / float64(reqCount)
-			}
+			errorRate = metrics.Percentage(errCount, reqCount)
 		}
 		points = append(points, ServicePerformancePoint{
 			Timestamp:    t,
@@ -295,10 +291,8 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters) 
 			seenRoute[row.HTTPRoute] = true
 			routes = append(routes, row.HTTPRoute)
 		}
-		var errRate, p99 float64
-		if row.RequestCount > 0 {
-			errRate = float64(row.ErrorCount) / float64(row.RequestCount)
-		}
+		var p99 float64
+		errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
 		if len(row.QS) >= 3 {
 			p99 = utils.SanitizeFloat(row.QS[2])
 		}
@@ -424,10 +418,7 @@ func (s *Service) GetTopDBQueries(
 func toTopDBQuery(row topDBQueryRow, durationSec float64) TopDBQuery {
 	total := int64(row.TotalCount)
 	errs := int64(row.ErrorCount)
-	errRate := 0.0
-	if total > 0 {
-		errRate = float64(errs) / float64(total)
-	}
+	errRate := metrics.PercentageInt(errs, total)
 	return TopDBQuery{
 		OperationName: row.OperationName,
 		ServiceName:   row.ServiceName,
@@ -445,10 +436,7 @@ func toTopDBQuery(row topDBQueryRow, durationSec float64) TopDBQuery {
 func toTopEndpoint(row topEndpointRow, durationSec float64) TopEndpoint {
 	total := int64(row.TotalCount)
 	errs := int64(row.ErrorCount)
-	errRate := 0.0
-	if total > 0 {
-		errRate = float64(errs) / float64(total)
-	}
+	errRate := metrics.PercentageInt(errs, total)
 	return TopEndpoint{
 		OperationName: row.OperationName,
 		ServiceName:   row.ServiceName,
@@ -563,9 +551,7 @@ func extractREDMetrics(redRow *redMetricsRow, durationSec float64) (reqCount, er
 	reqCount = int64(redRow.TotalCount)
 	errCount = int64(redRow.ErrorCount)
 	rps = float64(reqCount) / durationSec
-	if reqCount > 0 {
-		errRate = float64(errCount) / float64(reqCount)
-	}
+	errRate = metrics.PercentageInt(errCount, reqCount)
 	p50 = utils.SanitizeFloat(float64(redRow.P50Ms))
 	p95 = utils.SanitizeFloat(float64(redRow.P95Ms))
 	p99 = utils.SanitizeFloat(float64(redRow.P99Ms))

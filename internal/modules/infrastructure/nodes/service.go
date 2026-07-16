@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 type Service struct {
@@ -84,5 +86,5 @@ func redDerivations(reqCount, errCount uint64, durationMsSum float64) (errorRate
 		return 0, 0
 	}
 	rc := float64(reqCount)
-	return float64(errCount) * 100.0 / rc, durationMsSum / rc
+	return metrics.Percentage(errCount, reqCount), durationMsSum / rc
 }
