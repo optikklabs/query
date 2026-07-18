@@ -8,7 +8,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
-	"github.com/optikklabs/query/internal/shared/tracewindow"
 )
 
 const rollupTable = "optikk.llm_stats_1m"
@@ -279,13 +278,8 @@ func buildTraceFilters(tenantID int64, req TracesQueryRequest) (string, []any) {
 	return where, args
 }
 
-// ResolveWindow locates the trace, bounding the raw-spans scan in TraceSpans.
-func (r *Repository) ResolveWindow(ctx context.Context, tenantID int64, traceID string) (tracewindow.Window, bool, error) {
-	return tracewindow.Resolve(ctx, r.db, tenantID, traceID)
-}
-
-// TraceSpans fetches every span of one trace within its resolved window.
-func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) ([]traceSpanRow, error) {
+// TraceSpans fetches every span of one trace within the requested range.
+func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]traceSpanRow, error) {
 	query := `
 		SELECT span_id, parent_span_id, timestamp, duration_nano, name, service,
 		       gen_ai_system, gen_ai_operation, gen_ai_request_model,
@@ -298,7 +292,8 @@ func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID str
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC`
 	var rows []traceSpanRow
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.TraceSpans", &rows, query,
-		tracewindow.Args(tenantID, traceID, w)...,
+		args...,
 	)
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/logs/shared/models"
-	"github.com/optikklabs/query/internal/shared/tracewindow"
+	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
 type Repository struct {
@@ -15,12 +15,7 @@ type Repository struct {
 
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
-// ResolveWindow locates the trace so the log read below can be bounded.
-func (r *Repository) ResolveWindow(ctx context.Context, tenantID int64, traceID string) (tracewindow.Window, bool, error) {
-	return tracewindow.Resolve(ctx, r.db, tenantID, traceID)
-}
-
-func (r *Repository) FetchLogsByTrace(ctx context.Context, tenantID int64, traceID string, limit int, w tracewindow.Window) ([]models.LogRow, error) {
+func (r *Repository) FetchLogsByTrace(ctx context.Context, tenantID int64, traceID string, limit int, startTimeMs, endTimeMs int64) ([]models.LogRow, error) {
 	const query = `
 		SELECT ` + models.LogColumns + `
 		FROM optikk.logs
@@ -30,7 +25,10 @@ func (r *Repository) FetchLogsByTrace(ctx context.Context, tenantID int64, trace
 		ORDER BY timestamp ASC
 		LIMIT @limit`
 
-	args := append(tracewindow.Args(tenantID, traceID, w), clickhouse.Named("limit", uint64(limit)))
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs),
+		clickhouse.Named("traceID", traceID),
+		clickhouse.Named("limit", uint64(limit)),
+	)
 
 	var rows []models.LogRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "logsTraceLogs.FetchLogsByTrace", &rows, query, args...); err != nil {

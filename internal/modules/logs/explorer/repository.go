@@ -7,7 +7,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/logs/filter"
 	"github.com/optikklabs/query/internal/modules/logs/shared/models"
-	"github.com/optikklabs/query/internal/shared/tracewindow"
 )
 
 type Repository struct {
@@ -17,11 +16,6 @@ type Repository struct {
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
 func (r *Repository) getLogs(ctx context.Context, f filter.Filters, limit int, cur models.Cursor) ([]models.LogRow, bool, error) {
-	start, end, err := tracewindow.NarrowLogRange(ctx, r.db, f.TenantID, f.TraceID, f.StartMs, f.EndMs)
-	if err != nil {
-		return nil, false, err
-	}
-	f.StartMs, f.EndMs = start, end
 	resourceWhere, where, args := filter.BuildClauses(f)
 	if !cur.IsZero() {
 		where += ` AND (timestamp, log_id) < (@curTs, @curLid)`

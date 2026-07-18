@@ -5,7 +5,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
-	"github.com/optikklabs/query/internal/shared/tracewindow"
+	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
 type Repository struct {
@@ -16,12 +16,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// ResolveWindow locates the trace, bounding every span read below.
-func (r *Repository) ResolveWindow(ctx context.Context, tenantID int64, traceID string) (tracewindow.Window, bool, error) {
-	return tracewindow.Resolve(ctx, r.db, tenantID, traceID)
-}
-
-func (r *Repository) GetCriticalPath(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) ([]criticalPathRow, error) {
+func (r *Repository) GetCriticalPath(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]criticalPathRow, error) {
 	const query = `
 		SELECT span_id,
 		       parent_span_id,
@@ -37,12 +32,13 @@ func (r *Repository) GetCriticalPath(ctx context.Context, tenantID int64, traceI
 		ORDER BY timestamp ASC
 		LIMIT 5000`
 	var rows []criticalPathRow
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "paths.GetCriticalPath", &rows, query,
-		tracewindow.Args(tenantID, traceID, w)...,
+		args...,
 	)
 }
 
-func (r *Repository) GetErrorPath(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) ([]errorPathRow, error) {
+func (r *Repository) GetErrorPath(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]errorPathRow, error) {
 	const query = `
 		SELECT span_id,
 		       parent_span_id,
@@ -60,7 +56,8 @@ func (r *Repository) GetErrorPath(ctx context.Context, tenantID int64, traceID s
 		ORDER BY timestamp ASC
 		LIMIT 1000`
 	var rows []errorPathRow
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "paths.GetErrorPath", &rows, query,
-		tracewindow.Args(tenantID, traceID, w)...,
+		args...,
 	)
 }

@@ -112,7 +112,11 @@ func (h *Handler) TraceDetail(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "traceId is required", nil)
 		return
 	}
-	resp, err := h.svc.TraceDetail(r.Context(), modulecommon.Tenant(r).TenantID, traceID)
+	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
+	if !ok {
+		return
+	}
+	resp, err := h.svc.TraceDetail(r.Context(), modulecommon.Tenant(r).TenantID, traceID, startTimeMs, endTimeMs)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to load LLM trace", err)
 		return

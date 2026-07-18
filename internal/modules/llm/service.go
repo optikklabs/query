@@ -290,12 +290,8 @@ func pickLimit(v, def, max int) int {
 	return v
 }
 
-func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID string) (TraceDetailResponse, error) {
-	w, ok, err := s.repo.ResolveWindow(ctx, tenantID, traceID)
-	if err != nil || !ok {
-		return TraceDetailResponse{}, err
-	}
-	rows, err := s.repo.TraceSpans(ctx, tenantID, traceID, w)
+func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) (TraceDetailResponse, error) {
+	rows, err := s.repo.TraceSpans(ctx, tenantID, traceID, startTimeMs, endTimeMs)
 	if err != nil || len(rows) == 0 {
 		return TraceDetailResponse{}, err
 	}

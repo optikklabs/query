@@ -6,7 +6,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
-	"github.com/optikklabs/query/internal/shared/tracewindow"
+	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
 type Repository struct {
@@ -17,12 +17,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// ResolveWindow locates the trace, bounding every span read below.
-func (r *Repository) ResolveWindow(ctx context.Context, tenantID int64, traceID string) (tracewindow.Window, bool, error) {
-	return tracewindow.Resolve(ctx, r.db, tenantID, traceID)
-}
-
-func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) ([]spanEventCombinedRow, error) {
+func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]spanEventCombinedRow, error) {
 	const query = `
 		SELECT span_id, trace_id, timestamp, events,
 		       exception_type, exception_message, exception_stacktrace
@@ -32,12 +27,13 @@ func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID 
 		     AND trace_id = @traceID
 		WHERE NOT empty(events) OR NOT empty(exception_type)`
 	var rows []spanEventCombinedRow
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanEvents", &rows, query,
-		tracewindow.Args(tenantID, traceID, w)...,
+		args...,
 	)
 }
 
-func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, w tracewindow.Window) (*spanAttributeRow, error) {
+func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startTimeMs, endTimeMs int64) (*spanAttributeRow, error) {
 	const query = `
 		SELECT span_id, trace_id, name AS operation_name, service,
 		       toJSONString(attributes)                AS attributes_json,
@@ -55,7 +51,10 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, trac
 		     AND trace_id = @traceID
 		LIMIT 1`
 	var rows []spanAttributeRow
-	args := append(tracewindow.Args(tenantID, traceID, w), clickhouse.Named("spanID", spanID))
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs),
+		clickhouse.Named("traceID", traceID),
+		clickhouse.Named("spanID", spanID),
+	)
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &rows, query, args...); err != nil {
 		return nil, err
 	}
@@ -107,7 +106,7 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 // GetTraceSummary aggregates the whole trace rather than reading its root span.
 // A trace whose root was sampled out or dropped still has a summary; the
 // earliest span stands in for the root and root_missing marks it as partial.
-func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) (*TraceSummary, error) {
+func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) (*TraceSummary, error) {
 	const query = `
 		SELECT trace_id,
 		       min(timestamp)                                            AS start_time,
@@ -144,8 +143,9 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 		ServiceSet     []string  `ch:"service_set"`
 		RootMissing    bool      `ch:"root_missing"`
 	}
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &rows, query,
-		tracewindow.Args(tenantID, traceID, w)...,
+		args...,
 	); err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 	}, nil
 }
 
-func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) ([]SpanListItem, error) {
+func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]SpanListItem, error) {
 	const query = `
 		SELECT span_id,
 		       parent_span_id,
@@ -190,7 +190,8 @@ func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, trace
 		ORDER BY timestamp ASC
 		LIMIT 5000`
 	var rows []SpanListItem
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.ListSpansByTrace", &rows, query,
-		tracewindow.Args(tenantID, traceID, w)...,
+		args...,
 	)
 }

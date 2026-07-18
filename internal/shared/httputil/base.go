@@ -47,8 +47,6 @@ func RespondOK(w http.ResponseWriter, data any) {
 	WriteJSON(w, http.StatusOK, types.Success(data))
 }
 
-
-
 func RespondErrorWithCause(w http.ResponseWriter, r *http.Request, status int, code, msg string, err error) {
 	if err != nil {
 		slog.Error("request error",
@@ -83,7 +81,6 @@ func ParseIntParam(r *http.Request, key string, fallback int) int {
 	}
 	return fallback
 }
-
 
 func ParsePageSize(r *http.Request, key string, fallback int) int {
 	size := ParseIntParam(r, key, fallback)
@@ -122,6 +119,26 @@ func ParseRequiredRange(w http.ResponseWriter, r *http.Request) (startMs, endMs 
 	start, end, err := ParseRange(r)
 	if err != nil {
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "start and end time params are required", err)
+		return 0, 0, false
+	}
+	return start, end, true
+}
+
+// ParseRequiredExplicitRange requires startTime and endTime to be supplied
+// together as positive Unix millisecond values. Unlike ParseRange, it never
+// substitutes the current time for a missing end bound.
+func ParseRequiredExplicitRange(w http.ResponseWriter, r *http.Request) (startMs, endMs int64, ok bool) {
+	startRaw := r.URL.Query().Get("startTime")
+	endRaw := r.URL.Query().Get("endTime")
+	if startRaw == "" || endRaw == "" {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "startTime and endTime are required", nil)
+		return 0, 0, false
+	}
+
+	start, startErr := strconv.ParseInt(startRaw, 10, 64)
+	end, endErr := strconv.ParseInt(endRaw, 10, 64)
+	if startErr != nil || endErr != nil || start <= 0 || end <= 0 || start >= end {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "startTime and endTime must be positive Unix milliseconds with startTime before endTime", nil)
 		return 0, 0, false
 	}
 	return start, end, true

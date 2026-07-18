@@ -5,7 +5,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
-	"github.com/optikklabs/query/internal/shared/tracewindow"
+	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
 type Repository struct {
@@ -16,12 +16,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// ResolveWindow locates the trace, bounding every span read below.
-func (r *Repository) ResolveWindow(ctx context.Context, tenantID int64, traceID string) (tracewindow.Window, bool, error) {
-	return tracewindow.Resolve(ctx, r.db, tenantID, traceID)
-}
-
-func (r *Repository) GetServiceMapSpans(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) ([]serviceMapSpanRow, error) {
+func (r *Repository) GetServiceMapSpans(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]serviceMapSpanRow, error) {
 	const query = `
 		SELECT span_id,
 		       parent_span_id,
@@ -35,12 +30,13 @@ func (r *Repository) GetServiceMapSpans(ctx context.Context, tenantID int64, tra
 		ORDER BY timestamp ASC
 		LIMIT 10000`
 	var rows []serviceMapSpanRow
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetServiceMapSpans", &rows, query,
-		tracewindow.Args(tenantID, traceID, w)...,
+		args...,
 	)
 }
 
-func (r *Repository) GetTraceErrors(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) ([]traceErrorRow, error) {
+func (r *Repository) GetTraceErrors(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]traceErrorRow, error) {
 	const query = `
 		SELECT span_id,
 		       service,
@@ -58,7 +54,8 @@ func (r *Repository) GetTraceErrors(ctx context.Context, tenantID int64, traceID
 		ORDER BY timestamp ASC
 		LIMIT 1000`
 	var rows []traceErrorRow
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetTraceErrors", &rows, query,
-		tracewindow.Args(tenantID, traceID, w)...,
+		args...,
 	)
 }

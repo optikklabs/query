@@ -25,7 +25,11 @@ func (h *Handler) GetCriticalPath(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	path, err := h.svc.GetCriticalPath(r.Context(), tenantID, traceID)
+	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
+	if !ok {
+		return
+	}
+	path, err := h.svc.GetCriticalPath(r.Context(), tenantID, traceID, startTimeMs, endTimeMs)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to compute critical path", err)
 		return
@@ -40,7 +44,11 @@ func (h *Handler) GetErrorPath(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	path, err := h.svc.GetErrorPath(r.Context(), tenantID, traceID)
+	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
+	if !ok {
+		return
+	}
+	path, err := h.svc.GetErrorPath(r.Context(), tenantID, traceID, startTimeMs, endTimeMs)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to compute error path", err)
 		return

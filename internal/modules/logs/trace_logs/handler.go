@@ -37,7 +37,11 @@ func (h *Handler) GetByTrace(w http.ResponseWriter, r *http.Request) {
 	if limit > maxLimit {
 		limit = maxLimit
 	}
-	logs, err := h.svc.GetByTraceID(r.Context(), modulecommon.Tenant(r).TenantID, traceID, limit)
+	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
+	if !ok {
+		return
+	}
+	logs, err := h.svc.GetByTraceID(r.Context(), modulecommon.Tenant(r).TenantID, traceID, limit, startTimeMs, endTimeMs)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch logs by trace", err)
 		return

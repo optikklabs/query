@@ -17,16 +17,8 @@ func NewService(repo *Repository) *Service {
 }
 
 // GetServiceMap builds the per-trace service map in the shared topology shape.
-func (s *Service) GetServiceMap(ctx context.Context, tenantID int64, traceID string) (topology.TopologyResponse, error) {
-	w, ok, err := s.repo.ResolveWindow(ctx, tenantID, traceID)
-	if err != nil {
-		slog.ErrorContext(ctx, "servicemap: ResolveWindow failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
-		return topology.TopologyResponse{}, err
-	}
-	if !ok {
-		return topology.TopologyResponse{}, nil
-	}
-	rows, err := s.repo.GetServiceMapSpans(ctx, tenantID, traceID, w)
+func (s *Service) GetServiceMap(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) (topology.TopologyResponse, error) {
+	rows, err := s.repo.GetServiceMapSpans(ctx, tenantID, traceID, startTimeMs, endTimeMs)
 	if err != nil {
 		slog.ErrorContext(ctx, "servicemap: GetServiceMap failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return topology.TopologyResponse{}, err
@@ -34,16 +26,8 @@ func (s *Service) GetServiceMap(ctx context.Context, tenantID int64, traceID str
 	return topology.BuildGraph(nodeAggsFromSpans(rows), edgeAggsFromSpans(rows)), nil
 }
 
-func (s *Service) GetTraceErrors(ctx context.Context, tenantID int64, traceID string) ([]TraceErrorGroup, error) {
-	w, ok, err := s.repo.ResolveWindow(ctx, tenantID, traceID)
-	if err != nil {
-		slog.ErrorContext(ctx, "servicemap: ResolveWindow failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
-		return nil, err
-	}
-	if !ok {
-		return nil, nil
-	}
-	rows, err := s.repo.GetTraceErrors(ctx, tenantID, traceID, w)
+func (s *Service) GetTraceErrors(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]TraceErrorGroup, error) {
+	rows, err := s.repo.GetTraceErrors(ctx, tenantID, traceID, startTimeMs, endTimeMs)
 	if err != nil {
 		slog.ErrorContext(ctx, "servicemap: GetTraceErrors failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
