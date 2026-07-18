@@ -123,6 +123,69 @@ func (r *Repository) LatencyPercentiles(ctx context.Context, tenantID, startMs, 
 		chargs.RangeArgs(tenantID, startMs, endMs)...)
 }
 
+// OverviewWindows aggregates the current range and the preceding range of
+// equal length in one rollup pass; the web derives KPI deltas from the pair.
+func (r *Repository) OverviewWindows(ctx context.Context, tenantID, startMs, endMs int64) ([]overviewWindowRow, error) {
+	query := `
+		SELECT if(timestamp >= @start, 1, 0) AS is_current,
+		       sumIf(span_count, gen_ai_operation = 'chat' AND gen_ai_request_model != '') AS llm_spans,
+		       sumIf(span_count, gen_ai_operation = 'tool') AS tool_spans,
+		       sum(span_count)    AS total_spans,
+		       sum(error_count)   AS error_spans,
+		       sum(input_tokens)  AS in_tokens,
+		       sum(output_tokens) AS out_tokens,
+		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs,
+		       sum(` + tokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
+		FROM ` + rollupTable + `
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @prevStart AND @end
+		GROUP BY is_current`
+	args := append(overviewArgs(tenantID, startMs, endMs), priceArgs()...)
+	var rows []overviewWindowRow
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.OverviewWindows", &rows, query, args...)
+}
+
+// OverviewSeries buckets the current range for the KPI sparklines.
+func (r *Repository) OverviewSeries(ctx context.Context, tenantID, startMs, endMs int64) ([]overviewSeriesRow, error) {
+	query := `
+		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
+		       sumIf(span_count, gen_ai_operation = 'chat' AND gen_ai_request_model != '') AS llm_spans,
+		       sumIf(span_count, gen_ai_operation = 'tool') AS tool_spans,
+		       sum(span_count)  AS total_spans,
+		       sum(error_count) AS error_spans,
+		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs,
+		       sum(` + tokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
+		FROM ` + rollupTable + `
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		GROUP BY bucket_at
+		ORDER BY bucket_at ASC`
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs), priceArgs()...)
+	var rows []overviewSeriesRow
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.OverviewSeries", &rows, query, args...)
+}
+
+// TraceCounts counts distinct gen_ai traces for the current and preceding
+// ranges. Raw-span scan, but tenant+time bounded like QueryTraces.
+func (r *Repository) TraceCounts(ctx context.Context, tenantID, startMs, endMs int64) ([]traceCountRow, error) {
+	query := `
+		SELECT if(timestamp >= @start, 1, 0) AS is_current,
+		       uniq(trace_id) AS traces,
+		       count()        AS spans
+		FROM optikk.spans
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @prevStart AND @end
+		WHERE is_gen_ai
+		GROUP BY is_current`
+	var rows []traceCountRow
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.TraceCounts", &rows, query,
+		overviewArgs(tenantID, startMs, endMs)...)
+}
+
+// overviewArgs binds @start/@end plus @prevStart, one range-length earlier.
+func overviewArgs(tenantID, startMs, endMs int64) []any {
+	prevStartMs := startMs - (endMs - startMs)
+	return append(chargs.RangeArgs(tenantID, startMs, endMs),
+		clickhouse.Named("prevStart", time.UnixMilli(prevStartMs)))
+}
+
 // QueryTraces lists root spans of traces containing gen_ai spans, joined
 // with per-trace token/cost totals aggregated from the gen_ai spans.
 func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, bool, error) {
@@ -147,6 +210,7 @@ func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req Traces
 		           anyIf(gen_ai_system, gen_ai_system != '') AS vendor,
 		           argMaxIf(gen_ai_request_model, gen_ai_input_tokens + gen_ai_output_tokens, gen_ai_request_model != '') AS model,
 		           countIf(gen_ai_operation = 'chat' AND gen_ai_request_model != '') AS llm_calls,
+		           anyIf(substring(gen_ai_prompt, 1, 160), gen_ai_prompt != '') AS prompt_preview,
 		           sum(` + tokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
 		    FROM optikk.spans
 		    PREWHERE tenant_id = @tenantID
@@ -164,6 +228,7 @@ func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req Traces
 		       llm.vendor           AS vendor,
 		       llm.model            AS model,
 		       llm.llm_calls        AS llm_calls,
+		       llm.prompt_preview   AS prompt_preview,
 		       llm.input_tokens     AS input_tokens,
 		       llm.output_tokens    AS output_tokens,
 		       llm.cost             AS cost
@@ -226,8 +291,8 @@ func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID str
 		SELECT span_id, parent_span_id, timestamp, duration_nano, name, service,
 		       gen_ai_system, gen_ai_operation, gen_ai_request_model,
 		       gen_ai_input_tokens, gen_ai_output_tokens, has_error,
-		       coalesce(toString(attributes.` + "`gen_ai.prompt`" + `), '')     AS prompt,
-		       coalesce(toString(attributes.` + "`gen_ai.completion`" + `), '') AS completion
+		       gen_ai_prompt     AS prompt,
+		       gen_ai_completion AS completion
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE

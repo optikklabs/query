@@ -13,21 +13,20 @@ type ClickHouseConfig struct {
 	MaxIdleConns int    `yaml:"max_idle_conns"`
 }
 
-// Pool defaults are sized so all query replicas together (HPA max 5 × 40)
-// stay near ClickHouse's default max_concurrent_queries (100) with headroom;
-// brief queuing in the Go pool beats server-side rejections.
+// Pool defaults bound pressure on the single ClickHouse server. A small pool
+// queues in Go instead of letting broad queries exhaust ClickHouse workers.
 func (c Config) ClickHouseMaxOpenConns() int {
 	if n := c.ClickHouse.MaxOpenConns; n > 0 {
 		return n
 	}
-	return 40
+	return 12
 }
 
 func (c Config) ClickHouseMaxIdleConns() int {
 	if n := c.ClickHouse.MaxIdleConns; n > 0 {
 		return n
 	}
-	return 20
+	return 6
 }
 
 func (c Config) ClickHouseDSN() string {

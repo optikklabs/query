@@ -320,13 +320,6 @@ var integrationCatalog = []struct {
 	Color string
 }{
 	{"slack", "Slack", "Send rich messages to channels", "#611f69"},
-	{"pagerduty", "PagerDuty", "Page on-call responders", "#06ac38"},
-	{"opsgenie", "Opsgenie", "Atlassian incident alerts", "#172b4d"},
-	{"email", "Email", "Send via SMTP relay", "#475569"},
-	{"webhook", "Webhook", "POST to any URL with custom body", "#8b5cf6"},
-	{"teams", "MS Teams", "Post to a Teams channel", "#4b53bc"},
-	{"twilio", "Twilio SMS", "Send SMS alerts to phone numbers", "#f22f46"},
-	{"jira", "Jira", "Auto-create tickets on trigger", "#2563eb"},
 }
 
 func (s *Service) ListIntegrations(ctx context.Context, tenantID int64) ([]IntegrationCatalogEntry, error) {
@@ -341,7 +334,7 @@ func (s *Service) ListIntegrations(ctx context.Context, tenantID int64) ([]Integ
 	out := make([]IntegrationCatalogEntry, 0, len(integrationCatalog))
 	for _, it := range integrationCatalog {
 		status := "not_connected"
-		if it.ID == "slack" {
+		if counts[it.ID] > 0 {
 			status = "connected"
 		}
 		out = append(out, IntegrationCatalogEntry{

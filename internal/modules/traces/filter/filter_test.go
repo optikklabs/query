@@ -116,10 +116,10 @@ func TestBuildClauses_AttributeOps(t *testing.T) {
 		op   string
 		want string
 	}{
-		{"", "attributes_string[@akey_0] = @aval_0"},
-		{"neq", "attributes_string[@akey_0] != @aval_0"},
-		{"contains", "positionCaseInsensitive(attributes_string[@akey_0], @aval_0) > 0"},
-		{"regex", "match(attributes_string[@akey_0], @aval_0)"},
+		{"", "attributes[@akey_0]::String = @aval_0"},
+		{"neq", "attributes[@akey_0]::String != @aval_0"},
+		{"contains", "positionCaseInsensitive(attributes[@akey_0]::String, @aval_0) > 0"},
+		{"regex", "match(attributes[@akey_0]::String, @aval_0)"},
 	}
 	for _, c := range cases {
 		t.Run(c.op, func(t *testing.T) {

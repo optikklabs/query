@@ -2,21 +2,28 @@ package dispatch
 
 import (
 	"context"
+	"fmt"
 
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
-// Dispatcher routes alert payloads to their configured channels,
-// using Slack webhook or a fallback stub.
+// UnsupportedChannelTypeError reports a channel without a real transport.
+type UnsupportedChannelTypeError struct {
+	Type string
+}
+
+func (e UnsupportedChannelTypeError) Error() string {
+	return fmt.Sprintf("unsupported notification channel type: %s", e.Type)
+}
+
+// Dispatcher routes alert payloads to implemented transports.
 type Dispatcher struct {
 	slack *SlackWebhook
-	stub  *Stub
 }
 
 func NewDefaultDispatcher() *Dispatcher {
 	return &Dispatcher{
 		slack: NewSlackWebhook(),
-		stub:  NewStub(),
 	}
 }
 
@@ -24,5 +31,5 @@ func (d *Dispatcher) Dispatch(ctx context.Context, ch models.ChannelRow, p Paylo
 	if ch.Type == "slack" {
 		return d.slack.Send(ctx, ch, p)
 	}
-	return d.stub.Send(ctx, ch, p)
+	return UnsupportedChannelTypeError{Type: ch.Type}
 }

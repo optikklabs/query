@@ -127,6 +127,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", "")
 	v.SetDefault("server.allowed_origins", "")
 	v.SetDefault("server.debug_api_logs", false)
+	v.SetDefault("server.expensive_query_concurrency", 2)
 
 	v.SetDefault("mysql.host", "")
 	v.SetDefault("mysql.port", "")

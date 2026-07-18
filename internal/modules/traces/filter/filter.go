@@ -146,13 +146,13 @@ func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 		vName := "aval_" + idx
 		switch af.Op {
 		case "neq":
-			where += ` AND attributes_string[@` + kName + `] != @` + vName
+			where += ` AND attributes[@` + kName + `]::String != @` + vName
 		case "contains":
-			where += ` AND positionCaseInsensitive(attributes_string[@` + kName + `], @` + vName + `) > 0`
+			where += ` AND positionCaseInsensitive(attributes[@` + kName + `]::String, @` + vName + `) > 0`
 		case "regex":
-			where += ` AND match(attributes_string[@` + kName + `], @` + vName + `)`
+			where += ` AND match(attributes[@` + kName + `]::String, @` + vName + `)`
 		default:
-			where += ` AND attributes_string[@` + kName + `] = @` + vName
+			where += ` AND attributes[@` + kName + `]::String = @` + vName
 		}
 		args = append(args, clickhouse.Named(kName, af.Key), clickhouse.Named(vName, af.Value))
 	}

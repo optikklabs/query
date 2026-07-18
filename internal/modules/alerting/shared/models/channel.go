@@ -49,7 +49,7 @@ type SlackWebhookConfig struct {
 	WebhookURL string `json:"webhook_url"`
 }
 
-var ChannelTypes = []string{"slack", "pagerduty", "opsgenie", "teams", "email", "webhook", "jira"}
+var ChannelTypes = []string{"slack"}
 
 func IsValidChannelType(t string) bool {
 	for _, v := range ChannelTypes {

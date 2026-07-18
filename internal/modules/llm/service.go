@@ -68,6 +68,7 @@ func (s *Service) Apps(ctx context.Context, tenantID, startMs, endMs int64) (App
 			Cost:           a.Cost,
 			Trend:          trendByService[a.Service],
 		}
+		app.Kind = deriveKind(a)
 		app.ErrorRate = metrics.Percentage(a.ErrorSpans, a.TotalSpans)
 		if best, ok := primary[a.Service]; ok {
 			app.Vendor = best.Vendor
@@ -76,6 +77,86 @@ func (s *Service) Apps(ctx context.Context, tenantID, startMs, endMs int64) (App
 		apps[i] = app
 	}
 	return AppsResponse{Apps: apps}, nil
+}
+
+// deriveKind classifies an app by its span mix: anything driving agent spans
+// is an agent, retrieval-heavy apps are RAG, the rest are plain workflows.
+func deriveKind(a appAggRow) string {
+	switch {
+	case a.AgentSpans > 0:
+		return "agent"
+	case a.RetrievalSpans > 0:
+		return "rag"
+	default:
+		return "workflow"
+	}
+}
+
+// Overview folds the two-window aggregates, trace counts and sparkline
+// buckets into the KPI payload shared by all LLM page tabs.
+func (s *Service) Overview(ctx context.Context, tenantID, startMs, endMs int64) (OverviewResponse, error) {
+	windows, err := s.repo.OverviewWindows(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return OverviewResponse{}, err
+	}
+	counts, err := s.repo.TraceCounts(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return OverviewResponse{}, err
+	}
+	series, err := s.repo.OverviewSeries(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return OverviewResponse{}, err
+	}
+
+	var resp OverviewResponse
+	for _, w := range windows {
+		win := OverviewWindow{
+			LLMSpans:     w.LLMSpans,
+			ToolSpans:    w.ToolSpans,
+			TotalSpans:   w.TotalSpans,
+			InputTokens:  w.InputTokens,
+			OutputTokens: w.OutputTokens,
+			ErrorRate:    metrics.Percentage(w.ErrorSpans, w.TotalSpans),
+			P50Ms:        qsAt(w.QS, 0),
+			P95Ms:        qsAt(w.QS, 1),
+			P99Ms:        qsAt(w.QS, 2),
+			Cost:         w.Cost,
+		}
+		if w.IsCurrent == 1 {
+			resp.Current = win
+		} else {
+			resp.Previous = win
+		}
+	}
+	for _, c := range counts {
+		if c.IsCurrent == 1 {
+			resp.Current.Traces = c.Traces
+		} else {
+			resp.Previous.Traces = c.Traces
+		}
+	}
+	resp.Series = transposeOverviewSeries(series)
+	return resp, nil
+}
+
+func transposeOverviewSeries(rows []overviewSeriesRow) OverviewSeries {
+	out := OverviewSeries{
+		Timestamps: make([]int64, len(rows)),
+		LLMSpans:   make([]uint64, len(rows)),
+		ToolSpans:  make([]uint64, len(rows)),
+		ErrorRate:  make([]float64, len(rows)),
+		P95Ms:      make([]float64, len(rows)),
+		Cost:       make([]float64, len(rows)),
+	}
+	for i, r := range rows {
+		out.Timestamps[i] = r.BucketAt.UnixMilli()
+		out.LLMSpans[i] = r.LLMSpans
+		out.ToolSpans[i] = r.ToolSpans
+		out.ErrorRate[i] = metrics.Percentage(r.ErrorSpans, r.TotalSpans)
+		out.P95Ms[i] = qsAt(r.QS, 1)
+		out.Cost[i] = r.Cost
+	}
+	return out
 }
 
 func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64, metric string) (TimeseriesResponse, error) {
@@ -171,19 +252,20 @@ func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQue
 	results := make([]LLMTrace, len(rows))
 	for i, r := range rows {
 		results[i] = LLMTrace{
-			TraceID:      r.TraceID,
-			StartMs:      r.StartTime.UnixMilli(),
-			DurationMs:   float64(r.DurationNano) / 1e6,
-			Service:      r.Service,
-			Operation:    r.Operation,
-			Status:       r.Status,
-			HasError:     r.HasError,
-			Vendor:       r.Vendor,
-			Model:        r.Model,
-			LLMCalls:     r.LLMCalls,
-			InputTokens:  r.InputTokens,
-			OutputTokens: r.OutputTokens,
-			Cost:         r.Cost,
+			TraceID:       r.TraceID,
+			StartMs:       r.StartTime.UnixMilli(),
+			DurationMs:    float64(r.DurationNano) / 1e6,
+			Service:       r.Service,
+			Operation:     r.Operation,
+			Status:        r.Status,
+			HasError:      r.HasError,
+			Vendor:        r.Vendor,
+			Model:         r.Model,
+			LLMCalls:      r.LLMCalls,
+			PromptPreview: r.PromptPreview,
+			InputTokens:   r.InputTokens,
+			OutputTokens:  r.OutputTokens,
+			Cost:          r.Cost,
 		}
 	}
 	info := PageInfo{HasMore: hasMore, Limit: req.Limit}
@@ -242,6 +324,19 @@ func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID strin
 			resp.DurationMs = float64(r.DurationNano) / 1e6
 			resp.Prompt = r.Prompt
 			resp.Output = r.Completion
+		}
+	}
+	// SDKs often attach content to the chat span, not the root: fall back
+	// to the first prompt and the last completion in trace order.
+	for _, r := range rows {
+		if resp.Prompt != "" {
+			break
+		}
+		resp.Prompt = r.Prompt
+	}
+	if resp.Output == "" {
+		for i := len(rows) - 1; i >= 0 && resp.Output == ""; i-- {
+			resp.Output = rows[i].Completion
 		}
 	}
 	return resp, nil

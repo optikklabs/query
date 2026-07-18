@@ -55,6 +55,7 @@ func (a *App) setupHealthRoutes(r chi.Router) {
 func (a *App) setupAPIRoutes(r chi.Router) {
 	r.Route(httputil.APIV1Base, func(r chi.Router) {
 		r.Use(middleware.TenantMiddleware(a.Infra.Tokens))
+		r.Use(middleware.ExpensiveQueryLimit(a.Config.ExpensiveQueryConcurrency()))
 		for _, mod := range a.Modules {
 			mod.RegisterRoutes(r)
 		}

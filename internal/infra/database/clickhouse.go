@@ -47,8 +47,8 @@ func OpenClickHouseConn(dsn string, maxOpenConns, maxIdleConns int) (clickhouse.
 // Keeps dashboard queries prioritized over background explorer scans.
 var dashboardSettings = clickhouse.Settings{
 	"max_execution_time":              3,
-	"max_rows_to_read":                20_000_000,
-	"max_memory_usage":                1 * 1024 * 1024 * 1024,
+	"max_rows_to_read":                10_000_000,
+	"max_memory_usage":                512 * 1024 * 1024,
 	"max_result_rows":                 10_000,
 	"result_overflow_mode":            "throw",
 	"read_overflow_mode":              "throw",
@@ -57,11 +57,28 @@ var dashboardSettings = clickhouse.Settings{
 	"query_cache_ttl":                 60,
 	"query_cache_share_between_users": 0,
 	"use_query_condition_cache":       1,
+	"max_threads":                     2,
 	"priority":                        1,
 }
 
 var overviewSettings = clickhouse.Settings{
 	"max_execution_time":              15,
+	"max_rows_to_read":                30_000_000,
+	"max_memory_usage":                1 * 1024 * 1024 * 1024,
+	"max_result_rows":                 100_000,
+	"result_overflow_mode":            "throw",
+	"read_overflow_mode":              "throw",
+	"optimize_read_in_order":          1,
+	"use_query_cache":                 1,
+	"query_cache_ttl":                 60,
+	"query_cache_share_between_users": 0,
+	"use_query_condition_cache":       1,
+	"max_threads":                     2,
+	"priority":                        5,
+}
+
+var explorerSettings = clickhouse.Settings{
+	"max_execution_time":              60,
 	"max_rows_to_read":                100_000_000,
 	"max_memory_usage":                2 * 1024 * 1024 * 1024,
 	"max_result_rows":                 100_000,
@@ -72,21 +89,7 @@ var overviewSettings = clickhouse.Settings{
 	"query_cache_ttl":                 60,
 	"query_cache_share_between_users": 0,
 	"use_query_condition_cache":       1,
-	"priority":                        5,
-}
-
-var explorerSettings = clickhouse.Settings{
-	"max_execution_time":              60,
-	"max_rows_to_read":                1_000_000_000,
-	"max_memory_usage":                8 * 1024 * 1024 * 1024,
-	"max_result_rows":                 1_000_000,
-	"result_overflow_mode":            "throw",
-	"read_overflow_mode":              "throw",
-	"optimize_read_in_order":          1,
-	"use_query_cache":                 1,
-	"query_cache_ttl":                 60,
-	"query_cache_share_between_users": 0,
-	"use_query_condition_cache":       1,
+	"max_threads":                     2,
 	"priority":                        10,
 }
 

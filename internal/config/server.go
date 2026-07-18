@@ -36,9 +36,17 @@ func (c AlertingKafkaConfig) MetricsTopic() string {
 }
 
 type ServerConfig struct {
-	Port           string `yaml:"port"`
-	AllowedOrigins string `yaml:"allowed_origins"`
-	DebugAPILogs   bool   `yaml:"debug_api_logs"`
+	Port                      string `yaml:"port"`
+	AllowedOrigins            string `yaml:"allowed_origins"`
+	DebugAPILogs              bool   `yaml:"debug_api_logs"`
+	ExpensiveQueryConcurrency int    `yaml:"expensive_query_concurrency"`
+}
+
+func (c Config) ExpensiveQueryConcurrency() int {
+	if n := c.Server.ExpensiveQueryConcurrency; n > 0 {
+		return n
+	}
+	return 2
 }
 
 type AuthConfig struct {
