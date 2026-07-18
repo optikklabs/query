@@ -18,7 +18,15 @@ func NewService(repo *Repository) *Service {
 
 // GetServiceMap builds the per-trace service map in the shared topology shape.
 func (s *Service) GetServiceMap(ctx context.Context, tenantID int64, traceID string) (topology.TopologyResponse, error) {
-	rows, err := s.repo.GetServiceMapSpans(ctx, tenantID, traceID)
+	w, ok, err := s.repo.ResolveWindow(ctx, tenantID, traceID)
+	if err != nil {
+		slog.ErrorContext(ctx, "servicemap: ResolveWindow failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
+		return topology.TopologyResponse{}, err
+	}
+	if !ok {
+		return topology.TopologyResponse{}, nil
+	}
+	rows, err := s.repo.GetServiceMapSpans(ctx, tenantID, traceID, w)
 	if err != nil {
 		slog.ErrorContext(ctx, "servicemap: GetServiceMap failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return topology.TopologyResponse{}, err
@@ -27,7 +35,15 @@ func (s *Service) GetServiceMap(ctx context.Context, tenantID int64, traceID str
 }
 
 func (s *Service) GetTraceErrors(ctx context.Context, tenantID int64, traceID string) ([]TraceErrorGroup, error) {
-	rows, err := s.repo.GetTraceErrors(ctx, tenantID, traceID)
+	w, ok, err := s.repo.ResolveWindow(ctx, tenantID, traceID)
+	if err != nil {
+		slog.ErrorContext(ctx, "servicemap: ResolveWindow failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	rows, err := s.repo.GetTraceErrors(ctx, tenantID, traceID, w)
 	if err != nil {
 		slog.ErrorContext(ctx, "servicemap: GetTraceErrors failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err

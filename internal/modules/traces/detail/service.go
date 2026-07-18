@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/optikklabs/query/internal/shared/tracewindow"
 )
 
 type Service struct {
@@ -19,8 +21,23 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
+// resolveWindow returns the trace's scan window. A trace absent from the index
+// has no spans, so callers return an empty result rather than scanning.
+func (s *Service) resolveWindow(ctx context.Context, tenantID int64, traceID string) (tracewindow.Window, bool, error) {
+	w, ok, err := s.repo.ResolveWindow(ctx, tenantID, traceID)
+	if err != nil {
+		slog.ErrorContext(ctx, "detail: ResolveWindow failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
+		return tracewindow.Window{}, false, err
+	}
+	return w, ok, nil
+}
+
 func (s *Service) GetTraceSummary(ctx context.Context, tenantID int64, traceID string) (*TraceSummary, error) {
-	row, err := s.repo.GetTraceSummary(ctx, tenantID, traceID)
+	w, ok, err := s.resolveWindow(ctx, tenantID, traceID)
+	if err != nil || !ok {
+		return nil, err
+	}
+	row, err := s.repo.GetTraceSummary(ctx, tenantID, traceID, w)
 	if err != nil {
 		slog.ErrorContext(ctx, "detail: GetTraceSummary failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
@@ -29,7 +46,11 @@ func (s *Service) GetTraceSummary(ctx context.Context, tenantID int64, traceID s
 }
 
 func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID string) ([]SpanEvent, error) {
-	combined, err := s.repo.GetSpanEvents(ctx, tenantID, traceID)
+	w, ok, err := s.resolveWindow(ctx, tenantID, traceID)
+	if err != nil || !ok {
+		return nil, err
+	}
+	combined, err := s.repo.GetSpanEvents(ctx, tenantID, traceID, w)
 	if err != nil {
 		slog.ErrorContext(ctx, "detail: GetSpanEvents failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
@@ -94,7 +115,11 @@ func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID str
 }
 
 func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string) (*SpanAttributes, error) {
-	row, err := s.repo.GetSpanAttributes(ctx, tenantID, traceID, spanID)
+	w, ok, err := s.resolveWindow(ctx, tenantID, traceID)
+	if err != nil || !ok {
+		return nil, err
+	}
+	row, err := s.repo.GetSpanAttributes(ctx, tenantID, traceID, spanID, w)
 	if err != nil {
 		slog.ErrorContext(ctx, "detail: GetSpanAttributes failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID), slog.String("span_id", spanID))
 		return nil, err
@@ -133,7 +158,11 @@ func (s *Service) GetRelatedTraces(ctx context.Context, tenantID int64, serviceN
 }
 
 func (s *Service) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string) ([]SpanListItem, error) {
-	rows, err := s.repo.ListSpansByTrace(ctx, tenantID, traceID)
+	w, ok, err := s.resolveWindow(ctx, tenantID, traceID)
+	if err != nil || !ok {
+		return nil, err
+	}
+	rows, err := s.repo.ListSpansByTrace(ctx, tenantID, traceID, w)
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,9 @@ type TraceSummary struct {
 	ErrorCount     uint32   `json:"error_count"`
 	ServiceSet     []string `json:"service_set,omitempty"`
 	Truncated      bool     `json:"truncated,omitempty"`
+	// RootMissing marks a trace whose root span was never ingested. The summary
+	// then describes the earliest span rather than the true entry point.
+	RootMissing bool `json:"root_missing,omitempty"`
 }
 
 type SpanEvent struct {

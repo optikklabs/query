@@ -8,6 +8,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
+	"github.com/optikklabs/query/internal/shared/tracewindow"
 )
 
 const rollupTable = "optikk.llm_stats_1m"
@@ -278,16 +279,14 @@ func buildTraceFilters(tenantID int64, req TracesQueryRequest) (string, []any) {
 	return where, args
 }
 
-// TraceSpans fetches every span of one trace, located via trace_index to
-// keep the raw-spans scan bounded.
-func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID string) ([]traceSpanRow, error) {
+// ResolveWindow locates the trace, bounding the raw-spans scan in TraceSpans.
+func (r *Repository) ResolveWindow(ctx context.Context, tenantID int64, traceID string) (tracewindow.Window, bool, error) {
+	return tracewindow.Resolve(ctx, r.db, tenantID, traceID)
+}
+
+// TraceSpans fetches every span of one trace within its resolved window.
+func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) ([]traceSpanRow, error) {
 	query := `
-		WITH trace_loc AS (
-		    SELECT timestamp
-		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
-		    LIMIT 1
-		)
 		SELECT span_id, parent_span_id, timestamp, duration_nano, name, service,
 		       gen_ai_system, gen_ai_operation, gen_ai_request_model,
 		       gen_ai_input_tokens, gen_ai_output_tokens, has_error,
@@ -295,13 +294,11 @@ func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID str
 		       gen_ai_completion AS completion
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
-		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
+		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC`
 	var rows []traceSpanRow
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.TraceSpans", &rows, query,
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("traceID", traceID),
+		tracewindow.Args(tenantID, traceID, w)...,
 	)
 }

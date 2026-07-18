@@ -8,6 +8,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/logs/filter"
+	"github.com/optikklabs/query/internal/shared/tracewindow"
 )
 
 type Repository struct {
@@ -34,6 +35,11 @@ type TrendRow struct {
 }
 
 func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow, error) {
+	start, end, err := tracewindow.NarrowLogRange(ctx, r.db, f.TenantID, f.TraceID, f.StartMs, f.EndMs)
+	if err != nil {
+		return SummaryRow{}, err
+	}
+	f.StartMs, f.EndMs = start, end
 	resourceWhere, where, args := filter.BuildClauses(f)
 	cte, prewhereFP := filter.BuildFingerprintCTE(resourceWhere)
 
@@ -52,6 +58,11 @@ func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow,
 }
 
 func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, error) {
+	start, end, err := tracewindow.NarrowLogRange(ctx, r.db, f.TenantID, f.TraceID, f.StartMs, f.EndMs)
+	if err != nil {
+		return nil, err
+	}
+	f.StartMs, f.EndMs = start, end
 	resourceWhere, where, args := filter.BuildClauses(f)
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	cte, prewhereFP := filter.BuildFingerprintCTE(resourceWhere)

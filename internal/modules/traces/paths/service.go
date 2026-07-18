@@ -15,7 +15,15 @@ func NewService(repo *Repository) *Service {
 }
 
 func (s *Service) GetCriticalPath(ctx context.Context, tenantID int64, traceID string) ([]CriticalPathSpan, error) {
-	rows, err := s.repo.GetCriticalPath(ctx, tenantID, traceID)
+	w, ok, err := s.repo.ResolveWindow(ctx, tenantID, traceID)
+	if err != nil {
+		slog.ErrorContext(ctx, "paths: ResolveWindow failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	rows, err := s.repo.GetCriticalPath(ctx, tenantID, traceID, w)
 	if err != nil {
 		slog.ErrorContext(ctx, "paths: GetCriticalPath failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
@@ -24,7 +32,15 @@ func (s *Service) GetCriticalPath(ctx context.Context, tenantID int64, traceID s
 }
 
 func (s *Service) GetErrorPath(ctx context.Context, tenantID int64, traceID string) ([]ErrorPathSpan, error) {
-	rows, err := s.repo.GetErrorPath(ctx, tenantID, traceID)
+	w, ok, err := s.repo.ResolveWindow(ctx, tenantID, traceID)
+	if err != nil {
+		slog.ErrorContext(ctx, "paths: ResolveWindow failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
+		return nil, err
+	}
+	if !ok {
+		return []ErrorPathSpan{}, nil
+	}
+	rows, err := s.repo.GetErrorPath(ctx, tenantID, traceID, w)
 	if err != nil {
 		slog.ErrorContext(ctx, "paths: GetErrorPath failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err

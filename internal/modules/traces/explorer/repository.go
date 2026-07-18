@@ -9,6 +9,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/traces/filter"
+	"github.com/optikklabs/query/internal/shared/tracewindow"
 )
 
 type Repository struct {
@@ -36,7 +37,22 @@ const traceIndexColumns = `trace_id,
 		false                                                      AS truncated,
 		timestamp                                                  AS last_seen`
 
+// narrowToTrace tightens the request range to the trace's own lifetime when the
+// caller filtered by trace_id. ok is false when that trace has no spans, so the
+// caller returns an empty result instead of scanning the full UI range.
+func (r *Repository) narrowToTrace(ctx context.Context, f *filter.Filters) (bool, error) {
+	start, end, ok, err := tracewindow.NarrowSpanRange(ctx, r.db, f.TenantID, f.TraceID, f.StartMs, f.EndMs)
+	if err != nil || !ok {
+		return false, err
+	}
+	f.StartMs, f.EndMs = start, end
+	return true, nil
+}
+
 func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, bool, error) {
+	if ok, err := r.narrowToTrace(ctx, &req.Filters); err != nil || !ok {
+		return nil, false, err
+	}
 	resourceWhere, where, args := filter.BuildClauses(req.Filters)
 	cur, _ := DecodeCursor(req.Cursor)
 	if !cur.IsZero() {
@@ -85,6 +101,9 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 }
 
 func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets, error) {
+	if ok, err := r.narrowToTrace(ctx, &req.Filters); err != nil || !ok {
+		return Facets{}, err
+	}
 	resourceWhere, where, args := filter.BuildClauses(req.Filters)
 
 	cte, prewhereFP := "", ""
@@ -155,6 +174,9 @@ func pivotFacets(rows []facetDimRow) Facets {
 }
 
 func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBucket, error) {
+	if ok, err := r.narrowToTrace(ctx, &req.Filters); err != nil || !ok {
+		return nil, err
+	}
 	resourceWhere, where, args := filter.BuildClauses(req.Filters)
 	grainSQL := timebucket.DisplayGrainSQL(req.EndTime - req.StartTime)
 

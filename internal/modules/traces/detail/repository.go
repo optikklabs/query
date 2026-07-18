@@ -6,6 +6,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/shared/tracewindow"
 )
 
 type Repository struct {
@@ -16,37 +17,28 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID string) ([]spanEventCombinedRow, error) {
+// ResolveWindow locates the trace, bounding every span read below.
+func (r *Repository) ResolveWindow(ctx context.Context, tenantID int64, traceID string) (tracewindow.Window, bool, error) {
+	return tracewindow.Resolve(ctx, r.db, tenantID, traceID)
+}
+
+func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) ([]spanEventCombinedRow, error) {
 	const query = `
-		WITH trace_loc AS (
-		    SELECT timestamp
-		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
-		    LIMIT 1
-		)
 		SELECT span_id, trace_id, timestamp, events,
 		       exception_type, exception_message, exception_stacktrace
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
-		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
+		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
 		WHERE NOT empty(events) OR NOT empty(exception_type)`
 	var rows []spanEventCombinedRow
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanEvents", &rows, query,
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("traceID", traceID),
+		tracewindow.Args(tenantID, traceID, w)...,
 	)
 }
 
-func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string) (*spanAttributeRow, error) {
+func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, w tracewindow.Window) (*spanAttributeRow, error) {
 	const query = `
-		WITH trace_loc AS (
-		    SELECT timestamp
-		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
-		    LIMIT 1
-		)
 		SELECT span_id, trace_id, name AS operation_name, service,
 		       toJSONString(attributes)                AS attributes_json,
 		       exception_type,
@@ -58,17 +50,13 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, trac
 		       links AS links
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
-		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
+		     AND timestamp BETWEEN @start AND @end
 		     AND span_id  = @spanID
 		     AND trace_id = @traceID
 		LIMIT 1`
 	var rows []spanAttributeRow
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &rows, query,
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("traceID", traceID),
-		clickhouse.Named("spanID", spanID),
-	); err != nil {
+	args := append(tracewindow.Args(tenantID, traceID, w), clickhouse.Named("spanID", spanID))
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &rows, query, args...); err != nil {
 		return nil, err
 	}
 	if len(rows) == 0 {
@@ -116,55 +104,48 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetRelatedTraces", &rows, query, args...)
 }
 
-func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string) (*TraceSummary, error) {
+// GetTraceSummary aggregates the whole trace rather than reading its root span.
+// A trace whose root was sampled out or dropped still has a summary; the
+// earliest span stands in for the root and root_missing marks it as partial.
+func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) (*TraceSummary, error) {
 	const query = `
-		WITH trace_loc AS (
-		    SELECT timestamp
-		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
-		    LIMIT 1
-		)
 		SELECT trace_id,
-		       timestamp                              AS start_time,
-		       timestamp                              AS end_time,
-		       duration_nano                          AS duration_ns,
-		       service                                AS root_service,
-		       name                                   AS root_operation,
-		       status_code_string                     AS root_status,
-		       http_method                            AS root_http_method,
-		       response_status_code                   AS root_http_status,
-		       1                                      AS span_count,
-		       has_error,
-		       (CASE WHEN has_error THEN 1 ELSE 0 END) AS error_count,
-		       [service]                              AS service_set,
-		       false                                  AS truncated
+		       min(timestamp)                                            AS start_time,
+		       max(timestamp + toIntervalNanosecond(duration_nano))      AS end_time,
+		       argMin(service,              timestamp)                   AS root_service,
+		       argMin(name,                 timestamp)                   AS root_operation,
+		       argMin(status_code_string,   timestamp)                   AS root_status,
+		       argMin(http_method,          timestamp)                   AS root_http_method,
+		       argMin(response_status_code, timestamp)                   AS root_http_status,
+		       count()                                                   AS span_count,
+		       countIf(has_error)                                        AS error_count,
+		       -- aliased away from the has_error column, which cannot be
+		       -- shadowed by an aggregate over itself.
+		       error_count > 0                                           AS trace_has_error,
+		       groupUniqArray(service)                                   AS service_set,
+		       countIf(is_root = 1) = 0                                  AS root_missing
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
-		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
+		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
-		     AND is_root  = 1
-		ORDER BY timestamp DESC
-		LIMIT 1`
+		GROUP BY trace_id`
 	var rows []struct {
 		TraceID        string    `ch:"trace_id"`
 		StartTime      time.Time `ch:"start_time"`
 		EndTime        time.Time `ch:"end_time"`
-		DurationNs     uint64    `ch:"duration_ns"`
 		RootService    string    `ch:"root_service"`
 		RootOperation  string    `ch:"root_operation"`
 		RootStatus     string    `ch:"root_status"`
 		RootHTTPMethod string    `ch:"root_http_method"`
 		RootHTTPStatus string    `ch:"root_http_status"`
-		SpanCount      uint8     `ch:"span_count"`
-		HasError       bool      `ch:"has_error"`
-		ErrorCount     uint8     `ch:"error_count"`
+		SpanCount      uint64    `ch:"span_count"`
+		ErrorCount     uint64    `ch:"error_count"`
+		HasError       bool      `ch:"trace_has_error"`
 		ServiceSet     []string  `ch:"service_set"`
-		Truncated      bool      `ch:"truncated"`
+		RootMissing    bool      `ch:"root_missing"`
 	}
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &rows, query,
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("traceID", traceID),
+		tracewindow.Args(tenantID, traceID, w)...,
 	); err != nil {
 		return nil, err
 	}
@@ -176,7 +157,7 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 		TraceID:        res.TraceID,
 		StartMs:        uint64(res.StartTime.UnixMilli()),
 		EndMs:          uint64(res.EndTime.UnixMilli()),
-		DurationMs:     float64(res.DurationNs) / 1_000_000,
+		DurationMs:     float64(res.EndTime.Sub(res.StartTime).Nanoseconds()) / 1_000_000,
 		RootService:    res.RootService,
 		RootOperation:  res.RootOperation,
 		RootStatus:     res.RootStatus,
@@ -186,18 +167,12 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 		HasError:       res.HasError,
 		ErrorCount:     uint32(res.ErrorCount),
 		ServiceSet:     res.ServiceSet,
-		Truncated:      res.Truncated,
+		RootMissing:    res.RootMissing,
 	}, nil
 }
 
-func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string) ([]SpanListItem, error) {
+func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, w tracewindow.Window) ([]SpanListItem, error) {
 	const query = `
-		WITH trace_loc AS (
-		    SELECT timestamp
-		    FROM optikk.trace_index
-		    PREWHERE trace_id = @traceID AND tenant_id = @tenantID
-		    LIMIT 1
-		)
 		SELECT span_id,
 		       parent_span_id,
 		       trace_id,
@@ -210,14 +185,12 @@ func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, trace
 		       timestamp
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN (SELECT timestamp FROM trace_loc) - INTERVAL 5 MINUTE
-		                       AND (SELECT timestamp FROM trace_loc) + INTERVAL 24 HOUR
+		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC
 		LIMIT 5000`
 	var rows []SpanListItem
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.ListSpansByTrace", &rows, query,
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("traceID", traceID),
+		tracewindow.Args(tenantID, traceID, w)...,
 	)
 }
