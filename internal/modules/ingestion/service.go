@@ -8,9 +8,8 @@ import (
 )
 
 const (
-	topServiceSeries   = 5  // distinct bands in the "by service" chart; rest fold into "Other"
-	topServiceRows     = 12 // rows returned for the services table
-	projectionTrailing = 7  // days of trailing data the month-end projection uses
+	topServiceSeries = 5  // distinct bands in the "by service" chart; rest fold into "Other"
+	topServiceRows   = 12 // rows returned for the services table
 )
 
 type Service struct {
@@ -76,21 +75,6 @@ func pct(part, whole uint64) float64 {
 	return float64(part) / float64(whole) * 100
 }
 
-// projectMonthEnd extrapolates the month total from the mean of the last
-// projectionTrailing days — a recent-pace estimate, far less noisy than a
-// whole-month average early in the billing period.
-func projectMonthEnd(daily []uint64, totalDays int) uint64 {
-	if len(daily) == 0 {
-		return 0
-	}
-	w := projectionTrailing
-	if w > len(daily) {
-		w = len(daily)
-	}
-	rate := float64(sum(daily[len(daily)-w:])) / float64(w)
-	return uint64(rate * float64(totalDays))
-}
-
 // Summary assembles the KPI strip, by-type breakdown and metrics-pillar facts.
 func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (SummaryResponse, error) {
 	logs, err := s.repo.DailyLogs(ctx, tenantID, startMs, endMs)
@@ -126,15 +110,13 @@ func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (
 	records := logsTotal + spansTotal + metricsTotal
 	bytesTotal := logsBytes + spansBytes + metricsBytes
 
-	// Daily grand totals drive the peak day and the trailing projection.
-	dailyRecords := make([]uint64, n)
-	dailyBytes := make([]uint64, n)
+	// Daily grand totals drive the peak day.
 	peak := PeakDay{}
 	for i, d := range dates {
-		dailyRecords[i] = logsC[i] + spansC[i] + metricsC[i]
-		dailyBytes[i] = logsB[i] + spansB[i] + metricsB[i]
-		if dailyRecords[i] >= peak.Records {
-			peak = PeakDay{Date: d, Records: dailyRecords[i], Bytes: dailyBytes[i]}
+		dayRecords := logsC[i] + spansC[i] + metricsC[i]
+		dayBytes := logsB[i] + spansB[i] + metricsB[i]
+		if dayRecords >= peak.Records {
+			peak = PeakDay{Date: d, Records: dayRecords, Bytes: dayBytes}
 		}
 	}
 
@@ -146,9 +128,6 @@ func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (
 		dailyAvg = records / uint64(daysElapsed)
 		dailyAvgBytes = bytesTotal / uint64(daysElapsed)
 	}
-	projRecords := projectMonthEnd(dailyRecords, totalDays)
-	projBytes := projectMonthEnd(dailyBytes, totalDays)
-
 	recCommit := s.cfg.MonthlyRecordCommitment
 	byteCommit := s.cfg.MonthlyByteCommitment
 	return SummaryResponse{
@@ -163,16 +142,10 @@ func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (
 		Peak:                   peak,
 		DaysElapsed:            daysElapsed,
 		DaysInMonth:            totalDays,
-		ProjectedRecords:       projRecords,
-		ProjectedBytes:         projBytes,
 		CommitmentRecords:      recCommit,
 		CommitmentBytes:        byteCommit,
 		CommitmentUsedPct:      pct(records, recCommit),
 		CommitmentUsedBytesPct: pct(bytesTotal, byteCommit),
-		ProjectedPct:           pct(projRecords, recCommit),
-		ProjectedBytesPct:      pct(projBytes, byteCommit),
-		OnPace:                 projRecords <= recCommit,
-		OnPaceBytes:            projBytes <= byteCommit,
 		ByType: []TypeShare{
 			{Type: "logs", Label: "Logs", Records: logsTotal, Pct: pct(logsTotal, records), Bytes: logsBytes, BytesPct: pct(logsBytes, bytesTotal)},
 			{Type: "spans", Label: "Spans (APM)", Records: spansTotal, Pct: pct(spansTotal, records), Bytes: spansBytes, BytesPct: pct(spansBytes, bytesTotal)},

@@ -20,8 +20,8 @@ func DefaultConfig() Config {
 		Enabled:                 true,
 		MonthlyRecordCommitment: 5_000_000_000,
 		MonthlyByteCommitment:   50 * 1024 * 1024 * 1024 * 1024, // 50 TiB/month
-		PricePerGBLogsTraces:    0.10,  // USD per GB, logs + traces
-		PricePerDPMMetrics:      0.008, // USD per DPM, metrics
+		PricePerGBLogsTraces:    0.10,                           // USD per GB, logs + traces
+		PricePerDPMMetrics:      0.008,                          // USD per DPM, metrics
 		Currency:                "USD",
 	}
 }
@@ -80,16 +80,10 @@ type SummaryResponse struct {
 	Peak                   PeakDay      `json:"peak"`
 	DaysElapsed            int          `json:"daysElapsed"`
 	DaysInMonth            int          `json:"daysInMonth"`
-	ProjectedRecords       uint64       `json:"projectedRecords"`
-	ProjectedBytes         uint64       `json:"projectedBytes"`
 	CommitmentRecords      uint64       `json:"commitmentRecords"`
 	CommitmentBytes        uint64       `json:"commitmentBytes"`
 	CommitmentUsedPct      float64      `json:"commitmentUsedPct"`
 	CommitmentUsedBytesPct float64      `json:"commitmentUsedBytesPct"`
-	ProjectedPct           float64      `json:"projectedPct"`
-	ProjectedBytesPct      float64      `json:"projectedBytesPct"`
-	OnPace                 bool         `json:"onPace"`
-	OnPaceBytes            bool         `json:"onPaceBytes"`
 	ByType                 []TypeShare  `json:"byType"`
 }
 
@@ -102,7 +96,7 @@ type TimeseriesSeries struct {
 	ByteData []uint64 `json:"byteData"`
 }
 
-// TimeseriesResponse is the daily stacked series; all dates are actual (no projection).
+// TimeseriesResponse is the daily stacked series.
 type TimeseriesResponse struct {
 	GroupBy string             `json:"groupBy"`
 	Dates   []string           `json:"dates"`

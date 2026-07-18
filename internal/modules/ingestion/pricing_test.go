@@ -30,9 +30,6 @@ func TestEstimateCostVolumeAndDPM(t *testing.T) {
 	if !approx(logs.Cost, 1.0) { // 10 GB * 0.10
 		t.Errorf("logs cost: want 1.0, got %v", logs.Cost)
 	}
-	if !approx(logs.ProjectedCost, 2.0) { // 15->30 days doubles
-		t.Errorf("logs projected: want 2.0, got %v", logs.ProjectedCost)
-	}
 	if !approx(traces.Cost, 0.5) {
 		t.Errorf("traces cost: want 0.5, got %v", traces.Cost)
 	}
@@ -42,21 +39,17 @@ func TestEstimateCostVolumeAndDPM(t *testing.T) {
 	if !approx(metrics.Cost, 48.0) { // 6000 DPM * 0.008
 		t.Errorf("metrics cost: want 48.0, got %v", metrics.Cost)
 	}
-	// DPM is a rate: current == projected.
-	if !approx(metrics.Cost, metrics.ProjectedCost) {
-		t.Errorf("metrics projection should be flat: %v vs %v", metrics.Cost, metrics.ProjectedCost)
-	}
 	if !approx(got.CurrentCost, 1.0+0.5+48.0) {
 		t.Errorf("current total: want 49.5, got %v", got.CurrentCost)
 	}
-	if !approx(got.ProjectedMonthlyCost, 2.0+1.0+48.0) {
-		t.Errorf("projected total: want 51.0, got %v", got.ProjectedMonthlyCost)
+	if got.DaysElapsed != 15 || got.DaysInMonth != 30 {
+		t.Errorf("billing period: want day 15/30, got %d/%d", got.DaysElapsed, got.DaysInMonth)
 	}
 }
 
 func TestEstimateCostZeroWindowAndDaysAreSafe(t *testing.T) {
 	got := estimateCost(usageQuantities{metricDPs: 100}, testRates)
-	if got.CurrentCost != 0 || got.ProjectedMonthlyCost != 0 {
+	if got.CurrentCost != 0 {
 		t.Errorf("zero window/days must not divide by zero: %+v", got)
 	}
 }

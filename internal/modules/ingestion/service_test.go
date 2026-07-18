@@ -2,27 +2,6 @@ package ingestion
 
 import "testing"
 
-func TestProjectMonthEnd(t *testing.T) {
-	tests := []struct {
-		name      string
-		daily     []uint64
-		totalDays int
-		want      uint64
-	}{
-		{"empty", nil, 30, 0},
-		{"flat week extrapolates to month", []uint64{10, 10, 10, 10, 10, 10, 10}, 30, 300},
-		{"uses only trailing 7 days", []uint64{999, 999, 10, 10, 10, 10, 10, 10, 10}, 30, 300},
-		{"short history averages what exists", []uint64{5, 10, 15}, 30, 300},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := projectMonthEnd(tt.daily, tt.totalDays); got != tt.want {
-				t.Errorf("projectMonthEnd(%v, %d) = %d, want %d", tt.daily, tt.totalDays, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestAggregateServices(t *testing.T) {
 	logs := []svcCountRow{{Service: "checkout", Env: "prod", Count: 100, Bytes: 1000}}
 	spans := []svcCountRow{{Service: "checkout", Env: "prod", Count: 40, Bytes: 400}}
