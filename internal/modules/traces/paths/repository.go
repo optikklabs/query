@@ -33,9 +33,10 @@ func (r *Repository) GetCriticalPath(ctx context.Context, tenantID int64, traceI
 		LIMIT 5000`
 	var rows []criticalPathRow
 	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "paths.GetCriticalPath", &rows, query,
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "paths.GetCriticalPath", &rows, query,
 		args...,
 	)
+	return rows, err
 }
 
 func (r *Repository) GetErrorPath(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]errorPathRow, error) {
@@ -57,7 +58,8 @@ func (r *Repository) GetErrorPath(ctx context.Context, tenantID int64, traceID s
 		LIMIT 1000`
 	var rows []errorPathRow
 	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "paths.GetErrorPath", &rows, query,
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "paths.GetErrorPath", &rows, query,
 		args...,
 	)
+	return rows, err
 }

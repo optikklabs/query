@@ -28,9 +28,10 @@ func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID 
 		WHERE NOT empty(events) OR NOT empty(exception_type)`
 	var rows []spanEventCombinedRow
 	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanEvents", &rows, query,
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanEvents", &rows, query,
 		args...,
 	)
+	return rows, err
 }
 
 func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startTimeMs, endTimeMs int64) (*spanAttributeRow, error) {
@@ -100,7 +101,8 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 		clickhouse.Named("limit", limit),
 	}
 	var rows []RelatedTrace
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetRelatedTraces", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetRelatedTraces", &rows, query, args...)
+	return rows, err
 }
 
 // GetTraceSummary aggregates the whole trace rather than reading its root span.
@@ -191,7 +193,8 @@ func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, trace
 		LIMIT 5000`
 	var rows []SpanListItem
 	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.ListSpansByTrace", &rows, query,
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.ListSpansByTrace", &rows, query,
 		args...,
 	)
+	return rows, err
 }

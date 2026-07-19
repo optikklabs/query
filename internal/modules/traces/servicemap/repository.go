@@ -31,9 +31,10 @@ func (r *Repository) GetServiceMapSpans(ctx context.Context, tenantID int64, tra
 		LIMIT 10000`
 	var rows []serviceMapSpanRow
 	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetServiceMapSpans", &rows, query,
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetServiceMapSpans", &rows, query,
 		args...,
 	)
+	return rows, err
 }
 
 func (r *Repository) GetTraceErrors(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]traceErrorRow, error) {
@@ -55,7 +56,8 @@ func (r *Repository) GetTraceErrors(ctx context.Context, tenantID int64, traceID
 		LIMIT 1000`
 	var rows []traceErrorRow
 	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetTraceErrors", &rows, query,
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetTraceErrors", &rows, query,
 		args...,
 	)
+	return rows, err
 }
