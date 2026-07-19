@@ -9,6 +9,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
+	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
 type Repository struct {
@@ -27,7 +28,19 @@ const prewhere = `
 	    WHERE timestamp BETWEEN @start AND @end`
 
 func hashArgs(tenantID, startMs, endMs int64, hash string) []any {
-	return append(filter.SpanArgs(tenantID, startMs, endMs), clickhouse.Named("hash", hash))
+	return append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("hash", hash))
+}
+
+const (
+	defaultExecutionsLimit = 50
+	maxExecutionsLimit     = 200
+)
+
+func clampExecutionsLimit(limit int) int {
+	if limit <= 0 {
+		return defaultExecutionsLimit
+	}
+	return min(limit, maxExecutionsLimit)
 }
 
 type summaryRawDTO struct {
@@ -48,7 +61,7 @@ func (r *Repository) GetSummary(ctx context.Context, tenantID, startMs, endMs in
 	query := `
 		SELECT any(db_statement_normalized)                       AS query_text,
 		       any(db_system)                                     AS db_system,
-		       any(attributes.'db.collection.name'::String)       AS collection_name,
+		       any(db_name)                                       AS collection_name,
 		       any(attributes.'db.operation.name'::String)        AS operation_name,
 		       count()                                            AS call_count,
 		       countIf(is_error)                                  AS error_count,
@@ -125,9 +138,7 @@ type executionRawDTO struct {
 }
 
 func (r *Repository) GetExecutions(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters, limit int) ([]executionRawDTO, error) {
-	if limit <= 0 {
-		limit = 50
-	}
+	limit = clampExecutionsLimit(limit)
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
 		SELECT timestamp,

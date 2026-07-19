@@ -50,6 +50,6 @@ func (h *Handler) GetExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	modulecommon.HandleRangeQuery(w, r, "Failed to query detail executions", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.Service.GetExecutions(ctx, tenantID, startMs, endMs, hash, filter.ParseFilters(r), filter.ParseLimit(r, 50))
+		return h.Service.GetExecutions(ctx, tenantID, startMs, endMs, hash, filter.ParseFilters(r), modulecommon.ParsePageSize(r, "limit", defaultExecutionsLimit))
 	})
 }

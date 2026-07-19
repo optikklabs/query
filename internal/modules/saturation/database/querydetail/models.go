@@ -1,8 +1,8 @@
 package querydetail
 
 type ServiceCalls struct {
-	Service   string `json:"service" ch:"service"`
-	CallCount int64  `json:"call_count" ch:"call_count"`
+	Service   string `json:"service"`
+	CallCount int64  `json:"call_count"`
 }
 
 type QuerySummary struct {

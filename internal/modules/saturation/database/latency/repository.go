@@ -8,6 +8,8 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
+	"github.com/optikklabs/query/internal/shared/chargs"
+	"github.com/optikklabs/query/internal/shared/seriesattr"
 )
 
 type Repository struct {
@@ -28,38 +30,30 @@ type latencyRawDTO struct {
 }
 
 func (r *Repository) GetLatencyBySystem(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters) ([]latencyRawDTO, error) {
-	return r.latencySeriesByGroup(ctx, tenantID, startMs, endMs, f, filter.AttrDBSystem, "latency.GetLatencyBySystem")
-}
-
-func (r *Repository) latencySeriesByGroup(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters, attr, traceLabel string) ([]latencyRawDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
-	groupCol := filter.MetricsGroupColumn(attr)
-	if groupCol == "" {
-		return nil, nil
-	}
 	filterWhere, filterArgs := filter.BuildMetricsClauses(f)
 	query := `
-		WITH series AS (
-		    SELECT fingerprint, ` + groupCol + ` AS group_by
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE attributes.` + "`db.system`" + `::String != ''` + filterWhere + `
-		    GROUP BY fingerprint, group_by
-		)
-		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       series.group_by                                  AS group_by,
-		       arrayMap(x -> toFloat32(x), quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state)) AS qs
+			WITH series AS (
+			    SELECT fingerprint, ` + seriesattr.DBSystem + ` AS db_system
+			    FROM optikk.metrics_series
+			    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
+			    WHERE ` + seriesattr.DBSpanPred + filterWhere + `
+			    GROUP BY fingerprint, db_system
+			)
+			SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
+			       series.db_system                                 AS group_by,
+			       arrayMap(x -> toFloat32(x), quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state)) AS qs
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		GROUP BY bucket_at, group_by
-		ORDER BY bucket_at, group_by`
+			GROUP BY bucket_at, group_by
+			ORDER BY bucket_at, group_by`
 
-	args := append(filter.SpanArgs(tenantID, startMs, endMs), filterArgs...)
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs), filterArgs...)
 	var rows []latencyRawDTO
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, traceLabel, &rows, query, args...); err != nil {
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "latency.GetLatencyBySystem", &rows, query, args...); err != nil {
 		return nil, err
 	}
 	for i := range rows {

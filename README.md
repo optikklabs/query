@@ -13,7 +13,7 @@ the tables exist.
 ## Commands
 
 - **Build**: `make build` or `go build ./cmd/query`
-- **Run**: `make run` or `go run ./cmd/query`
+- **Run**: `make run`
 - **Test**: `go test ./...`
 - **Format / Vet**: `make fmt` / `make vet`
 
@@ -25,7 +25,9 @@ local compose file here:
 
 ```bash
 (cd ../ingest && docker compose up -d)   # ClickHouse + MariaDB (+ Kafka/Grafana)
-go run ./cmd/query                        # applies MySQL migrations, serves :19090
+make run                                  # applies MySQL migrations, serves :19090
 ```
 
 Configuration is read from `config.yml` (env overrides via the `OPTIKK_` prefix).
+`make run` supplies a local-only JWT secret when the environment does not set
+`OPTIKK_AUTH_JWT_SECRET`; production must always provide its own secret.

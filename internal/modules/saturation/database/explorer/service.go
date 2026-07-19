@@ -45,11 +45,11 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, en
 	}
 
 	rows := make([]DatastoreSystemRow, 0, len(spanRows))
-	seen := make(map[string]bool, len(spanRows))
+	seen := make(map[string]struct{}, len(spanRows))
 	for _, r := range spanRows {
 		queryCount := int64(r.QueryCount)
 		errorCount := int64(r.ErrorCount)
-		seen[r.DBSystem] = true
+		seen[r.DBSystem] = struct{}{}
 		rows = append(rows, DatastoreSystemRow{
 			System:            r.DBSystem,
 			Category:          datastoreCategory(r.DBSystem),
@@ -58,13 +58,12 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, en
 			P95LatencyMs:      float64(r.P95Ms),
 			ErrorRate:         safeRatioPct(errorCount, queryCount),
 			ActiveConnections: conns[r.DBSystem],
-			ServerHint:        r.ServerAddress,
 			LastSeen:          r.LastSeen.Format(time.RFC3339),
 		})
 	}
 
 	for system, active := range conns {
-		if seen[system] {
+		if _, ok := seen[system]; ok {
 			continue
 		}
 		rows = append(rows, DatastoreSystemRow{

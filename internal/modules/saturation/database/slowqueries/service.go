@@ -25,7 +25,10 @@ func (s *Service) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs, e
 		out[i] = SlowQueryPattern{
 			QueryHash:      r.QueryHash,
 			QueryText:      r.QueryText,
+			DBSystem:       r.DBSystem,
 			CollectionName: r.CollectionName,
+			Namespace:      r.Namespace,
+			Server:         r.Server,
 			P50Ms:          &p50,
 			P95Ms:          &p95,
 			P99Ms:          &p99,

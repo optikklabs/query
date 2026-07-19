@@ -91,7 +91,7 @@ func buildFixtures() map[string]any {
 		"querySummary":    dbquerydetail.QuerySummary{QueryHash: "h", Services: []dbquerydetail.ServiceCalls{{Service: "s", CallCount: 1}}},
 		"queryTimeseries": []dbquerydetail.QueryTimeseriesPoint{{TimeBucket: "t", CallCount: 1}, {}},
 		"queryExecutions": []dbquerydetail.QueryExecution{{Timestamp: "t", TraceID: "t1", SpanID: "s1", DurationMs: 1, IsError: false, Service: "s", Host: "h"}, {}},
-		"slowQueries":     []dbslowqueries.SlowQueryPattern{{QueryHash: "h", QueryText: "SELECT 1", CollectionName: "c", CallCount: 1}, {}},
+		"slowQueries":     []dbslowqueries.SlowQueryPattern{{QueryHash: "h", QueryText: "SELECT 1", DBSystem: "postgresql", CollectionName: "c", Namespace: "app", Server: "db.internal", CallCount: 1}, {}},
 	}
 }
 

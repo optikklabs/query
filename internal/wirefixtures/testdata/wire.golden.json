@@ -315,7 +315,10 @@
     {
       "query_hash": "h",
       "query_text": "SELECT 1",
+      "db_system": "postgresql",
       "collection_name": "c",
+      "namespace": "app",
+      "server": "db.internal",
       "p50_ms": null,
       "p95_ms": null,
       "p99_ms": null,
@@ -325,7 +328,10 @@
     {
       "query_hash": "",
       "query_text": "",
+      "db_system": "",
       "collection_name": "",
+      "namespace": "",
+      "server": "",
       "p50_ms": null,
       "p95_ms": null,
       "p99_ms": null,

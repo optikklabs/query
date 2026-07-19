@@ -29,8 +29,17 @@ const clientsQuery = `
 // QueryClients lists Kafka services in deterministic name order. The frontend
 // uses the first result as its initial selection.
 func (r *Repository) QueryClients(ctx context.Context, tenantID, startMs, endMs int64) ([]string, error) {
-	var rows []string
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryClients", &rows, clientsQuery, chargs.RangeArgs(tenantID, startMs, endMs)...)
+	var rows []struct {
+		Service string `ch:"service"`
+	}
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryClients", &rows, clientsQuery, chargs.RangeArgs(tenantID, startMs, endMs)...); err != nil {
+		return nil, err
+	}
+	clients := make([]string, len(rows))
+	for i, row := range rows {
+		clients[i] = row.Service
+	}
+	return clients, nil
 }
 
 // QueryEdges returns one row per (service, topic, consumer group) for the
