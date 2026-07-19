@@ -19,5 +19,6 @@ type kafkaTopologyModule struct {
 func (m *kafkaTopologyModule) Name() string { return "saturationKafkaTopology" }
 
 func (m *kafkaTopologyModule) RegisterRoutes(group chi.Router) {
+	group.Get("/saturation/kafka/clients", m.handler.GetClients)
 	group.Get("/saturation/kafka/topology", m.handler.GetTopology)
 }

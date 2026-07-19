@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/optikklabs/query/internal/shared/metrics"
-	"golang.org/x/sync/errgroup"
 )
 
 type Service struct {
@@ -16,24 +15,27 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-// GetTopology builds the producers->topics->consumers graph for the window.
-func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int64, _ string) (TopologyResponse, error) {
-	var (
-		produceRows []produceEdgeRow
-		consumeRows []consumeEdgeRow
-	)
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		rows, err := s.repo.QueryProduceEdges(gctx, tenantID, startMs, endMs)
-		produceRows = rows
-		return err
-	})
-	g.Go(func() error {
-		rows, err := s.repo.QueryConsumeEdges(gctx, tenantID, startMs, endMs)
-		consumeRows = rows
-		return err
-	})
-	if err := g.Wait(); err != nil {
+// GetClients lists the tenant's Kafka clients, busiest first. Separate from the
+// graph so the picker stays complete while the graph stays scoped.
+func (s *Service) GetClients(ctx context.Context, tenantID, startMs, endMs int64) ([]string, error) {
+	clients, err := s.repo.QueryClients(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return nil, err
+	}
+	if clients == nil {
+		clients = []string{}
+	}
+	return clients, nil
+}
+
+// GetTopology builds the producers->topics->consumers graph for the given
+// services: their topics and the peers on the far side of them.
+func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int64, services []string) (TopologyResponse, error) {
+	if len(services) == 0 {
+		return buildGraph(nil, 1), nil
+	}
+	rows, err := s.repo.QueryEdges(ctx, tenantID, startMs, endMs, services)
+	if err != nil {
 		return TopologyResponse{}, err
 	}
 
@@ -41,7 +43,7 @@ func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int6
 	if winSecs <= 0 {
 		winSecs = 1
 	}
-	return buildGraph(produceRows, consumeRows, winSecs), nil
+	return buildGraph(rows, winSecs), nil
 }
 
 func p95(qs []float64) float64 {
@@ -61,7 +63,10 @@ type nodeAgg struct {
 	maxP95 float64
 }
 
-func buildGraph(produceRows []produceEdgeRow, consumeRows []consumeEdgeRow, winSecs float64) TopologyResponse {
+// buildGraph folds the edge rows into the graph. Produce rows must be applied
+// first: pathways reference each topic's top producer, which only the produce
+// pass knows.
+func buildGraph(rows []edgeRow, winSecs float64) TopologyResponse {
 	producers := map[string]*nodeAgg{}
 	consumers := map[string]*nodeAgg{}
 	consumerMeta := map[string][2]string{}
@@ -72,9 +77,12 @@ func buildGraph(produceRows []produceEdgeRow, consumeRows []consumeEdgeRow, winS
 		svc   string
 		calls uint64
 	}{}
-	edges := make([]StreamEdge, 0, len(produceRows)+len(consumeRows))
+	edges := make([]StreamEdge, 0, len(rows))
 
-	for _, row := range produceRows {
+	for _, row := range rows {
+		if row.ConsumerGroup != "" {
+			continue
+		}
 		acc(producers, row.Service, row.CallCount, row.ErrorCount, p95(row.QS))
 		topicProduce[row.Topic] += row.CallCount
 		addSet(topicProducers, row.Topic, row.Service)
@@ -91,8 +99,11 @@ func buildGraph(produceRows []produceEdgeRow, consumeRows []consumeEdgeRow, winS
 	}
 
 	consumeEdge := map[[2]string]uint64{}
-	pathways := make([]Pathway, 0, len(consumeRows))
-	for _, row := range consumeRows {
+	pathways := make([]Pathway, 0, len(rows))
+	for _, row := range rows {
+		if row.ConsumerGroup == "" {
+			continue
+		}
 		key := row.Service + "|" + row.ConsumerGroup
 		acc(consumers, key, row.CallCount, row.ErrorCount, p95(row.QS))
 		consumerMeta[key] = [2]string{row.Service, row.ConsumerGroup}

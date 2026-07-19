@@ -66,15 +66,21 @@ func buildFixtures() map[string]any {
 			Results  []logsmodels.Log    `json:"results"`
 			PageInfo logsmodels.PageInfo `json:"pageInfo"`
 		}{Results: []logsmodels.Log{{ID: "l1", Timestamp: uint64(now.UnixNano()), ObservedTimestamp: uint64(now.UnixNano()), SeverityText: "INFO", SeverityNumber: 9, SeverityBucket: 2, Body: "hi", ServiceName: "s"}, {}}, PageInfo: logsmodels.PageInfo{HasMore: false, Limit: 100}},
-		"traceLogs":     []logsmodels.Log{{ID: "l1", Timestamp: uint64(now.UnixNano()), ObservedTimestamp: uint64(now.UnixNano()), SeverityText: "INFO", Body: "hi", ServiceName: "s", AttributesString: map[string]string{"k": "v"}}, {}},
-		"logsSummary":   struct{ Summary logsmodels.Summary `json:"summary"` }{Summary: logsmodels.Summary{Total: 10, Errors: 2, Warns: 1}},
-		"logsTrend":     struct{ Trend []logsmodels.TrendBucket `json:"trend"` }{Trend: []logsmodels.TrendBucket{{TimeBucket: "t", Total: 1}, {}}},
-		"logsFacets":    struct{ Facets logsmodels.Facets `json:"facets"` }{Facets: logsmodels.Facets{Severity: []string{"INFO"}, Service: []logsmodels.FacetValue{{Value: "s", Count: 1}}}},
-		"metricNames":   metricsexplorer.FEMetricNamesResponse{Metrics: []metricsexplorer.FEMetricNameEntry{{Name: "m", Type: "gauge"}, {Name: "m2", Type: "counter", Unit: "s", Description: "d"}}},
-		"metricTags":    metricsexplorer.FETagsResponse{Tags: []metricsexplorer.FETagEntry{{Key: "k", Values: []string{"v"}}}},
-		"metricsQuery":  metricsexplorer.FEQueryResponse{Results: map[string]metricsexplorer.FEQueryResult{"a": {Timestamps: []int64{1}, Series: []metricsexplorer.FESeries{{Tags: map[string]string{"k": "v"}, Values: []*float64{nil}}}}}},
-		"topology":      topology.BuildGraph(nil, nil),
-		"redServices":   []redfleet.ServiceREDMetric{{ServiceName: "s", RequestCount: 1, ErrorCount: 0, AvgLatency: 1, P95Latency: 2, P99Latency: 3}, {}},
+		"traceLogs": []logsmodels.Log{{ID: "l1", Timestamp: uint64(now.UnixNano()), ObservedTimestamp: uint64(now.UnixNano()), SeverityText: "INFO", Body: "hi", ServiceName: "s", AttributesString: map[string]string{"k": "v"}}, {}},
+		"logsSummary": struct {
+			Summary logsmodels.Summary `json:"summary"`
+		}{Summary: logsmodels.Summary{Total: 10, Errors: 2, Warns: 1}},
+		"logsTrend": struct {
+			Trend []logsmodels.TrendBucket `json:"trend"`
+		}{Trend: []logsmodels.TrendBucket{{TimeBucket: "t", Total: 1}, {}}},
+		"logsFacets": struct {
+			Facets logsmodels.Facets `json:"facets"`
+		}{Facets: logsmodels.Facets{Severity: []string{"INFO"}, Service: []logsmodels.FacetValue{{Value: "s", Count: 1}}}},
+		"metricNames":  metricsexplorer.FEMetricNamesResponse{Metrics: []metricsexplorer.FEMetricNameEntry{{Name: "m", Type: "gauge"}, {Name: "m2", Type: "counter", Unit: "s", Description: "d"}}},
+		"metricTags":   metricsexplorer.FETagsResponse{Tags: []metricsexplorer.FETagEntry{{Key: "k", Values: []string{"v"}}}},
+		"metricsQuery": metricsexplorer.FEQueryResponse{Results: map[string]metricsexplorer.FEQueryResult{"a": {Timestamps: []int64{1}, Series: []metricsexplorer.FESeries{{Tags: map[string]string{"k": "v"}, Values: []*float64{nil}}}}}},
+		"topology":     topology.BuildGraph(nil, nil),
+		"redServices":  []redfleet.ServiceREDMetric{{ServiceName: "s", RequestCount: 1, ErrorCount: 0, AvgLatency: 1, P95Latency: 2, P99Latency: 3}, {}},
 		"kafkaTopology": kafkatopology.TopologyResponse{
 			Producers: []kafkatopology.ProducerNode{{Service: "p"}},
 			Topics:    []kafkatopology.TopicNode{{Topic: "t"}},

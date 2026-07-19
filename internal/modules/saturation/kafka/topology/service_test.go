@@ -31,18 +31,18 @@ func TestP95(t *testing.T) {
 // edge fan-out, and pathway linkage to the top producer.
 func TestBuildGraph_Flow(t *testing.T) {
 	const winSecs = 10.0
-	produce := []produceEdgeRow{
+	// Interleaved on purpose: an empty consumer group is what marks a produce
+	// row, so the split must not depend on the rows arriving grouped by side.
+	rows := []edgeRow{
 		{Service: "svcA", Topic: "orders", CallCount: 100, ErrorCount: 10, QS: []float64{1, 5, 9}},
-		{Service: "svcA", Topic: "payments", CallCount: 50, ErrorCount: 0, QS: []float64{2, 8, 12}},
-		{Service: "svcB", Topic: "orders", CallCount: 20, ErrorCount: 0, QS: []float64{1, 3, 4}},
-	}
-	consume := []consumeEdgeRow{
 		{Service: "consumer1", Topic: "orders", ConsumerGroup: "g1", CallCount: 80, ErrorCount: 4, QS: []float64{1, 6, 10}},
+		{Service: "svcA", Topic: "payments", CallCount: 50, ErrorCount: 0, QS: []float64{2, 8, 12}},
 		{Service: "consumer1", Topic: "payments", ConsumerGroup: "g1", CallCount: 40, ErrorCount: 0, QS: []float64{1, 2, 3}},
+		{Service: "svcB", Topic: "orders", CallCount: 20, ErrorCount: 0, QS: []float64{1, 3, 4}},
 		{Service: "consumer2", Topic: "orders", ConsumerGroup: "g2", CallCount: 10, ErrorCount: 0, QS: []float64{1, 1, 1}},
 	}
 
-	g := buildGraph(produce, consume, winSecs)
+	g := buildGraph(rows, winSecs)
 
 	if len(g.Producers) != 2 {
 		t.Fatalf("got %d producers, want 2: %+v", len(g.Producers), g.Producers)
@@ -106,8 +106,33 @@ func TestBuildGraph_Flow(t *testing.T) {
 }
 
 func TestBuildGraph_Empty(t *testing.T) {
-	g := buildGraph(nil, nil, 1)
+	g := buildGraph(nil, 1)
 	if len(g.Producers) != 0 || len(g.Topics) != 0 || len(g.Consumers) != 0 || len(g.Edges) != 0 || len(g.Pathways) != 0 {
 		t.Errorf("empty input should yield empty graph, got %+v", g)
+	}
+}
+
+// An empty or comma-padded param must not widen the query to every service.
+func TestParseServices(t *testing.T) {
+	cases := map[string][]string{
+		"":          {},
+		",":         {},
+		"  ":        {},
+		"a":         {"a"},
+		"a,b":       {"a", "b"},
+		" a , ,b, ": {"a", "b"},
+	}
+	for raw, want := range cases {
+		got := parseServices(raw)
+		if len(got) != len(want) {
+			t.Errorf("parseServices(%q) = %v, want %v", raw, got, want)
+			continue
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("parseServices(%q) = %v, want %v", raw, got, want)
+				break
+			}
+		}
 	}
 }
