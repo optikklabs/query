@@ -3,9 +3,9 @@ package volume
 import "time"
 
 type OpsTimeSeries struct {
-	TimeBucket string   `json:"time_bucket"`
-	GroupBy    string   `json:"group_by"`
-	OpsPerSec  *float64 `json:"ops_per_sec"`
+	TimeBucket string   `json:"timeBucket"`
+	GroupBy    string   `json:"groupBy"`
+	OpsPerSec  *float64 `json:"opsPerSec"`
 }
 
 type opsRawDTO struct {

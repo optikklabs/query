@@ -13,9 +13,9 @@ type LoginResponse struct {
 }
 
 type AuthUserSummary struct {
-	ID        int64   `json:"id"`
-	Email     string  `json:"email"`
-	Name      string  `json:"name"`
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
 }
 
 type AuthTenantSummary struct {

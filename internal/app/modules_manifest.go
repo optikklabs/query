@@ -5,6 +5,7 @@ import (
 
 	"github.com/optikklabs/query/internal/app/registry"
 
+	alerting_evaluator "github.com/optikklabs/query/internal/modules/alerting/evaluator"
 	alerting_monitors "github.com/optikklabs/query/internal/modules/alerting/monitors"
 	alerting_notifications "github.com/optikklabs/query/internal/modules/alerting/notifications"
 	alerting_stream "github.com/optikklabs/query/internal/modules/alerting/stream"
@@ -100,6 +101,7 @@ func configuredModules(
 
 		alerting_monitors.NewModule(infraDeps.DB, nativeQuerier),
 		alerting_notifications.NewModule(infraDeps.DB),
+		alerting_evaluator.NewModule(infraDeps.DB, nativeQuerier),
 		alerting_stream.NewModule(infraDeps.DB, infraDeps.Config.Alerting.Kafka),
 
 		billing.NewModule(infraDeps.DB),

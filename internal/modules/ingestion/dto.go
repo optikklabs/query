@@ -126,3 +126,12 @@ type ServicesResponse struct {
 	TopSharePct      float64      `json:"topSharePct"`
 	TopShareBytesPct float64      `json:"topShareBytesPct"`
 }
+
+type OverviewResponse struct {
+	Summary             SummaryResponse    `json:"summary"`
+	Cost                CostResponse       `json:"cost"`
+	TimeseriesByType    TimeseriesResponse `json:"timeseriesByType"`
+	TimeseriesByService TimeseriesResponse `json:"timeseriesByService"`
+	Services            ServicesResponse   `json:"services"`
+	UsageSemantics      string             `json:"usageSemantics"`
+}

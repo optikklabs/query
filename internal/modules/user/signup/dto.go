@@ -6,8 +6,8 @@ type SignupRequest struct {
 	Email         string `json:"email" validate:"required,email"`
 	Password      string `json:"password" validate:"required,min=8"`
 	Name          string `json:"name" validate:"required"`
-	TenantName    string `json:"tenant_name" validate:"required"`
-	AcceptedTerms bool   `json:"accepted_terms" validate:"eq=true"`
+	TenantName    string `json:"tenantName" validate:"required"`
+	AcceptedTerms bool   `json:"acceptedTerms" validate:"eq=true"`
 }
 
 // SignupResponse is returned when email verification is required before login.

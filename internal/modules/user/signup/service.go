@@ -4,17 +4,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/optikklabs/query/internal/config"
+	emailinfra "github.com/optikklabs/query/internal/infra/email"
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	"golang.org/x/crypto/bcrypt"
@@ -46,10 +43,8 @@ type VerificationSender interface {
 }
 
 type ResendVerificationSender struct {
-	apiKey        string
-	from          string
 	verifyBaseURL string
-	httpClient    *http.Client
+	mailer        *emailinfra.ResendSender
 }
 
 func NewService(repo *Repository, issuer *auth.Service, email config.EmailConfig) *Service {
@@ -67,10 +62,8 @@ func NewService(repo *Repository, issuer *auth.Service, email config.EmailConfig
 
 func NewResendVerificationSender(apiKey, from, verifyBaseURL string) *ResendVerificationSender {
 	return &ResendVerificationSender{
-		apiKey:        apiKey,
-		from:          from,
 		verifyBaseURL: verifyBaseURL,
-		httpClient:    &http.Client{Timeout: 5 * time.Second},
+		mailer:        emailinfra.NewResendSender(apiKey, from),
 	}
 }
 
@@ -133,7 +126,7 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest) (SignupResult, 
 		return SignupResult{Message: "Check your email to verify your account."}, nil
 	}
 
-	session, refresh, err := s.issuer.IssueTokens(user)
+	session, refresh, err := s.issuer.IssueTokens(ctx, user)
 	if err != nil {
 		return SignupResult{}, err
 	}
@@ -155,7 +148,7 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) (auth.LoginR
 	if err := s.repo.RotateTenantAPIKey(ctx, user.TenantID, apiKey); err != nil {
 		return auth.LoginResponse{}, "", "", shared.NewInternalError("Failed to activate account", err)
 	}
-	session, refresh, err := s.issuer.IssueTokens(user)
+	session, refresh, err := s.issuer.IssueTokens(ctx, user)
 	if err != nil {
 		return auth.LoginResponse{}, "", "", err
 	}
@@ -220,23 +213,8 @@ func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, sec
 
 func (s *ResendVerificationSender) SendVerification(ctx context.Context, to, token string) error {
 	verifyURL := s.verifyBaseURL + "?token=" + url.QueryEscape(token)
-	body, _ := json.Marshal(map[string]any{"from": s.from, "to": []string{to}, "subject": "Verify your Optikk email", "html": "<p>Verify your account by opening <a href=\"" + verifyURL + "\">this link</a>. This link expires in 24 hours.</p>"})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.resend.com/emails", strings.NewReader(string(body)))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+s.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("email provider returned %s: %s", resp.Status, string(bodyBytes))
-	}
-	return nil
+	html := "<p>Verify your account by opening <a href=\"" + verifyURL + "\">this link</a>. This link expires in 24 hours.</p>"
+	return s.mailer.Send(ctx, to, "Verify your Optikk email", html)
 }
 
 func normalizeSignup(req SignupRequest) (normalizedSignup, error) {

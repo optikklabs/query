@@ -40,28 +40,15 @@ func (h *REDFleetHandler) GetFleetServices(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *REDFleetHandler) GetFleetOverview(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query fleet overview", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+	modulecommon.HandleComparableRangeQuery(w, r, "Failed to query fleet overview", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetFleetOverview(ctx, parseREDFilters(r, tenantID, startMs, endMs))
 	})
 }
 
 func (h *REDFleetHandler) GetRequestAndErrorRateTimeSeries(w http.ResponseWriter, r *http.Request) {
-	tenantID := modulecommon.Tenant(r).TenantID
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	f := parseREDFilters(r, tenantID, startMs, endMs)
-	resp, err := modulecommon.WithComparison(r, startMs, endMs, func(s, e int64) (any, error) {
-		cf := f
-		cf.StartMs, cf.EndMs = s, e
-		return h.Service.GetRequestAndErrorRateTimeSeries(r.Context(), cf)
+	modulecommon.HandleRangeQuery(w, r, "Failed to query request and error rate time series", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetRequestAndErrorRateTimeSeries(ctx, parseREDFilters(r, tenantID, startMs, endMs))
 	})
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query request and error rate time series", err)
-		return
-	}
-	modulecommon.RespondOK(w, resp)
 }
 
 // GetStatusTimeSeries returns status split by HTTP family over time.
@@ -83,91 +70,42 @@ func (h *REDFleetHandler) GetREDByEndpointTimeSeries(w http.ResponseWriter, r *h
 	})
 }
 
-func (h *REDFleetHandler) GetTopEndpointsCombined(w http.ResponseWriter, r *http.Request) {
-	tenantID := modulecommon.Tenant(r).TenantID
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	f := parseREDFilters(r, tenantID, startMs, endMs)
-	limit := modulecommon.ParsePageSize(r, "limit", 50)
-	cursorStr := r.URL.Query().Get("cursor")
+// parseTopCursor decodes the opaque pagination cursor, tolerating a malformed
+// value by starting from the first page.
+func parseTopCursor(r *http.Request) TopEndpointsCursor {
 	var cur TopEndpointsCursor
-	if cursorStr != "" {
-		if decoded, ok := cursor.Decode[TopEndpointsCursor](cursorStr); ok {
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		if decoded, ok := cursor.Decode[TopEndpointsCursor](raw); ok {
 			cur = decoded
 		}
 	}
-	resp, err := modulecommon.WithComparison(r, startMs, endMs, func(s, e int64) (any, error) {
-		cf := f
-		cf.StartMs, cf.EndMs = s, e
-		return h.Service.GetTopEndpointsCombined(r.Context(), cf, limit, cur)
+	return cur
+}
+
+func (h *REDFleetHandler) GetTopEndpointsCombined(w http.ResponseWriter, r *http.Request) {
+	limit, cur := modulecommon.ParsePageSize(r, "limit", 50), parseTopCursor(r)
+	modulecommon.HandleComparableRangeQuery(w, r, "Failed to query top endpoints", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetTopEndpointsCombined(ctx, parseREDFilters(r, tenantID, startMs, endMs), limit, cur)
 	})
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query top endpoints", err)
-		return
-	}
-	modulecommon.RespondOK(w, resp)
 }
 
 func (h *REDFleetHandler) GetTopDBQueriesCombined(w http.ResponseWriter, r *http.Request) {
-	tenantID := modulecommon.Tenant(r).TenantID
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	f := parseREDFilters(r, tenantID, startMs, endMs)
-	limit := modulecommon.ParsePageSize(r, "limit", 50)
-	cursorStr := r.URL.Query().Get("cursor")
-	var cur TopEndpointsCursor
-	if cursorStr != "" {
-		if decoded, ok := cursor.Decode[TopEndpointsCursor](cursorStr); ok {
-			cur = decoded
-		}
-	}
-	resp, err := modulecommon.WithComparison(r, startMs, endMs, func(s, e int64) (any, error) {
-		cf := f
-		cf.StartMs, cf.EndMs = s, e
-		return h.Service.GetTopDBQueries(r.Context(), cf, limit, cur)
+	limit, cur := modulecommon.ParsePageSize(r, "limit", 50), parseTopCursor(r)
+	modulecommon.HandleComparableRangeQuery(w, r, "Failed to query top db queries", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetTopDBQueries(ctx, parseREDFilters(r, tenantID, startMs, endMs), limit, cur)
 	})
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query top db queries", err)
-		return
-	}
-	modulecommon.RespondOK(w, resp)
 }
 
 func (h *REDFleetHandler) GetRequestRateTimeSeries(w http.ResponseWriter, r *http.Request) {
-	tenantID := modulecommon.Tenant(r).TenantID
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	resp, err := h.Service.GetRequestRateTimeSeries(r.Context(), parseREDFilters(r, tenantID, startMs, endMs))
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query service request rate time series", err)
-		return
-	}
-	modulecommon.RespondOK(w, resp)
+	modulecommon.HandleRangeQuery(w, r, "Failed to query service request rate time series", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetRequestRateTimeSeries(ctx, parseREDFilters(r, tenantID, startMs, endMs))
+	})
 }
 
 func (h *REDFleetHandler) GetServiceSummary(w http.ResponseWriter, r *http.Request) {
-	tenantID := modulecommon.Tenant(r).TenantID
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	f := parseREDFilters(r, tenantID, startMs, endMs)
-	resp, err := modulecommon.WithComparison(r, startMs, endMs, func(s, e int64) (any, error) {
-		cf := f
-		cf.StartMs, cf.EndMs = s, e
-		return h.Service.GetServiceSummary(r.Context(), cf)
+	modulecommon.HandleComparableRangeQuery(w, r, "Failed to query service summary", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetServiceSummary(ctx, parseREDFilters(r, tenantID, startMs, endMs))
 	})
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query service summary", err)
-		return
-	}
-	modulecommon.RespondOK(w, resp)
 }
 
 // GetOperationBaseline returns windowed p50/p95/p99 for service + operation.

@@ -14,23 +14,23 @@ type ChannelResponse struct {
 	Name           string          `json:"name"`
 	Config         json.RawMessage `json:"config"`
 	Status         string          `json:"status"`
-	UsedByCount    int             `json:"used_by_count"`
-	LastUsedAt     *time.Time      `json:"last_used_at,omitempty"`
-	LastDeliveryAt *time.Time      `json:"last_delivery_at,omitempty"`
-	LastErrorText  string          `json:"last_error_text,omitempty"`
-	CreatedAt      time.Time       `json:"created_at"`
+	UsedByCount    int             `json:"usedByCount"`
+	LastUsedAt     *time.Time      `json:"lastUsedAt,omitempty"`
+	LastDeliveryAt *time.Time      `json:"lastDeliveryAt,omitempty"`
+	LastErrorText  string          `json:"lastErrorText,omitempty"`
+	CreatedAt      time.Time       `json:"createdAt"`
 }
 
 type PolicyResponse struct {
 	ID         int64           `json:"id"`
 	Name       string          `json:"name"`
-	MatchDSL   string          `json:"match_dsl"`
+	MatchDSL   string          `json:"matchDsl"`
 	Actions    json.RawMessage `json:"actions"`
-	Hits30d    int             `json:"hits_30d"`
-	LastUsedAt *time.Time      `json:"last_used_at,omitempty"`
+	Hits30d    int             `json:"hits30d"`
+	LastUsedAt *time.Time      `json:"lastUsedAt,omitempty"`
 	Enabled    bool            `json:"enabled"`
 	Position   int             `json:"position"`
-	CreatedAt  time.Time       `json:"created_at"`
+	CreatedAt  time.Time       `json:"createdAt"`
 }
 
 type TemplateResponse struct {
@@ -38,8 +38,8 @@ type TemplateResponse struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
 	Body        string    `json:"body"`
-	UsedCount   int       `json:"used_count"`
-	CreatedAt   time.Time `json:"created_at"`
+	UsedCount   int       `json:"usedCount"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type IntegrationCatalogEntry struct {

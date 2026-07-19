@@ -2,40 +2,40 @@ package querydetail
 
 type ServiceCalls struct {
 	Service   string `json:"service"`
-	CallCount int64  `json:"call_count"`
+	CallCount int64  `json:"callCount"`
 }
 
 type QuerySummary struct {
-	QueryHash      string         `json:"query_hash"`
-	QueryText      string         `json:"query_text"`
-	DbSystem       string         `json:"db_system"`
-	CollectionName string         `json:"collection_name"`
-	OperationName  string         `json:"operation_name"`
-	CallCount      int64          `json:"call_count"`
-	ErrorCount     int64          `json:"error_count"`
-	P50Ms          *float64       `json:"p50_ms"`
-	P95Ms          *float64       `json:"p95_ms"`
-	P99Ms          *float64       `json:"p99_ms"`
-	AvgMs          float64        `json:"avg_ms"`
-	TotalTimeMs    float64        `json:"total_time_ms"`
-	AvgRows        *float64       `json:"avg_rows"`
+	QueryHash      string         `json:"queryHash"`
+	QueryText      string         `json:"queryText"`
+	DbSystem       string         `json:"dbSystem"`
+	CollectionName string         `json:"collectionName"`
+	OperationName  string         `json:"operationName"`
+	CallCount      int64          `json:"callCount"`
+	ErrorCount     int64          `json:"errorCount"`
+	P50Ms          *float64       `json:"p50Ms"`
+	P95Ms          *float64       `json:"p95Ms"`
+	P99Ms          *float64       `json:"p99Ms"`
+	AvgMs          float64        `json:"avgMs"`
+	TotalTimeMs    float64        `json:"totalTimeMs"`
+	AvgRows        *float64       `json:"avgRows"`
 	Services       []ServiceCalls `json:"services"`
 }
 
 type QueryTimeseriesPoint struct {
-	TimeBucket string   `json:"time_bucket"`
-	CallCount  int64    `json:"call_count"`
-	ErrorCount int64    `json:"error_count"`
-	AvgMs      *float64 `json:"avg_ms"`
-	P99Ms      *float64 `json:"p99_ms"`
+	TimeBucket string   `json:"timeBucket"`
+	CallCount  int64    `json:"callCount"`
+	ErrorCount int64    `json:"errorCount"`
+	AvgMs      *float64 `json:"avgMs"`
+	P99Ms      *float64 `json:"p99Ms"`
 }
 
 type QueryExecution struct {
 	Timestamp  string   `json:"timestamp"`
-	TraceID    string   `json:"trace_id"`
-	SpanID     string   `json:"span_id"`
-	DurationMs float64  `json:"duration_ms"`
-	IsError    bool     `json:"is_error"`
+	TraceID    string   `json:"traceId"`
+	SpanID     string   `json:"spanId"`
+	DurationMs float64  `json:"durationMs"`
+	IsError    bool     `json:"isError"`
 	Service    string   `json:"service"`
 	Host       string   `json:"host"`
 	Rows       *float64 `json:"rows"`

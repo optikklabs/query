@@ -59,7 +59,7 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.Service.SetUserRole(userID, tenant.TenantID, req.Role)
+	user, err := h.Service.SetUserRole(r.Context(), userID, tenant.TenantID, req.Role)
 	if err != nil {
 		shared.RespondServiceError(w, r, err, "Failed to update user role")
 		return
@@ -74,7 +74,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users, err := h.Service.ListUsers(tenant.TenantID)
+	users, err := h.Service.ListUsers(r.Context(), tenant.TenantID)
 	if err != nil {
 		shared.RespondServiceError(w, r, err, "Failed to list users")
 		return
@@ -95,7 +95,7 @@ func (h *Handler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Service.RemoveUser(userID, tenant.TenantID); err != nil {
+	if err := h.Service.RemoveUser(r.Context(), userID, tenant.TenantID); err != nil {
 		shared.RespondServiceError(w, r, err, "Failed to remove user")
 		return
 	}

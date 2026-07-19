@@ -22,6 +22,9 @@ import (
 // file that churns on every invocation would be worthless as a diff.
 var fixtureTime = time.Date(2026, 7, 16, 10, 30, 0, 0, time.UTC)
 
+// fixtureFloat backs the pointer fields that encode as null when unset.
+var fixtureFloat = 1.5
+
 // buildFixtures returns one sample of every response struct the web client
 // parses. Each entry pairs a fully-populated value with a zero value: the zero
 // value is what proves which keys survive `omitempty` and which nil maps and
@@ -81,6 +84,28 @@ func buildFixtures() map[string]any {
 		"metricsQuery": metricsexplorer.FEQueryResponse{Results: map[string]metricsexplorer.FEQueryResult{"a": {Timestamps: []int64{1}, Series: []metricsexplorer.FESeries{{Tags: map[string]string{"k": "v"}, Values: []*float64{nil}}}}}},
 		"topology":     topology.BuildGraph(nil, nil),
 		"redServices":  []redfleet.ServiceREDMetric{{ServiceName: "s", RequestCount: 1, ErrorCount: 0, AvgLatency: 1, P95Latency: 2, P99Latency: 3}, {}},
+		// Every RED shape the Overview, catalog and service-detail pages parse.
+		// These were uncovered when a snake_case rename reached the browser and
+		// silently zeroed the Overview request-rate chart.
+		"redFleetOverview": redfleet.FleetOverviewResponse{
+			Totals:   redfleet.FleetTotals{ServiceCount: 1, TotalSpanCount: 10, TotalErrors: 1, TotalRPS: 2, AvgErrorRate: 10, AvgP50Ms: 1, AvgP95Ms: 2, AvgP99Ms: 3},
+			Services: []redfleet.ServiceREDMetric{{ServiceName: "s", RequestCount: 1}, {}},
+		},
+		"redRequestAndErrorRate": []redfleet.ServicePerformancePoint{{Timestamp: now, RPS: 1, RequestCount: 10, ErrorCount: 1, ErrorRate: 10}, {}},
+		"redRequestRate":         []redfleet.RequestRatePoint{{Timestamp: now, ServiceName: "s", RPS: 1}, {}},
+		"redStatusTimeseries":    []redfleet.StatusTimeSeriesPoint{{Timestamp: now, Status2xx: 1, Status4xx: 2, Status5xx: 3, StatusOther: 4}, {}},
+		"redLatencyPercentiles":  []redfleet.LatencyPercentilesPoint{{Timestamp: now, P50Ms: 1, P95Ms: 2, P99Ms: 3}, {}},
+		"redByEndpoint":          []redfleet.EndpointRatePoint{{Timestamp: now, HTTPRoute: "/x", RPS: 1, ErrorRate: &fixtureFloat, P99Ms: &fixtureFloat}, {}},
+		"redTopEndpoints": redfleet.PaginatedEndpoints{
+			Results:  []redfleet.TopEndpoint{{OperationName: "op", ServiceName: "s", SpanKind: "SERVER", HTTPRoute: "/x", RPS: 1, ErrorRate: 1, ErrorCount: 1, TotalCount: 10, P50Ms: 1, P95Ms: 2, P99Ms: 3}, {}},
+			PageInfo: redfleet.PageInfo{HasMore: true, NextCursor: "c", Limit: 50},
+		},
+		"redTopDBQueries": redfleet.PaginatedDBQueries{
+			Results:  []redfleet.TopDBQuery{{OperationName: "op", ServiceName: "s", DBSystem: "mysql", RPS: 1, ErrorRate: 1, ErrorCount: 1, TotalCount: 10, P50Ms: 1, P95Ms: 2, P99Ms: 3}, {}},
+			PageInfo: redfleet.PageInfo{HasMore: false, Limit: 50},
+		},
+		"redServiceSummary": redfleet.ServiceSummaryResponse{ServiceName: "s", RequestCount: 10, ErrorCount: 1, RPS: 1, ErrorRate: 10, P50Ms: 1, P95Ms: 2, P99Ms: 3, CPUUtilization: 4, MemoryUtilization: 5, DiskUtilization: 6},
+		"redSaturation":     []redfleet.SaturationTimeSeriesPoint{{Timestamp: now, Value: 1}, {}},
 		"kafkaTopology": kafkatopology.TopologyResponse{
 			Producers: []kafkatopology.ProducerNode{{Service: "p"}},
 			Topics:    []kafkatopology.TopicNode{{Topic: "t"}},

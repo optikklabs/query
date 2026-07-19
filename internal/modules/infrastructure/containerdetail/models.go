@@ -4,7 +4,7 @@ import "time"
 
 // SeriesPoint is one display-grain bucket of one named series.
 type SeriesPoint struct {
-	TimeBucket time.Time `json:"time_bucket" ch:"time_bucket"`
+	TimeBucket time.Time `json:"timeBucket" ch:"time_bucket"`
 	Series     string    `json:"series"      ch:"series"`
 	Value      float64   `json:"value"       ch:"value"`
 }
@@ -15,17 +15,17 @@ type SeriesPoint struct {
 type PodOverview struct {
 	Pod              string   `json:"pod"`
 	Host             string   `json:"host,omitempty"`
-	LastSeen         string   `json:"last_seen,omitempty"`
+	LastSeen         string   `json:"lastSeen,omitempty"`
 	Containers       []string `json:"containers"`
 	Services         []string `json:"services"`
 	Environments     []string `json:"environments"`
 	Namespaces       []string `json:"namespaces"`
-	RequestCount     int64    `json:"request_count"`
-	ErrorCount       int64    `json:"error_count"`
-	ErrorRate        float64  `json:"error_rate"`
-	AvgLatencyMs     float64  `json:"avg_latency_ms"`
-	P95LatencyMs     float64  `json:"p95_latency_ms"`
-	AvailableMetrics []string `json:"available_metrics"`
+	RequestCount     int64    `json:"requestCount"`
+	ErrorCount       int64    `json:"errorCount"`
+	ErrorRate        float64  `json:"errorRate"`
+	AvgLatencyMs     float64  `json:"avgLatencyMs"`
+	P95LatencyMs     float64  `json:"p95LatencyMs"`
+	AvailableMetrics []string `json:"availableMetrics"`
 }
 
 type podMetaRow struct {

@@ -70,9 +70,9 @@ func (r *Repository) ConsumeDeviceCode(ctx context.Context, deviceCode string, a
 	return err
 }
 
-func (r *Repository) FindActiveUserByID(userID int64) (shared.UserRecord, error) {
+func (r *Repository) FindActiveUserByID(ctx context.Context, userID int64) (shared.UserRecord, error) {
 	var u shared.UserRecord
-	err := dbutil.GetSQL(context.Background(), r.db, "user.FindActiveUserByID", &u, `
+	err := dbutil.GetSQL(ctx, r.db, "user.FindActiveUserByID", &u, `
 		SELECT id, email, name, tenant_id, active, created_at
 		FROM users
 		WHERE id = ? AND active = 1

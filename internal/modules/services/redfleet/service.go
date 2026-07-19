@@ -29,7 +29,7 @@ func (s *Service) GetFleetOverview(ctx context.Context, f REDFilters) (FleetOver
 	}
 	services := mapFleetServices(rows)
 	return FleetOverviewResponse{
-		Totals:   computeFleetTotals(services, f.StartMs, f.EndMs),
+		Totals:   computeFleetTotals(fleetTotalRow(rows), len(services), f.StartMs, f.EndMs),
 		Services: services,
 	}, nil
 }
@@ -44,53 +44,53 @@ func (s *Service) GetFleetServices(ctx context.Context, f REDFilters) ([]Service
 }
 
 func mapFleetServices(rows []redMetricsRow) []ServiceREDMetric {
-	services := make([]ServiceREDMetric, len(rows))
-	for i, row := range rows {
-		services[i] = ServiceREDMetric{
+	services := make([]ServiceREDMetric, 0, len(rows))
+	for _, row := range rows {
+		if row.IsTotal != 0 {
+			continue
+		}
+		services = append(services, ServiceREDMetric{
 			ServiceName:  row.ServiceName,
 			RequestCount: int64(row.TotalCount),
 			ErrorCount:   int64(row.ErrorCount),
 			AvgLatency:   utils.SanitizeFloat(float64(row.P50Ms)),
 			P95Latency:   utils.SanitizeFloat(float64(row.P95Ms)),
 			P99Latency:   utils.SanitizeFloat(float64(row.P99Ms)),
-		}
+		})
 	}
 	return services
 }
 
-func computeFleetTotals(services []ServiceREDMetric, startMs, endMs int64) FleetTotals {
+func fleetTotalRow(rows []redMetricsRow) *redMetricsRow {
+	for i := range rows {
+		if rows[i].IsTotal != 0 {
+			return &rows[i]
+		}
+	}
+	return nil
+}
+
+func computeFleetTotals(total *redMetricsRow, serviceCount int, startMs, endMs int64) FleetTotals {
 	durationSec := float64(endMs-startMs) / 1000.0
 	if durationSec <= 0 {
 		durationSec = 1
 	}
 
-	var totalCount, totalErrors int64
-	var totalP50, totalP95, totalP99 float64
-	for _, svc := range services {
-		totalCount += svc.RequestCount
-		totalErrors += svc.ErrorCount
-		totalP50 += svc.AvgLatency
-		totalP95 += svc.P95Latency
-		totalP99 += svc.P99Latency
+	if total == nil {
+		return FleetTotals{ServiceCount: int64(serviceCount)}
 	}
-	serviceCount := int64(len(services))
-
+	totalCount := int64(total.TotalCount)
+	totalErrors := int64(total.ErrorCount)
 	avgErrorRate := metrics.PercentageInt(totalErrors, totalCount)
-	avgP50, avgP95, avgP99 := 0.0, 0.0, 0.0
-	if serviceCount > 0 {
-		avgP50 = totalP50 / float64(serviceCount)
-		avgP95 = totalP95 / float64(serviceCount)
-		avgP99 = totalP99 / float64(serviceCount)
-	}
 	return FleetTotals{
-		ServiceCount:   serviceCount,
+		ServiceCount:   int64(serviceCount),
 		TotalSpanCount: totalCount,
 		TotalErrors:    totalErrors,
 		TotalRPS:       utils.SanitizeFloat(float64(totalCount) / durationSec),
 		AvgErrorRate:   utils.SanitizeFloat(avgErrorRate),
-		AvgP50Ms:       utils.SanitizeFloat(avgP50),
-		AvgP95Ms:       utils.SanitizeFloat(avgP95),
-		AvgP99Ms:       utils.SanitizeFloat(avgP99),
+		AvgP50Ms:       utils.SanitizeFloat(float64(total.P50Ms)),
+		AvgP95Ms:       utils.SanitizeFloat(float64(total.P95Ms)),
+		AvgP99Ms:       utils.SanitizeFloat(float64(total.P99Ms)),
 	}
 }
 

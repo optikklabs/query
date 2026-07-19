@@ -81,7 +81,8 @@ func (r *Repository) QueryTopicThroughput(ctx context.Context, tenantID, startMs
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp BETWEEN @start AND @end
 		GROUP BY topic
-		ORDER BY bytes_per_sec DESC, topic ASC`
+		ORDER BY bytes_per_sec DESC, topic ASC
+		LIMIT 200`
 	rows := make([]TopicThroughputRow, 0)
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicThroughput", &rows, query, args...)
 }
@@ -102,7 +103,8 @@ func (r *Repository) QueryGroupPartitions(ctx context.Context, tenantID, startMs
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp BETWEEN @start AND @end
 		GROUP BY consumer_group
-		ORDER BY assigned_partitions DESC, consumer_group ASC`
+		ORDER BY assigned_partitions DESC, consumer_group ASC
+		LIMIT 200`
 	rows := make([]GroupPartitionsRow, 0)
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryGroupPartitions", &rows, query, args...)
 }

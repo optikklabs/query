@@ -13,6 +13,12 @@ type Handler struct {
 
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
+func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
+	modulecommon.HandleRangeQuery(w, r, "Failed to query ingestion overview", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.svc.Overview(ctx, tenantID, startMs, endMs)
+	})
+}
+
 // Summary powers GET /api/v1/ingestion/summary — KPI strip + by-type breakdown.
 func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 	modulecommon.HandleRangeQuery(w, r, "Failed to query ingestion summary", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {

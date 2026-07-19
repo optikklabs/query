@@ -14,9 +14,14 @@ type CreateChannelRequest struct {
 
 type UpdateChannelRequest = CreateChannelRequest
 
+type TestChannelResponse struct {
+	OK        bool   `json:"ok"`
+	ErrorText string `json:"errorText,omitempty"`
+}
+
 type CreatePolicyRequest struct {
 	Name     string          `json:"name" validate:"required"`
-	MatchDSL string          `json:"match_dsl" validate:"required"`
+	MatchDSL string          `json:"matchDsl" validate:"required"`
 	Actions  json.RawMessage `json:"actions"`
 	Enabled  *bool           `json:"enabled,omitempty"`
 	Position *int            `json:"position,omitempty"`

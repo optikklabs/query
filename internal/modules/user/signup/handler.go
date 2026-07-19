@@ -36,7 +36,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		h.Tokens.SetRefreshCookie(w, response.RefreshToken)
 		modulecommon.RespondOK(w, struct {
 			auth.LoginResponse
-			APIKey string `json:"api_key"`
+			APIKey string `json:"apiKey"`
 		}{*response.Session, response.APIKey})
 		return
 	}
@@ -57,6 +57,6 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	h.Tokens.SetRefreshCookie(w, refresh)
 	modulecommon.RespondOK(w, struct {
 		auth.LoginResponse
-		APIKey string `json:"api_key"`
+		APIKey string `json:"apiKey"`
 	}{response, apiKey})
 }

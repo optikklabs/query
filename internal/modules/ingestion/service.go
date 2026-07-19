@@ -97,7 +97,15 @@ func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (
 	if err != nil {
 		return SummaryResponse{}, fmt.Errorf("ingestion.Summary cardinality: %w", err)
 	}
+	return s.summaryFromUsage(logs, spans, metrics, activeTS, topMetric, startMs, endMs), nil
+}
 
+func (s *Service) summaryFromUsage(
+	logs, spans, metrics []dateCountRow,
+	activeTS uint64,
+	topMetric nameCountRow,
+	startMs, endMs int64,
+) SummaryResponse {
 	dates := buildDateAxis(startMs, endMs)
 	idx := axisIndex(dates)
 	n := len(dates)
@@ -151,7 +159,7 @@ func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (
 			{Type: "spans", Label: "Spans (APM)", Records: spansTotal, Pct: pct(spansTotal, records), Bytes: spansBytes, BytesPct: pct(spansBytes, bytesTotal)},
 			{Type: "metrics", Label: "Custom metrics", Records: metricsTotal, Pct: pct(metricsTotal, records), Bytes: metricsBytes, BytesPct: pct(metricsBytes, bytesTotal)},
 		},
-	}, nil
+	}
 }
 
 // Cost estimates the tenant's bill for the period from metered usage. It reads
@@ -169,7 +177,13 @@ func (s *Service) Cost(ctx context.Context, tenantID, startMs, endMs int64) (Cos
 	if err != nil {
 		return CostResponse{}, fmt.Errorf("ingestion.Cost metrics: %w", err)
 	}
+	return s.costFromUsage(logs, spans, metrics, startMs, endMs), nil
+}
 
+func (s *Service) costFromUsage(
+	logs, spans, metrics []dateCountRow,
+	startMs, endMs int64,
+) CostResponse {
 	var logsBytes, spansBytes, metricDPs uint64
 	for _, row := range logs {
 		logsBytes += row.Bytes
@@ -190,7 +204,7 @@ func (s *Service) Cost(ctx context.Context, tenantID, startMs, endMs int64) (Cos
 		daysElapsed: end.Day(),
 		daysInMonth: daysInMonth(end),
 	}
-	return estimateCost(u, s.cfg.Rates()), nil
+	return estimateCost(u, s.cfg.Rates())
 }
 
 // Timeseries builds the daily stacked series, grouped by signal type or by service.
@@ -214,7 +228,14 @@ func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64
 	if err != nil {
 		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries metrics: %w", err)
 	}
+	return timeseriesByType(logs, spans, metrics, dates, idx), nil
+}
 
+func timeseriesByType(
+	logs, spans, metrics []dateCountRow,
+	dates []string,
+	idx map[string]int,
+) TimeseriesResponse {
 	logsC, logsB := fillDaily(logs, idx, len(dates))
 	spansC, spansB := fillDaily(spans, idx, len(dates))
 	metricsC, metricsB := fillDaily(metrics, idx, len(dates))
@@ -226,7 +247,7 @@ func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64
 			{ID: "spans", Label: "Spans (APM)", Data: spansC, ByteData: spansB},
 			{ID: "metrics", Label: "Custom metrics", Data: metricsC, ByteData: metricsB},
 		},
-	}, nil
+	}
 }
 
 // svcSeries accumulates a service's daily records and bytes on the date axis.
@@ -263,7 +284,14 @@ func (s *Service) timeseriesByService(ctx context.Context, tenantID, startMs, en
 	if err != nil {
 		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries svc spans: %w", err)
 	}
+	return timeseriesByServiceRows(logs, spans, dates, idx), nil
+}
 
+func timeseriesByServiceRows(
+	logs, spans []svcDateCountRow,
+	dates []string,
+	idx map[string]int,
+) TimeseriesResponse {
 	perService := accumulateByService([][]svcDateCountRow{logs, spans}, idx, len(dates))
 	ranked := rankByTotal(perService)
 	series := make([]TimeseriesSeries, 0, topServiceSeries+1)
@@ -284,7 +312,7 @@ func (s *Service) timeseriesByService(ctx context.Context, tenantID, startMs, en
 		series = append(series, TimeseriesSeries{ID: "other", Label: "Other services", Data: otherC, ByteData: otherB})
 	}
 
-	return TimeseriesResponse{GroupBy: "service", Dates: dates, Series: series}, nil
+	return TimeseriesResponse{GroupBy: "service", Dates: dates, Series: series}
 }
 
 // rankByTotal returns service names ordered by descending total record volume.
@@ -383,8 +411,6 @@ func (s *Service) Services(ctx context.Context, tenantID, startMs, endMs int64) 
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services prior spans: %w", err)
 	}
 
-	dates := buildDateAxis(startMs, endMs)
-	idx := axisIndex(dates)
 	dailyLogs, err := s.repo.DailyLogsByService(ctx, tenantID, startMs, endMs)
 	if err != nil {
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services daily logs: %w", err)
@@ -393,12 +419,24 @@ func (s *Service) Services(ctx context.Context, tenantID, startMs, endMs int64) 
 	if err != nil {
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services daily spans: %w", err)
 	}
+	return servicesFromUsage(
+		logTotals, spanTotals, tsTotals, priorLogs, priorSpans,
+		dailyLogs, dailySpans, startMs, endMs,
+	), nil
+}
 
+func servicesFromUsage(
+	logTotals, spanTotals, tsTotals, priorLogs, priorSpans []svcCountRow,
+	dailyLogs, dailySpans []svcDateCountRow,
+	startMs, endMs int64,
+) ServicesResponse {
+	dates := buildDateAxis(startMs, endMs)
+	idx := axisIndex(dates)
 	services := aggregateServices(logTotals, spanTotals, tsTotals)
 	priorTotals := priorRecordTotals(priorLogs, priorSpans)
 	spark := accumulateByService([][]svcDateCountRow{dailyLogs, dailySpans}, idx, len(dates))
 
-	return buildServicesResponse(services, priorTotals, spark, len(dates)), nil
+	return buildServicesResponse(services, priorTotals, spark, len(dates))
 }
 
 // buildServicesResponse ranks services by record volume, keeps the top rows and

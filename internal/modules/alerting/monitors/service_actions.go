@@ -47,8 +47,8 @@ func (s *Service) Unmute(ctx context.Context, tenantID, id int64) error {
 
 type TestResult struct {
 	Value         float64 `json:"value"`
-	HasData       bool    `json:"has_data"`
-	WouldDecideAs string  `json:"would_decide_as"`
+	HasData       bool    `json:"hasData"`
+	WouldDecideAs string  `json:"wouldDecideAs"`
 	Threshold     float64 `json:"threshold"`
 }
 
@@ -119,9 +119,9 @@ func (s *Service) Series(ctx context.Context, tenantID, id int64, queries query.
 
 type SeriesResponse struct {
 	Points            []query.Point `json:"points"`
-	AlertThreshold    *float64      `json:"alert_threshold,omitempty"`
-	WarnThreshold     *float64      `json:"warn_threshold,omitempty"`
-	RecoveryThreshold *float64      `json:"recovery_threshold,omitempty"`
+	AlertThreshold    *float64      `json:"alertThreshold,omitempty"`
+	WarnThreshold     *float64      `json:"warnThreshold,omitempty"`
+	RecoveryThreshold *float64      `json:"recoveryThreshold,omitempty"`
 }
 
 func (s *Service) Events(ctx context.Context, tenantID, id int64, limit int) ([]MonitorEventResponse, error) {
@@ -165,14 +165,14 @@ func (s *Service) StatusTimeline(ctx context.Context, tenantID, id int64, window
 
 type StatusTimelineResponse struct {
 	Bands     []StatusBand `json:"bands"`
-	StartedAt time.Time    `json:"started_at"`
-	EndedAt   time.Time    `json:"ended_at"`
+	StartedAt time.Time    `json:"startedAt"`
+	EndedAt   time.Time    `json:"endedAt"`
 }
 
 type StatusBand struct {
 	Status    string    `json:"status"`
-	StartedAt time.Time `json:"started_at"`
-	EndedAt   time.Time `json:"ended_at"`
+	StartedAt time.Time `json:"startedAt"`
+	EndedAt   time.Time `json:"endedAt"`
 }
 
 func buildBands(events []models.MonitorEventRow, start, end time.Time) []StatusBand {

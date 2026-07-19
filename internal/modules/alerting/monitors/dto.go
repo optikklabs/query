@@ -13,17 +13,17 @@ type CreateMonitorRequest struct {
 	Query            models.MonitorQuery  `json:"query"`
 	Conditions       models.Conditions    `json:"conditions"`
 	Notify           models.NotifyTargets `json:"notify"`
-	MessageBody      string               `json:"message_body,omitempty"`
-	RunbookURL       string               `json:"runbook_url,omitempty"`
+	MessageBody      string               `json:"messageBody,omitempty"`
+	RunbookURL       string               `json:"runbookUrl,omitempty"`
 	Tags             []string             `json:"tags,omitempty"`
-	EvalEverySec     int                  `json:"eval_every_sec"`
-	RenotifyEverySec *int                 `json:"renotify_every_sec,omitempty"`
+	EvalEverySec     int                  `json:"evalEverySec"`
+	RenotifyEverySec *int                 `json:"renotifyEverySec,omitempty"`
 }
 
 type UpdateMonitorRequest = CreateMonitorRequest
 
 type MuteRequest struct {
-	DurationSec int `json:"duration_sec" validate:"required"`
+	DurationSec int `json:"durationSec" validate:"required"`
 }
 
 type ListQuery struct {

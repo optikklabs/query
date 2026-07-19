@@ -42,6 +42,7 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 		    GROUP BY fingerprint, service, status_code
 		)
 		SELECT series.service                                              AS service,
+		       grouping(series.service)                                     AS is_total,
 		       sum(m.hist_count)                                           AS total_count,
 		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)     AS error_count,
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
@@ -50,7 +51,7 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		GROUP BY service`
+		GROUP BY GROUPING SETS ((service), ())`
 	var rows []redMetricsRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetFleetREDMetrics",
 		&rows, query, args...); err != nil {

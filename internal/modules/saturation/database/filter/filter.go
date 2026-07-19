@@ -25,7 +25,7 @@ type Filters struct {
 
 func ParseFilters(r *http.Request) Filters {
 	return Filters{
-		DBSystem:   r.URL.Query()["db_system"],
+		DBSystem:   r.URL.Query()["dbSystem"],
 		Collection: r.URL.Query()["collection"],
 		Namespace:  r.URL.Query()["namespace"],
 		Server:     r.URL.Query()["server"],

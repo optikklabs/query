@@ -24,7 +24,8 @@ const clientsQuery = `
 	FROM optikk.metrics_series
 	PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' AND service != ''
 	WHERE ` + filter.AttrSystem + ` = 'kafka' AND ` + filter.AttrTopic + ` != ''
-	ORDER BY service`
+	ORDER BY service
+	LIMIT 200`
 
 // QueryClients lists Kafka services in deterministic name order. The frontend
 // uses the first result as its initial selection.
@@ -83,5 +84,6 @@ func edgesQuery(rollupTable string) string {
 		PREWHERE m.tenant_id = @tenantID
 		     AND m.timestamp BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		GROUP BY service, topic, consumer_group`
+		GROUP BY service, topic, consumer_group
+		LIMIT 1000`
 }

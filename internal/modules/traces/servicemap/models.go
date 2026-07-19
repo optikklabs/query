@@ -5,17 +5,17 @@ import (
 )
 
 type TraceErrorGroup struct {
-	ExceptionType string           `json:"exception_type"`
+	ExceptionType string           `json:"exceptionType"`
 	Count         int              `json:"count"`
 	Spans         []TraceErrorSpan `json:"spans"`
 }
 
 type TraceErrorSpan struct {
-	SpanID           string    `json:"span_id"`
-	ServiceName      string    `json:"service_name"`
-	OperationName    string    `json:"operation_name"`
-	ExceptionMessage string    `json:"exception_message,omitempty"`
-	StatusMessage    string    `json:"status_message,omitempty"`
-	StartTime        time.Time `json:"start_time"`
-	DurationMs       float64   `json:"duration_ms"`
+	SpanID           string    `json:"spanId"`
+	ServiceName      string    `json:"serviceName"`
+	OperationName    string    `json:"operationName"`
+	ExceptionMessage string    `json:"exceptionMessage,omitempty"`
+	StatusMessage    string    `json:"statusMessage,omitempty"`
+	StartTime        time.Time `json:"startTime"`
+	DurationMs       float64   `json:"durationMs"`
 }

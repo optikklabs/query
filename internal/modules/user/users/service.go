@@ -14,12 +14,12 @@ import (
 // repository is the tenant-scoped persistence the service depends on. Defined
 // here (consumer side) so the service can be unit-tested with a fake.
 type repository interface {
-	CreateUser(email, passwordHash, name string, tenantID int64, role string, createdAt time.Time) (int64, error)
-	FindUserByID(userID, tenantID int64) (shared.UserRecord, error)
-	ListUsersByTenantID(tenantID int64) ([]shared.UserRecord, error)
-	UpdateUserRole(userID, tenantID int64, role string) error
-	CountActiveAdmins(tenantID int64) (int, error)
-	DeactivateUser(userID, tenantID int64) error
+	CreateUser(context.Context, string, string, string, int64, string, time.Time) (int64, error)
+	FindUserByID(context.Context, int64, int64) (shared.UserRecord, error)
+	ListUsersByTenantID(context.Context, int64) ([]shared.UserRecord, error)
+	UpdateUserRole(context.Context, int64, int64, string) error
+	CountActiveAdmins(context.Context, int64) (int, error)
+	DeactivateUser(context.Context, int64, int64) error
 }
 
 // Service provisions and manages users within a single tenant.
@@ -52,16 +52,16 @@ func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantI
 		hashStr = string(hash)
 	}
 
-	userID, err := s.repo.CreateUser(req.Email, hashStr, req.Name, tenantID, role, time.Now().UTC())
+	userID, err := s.repo.CreateUser(ctx, req.Email, hashStr, req.Name, tenantID, role, time.Now().UTC())
 	if err != nil {
 		return UserResponse{}, shared.NewInternalError("Failed to create user", err)
 	}
 
-	created, err := s.repo.FindUserByID(userID, tenantID)
+	created, err := s.repo.FindUserByID(ctx, userID, tenantID)
 	if err != nil {
 		return UserResponse{}, shared.NewInternalError("Failed to load created user", err)
 	}
-	
+
 	// If no password was provided, generate an invite/reset link and email it to the user.
 	if req.Password == "" {
 		if err := s.authService.ForgotPassword(ctx, req.Email); err != nil {
@@ -87,8 +87,8 @@ func (s *Service) buildUserResponse(user shared.UserRecord) UserResponse {
 }
 
 // ListUsers returns all active users belonging to the given tenant.
-func (s *Service) ListUsers(tenantID int64) ([]UserResponse, error) {
-	records, err := s.repo.ListUsersByTenantID(tenantID)
+func (s *Service) ListUsers(ctx context.Context, tenantID int64) ([]UserResponse, error) {
+	records, err := s.repo.ListUsersByTenantID(ctx, tenantID)
 	if err != nil {
 		return nil, shared.NewInternalError("Failed to list users", err)
 	}
@@ -101,20 +101,20 @@ func (s *Service) ListUsers(tenantID int64) ([]UserResponse, error) {
 
 // SetUserRole promotes or demotes a user within the caller's tenant. Demoting
 // the last admin is blocked so an org can never be left without one.
-func (s *Service) SetUserRole(userID, tenantID int64, role string) (UserResponse, error) {
+func (s *Service) SetUserRole(ctx context.Context, userID, tenantID int64, role string) (UserResponse, error) {
 	if !shared.IsValidRole(role) {
 		return UserResponse{}, shared.NewValidationError("role must be 'admin' or 'member'", nil)
 	}
-	user, err := s.findInTenant(userID, tenantID)
+	user, err := s.findInTenant(ctx, userID, tenantID)
 	if err != nil {
 		return UserResponse{}, err
 	}
 	if user.Role == shared.RoleAdmin && role == shared.RoleMember {
-		if err := s.guardLastAdmin(tenantID); err != nil {
+		if err := s.guardLastAdmin(ctx, tenantID); err != nil {
 			return UserResponse{}, err
 		}
 	}
-	if err := s.repo.UpdateUserRole(userID, tenantID, role); err != nil {
+	if err := s.repo.UpdateUserRole(ctx, userID, tenantID, role); err != nil {
 		return UserResponse{}, shared.NewInternalError("Failed to update user role", err)
 	}
 	user.Role = role
@@ -123,17 +123,17 @@ func (s *Service) SetUserRole(userID, tenantID int64, role string) (UserResponse
 
 // RemoveUser soft-deletes a user within the caller's tenant. Removing the last
 // admin is blocked.
-func (s *Service) RemoveUser(userID, tenantID int64) error {
-	user, err := s.findInTenant(userID, tenantID)
+func (s *Service) RemoveUser(ctx context.Context, userID, tenantID int64) error {
+	user, err := s.findInTenant(ctx, userID, tenantID)
 	if err != nil {
 		return err
 	}
 	if user.Role == shared.RoleAdmin {
-		if err := s.guardLastAdmin(tenantID); err != nil {
+		if err := s.guardLastAdmin(ctx, tenantID); err != nil {
 			return err
 		}
 	}
-	if err := s.repo.DeactivateUser(userID, tenantID); err != nil {
+	if err := s.repo.DeactivateUser(ctx, userID, tenantID); err != nil {
 		return shared.NewInternalError("Failed to remove user", err)
 	}
 	return nil
@@ -141,8 +141,8 @@ func (s *Service) RemoveUser(userID, tenantID int64) error {
 
 // findInTenant loads an active user, mapping a miss to a not-found error so a
 // caller cannot probe or act on users outside their tenant.
-func (s *Service) findInTenant(userID, tenantID int64) (shared.UserRecord, error) {
-	user, err := s.repo.FindUserByID(userID, tenantID)
+func (s *Service) findInTenant(ctx context.Context, userID, tenantID int64) (shared.UserRecord, error) {
+	user, err := s.repo.FindUserByID(ctx, userID, tenantID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return shared.UserRecord{}, shared.NewNotFoundError("User not found", nil)
@@ -152,8 +152,8 @@ func (s *Service) findInTenant(userID, tenantID int64) (shared.UserRecord, error
 	return user, nil
 }
 
-func (s *Service) guardLastAdmin(tenantID int64) error {
-	admins, err := s.repo.CountActiveAdmins(tenantID)
+func (s *Service) guardLastAdmin(ctx context.Context, tenantID int64) error {
+	admins, err := s.repo.CountActiveAdmins(ctx, tenantID)
 	if err != nil {
 		return shared.NewInternalError("Failed to count admins", err)
 	}

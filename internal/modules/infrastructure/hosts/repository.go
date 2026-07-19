@@ -50,7 +50,9 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, tenantID, startMs
 		PREWHERE m.tenant_id     = @tenantID
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
-		GROUP BY host, metric_name`
+		GROUP BY host, metric_name
+		ORDER BY host, metric_name
+		LIMIT 500`
 
 	args := []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
@@ -91,7 +93,8 @@ func (r *Repository) QueryHostSpans(
 		     AND m.timestamp   BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY host
-		ORDER BY request_count DESC`
+		ORDER BY request_count DESC
+		LIMIT 200`
 	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("unknownHost", defaultUnknownHost),

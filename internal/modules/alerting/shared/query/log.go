@@ -79,12 +79,23 @@ func (b *LogBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 }
 
 func logArgs(tenantID int64, queryText string, startMs, endMs int64) []any {
+	bucketStart, bucketEnd := logBucketBounds(startMs, endMs)
 	return []any{
 		tenantIDArg(tenantID),
 		clickhouse.Named("searchTerm", strings.ToLower(strings.TrimSpace(queryText))),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
+		clickhouse.Named("bucketStart", bucketStart),
+		clickhouse.Named("bucketEnd", bucketEnd),
 	}
+}
+
+// logBucketBounds expands a timestamp range to the five-minute partitions used
+// by optikk.logs. The timestamp predicate in the query keeps the final result
+// exact; these bounds only ensure ClickHouse can prune irrelevant partitions.
+func logBucketBounds(startMs, endMs int64) (time.Time, time.Time) {
+	return time.UnixMilli(timebucket.FloorMsToBucket(startMs, timebucket.BucketSeconds)),
+		time.UnixMilli(timebucket.FloorMsToBucket(endMs, timebucket.BucketSeconds))
 }
 
 type logCountRow struct {

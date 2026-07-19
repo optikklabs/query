@@ -18,9 +18,9 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: sqlx.NewDb(db, "mysql")}
 }
 
-func (r *Repository) FindTenantByID(tenantID int64) (shared.TenantRecord, error) {
+func (r *Repository) FindTenantByID(ctx context.Context, tenantID int64) (shared.TenantRecord, error) {
 	var t shared.TenantRecord
-	err := dbutil.GetSQL(context.Background(), r.db, "user.FindTenantByID", &t, `
+	err := dbutil.GetSQL(ctx, r.db, "user.FindTenantByID", &t, `
 		SELECT id, name, active, api_key_prefix, created_at
 		FROM tenant
 		WHERE id = ?

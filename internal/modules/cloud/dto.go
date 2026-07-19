@@ -26,17 +26,17 @@ type ProviderSummary struct {
 	Restarts   int64           `json:"restarts"`
 	Categories []CategoryCount `json:"categories"`
 	Health     HealthCounts    `json:"health"`
-	LastSeen   string          `json:"last_seen"`
+	LastSeen   string          `json:"lastSeen"`
 }
 
 // CloudOverview is the /cloud/overview response.
 type CloudOverview struct {
 	Providers      []ProviderSummary `json:"providers"`
-	TotalResources int64             `json:"total_resources"`
-	TotalAccounts  int64             `json:"total_accounts"`
-	TotalRegions   int64             `json:"total_regions"`
-	TotalNodes     int64             `json:"total_nodes"`
-	TotalPods      int64             `json:"total_pods"`
+	TotalResources int64             `json:"totalResources"`
+	TotalAccounts  int64             `json:"totalAccounts"`
+	TotalRegions   int64             `json:"totalRegions"`
+	TotalNodes     int64             `json:"totalNodes"`
+	TotalPods      int64             `json:"totalPods"`
 	Unhealthy      int64             `json:"unhealthy"`
 	Degraded       int64             `json:"degraded"`
 }
@@ -63,9 +63,9 @@ type AttentionResource struct {
 	Region       string  `json:"region"`
 	Platform     string  `json:"platform"`
 	Health       string  `json:"health"`
-	ErrorRate    float64 `json:"error_rate"`
-	AvgLatencyMs float64 `json:"avg_latency_ms"`
-	RequestCount int64   `json:"request_count"`
+	ErrorRate    float64 `json:"errorRate"`
+	AvgLatencyMs float64 `json:"avgLatencyMs"`
+	RequestCount int64   `json:"requestCount"`
 }
 
 // CloudProviderDetail is the /cloud/{provider} response.

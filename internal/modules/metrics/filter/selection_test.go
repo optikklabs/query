@@ -1,8 +1,9 @@
 package filter
 
-import "strings"
-
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Day-window base filters route to the 5m grain on the 5m rollup tier.
 func baseFilters() Filters {
@@ -56,15 +57,16 @@ func TestBuildSelectionGroupByCarriesLabels(t *testing.T) {
 	f := baseFilters()
 	f.GroupBy = []string{"service", "db.name"}
 	_, cte, _, selectCols, groupBy, _ := BuildSelection(f)
-	if !strings.Contains(cte, "service AS g_service") {
+	if !strings.Contains(cte, "service AS g0") {
 		t.Fatalf("cte missing resource group: %q", cte)
 	}
-	if !strings.Contains(cte, "attributes.`db.name`::String AS g_db.name") {
+	if !strings.Contains(cte, "attributes.`db.name`::String AS g1") {
 		t.Fatalf("cte missing attr group: %q", cte)
 	}
-	for _, want := range []string{"`group_service`", "`group_db.name`"} {
-		if !strings.Contains(selectCols, want) || !strings.Contains(groupBy, want) {
-			t.Fatalf("missing %s in select=%q group=%q", want, selectCols, groupBy)
-		}
+	if !strings.Contains(selectCols, "[toString(fps.g0), toString(fps.g1)] AS group_values") {
+		t.Fatalf("select does not expose ordered group values: %q", selectCols)
+	}
+	if !strings.Contains(groupBy, "fps.g0") || !strings.Contains(groupBy, "fps.g1") {
+		t.Fatalf("group columns missing from group by: %q", groupBy)
 	}
 }

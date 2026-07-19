@@ -131,7 +131,7 @@ func (s *Service) ParsePasswordReset(raw string, passwordHash string) (int64, er
 		jwt.WithLeeway(30*time.Second),
 		jwt.WithExpirationRequired(),
 	)
-	
+
 	secret := append(s.secret, []byte(passwordHash)...)
 	_, err := parser.ParseWithClaims(raw, &claims, func(t *jwt.Token) (any, error) {
 		return secret, nil
@@ -139,7 +139,7 @@ func (s *Service) ParsePasswordReset(raw string, passwordHash string) (int64, er
 	if err != nil {
 		return 0, err
 	}
-	
+
 	if claims.Typ != typPasswordReset {
 		return 0, fmt.Errorf("token is not a password reset token")
 	}

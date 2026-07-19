@@ -3,8 +3,11 @@ package contracts
 import "time"
 
 type APIResponse struct {
-	Success    bool         `json:"success"`
-	Data       any          `json:"data,omitempty"`
+	Success bool `json:"success"`
+	Data    any  `json:"data,omitempty"`
+	// Comparison holds the same shape as Data for a previous period. Present
+	// only when the request asked for one via compareTo/compareStart.
+	Comparison any          `json:"comparison,omitempty"`
 	Error      *ErrorDetail `json:"error,omitempty"`
 	Pagination *PageInfo    `json:"pagination,omitempty"`
 	Timestamp  time.Time    `json:"timestamp"`
@@ -30,6 +33,10 @@ type PageInfo struct {
 
 func Success(data any) APIResponse {
 	return APIResponse{Success: true, Data: data, Timestamp: time.Now().UTC()}
+}
+
+func SuccessWithComparison(data, comparison any) APIResponse {
+	return APIResponse{Success: true, Data: data, Comparison: comparison, Timestamp: time.Now().UTC()}
 }
 
 func Failure(code, msg, path string, requestID ...string) APIResponse {

@@ -82,13 +82,13 @@ type ScopeTag struct {
 
 type Conditions struct {
 	Comparator        string   `json:"comparator"`
-	AlertThreshold    *float64 `json:"alert_threshold,omitempty"`
-	WarnThreshold     *float64 `json:"warn_threshold,omitempty"`
-	RecoveryThreshold *float64 `json:"recovery_threshold,omitempty"`
-	NoDataAfterSec    int      `json:"no_data_after_sec"`
+	AlertThreshold    *float64 `json:"alertThreshold,omitempty"`
+	WarnThreshold     *float64 `json:"warnThreshold,omitempty"`
+	RecoveryThreshold *float64 `json:"recoveryThreshold,omitempty"`
+	NoDataAfterSec    int      `json:"noDataAfterSec"`
 
-	NoDataAs  string `json:"no_data_as"`
-	MinSample *int   `json:"min_sample,omitempty"`
+	NoDataAs  string `json:"noDataAs"`
+	MinSample *int   `json:"minSample,omitempty"`
 }
 
 func (c *Conditions) Scan(value interface{}) error {

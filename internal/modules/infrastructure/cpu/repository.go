@@ -61,7 +61,8 @@ func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, tenantID
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
 		GROUP BY host, pod, container, service, metric_name
-		ORDER BY service, pod`
+		ORDER BY service, pod
+		LIMIT 500`
 	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), infraconsts.CPUMetrics)
 	var rows []CPUInstanceMetricRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "cpu.QueryCPUUtilizationByInstance", &rows, query, args...)

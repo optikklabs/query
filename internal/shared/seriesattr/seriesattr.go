@@ -20,5 +20,4 @@ const (
 
 const StatusErrorPred = "(series.status_code = 'STATUS_CODE_ERROR' OR series.status_code = 'ERROR')"
 
-
 const DBSpanPred = "attributes.db.system::String != ''"

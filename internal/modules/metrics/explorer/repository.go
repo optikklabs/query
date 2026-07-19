@@ -162,23 +162,39 @@ func (r *Repository) ListTagValuesForKeys(ctx context.Context, tenantID, startMs
 	return rows, nil
 }
 
-func (r *Repository) ResolveSeriesKind(ctx context.Context, f filter.Filters) (*metricKindDTO, error) {
+func (r *Repository) ResolveSeriesKinds(
+	ctx context.Context,
+	tenantID, startMs, endMs int64,
+	metricNames []string,
+) (map[string]metricKindDTO, error) {
+	if len(metricNames) == 0 {
+		return map[string]metricKindDTO{}, nil
+	}
 	query := `
-		SELECT any(temporality)  AS temporality,
+		SELECT metric_name,
+		       any(temporality)  AS temporality,
 		       any(is_monotonic) AS is_monotonic,
 		       any(metric_type)  AS metric_type
 		FROM optikk.metrics_series
 		PREWHERE tenant_id     = @tenantID
-		     AND metric_name = @metricName
-		     AND timestamp   BETWEEN @start AND @end`
+		     AND metric_name IN @metricNames
+		     AND timestamp   BETWEEN @start AND @end
+		GROUP BY metric_name`
+	args := []any{
+		clickhouse.Named("tenantID", uint32(tenantID)),
+		clickhouse.Named("start", time.UnixMilli(startMs)),
+		clickhouse.Named("end", time.UnixMilli(endMs)),
+		clickhouse.Named("metricNames", metricNames),
+	}
 	var rows []metricKindDTO
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.ResolveSeriesKind", &rows, query, metricArgs(f)...); err != nil {
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.ResolveSeriesKinds", &rows, query, args...); err != nil {
 		return nil, err
 	}
-	if len(rows) == 0 {
-		return nil, nil
+	kinds := make(map[string]metricKindDTO, len(rows))
+	for _, row := range rows {
+		kinds[row.MetricName] = row
 	}
-	return &rows[0], nil
+	return kinds, nil
 }
 
 func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([]timeseriesPointDTO, error) {

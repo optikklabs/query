@@ -6,7 +6,7 @@ type TenantResponse struct {
 	ID           int64  `json:"id"`
 	Name         string `json:"name"`
 	Active       bool   `json:"active"`
-	APIKey       string `json:"api_key,omitempty"`
-	APIKeyPrefix string `json:"api_key_prefix"`
-	CreatedAt    any    `json:"created_at"`
+	APIKey       string `json:"apiKey,omitempty"`
+	APIKeyPrefix string `json:"apiKeyPrefix"`
+	CreatedAt    any    `json:"createdAt"`
 }

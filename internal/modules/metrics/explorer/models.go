@@ -4,18 +4,18 @@ package explorer
 
 // MetricNameResult holds a metric name for autocomplete search.
 type MetricNameResult struct {
-	MetricName  string `json:"metric_name"`
-	MetricType  string `json:"metric_type"`
+	MetricName  string `json:"metricName"`
+	MetricType  string `json:"metricType"`
 	Unit        string `json:"unit"`
 	Description string `json:"description"`
 }
 
 type TagKeyResult struct {
-	TagKey string `json:"tag_key"`
+	TagKey string `json:"tagKey"`
 }
 
 type TagValueResult struct {
-	TagValue string `json:"tag_value"`
+	TagValue string `json:"tagValue"`
 	Count    uint64 `json:"count"`
 }
 
@@ -51,12 +51,11 @@ type FEFilter struct {
 }
 
 type FEMetricQuery struct {
-	ID               string     `json:"id"`
-	Aggregation      string     `json:"aggregation"`
-	MetricName       string     `json:"metricName"`
-	Where            []FEFilter `json:"where"`
-	GroupBy          []string   `json:"groupBy,omitempty"`
-	SpaceAggregation string     `json:"spaceAggregation,omitempty"`
+	ID          string     `json:"id"`
+	Aggregation string     `json:"aggregation"`
+	MetricName  string     `json:"metricName"`
+	Where       []FEFilter `json:"where"`
+	GroupBy     []string   `json:"groupBy,omitempty"`
 }
 
 type FEQueryRequest struct {

@@ -20,9 +20,9 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: sqlx.NewDb(db, "mysql")}
 }
 
-func (r *Repository) FindActiveUserByEmail(email string) (shared.AuthUser, error) {
+func (r *Repository) FindActiveUserByEmail(ctx context.Context, email string) (shared.AuthUser, error) {
 	var u shared.AuthUser
-	err := dbutil.GetSQL(context.Background(), r.db, "user.FindActiveUserByEmail", &u, `
+	err := dbutil.GetSQL(ctx, r.db, "user.FindActiveUserByEmail", &u, `
 		SELECT id, email, password_hash, name, tenant_id, role
 		FROM users
 		WHERE email = ? AND active = 1
@@ -31,9 +31,9 @@ func (r *Repository) FindActiveUserByEmail(email string) (shared.AuthUser, error
 	return u, err
 }
 
-func (r *Repository) FindActiveUserByID(userID int64) (shared.UserRecord, error) {
+func (r *Repository) FindActiveUserByID(ctx context.Context, userID int64) (shared.UserRecord, error) {
 	var u shared.UserRecord
-	err := dbutil.GetSQL(context.Background(), r.db, "user.FindActiveUserByID", &u, `
+	err := dbutil.GetSQL(ctx, r.db, "user.FindActiveUserByID", &u, `
 		SELECT id, email, name, tenant_id, active, role, created_at
 		FROM users
 		WHERE id = ? AND active = 1
@@ -42,9 +42,9 @@ func (r *Repository) FindActiveUserByID(userID int64) (shared.UserRecord, error)
 	return u, err
 }
 
-func (r *Repository) FindAuthUserByID(userID int64) (shared.AuthUser, error) {
+func (r *Repository) FindAuthUserByID(ctx context.Context, userID int64) (shared.AuthUser, error) {
 	var u shared.AuthUser
-	err := dbutil.GetSQL(context.Background(), r.db, "user.FindAuthUserByID", &u, `
+	err := dbutil.GetSQL(ctx, r.db, "user.FindAuthUserByID", &u, `
 		SELECT id, email, password_hash, name, tenant_id, role
 		FROM users
 		WHERE id = ? AND active = 1
@@ -53,25 +53,24 @@ func (r *Repository) FindAuthUserByID(userID int64) (shared.AuthUser, error) {
 	return u, err
 }
 
-func (r *Repository) UpdatePassword(userID int64, passwordHash string) error {
-	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.UpdatePassword", `
+func (r *Repository) UpdatePassword(ctx context.Context, userID int64, passwordHash string) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.UpdatePassword", `
 		UPDATE users SET password_hash = ? WHERE id = ?
 	`, passwordHash, userID)
 	return err
 }
 
-
-func (r *Repository) InsertRefreshToken(userID int64, familyID, tokenHash string, expiresAt time.Time) error {
-	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.InsertRefreshToken", `
+func (r *Repository) InsertRefreshToken(ctx context.Context, userID int64, familyID, tokenHash string, expiresAt time.Time) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.InsertRefreshToken", `
 		INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
 		VALUES (?, ?, ?, ?)
 	`, userID, familyID, tokenHash, expiresAt)
 	return err
 }
 
-func (r *Repository) FindRefreshTokenByHash(tokenHash string) (shared.RefreshTokenRecord, error) {
+func (r *Repository) FindRefreshTokenByHash(ctx context.Context, tokenHash string) (shared.RefreshTokenRecord, error) {
 	var t shared.RefreshTokenRecord
-	err := dbutil.GetSQL(context.Background(), r.db, "user.FindRefreshTokenByHash", &t, `
+	err := dbutil.GetSQL(ctx, r.db, "user.FindRefreshTokenByHash", &t, `
 		SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, created_at
 		FROM refresh_tokens
 		WHERE token_hash = ?
@@ -80,15 +79,15 @@ func (r *Repository) FindRefreshTokenByHash(tokenHash string) (shared.RefreshTok
 	return t, err
 }
 
-func (r *Repository) RevokeRefreshToken(tokenHash string) error {
-	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.RevokeRefreshToken", `
+func (r *Repository) RevokeRefreshToken(ctx context.Context, tokenHash string) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.RevokeRefreshToken", `
 		UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL
 	`, time.Now().UTC(), tokenHash)
 	return err
 }
 
-func (r *Repository) RevokeRefreshTokenFamily(familyID string) error {
-	_, err := dbutil.ExecSQL(context.Background(), r.db, "user.RevokeRefreshTokenFamily", `
+func (r *Repository) RevokeRefreshTokenFamily(ctx context.Context, familyID string) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.RevokeRefreshTokenFamily", `
 		UPDATE refresh_tokens SET revoked_at = ? WHERE family_id = ? AND revoked_at IS NULL
 	`, time.Now().UTC(), familyID)
 	return err
@@ -96,9 +95,9 @@ func (r *Repository) RevokeRefreshTokenFamily(familyID string) error {
 
 // FindTenantByID loads a tenant regardless of active state so login can tell a
 // suspended (trial-expired) tenant apart from a genuinely missing one.
-func (r *Repository) FindTenantByID(tenantID int64) (shared.TenantRecord, error) {
+func (r *Repository) FindTenantByID(ctx context.Context, tenantID int64) (shared.TenantRecord, error) {
 	var t shared.TenantRecord
-	err := dbutil.GetSQL(context.Background(), r.db, "user.FindTenantByID", &t, `
+	err := dbutil.GetSQL(ctx, r.db, "user.FindTenantByID", &t, `
 		SELECT id, name, active, api_key_prefix, account_status, trial_ends_at, created_at
 		FROM tenant
 		WHERE id = ?
@@ -106,4 +105,3 @@ func (r *Repository) FindTenantByID(tenantID int64) (shared.TenantRecord, error)
 	`, tenantID)
 	return t, err
 }
-

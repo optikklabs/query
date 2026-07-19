@@ -46,7 +46,7 @@ type TemplateRow struct {
 }
 
 type SlackWebhookConfig struct {
-	WebhookURL string `json:"webhook_url"`
+	WebhookURL string `json:"webhookUrl"`
 }
 
 var ChannelTypes = []string{"slack"}

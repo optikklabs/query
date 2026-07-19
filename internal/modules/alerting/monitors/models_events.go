@@ -8,16 +8,16 @@ import (
 // MonitorName is denormalized for the activity feed (saves a roundtrip).
 type MonitorEventResponse struct {
 	ID          int64      `json:"id"`
-	MonitorID   int64      `json:"monitor_id"`
-	MonitorName string     `json:"monitor_name"`
+	MonitorID   int64      `json:"monitorId"`
+	MonitorName string     `json:"monitorName"`
 	Kind        string     `json:"kind"`
 	Value       *float64   `json:"value,omitempty"`
 	Threshold   *float64   `json:"threshold,omitempty"`
-	PeakValue   *float64   `json:"peak_value,omitempty"`
-	ResolvedBy  string     `json:"resolved_by,omitempty"`
+	PeakValue   *float64   `json:"peakValue,omitempty"`
+	ResolvedBy  string     `json:"resolvedBy,omitempty"`
 	Note        string     `json:"note,omitempty"`
-	StartedAt   time.Time  `json:"started_at"`
-	EndedAt     *time.Time `json:"ended_at,omitempty"`
+	StartedAt   time.Time  `json:"startedAt"`
+	EndedAt     *time.Time `json:"endedAt,omitempty"`
 }
 
 func toEventResponses(rows []EventRow) []MonitorEventResponse {

@@ -48,7 +48,7 @@ func (s *Service) setTenantAPIKey(ctx context.Context, tenantID int64, apiKey st
 	if err := s.repo.UpdateTenantAPIKey(ctx, tenantID, shared.HashAPIKey(apiKey), shared.APIKeyPrefix(apiKey)); err != nil {
 		return TenantResponse{}, shared.NewInternalError("Failed to update api key", err)
 	}
-	tenant, err := s.repo.FindTenantByID(tenantID)
+	tenant, err := s.repo.FindTenantByID(ctx, tenantID)
 	if err != nil {
 		return TenantResponse{}, shared.NewInternalError("Failed to load tenant", err)
 	}
@@ -80,7 +80,7 @@ func (s *Service) setTenantActive(ctx context.Context, tenantID int64, active bo
 	if err := s.repo.UpdateTenantActive(ctx, tenantID, active); err != nil {
 		return TenantResponse{}, shared.NewInternalError("Failed to update tenant status", err)
 	}
-	tenant, err := s.repo.FindTenantByID(tenantID)
+	tenant, err := s.repo.FindTenantByID(ctx, tenantID)
 	if err != nil {
 		return TenantResponse{}, shared.NewInternalError("Failed to load tenant", err)
 	}

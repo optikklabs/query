@@ -191,14 +191,14 @@ func validateConditions(c models.Conditions) error {
 		return ErrValidation{Msg: "conditions.comparator must be above, below, or equal"}
 	}
 	if c.AlertThreshold == nil {
-		return ErrValidation{Msg: "conditions.alert_threshold is required"}
+		return ErrValidation{Msg: "conditions.alertThreshold is required"}
 	}
 	switch c.NoDataAs {
 	case "no_data", "alert", "ok":
 	case "":
 
 	default:
-		return ErrValidation{Msg: "conditions.no_data_as must be no_data, alert, or ok"}
+		return ErrValidation{Msg: "conditions.noDataAs must be no_data, alert, or ok"}
 	}
 	return nil
 }

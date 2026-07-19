@@ -99,13 +99,13 @@ func (s *Service) ListChannels(ctx context.Context, tenantID int64) ([]ChannelRe
 	return out, nil
 }
 
-func (s *Service) TestChannel(ctx context.Context, tenantID, id int64) (map[string]any, error) {
+func (s *Service) TestChannel(ctx context.Context, tenantID, id int64) (TestChannelResponse, error) {
 	row, err := s.repo.GetChannel(ctx, id, tenantID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
+			return TestChannelResponse{}, ErrNotFound
 		}
-		return nil, err
+		return TestChannelResponse{}, err
 	}
 	payload := dispatch.Payload{
 		MonitorID:    0,
@@ -127,9 +127,9 @@ func (s *Service) TestChannel(ctx context.Context, tenantID, id int64) (map[stri
 		errText = sql.NullString{Valid: true, String: deliverErr.Error()}
 	}
 	_ = s.repo.MarkChannelDelivered(ctx, id, at, errText)
-	out := map[string]any{"ok": deliverErr == nil}
+	out := TestChannelResponse{OK: deliverErr == nil}
 	if deliverErr != nil {
-		out["error_text"] = deliverErr.Error()
+		out.ErrorText = deliverErr.Error()
 	}
 	return out, nil
 }
@@ -150,7 +150,7 @@ func buildChannelRow(tenantID int64, req CreateChannelRequest) (models.ChannelRo
 	if t == "slack" {
 		var sc models.SlackWebhookConfig
 		if err := json.Unmarshal(cfg, &sc); err != nil || strings.TrimSpace(sc.WebhookURL) == "" {
-			return models.ChannelRow{}, ErrValidation{Msg: "slack channel requires config.webhook_url"}
+			return models.ChannelRow{}, ErrValidation{Msg: "slack channel requires config.webhookUrl"}
 		}
 	}
 	return models.ChannelRow{
@@ -218,7 +218,7 @@ func buildPolicyRow(tenantID int64, req CreatePolicyRequest) (models.PolicyRow, 
 	}
 	dsl := strings.TrimSpace(req.MatchDSL)
 	if dsl == "" {
-		return models.PolicyRow{}, ErrValidation{Msg: "match_dsl is required"}
+		return models.PolicyRow{}, ErrValidation{Msg: "matchDsl is required"}
 	}
 	actions := req.Actions
 	if len(actions) == 0 {

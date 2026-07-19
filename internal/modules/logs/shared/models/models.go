@@ -10,24 +10,24 @@ import (
 type Log struct {
 	ID                string             `json:"id"`
 	Timestamp         uint64             `json:"timestamp,string"`
-	ObservedTimestamp uint64             `json:"observed_timestamp,string"`
-	SeverityText      string             `json:"severity_text"`
-	SeverityNumber    uint8              `json:"severity_number"`
-	SeverityBucket    uint8              `json:"severity_bucket"`
+	ObservedTimestamp uint64             `json:"observedTimestamp,string"`
+	SeverityText      string             `json:"severityText"`
+	SeverityNumber    uint8              `json:"severityNumber"`
+	SeverityBucket    uint8              `json:"severityBucket"`
 	Body              string             `json:"body"`
-	TraceID           string             `json:"trace_id"`
-	SpanID            string             `json:"span_id"`
-	TraceFlags        uint32             `json:"trace_flags"`
-	ServiceName       string             `json:"service_name"`
+	TraceID           string             `json:"traceId"`
+	SpanID            string             `json:"spanId"`
+	TraceFlags        uint32             `json:"traceFlags"`
+	ServiceName       string             `json:"serviceName"`
 	Host              string             `json:"host"`
 	Pod               string             `json:"pod"`
 	Container         string             `json:"container"`
 	Environment       string             `json:"environment"`
-	AttributesString  map[string]string  `json:"attributes_string,omitempty"`
-	AttributesNumber  map[string]float64 `json:"attributes_number,omitempty"`
-	AttributesBool    map[string]bool    `json:"attributes_bool,omitempty"`
-	ScopeName         string             `json:"scope_name"`
-	ScopeVersion      string             `json:"scope_version"`
+	AttributesString  map[string]string  `json:"attributesString,omitempty"`
+	AttributesNumber  map[string]float64 `json:"attributesNumber,omitempty"`
+	AttributesBool    map[string]bool    `json:"attributesBool,omitempty"`
+	ScopeName         string             `json:"scopeName"`
+	ScopeVersion      string             `json:"scopeVersion"`
 }
 
 type LogRow struct {
@@ -81,7 +81,7 @@ type FacetValue struct {
 var SeverityLabels = []string{"UNSET", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"}
 
 type Facets struct {
-	Severity    []string     `json:"severity_bucket"`
+	Severity    []string     `json:"severityBucket"`
 	Service     []FacetValue `json:"service"`
 	Host        []FacetValue `json:"host,omitempty"`
 	Pod         []FacetValue `json:"pod,omitempty"`
@@ -95,7 +95,7 @@ type Summary struct {
 }
 
 type TrendBucket struct {
-	TimeBucket string `json:"time_bucket"`
+	TimeBucket string `json:"timeBucket"`
 	Total      uint64 `json:"total"`
 	Error      uint64 `json:"error"`
 	Warn       uint64 `json:"warn"`

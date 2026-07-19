@@ -86,7 +86,6 @@ func TestGenerateRevokedKey(t *testing.T) {
 	}
 }
 
-
 // A user code must be unambiguous, dash-formatted, and unique per draw.
 func TestGenerateUserCode(t *testing.T) {
 	seen := make(map[string]bool)

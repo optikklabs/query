@@ -19,7 +19,7 @@ func namedArgs(args []any) map[string]any {
 }
 
 func TestParseFilters(t *testing.T) {
-	req := httptest.NewRequest("GET", "/?db_system=postgresql&db_system=mysql&collection=orders&namespace=app&server=db.internal", nil)
+	req := httptest.NewRequest("GET", "/?dbSystem=postgresql&dbSystem=mysql&collection=orders&namespace=app&server=db.internal", nil)
 	got := ParseFilters(req)
 	if len(got.DBSystem) != 2 || got.DBSystem[0] != "postgresql" || got.DBSystem[1] != "mysql" {
 		t.Fatalf("DBSystem = %v", got.DBSystem)

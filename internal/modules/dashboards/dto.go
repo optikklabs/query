@@ -7,9 +7,9 @@ type CreatePageRequest struct {
 	Name        string   `json:"name" validate:"required"`
 	Description string   `json:"description,omitempty"`
 	Icon        string   `json:"icon,omitempty"`
-	IconColor   string   `json:"icon_color,omitempty"`
+	IconColor   string   `json:"iconColor,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
-	IsFavorite  bool     `json:"is_favorite"`
+	IsFavorite  bool     `json:"isFavorite"`
 }
 
 // UpdatePageRequest reuses the create shape (full replace of editable fields).
@@ -18,8 +18,8 @@ type UpdatePageRequest = CreatePageRequest
 // CreateWidgetRequest persists a widget's full definition with its query.
 type CreateWidgetRequest struct {
 	Title         string          `json:"title,omitempty"`
-	PanelType     string          `json:"panel_type" validate:"required"`
-	LayoutVariant string          `json:"layout_variant,omitempty"`
+	PanelType     string          `json:"panelType" validate:"required"`
+	LayoutVariant string          `json:"layoutVariant,omitempty"`
 	Spec          json.RawMessage `json:"spec" validate:"required"`
 	Layout        json.RawMessage `json:"layout" validate:"required"`
 	Position      int             `json:"position"`

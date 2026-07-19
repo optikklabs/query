@@ -28,12 +28,12 @@ type Host struct {
 
 	Zone         string     `json:"zone,omitempty"`
 	RPS          *float64   `json:"rps,omitempty"`
-	ErrorRate    *float64   `json:"error_rate,omitempty"`
-	P99Ms        *float64   `json:"p99_ms,omitempty"`
+	ErrorRate    *float64   `json:"errorRate,omitempty"`
+	P99Ms        *float64   `json:"p99Ms,omitempty"`
 	Status       HostStatus `json:"status,omitempty"`
-	LastSeen     string     `json:"last_seen,omitempty"`
-	RequestCount int64      `json:"request_count,omitempty"`
-	ErrorCount   int64      `json:"error_count,omitempty"`
+	LastSeen     string     `json:"lastSeen,omitempty"`
+	RequestCount int64      `json:"requestCount,omitempty"`
+	ErrorCount   int64      `json:"errorCount,omitempty"`
 }
 
 type hostMetricRow struct {

@@ -324,3 +324,44 @@ func TestBuildColumnarResult_Empty(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildGroupedColumnarResult(t *testing.T) {
+	startMs := int64(0)
+	endMs := int64(900000)
+	step := "15m"
+	rows := []timeseriesPointDTO{
+		{BucketAt: time.Unix(0, 0), GroupValues: []string{"api", "prod"}, Sum: 10, Count: 1},
+		{BucketAt: time.Unix(0, 0), GroupValues: []string{"worker", "prod"}, Sum: 20, Count: 1},
+		{BucketAt: time.Unix(900, 0), GroupValues: []string{"api", "prod"}, Sum: 30, Count: 1},
+	}
+	points := applyAggregation(rows, "sum", startMs, endMs, step, false, false)
+
+	result := buildGroupedColumnarResult(
+		rows, points, []string{"service", "environment"}, startMs, endMs, step, false,
+	)
+
+	if len(result.Series) != 2 {
+		t.Fatalf("series count = %d, want 2", len(result.Series))
+	}
+	api := result.Series[0]
+	if api.Tags["service"] != "api" || api.Tags["environment"] != "prod" {
+		t.Fatalf("api tags = %v", api.Tags)
+	}
+	if api.Values[0] == nil || *api.Values[0] != 10 || api.Values[1] == nil || *api.Values[1] != 30 {
+		t.Fatalf("api values = %v", api.Values)
+	}
+	worker := result.Series[1]
+	if worker.Tags["service"] != "worker" || worker.Values[0] == nil || *worker.Values[0] != 20 {
+		t.Fatalf("worker series = %+v", worker)
+	}
+	if worker.Values[1] != nil {
+		t.Fatalf("worker missing bucket = %v, want nil", *worker.Values[1])
+	}
+}
+
+func TestBuildGroupedColumnarResultEmpty(t *testing.T) {
+	result := buildGroupedColumnarResult(nil, nil, []string{"service"}, 0, 900000, "15m", true)
+	if len(result.Timestamps) != 2 || len(result.Series) != 0 {
+		t.Fatalf("result = %+v, want dense timestamps and no grouped series", result)
+	}
+}

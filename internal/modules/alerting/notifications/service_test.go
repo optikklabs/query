@@ -16,7 +16,7 @@ func TestBuildChannelRowAcceptsOnlyImplementedTypes(t *testing.T) {
 			name: "slack",
 			req: CreateChannelRequest{
 				Type: "slack", Name: "on-call",
-				Config: []byte(`{"webhook_url":"https://hooks.slack.test/1"}`),
+				Config: []byte(`{"webhookUrl":"https://hooks.slack.test/1"}`),
 			},
 		},
 		{

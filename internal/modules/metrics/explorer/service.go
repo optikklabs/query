@@ -9,6 +9,7 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/metrics/filter"
+	"golang.org/x/sync/errgroup"
 )
 
 type Service struct {
@@ -150,29 +151,68 @@ func (s *Service) ListTags(ctx context.Context, tenantID, startMs, endMs int64, 
 }
 
 func (s *Service) Query(ctx context.Context, tenantID int64, req FEQueryRequest) (*FEQueryResponse, error) {
-	results := make(map[string]FEQueryResult, len(req.Queries))
-
-	for _, feq := range req.Queries {
+	type preparedQuery struct {
+		request FEMetricQuery
+		filter  filter.Filters
+		result  FEQueryResult
+	}
+	prepared := make([]preparedQuery, len(req.Queries))
+	metricNames := make([]string, 0, len(req.Queries))
+	seenMetrics := make(map[string]struct{}, len(req.Queries))
+	for i, feq := range req.Queries {
 		f := convertFEQuery(tenantID, req.StartTime, req.EndTime, req.Step, feq)
 		if err := f.Validate(); err != nil {
 			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
 		}
-
-		kind, err := s.repo.ResolveSeriesKind(ctx, f)
-		if err != nil {
-			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
+		prepared[i] = preparedQuery{request: feq, filter: f}
+		if _, seen := seenMetrics[f.MetricName]; !seen {
+			seenMetrics[f.MetricName] = struct{}{}
+			metricNames = append(metricNames, f.MetricName)
 		}
-		f.Cumulative, f.Histogram = resolveSeriesFlags(kind)
-		metricType := metricTypeFrom(kind)
-		fillZero := shouldZeroFill(metricType, f.Aggregation, f.Cumulative)
+	}
 
-		rows, err := s.repo.QueryRollupSeries(ctx, f)
-		if err != nil {
-			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
-		}
+	kinds, err := s.repo.ResolveSeriesKinds(ctx, tenantID, req.StartTime, req.EndTime, metricNames)
+	if err != nil {
+		return nil, fmt.Errorf("resolve metric types: %w", err)
+	}
 
-		points := applyAggregation(rows, f.Aggregation, f.StartMs, f.EndMs, f.Step, f.Cumulative, f.Histogram)
-		results[feq.ID] = buildColumnarResult(points, f.StartMs, f.EndMs, f.Step, fillZero)
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(4)
+	for i := range prepared {
+		i := i
+		group.Go(func() error {
+			query := &prepared[i]
+			kind, found := kinds[query.filter.MetricName]
+			var kindPtr *metricKindDTO
+			if found {
+				kindPtr = &kind
+			}
+			query.filter.Cumulative, query.filter.Histogram = resolveSeriesFlags(kindPtr)
+			metricType := metricTypeFrom(kindPtr)
+			fillZero := shouldZeroFill(
+				metricType, query.filter.Aggregation, query.filter.Cumulative,
+			)
+
+			rows, err := s.repo.QueryRollupSeries(groupCtx, query.filter)
+			if err != nil {
+				return fmt.Errorf("query %q: %w", query.request.ID, err)
+			}
+
+			points := applyAggregation(rows, query.filter.Aggregation, query.filter.StartMs, query.filter.EndMs, query.filter.Step, query.filter.Cumulative, query.filter.Histogram)
+			query.result = buildGroupedColumnarResult(
+				rows, points, query.request.GroupBy,
+				query.filter.StartMs, query.filter.EndMs, query.filter.Step, fillZero,
+			)
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	results := make(map[string]FEQueryResult, len(prepared))
+	for _, query := range prepared {
+		results[query.request.ID] = query.result
 	}
 
 	return &FEQueryResponse{Results: results}, nil
@@ -429,6 +469,82 @@ func buildColumnarResult(points []TimeseriesPoint, startMs, endMs int64, step st
 		Timestamps: timestamps,
 		Series:     []FESeries{{Tags: map[string]string{}, Values: values}},
 	}
+}
+
+type pointGroup struct {
+	tags   map[string]string
+	points []TimeseriesPoint
+}
+
+func buildGroupedColumnarResult(
+	rows []timeseriesPointDTO,
+	points []TimeseriesPoint,
+	groupKeys []string,
+	startMs, endMs int64,
+	step string,
+	fillZero bool,
+) FEQueryResult {
+	if len(groupKeys) == 0 {
+		return buildColumnarResult(points, startMs, endMs, step, fillZero)
+	}
+
+	timestamps := buildDenseTimestamps(startMs, endMs, step)
+	if len(timestamps) == 0 || len(rows) == 0 {
+		return FEQueryResult{Timestamps: timestamps, Series: []FESeries{}}
+	}
+
+	tsIndex := make(map[int64]int, len(timestamps))
+	for i, ts := range timestamps {
+		tsIndex[ts] = i
+	}
+
+	groups := make(map[string]*pointGroup)
+	for i, row := range rows {
+		key := groupIdentity(row.GroupValues)
+		group := groups[key]
+		if group == nil {
+			group = &pointGroup{tags: groupTags(groupKeys, row.GroupValues)}
+			groups[key] = group
+		}
+		group.points = append(group.points, points[i])
+	}
+
+	keys := make([]string, 0, len(groups))
+	for key := range groups {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	series := make([]FESeries, 0, len(keys))
+	for _, key := range keys {
+		group := groups[key]
+		values := mapPointsToAxis(group.points, tsIndex, len(timestamps))
+		if fillZero {
+			zeroFillGaps(values)
+		}
+		series = append(series, FESeries{Tags: group.tags, Values: values})
+	}
+	return FEQueryResult{Timestamps: timestamps, Series: series}
+}
+
+func groupIdentity(values []string) string {
+	var b strings.Builder
+	for _, value := range values {
+		fmt.Fprintf(&b, "%d:%s|", len(value), value)
+	}
+	return b.String()
+}
+
+func groupTags(keys, values []string) map[string]string {
+	tags := make(map[string]string, len(keys))
+	for i, key := range keys {
+		if i < len(values) {
+			tags[key] = values[i]
+		} else {
+			tags[key] = ""
+		}
+	}
+	return tags
 }
 
 func parseTimestampMs(ts string) int64 {

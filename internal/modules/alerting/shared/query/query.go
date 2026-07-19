@@ -17,7 +17,7 @@ type ScalarResult struct {
 }
 
 type Point struct {
-	BucketMs int64   `json:"bucket_ms"`
+	BucketMs int64   `json:"bucketMs"`
 	Value    float64 `json:"value"`
 }
 

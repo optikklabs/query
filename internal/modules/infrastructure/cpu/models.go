@@ -10,7 +10,7 @@ type CPUInstanceMetric struct {
 	Host        string   `json:"host"`
 	Pod         string   `json:"pod"`
 	Container   string   `json:"container"`
-	ServiceName string   `json:"service_name"`
+	ServiceName string   `json:"serviceName"`
 	Value       *float64 `json:"value"`
 }
 

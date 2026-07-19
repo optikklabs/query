@@ -10,7 +10,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 )
 
-const maxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
+const MaxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
 
 type Filters struct {
 	TenantID int64
@@ -48,11 +48,11 @@ func (f *Filters) Validate() error {
 	if f.StartMs <= 0 || f.EndMs <= 0 {
 		return errors.New("startTime and endTime are required")
 	}
-	if f.EndMs < f.StartMs {
-		return errors.New("endTime must be >= startTime")
+	if f.EndMs <= f.StartMs {
+		return errors.New("endTime must be greater than startTime")
 	}
-	if f.EndMs-f.StartMs > maxTimeRangeMs {
-		f.StartMs = f.EndMs - maxTimeRangeMs
+	if f.EndMs-f.StartMs > MaxTimeRangeMs {
+		return errors.New("time range must not exceed 30 days")
 	}
 	if f.Aggregation == "" {
 		f.Aggregation = "avg"

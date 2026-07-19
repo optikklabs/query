@@ -78,7 +78,7 @@ func (s *Service) PollDeviceToken(ctx context.Context, deviceCode string) (auth.
 		slog.WarnContext(ctx, "AUTH_EVENT device_poll_touch_failed", slog.Any("error", err))
 	}
 
-	user, err := s.repo.FindActiveUserByID(*record.UserID)
+	user, err := s.repo.FindActiveUserByID(ctx, *record.UserID)
 	if err != nil {
 		return auth.LoginResponse{}, "", shared.NewUnauthorizedError("Approved user is no longer active", err)
 	}
@@ -92,7 +92,7 @@ func (s *Service) PollDeviceToken(ctx context.Context, deviceCode string) (auth.
 		Name:     user.Name,
 		TenantID: user.TenantID,
 	}
-	response, refresh, err := s.issuer.IssueTokens(authUser)
+	response, refresh, err := s.issuer.IssueTokens(ctx, authUser)
 	if err != nil {
 		return auth.LoginResponse{}, "", err
 	}

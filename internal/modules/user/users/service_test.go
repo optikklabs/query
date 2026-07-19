@@ -23,13 +23,13 @@ func newFakeRepo(seed ...shared.UserRecord) *fakeRepo {
 	return f
 }
 
-func (f *fakeRepo) CreateUser(_, _, _ string, tenantID int64, role string, _ time.Time) (int64, error) {
+func (f *fakeRepo) CreateUser(_ context.Context, _, _, _ string, tenantID int64, role string, _ time.Time) (int64, error) {
 	f.nextID++
 	f.users[f.nextID] = shared.UserRecord{ID: f.nextID, TenantID: tenantID, Role: role, Active: true}
 	return f.nextID, nil
 }
 
-func (f *fakeRepo) FindUserByID(userID, tenantID int64) (shared.UserRecord, error) {
+func (f *fakeRepo) FindUserByID(_ context.Context, userID, tenantID int64) (shared.UserRecord, error) {
 	u, ok := f.users[userID]
 	if !ok || u.TenantID != tenantID || !u.Active {
 		return shared.UserRecord{}, sql.ErrNoRows
@@ -37,7 +37,7 @@ func (f *fakeRepo) FindUserByID(userID, tenantID int64) (shared.UserRecord, erro
 	return u, nil
 }
 
-func (f *fakeRepo) ListUsersByTenantID(tenantID int64) ([]shared.UserRecord, error) {
+func (f *fakeRepo) ListUsersByTenantID(_ context.Context, tenantID int64) ([]shared.UserRecord, error) {
 	var out []shared.UserRecord
 	for _, u := range f.users {
 		if u.TenantID == tenantID && u.Active {
@@ -47,14 +47,14 @@ func (f *fakeRepo) ListUsersByTenantID(tenantID int64) ([]shared.UserRecord, err
 	return out, nil
 }
 
-func (f *fakeRepo) UpdateUserRole(userID, tenantID int64, role string) error {
+func (f *fakeRepo) UpdateUserRole(_ context.Context, userID, tenantID int64, role string) error {
 	u := f.users[userID]
 	u.Role = role
 	f.users[userID] = u
 	return nil
 }
 
-func (f *fakeRepo) CountActiveAdmins(tenantID int64) (int, error) {
+func (f *fakeRepo) CountActiveAdmins(_ context.Context, tenantID int64) (int, error) {
 	n := 0
 	for _, u := range f.users {
 		if u.TenantID == tenantID && u.Active && u.Role == shared.RoleAdmin {
@@ -64,7 +64,7 @@ func (f *fakeRepo) CountActiveAdmins(tenantID int64) (int, error) {
 	return n, nil
 }
 
-func (f *fakeRepo) DeactivateUser(userID, tenantID int64) error {
+func (f *fakeRepo) DeactivateUser(_ context.Context, userID, tenantID int64) error {
 	u := f.users[userID]
 	u.Active = false
 	f.users[userID] = u
@@ -101,7 +101,7 @@ func TestCreateUserDefaultsToMemberInCallerTenant(t *testing.T) {
 func TestSetUserRoleBlocksDemotingLastAdmin(t *testing.T) {
 	f := newFakeRepo(admin(1, 7))
 	s := NewService(f, nil)
-	if _, err := s.SetUserRole(1, 7, shared.RoleMember); err == nil {
+	if _, err := s.SetUserRole(context.Background(), 1, 7, shared.RoleMember); err == nil {
 		t.Fatal("expected last-admin demotion to be blocked")
 	}
 	if f.users[1].Role != shared.RoleAdmin {
@@ -112,7 +112,7 @@ func TestSetUserRoleBlocksDemotingLastAdmin(t *testing.T) {
 func TestSetUserRoleAllowsDemotionWhenAnotherAdminExists(t *testing.T) {
 	f := newFakeRepo(admin(1, 7), admin(2, 7))
 	s := NewService(f, nil)
-	if _, err := s.SetUserRole(1, 7, shared.RoleMember); err != nil {
+	if _, err := s.SetUserRole(context.Background(), 1, 7, shared.RoleMember); err != nil {
 		t.Fatalf("expected demotion allowed, got %v", err)
 	}
 	if f.users[1].Role != shared.RoleMember {
@@ -124,7 +124,7 @@ func TestSetUserRoleOtherTenantIsNotFound(t *testing.T) {
 	f := newFakeRepo(admin(1, 7), member(2, 7))
 	s := NewService(f, nil)
 	// User 1 belongs to tenant 7; caller is tenant 9.
-	if _, err := s.SetUserRole(1, 9, shared.RoleMember); err == nil {
+	if _, err := s.SetUserRole(context.Background(), 1, 9, shared.RoleMember); err == nil {
 		t.Fatal("expected cross-tenant role change to be not-found")
 	}
 }
@@ -132,7 +132,7 @@ func TestSetUserRoleOtherTenantIsNotFound(t *testing.T) {
 func TestRemoveUserBlocksLastAdmin(t *testing.T) {
 	f := newFakeRepo(admin(1, 7))
 	s := NewService(f, nil)
-	if err := s.RemoveUser(1, 7); err == nil {
+	if err := s.RemoveUser(context.Background(), 1, 7); err == nil {
 		t.Fatal("expected removing last admin to be blocked")
 	}
 	if !f.users[1].Active {
@@ -143,7 +143,7 @@ func TestRemoveUserBlocksLastAdmin(t *testing.T) {
 func TestRemoveUserAllowsMember(t *testing.T) {
 	f := newFakeRepo(admin(1, 7), member(2, 7))
 	s := NewService(f, nil)
-	if err := s.RemoveUser(2, 7); err != nil {
+	if err := s.RemoveUser(context.Background(), 2, 7); err != nil {
 		t.Fatalf("expected member removal to succeed, got %v", err)
 	}
 	if f.users[2].Active {
@@ -154,7 +154,7 @@ func TestRemoveUserAllowsMember(t *testing.T) {
 func TestRemoveUserOtherTenantIsNotFound(t *testing.T) {
 	f := newFakeRepo(member(2, 7))
 	s := NewService(f, nil)
-	if err := s.RemoveUser(2, 9); err == nil {
+	if err := s.RemoveUser(context.Background(), 2, 9); err == nil {
 		t.Fatal("expected cross-tenant removal to be not-found")
 	}
 }

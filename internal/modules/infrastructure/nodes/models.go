@@ -6,32 +6,32 @@ import "time"
 
 type InfrastructureNode struct {
 	Host           string   `json:"host"`
-	PodCount       int64    `json:"pod_count"`
-	ContainerCount int64    `json:"container_count"`
+	PodCount       int64    `json:"podCount"`
+	ContainerCount int64    `json:"containerCount"`
 	Services       []string `json:"services"`
-	RequestCount   int64    `json:"request_count"`
-	ErrorCount     int64    `json:"error_count"`
-	ErrorRate      float64  `json:"error_rate"`
-	AvgLatencyMs   float64  `json:"avg_latency_ms"`
-	P95LatencyMs   float64  `json:"p95_latency_ms"`
-	LastSeen       string   `json:"last_seen"`
+	RequestCount   int64    `json:"requestCount"`
+	ErrorCount     int64    `json:"errorCount"`
+	ErrorRate      float64  `json:"errorRate"`
+	AvgLatencyMs   float64  `json:"avgLatencyMs"`
+	P95LatencyMs   float64  `json:"p95LatencyMs"`
+	LastSeen       string   `json:"lastSeen"`
 }
 
 type InfrastructureNodeService struct {
-	ServiceName  string  `json:"service_name"`
-	RequestCount int64   `json:"request_count"`
-	ErrorCount   int64   `json:"error_count"`
-	ErrorRate    float64 `json:"error_rate"`
-	AvgLatencyMs float64 `json:"avg_latency_ms"`
-	P95LatencyMs float64 `json:"p95_latency_ms"`
-	PodCount     int64   `json:"pod_count"`
+	ServiceName  string  `json:"serviceName"`
+	RequestCount int64   `json:"requestCount"`
+	ErrorCount   int64   `json:"errorCount"`
+	ErrorRate    float64 `json:"errorRate"`
+	AvgLatencyMs float64 `json:"avgLatencyMs"`
+	P95LatencyMs float64 `json:"p95LatencyMs"`
+	PodCount     int64   `json:"podCount"`
 }
 
 type InfrastructureNodeSummary struct {
-	HealthyNodes   int64 `json:"healthy_nodes"`
-	DegradedNodes  int64 `json:"degraded_nodes"`
-	UnhealthyNodes int64 `json:"unhealthy_nodes"`
-	TotalPods      int64 `json:"total_pods"`
+	HealthyNodes   int64 `json:"healthyNodes"`
+	DegradedNodes  int64 `json:"degradedNodes"`
+	UnhealthyNodes int64 `json:"unhealthyNodes"`
+	TotalPods      int64 `json:"totalPods"`
 }
 
 type NodeAggregateRow struct {

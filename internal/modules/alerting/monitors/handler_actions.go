@@ -40,7 +40,7 @@ func (h *Handler) Mute(w http.ResponseWriter, r *http.Request) {
 		respondServiceError(w, r, err)
 		return
 	}
-	httputil.RespondOK(w, map[string]any{"muted": id, "duration_sec": req.DurationSec})
+	httputil.RespondOK(w, map[string]any{"muted": id, "durationSec": req.DurationSec})
 }
 
 func (h *Handler) Unmute(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +76,7 @@ func (h *Handler) Series(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	windowMs := int64(httputil.ParseIntParam(r, "window_ms", 3_600_000))
+	windowMs := int64(httputil.ParseIntParam(r, "windowMs", 3_600_000))
 	res, err := h.Service.Series(r.Context(), tenant.TenantID, id, h.Queries, windowMs)
 	if err != nil {
 		respondServiceError(w, r, err)
@@ -118,7 +118,7 @@ func (h *Handler) StatusTimeline(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	windowMs := int64(httputil.ParseIntParam(r, "window_ms", 24*60*60*1000))
+	windowMs := int64(httputil.ParseIntParam(r, "windowMs", 24*60*60*1000))
 	res, err := h.Service.StatusTimeline(r.Context(), tenant.TenantID, id, windowMs)
 	if err != nil {
 		respondServiceError(w, r, err)

@@ -1,68 +1,68 @@
 {
   "criticalPath": [
     {
-      "span_id": "a1",
-      "operation_name": "op",
-      "service_name": "s",
-      "duration_ms": 3
+      "spanId": "a1",
+      "operationName": "op",
+      "serviceName": "s",
+      "durationMs": 3
     },
     {
-      "span_id": "",
-      "operation_name": "",
-      "service_name": "",
-      "duration_ms": 0
+      "spanId": "",
+      "operationName": "",
+      "serviceName": "",
+      "durationMs": 0
     }
   ],
   "errorPath": [
     {
-      "span_id": "a1",
-      "parent_span_id": "",
-      "operation_name": "op",
-      "service_name": "s",
+      "spanId": "a1",
+      "parentSpanId": "",
+      "operationName": "op",
+      "serviceName": "s",
       "status": "ERROR",
-      "status_message": "m",
-      "start_time": "2026-07-16T10:30:00Z",
-      "duration_ms": 3
+      "statusMessage": "m",
+      "startTime": "2026-07-16T10:30:00Z",
+      "durationMs": 3
     },
     {
-      "span_id": "",
-      "parent_span_id": "",
-      "operation_name": "",
-      "service_name": "",
+      "spanId": "",
+      "parentSpanId": "",
+      "operationName": "",
+      "serviceName": "",
       "status": "",
-      "status_message": "",
-      "start_time": "0001-01-01T00:00:00Z",
-      "duration_ms": 0
+      "statusMessage": "",
+      "startTime": "0001-01-01T00:00:00Z",
+      "durationMs": 0
     }
   ],
   "kafkaTopology": {
     "producers": [
       {
         "service": "p",
-        "rate_per_sec": 0,
-        "error_rate": 0,
-        "p50_ms": 0,
-        "p95_ms": 0,
-        "p99_ms": 0
+        "ratePerSec": 0,
+        "errorRate": 0,
+        "p50Ms": 0,
+        "p95Ms": 0,
+        "p99Ms": 0
       }
     ],
     "topics": [
       {
         "topic": "t",
-        "rate_per_sec": 0,
-        "producer_count": 0,
-        "consumer_group_count": 0
+        "ratePerSec": 0,
+        "producerCount": 0,
+        "consumerGroupCount": 0
       }
     ],
     "consumers": [
       {
         "service": "c",
         "group": "g",
-        "rate_per_sec": 0,
-        "error_rate": 0,
-        "p50_ms": 0,
-        "p95_ms": 0,
-        "p99_ms": 0
+        "ratePerSec": 0,
+        "errorRate": 0,
+        "p50Ms": 0,
+        "p95Ms": 0,
+        "p99Ms": 0
       }
     ],
     "edges": [
@@ -70,7 +70,7 @@
         "source": "p",
         "target": "t",
         "kind": "produce",
-        "rate_per_sec": 0
+        "ratePerSec": 0
       }
     ],
     "pathways": [
@@ -79,15 +79,15 @@
         "topic": "t",
         "group": "g",
         "consumer": "c",
-        "produce_rate_per_sec": 0,
-        "consume_rate_per_sec": 0,
-        "error_rate": 0
+        "produceRatePerSec": 0,
+        "consumeRatePerSec": 0,
+        "errorRate": 0
       }
     ]
   },
   "logsFacets": {
     "facets": {
-      "severity_bucket": [
+      "severityBucket": [
         "INFO"
       ],
       "service": [
@@ -103,40 +103,40 @@
       {
         "id": "l1",
         "timestamp": "1784197800000000000",
-        "observed_timestamp": "1784197800000000000",
-        "severity_text": "INFO",
-        "severity_number": 9,
-        "severity_bucket": 2,
+        "observedTimestamp": "1784197800000000000",
+        "severityText": "INFO",
+        "severityNumber": 9,
+        "severityBucket": 2,
         "body": "hi",
-        "trace_id": "",
-        "span_id": "",
-        "trace_flags": 0,
-        "service_name": "s",
+        "traceId": "",
+        "spanId": "",
+        "traceFlags": 0,
+        "serviceName": "s",
         "host": "",
         "pod": "",
         "container": "",
         "environment": "",
-        "scope_name": "",
-        "scope_version": ""
+        "scopeName": "",
+        "scopeVersion": ""
       },
       {
         "id": "",
         "timestamp": "0",
-        "observed_timestamp": "0",
-        "severity_text": "",
-        "severity_number": 0,
-        "severity_bucket": 0,
+        "observedTimestamp": "0",
+        "severityText": "",
+        "severityNumber": 0,
+        "severityBucket": 0,
         "body": "",
-        "trace_id": "",
-        "span_id": "",
-        "trace_flags": 0,
-        "service_name": "",
+        "traceId": "",
+        "spanId": "",
+        "traceFlags": 0,
+        "serviceName": "",
         "host": "",
         "pod": "",
         "container": "",
         "environment": "",
-        "scope_name": "",
-        "scope_version": ""
+        "scopeName": "",
+        "scopeVersion": ""
       }
     ],
     "pageInfo": {
@@ -154,7 +154,7 @@
   "logsTrend": {
     "trend": [
       {
-        "time_bucket": "t",
+        "timeBucket": "t",
         "total": 1,
         "error": 0,
         "warn": 0,
@@ -162,7 +162,7 @@
         "debug": 0
       },
       {
-        "time_bucket": "",
+        "timeBucket": "",
         "total": 0,
         "error": 0,
         "warn": 0,
@@ -217,171 +217,365 @@
   "queryExecutions": [
     {
       "timestamp": "t",
-      "trace_id": "t1",
-      "span_id": "s1",
-      "duration_ms": 1,
-      "is_error": false,
+      "traceId": "t1",
+      "spanId": "s1",
+      "durationMs": 1,
+      "isError": false,
       "service": "s",
       "host": "h",
       "rows": null
     },
     {
       "timestamp": "",
-      "trace_id": "",
-      "span_id": "",
-      "duration_ms": 0,
-      "is_error": false,
+      "traceId": "",
+      "spanId": "",
+      "durationMs": 0,
+      "isError": false,
       "service": "",
       "host": "",
       "rows": null
     }
   ],
   "querySummary": {
-    "query_hash": "h",
-    "query_text": "",
-    "db_system": "",
-    "collection_name": "",
-    "operation_name": "",
-    "call_count": 0,
-    "error_count": 0,
-    "p50_ms": null,
-    "p95_ms": null,
-    "p99_ms": null,
-    "avg_ms": 0,
-    "total_time_ms": 0,
-    "avg_rows": null,
+    "queryHash": "h",
+    "queryText": "",
+    "dbSystem": "",
+    "collectionName": "",
+    "operationName": "",
+    "callCount": 0,
+    "errorCount": 0,
+    "p50Ms": null,
+    "p95Ms": null,
+    "p99Ms": null,
+    "avgMs": 0,
+    "totalTimeMs": 0,
+    "avgRows": null,
     "services": [
       {
         "service": "s",
-        "call_count": 1
+        "callCount": 1
       }
     ]
   },
   "queryTimeseries": [
     {
-      "time_bucket": "t",
-      "call_count": 1,
-      "error_count": 0,
-      "avg_ms": null,
-      "p99_ms": null
+      "timeBucket": "t",
+      "callCount": 1,
+      "errorCount": 0,
+      "avgMs": null,
+      "p99Ms": null
     },
     {
-      "time_bucket": "",
-      "call_count": 0,
-      "error_count": 0,
-      "avg_ms": null,
-      "p99_ms": null
+      "timeBucket": "",
+      "callCount": 0,
+      "errorCount": 0,
+      "avgMs": null,
+      "p99Ms": null
     }
   ],
+  "redByEndpoint": [
+    {
+      "timestamp": "2026-07-16T10:30:00Z",
+      "httpRoute": "/x",
+      "rps": 1,
+      "errorRate": 1.5,
+      "p99Ms": 1.5
+    },
+    {
+      "timestamp": "0001-01-01T00:00:00Z",
+      "httpRoute": "",
+      "rps": 0,
+      "errorRate": null,
+      "p99Ms": null
+    }
+  ],
+  "redFleetOverview": {
+    "totals": {
+      "serviceCount": 1,
+      "totalSpanCount": 10,
+      "totalErrors": 1,
+      "totalRps": 2,
+      "avgErrorRate": 10,
+      "avgP50Ms": 1,
+      "avgP95Ms": 2,
+      "avgP99Ms": 3
+    },
+    "services": [
+      {
+        "serviceName": "s",
+        "requestCount": 1,
+        "errorCount": 0,
+        "avgLatency": 0,
+        "p95Latency": 0,
+        "p99Latency": 0
+      },
+      {
+        "serviceName": "",
+        "requestCount": 0,
+        "errorCount": 0,
+        "avgLatency": 0,
+        "p95Latency": 0,
+        "p99Latency": 0
+      }
+    ]
+  },
+  "redLatencyPercentiles": [
+    {
+      "timestamp": "2026-07-16T10:30:00Z",
+      "p50Ms": 1,
+      "p95Ms": 2,
+      "p99Ms": 3
+    },
+    {
+      "timestamp": "0001-01-01T00:00:00Z",
+      "p50Ms": 0,
+      "p95Ms": 0,
+      "p99Ms": 0
+    }
+  ],
+  "redRequestAndErrorRate": [
+    {
+      "timestamp": "2026-07-16T10:30:00Z",
+      "rps": 1,
+      "requestCount": 10,
+      "errorCount": 1,
+      "errorRate": 10
+    },
+    {
+      "timestamp": "0001-01-01T00:00:00Z",
+      "rps": 0,
+      "requestCount": 0,
+      "errorCount": 0,
+      "errorRate": 0
+    }
+  ],
+  "redRequestRate": [
+    {
+      "timestamp": "2026-07-16T10:30:00Z",
+      "serviceName": "s",
+      "rps": 1
+    },
+    {
+      "timestamp": "0001-01-01T00:00:00Z",
+      "serviceName": "",
+      "rps": 0
+    }
+  ],
+  "redSaturation": [
+    {
+      "timestamp": "2026-07-16T10:30:00Z",
+      "value": 1
+    },
+    {
+      "timestamp": "0001-01-01T00:00:00Z",
+      "value": 0
+    }
+  ],
+  "redServiceSummary": {
+    "serviceName": "s",
+    "requestCount": 10,
+    "errorCount": 1,
+    "rps": 1,
+    "errorRate": 10,
+    "p50Ms": 1,
+    "p95Ms": 2,
+    "p99Ms": 3,
+    "cpuUtilization": 4,
+    "memoryUtilization": 5,
+    "diskUtilization": 6
+  },
   "redServices": [
     {
-      "service_name": "s",
-      "request_count": 1,
-      "error_count": 0,
-      "avg_latency": 1,
-      "p95_latency": 2,
-      "p99_latency": 3
+      "serviceName": "s",
+      "requestCount": 1,
+      "errorCount": 0,
+      "avgLatency": 1,
+      "p95Latency": 2,
+      "p99Latency": 3
     },
     {
-      "service_name": "",
-      "request_count": 0,
-      "error_count": 0,
-      "avg_latency": 0,
-      "p95_latency": 0,
-      "p99_latency": 0
+      "serviceName": "",
+      "requestCount": 0,
+      "errorCount": 0,
+      "avgLatency": 0,
+      "p95Latency": 0,
+      "p99Latency": 0
     }
   ],
-  "relatedTraces": [
+  "redStatusTimeseries": [
     {
-      "trace_id": "t2",
-      "span_id": "b1",
-      "operation_name": "op",
-      "service_name": "s",
-      "duration_ms": 1,
-      "status": "OK",
-      "start_time": "2026-07-16T10:30:00Z"
+      "timestamp": "2026-07-16T10:30:00Z",
+      "status2xx": 1,
+      "status4xx": 2,
+      "status5xx": 3,
+      "statusOther": 4
     },
     {
-      "trace_id": "",
-      "span_id": "",
-      "operation_name": "",
-      "service_name": "",
-      "duration_ms": 0,
+      "timestamp": "0001-01-01T00:00:00Z",
+      "status2xx": 0,
+      "status4xx": 0,
+      "status5xx": 0,
+      "statusOther": 0
+    }
+  ],
+  "redTopDBQueries": {
+    "results": [
+      {
+        "operationName": "op",
+        "serviceName": "s",
+        "dbSystem": "mysql",
+        "rps": 1,
+        "errorRate": 1,
+        "errorCount": 1,
+        "totalCount": 10,
+        "p50Ms": 1,
+        "p95Ms": 2,
+        "p99Ms": 3
+      },
+      {
+        "operationName": "",
+        "serviceName": "",
+        "dbSystem": "",
+        "rps": 0,
+        "errorRate": 0,
+        "errorCount": 0,
+        "totalCount": 0,
+        "p50Ms": 0,
+        "p95Ms": 0,
+        "p99Ms": 0
+      }
+    ],
+    "pageInfo": {
+      "hasMore": false,
+      "limit": 50
+    }
+  },
+  "redTopEndpoints": {
+    "results": [
+      {
+        "operationName": "op",
+        "serviceName": "s",
+        "spanKind": "SERVER",
+        "httpRoute": "/x",
+        "rps": 1,
+        "errorRate": 1,
+        "errorCount": 1,
+        "totalCount": 10,
+        "p50Ms": 1,
+        "p95Ms": 2,
+        "p99Ms": 3
+      },
+      {
+        "operationName": "",
+        "serviceName": "",
+        "spanKind": "",
+        "httpRoute": "",
+        "rps": 0,
+        "errorRate": 0,
+        "errorCount": 0,
+        "totalCount": 0,
+        "p50Ms": 0,
+        "p95Ms": 0,
+        "p99Ms": 0
+      }
+    ],
+    "pageInfo": {
+      "hasMore": true,
+      "nextCursor": "c",
+      "limit": 50
+    }
+  },
+  "relatedTraces": [
+    {
+      "traceId": "t2",
+      "spanId": "b1",
+      "operationName": "op",
+      "serviceName": "s",
+      "durationMs": 1,
+      "status": "OK",
+      "startTime": "2026-07-16T10:30:00Z"
+    },
+    {
+      "traceId": "",
+      "spanId": "",
+      "operationName": "",
+      "serviceName": "",
+      "durationMs": 0,
       "status": "",
-      "start_time": "0001-01-01T00:00:00Z"
+      "startTime": "0001-01-01T00:00:00Z"
     }
   ],
   "slowQueries": [
     {
-      "query_hash": "h",
-      "query_text": "SELECT 1",
-      "db_system": "postgresql",
-      "collection_name": "c",
+      "queryHash": "h",
+      "queryText": "SELECT 1",
+      "dbSystem": "postgresql",
+      "collectionName": "c",
       "namespace": "app",
       "server": "db.internal",
-      "p50_ms": null,
-      "p95_ms": null,
-      "p99_ms": null,
-      "call_count": 1,
-      "error_count": 0
+      "p50Ms": null,
+      "p95Ms": null,
+      "p99Ms": null,
+      "callCount": 1,
+      "errorCount": 0
     },
     {
-      "query_hash": "",
-      "query_text": "",
-      "db_system": "",
-      "collection_name": "",
+      "queryHash": "",
+      "queryText": "",
+      "dbSystem": "",
+      "collectionName": "",
       "namespace": "",
       "server": "",
-      "p50_ms": null,
-      "p95_ms": null,
-      "p99_ms": null,
-      "call_count": 0,
-      "error_count": 0
+      "p50Ms": null,
+      "p95Ms": null,
+      "p99Ms": null,
+      "callCount": 0,
+      "errorCount": 0
     }
   ],
   "spanAttributes": {
-    "span_id": "a1",
-    "trace_id": "t1",
-    "operation_name": "op",
-    "service_name": "svc",
-    "attributes_string": {},
-    "resource_attributes": {}
+    "spanId": "a1",
+    "traceId": "t1",
+    "operationName": "op",
+    "serviceName": "svc",
+    "attributesString": {},
+    "resourceAttributes": {}
   },
   "spanAttributesFull": {
-    "span_id": "a1",
-    "trace_id": "t1",
-    "operation_name": "op",
-    "service_name": "svc",
-    "attributes_string": {
+    "spanId": "a1",
+    "traceId": "t1",
+    "operationName": "op",
+    "serviceName": "svc",
+    "attributesString": {
       "k": "v"
     },
-    "resource_attributes": {
+    "resourceAttributes": {
       "r": "v"
     },
-    "exception_type": "E",
-    "db_system": "mysql",
+    "exceptionType": "E",
+    "dbSystem": "mysql",
     "attributes": {
       "a": "b"
     },
     "links": [
       {
-        "trace_id": "t2",
-        "span_id": "b1"
+        "traceId": "t2",
+        "spanId": "b1"
       }
     ]
   },
   "spanEvents": [
     {
-      "span_id": "a1",
-      "trace_id": "t1",
-      "event_name": "e",
+      "spanId": "a1",
+      "traceId": "t1",
+      "eventName": "e",
       "timestamp": "2026-07-16T10:30:00Z",
       "attributes": "{}"
     },
     {
-      "span_id": "",
-      "trace_id": "",
-      "event_name": "",
+      "spanId": "",
+      "traceId": "",
+      "eventName": "",
       "timestamp": "0001-01-01T00:00:00Z",
       "attributes": ""
     }
@@ -400,22 +594,22 @@
   },
   "traceErrors": [
     {
-      "exception_type": "E",
+      "exceptionType": "E",
       "count": 1,
       "spans": [
         {
-          "span_id": "a1",
-          "service_name": "s",
-          "operation_name": "op",
-          "start_time": "2026-07-16T10:30:00Z",
-          "duration_ms": 2
+          "spanId": "a1",
+          "serviceName": "s",
+          "operationName": "op",
+          "startTime": "2026-07-16T10:30:00Z",
+          "durationMs": 2
         },
         {
-          "span_id": "",
-          "service_name": "",
-          "operation_name": "",
-          "start_time": "0001-01-01T00:00:00Z",
-          "duration_ms": 0
+          "spanId": "",
+          "serviceName": "",
+          "operationName": "",
+          "startTime": "0001-01-01T00:00:00Z",
+          "durationMs": 0
         }
       ]
     }
@@ -424,70 +618,70 @@
     {
       "id": "l1",
       "timestamp": "1784197800000000000",
-      "observed_timestamp": "1784197800000000000",
-      "severity_text": "INFO",
-      "severity_number": 0,
-      "severity_bucket": 0,
+      "observedTimestamp": "1784197800000000000",
+      "severityText": "INFO",
+      "severityNumber": 0,
+      "severityBucket": 0,
       "body": "hi",
-      "trace_id": "",
-      "span_id": "",
-      "trace_flags": 0,
-      "service_name": "s",
+      "traceId": "",
+      "spanId": "",
+      "traceFlags": 0,
+      "serviceName": "s",
       "host": "",
       "pod": "",
       "container": "",
       "environment": "",
-      "attributes_string": {
+      "attributesString": {
         "k": "v"
       },
-      "scope_name": "",
-      "scope_version": ""
+      "scopeName": "",
+      "scopeVersion": ""
     },
     {
       "id": "",
       "timestamp": "0",
-      "observed_timestamp": "0",
-      "severity_text": "",
-      "severity_number": 0,
-      "severity_bucket": 0,
+      "observedTimestamp": "0",
+      "severityText": "",
+      "severityNumber": 0,
+      "severityBucket": 0,
       "body": "",
-      "trace_id": "",
-      "span_id": "",
-      "trace_flags": 0,
-      "service_name": "",
+      "traceId": "",
+      "spanId": "",
+      "traceFlags": 0,
+      "serviceName": "",
       "host": "",
       "pod": "",
       "container": "",
       "environment": "",
-      "scope_name": "",
-      "scope_version": ""
+      "scopeName": "",
+      "scopeVersion": ""
     }
   ],
   "traceSpansEnvelope": {
     "spans": [
       {
-        "span_id": "a1",
-        "parent_span_id": "",
-        "trace_id": "t1",
-        "service_name": "gateway",
-        "operation_name": "GET /x",
-        "span_kind": "SERVER",
+        "spanId": "a1",
+        "parentSpanId": "",
+        "traceId": "t1",
+        "serviceName": "gateway",
+        "operationName": "GET /x",
+        "spanKind": "SERVER",
         "status": "OK",
-        "has_error": false,
-        "duration_ms": 12.5,
-        "start_ns": 1784197800000000000
+        "hasError": false,
+        "durationMs": 12.5,
+        "startNs": 1784197800000000000
       },
       {
-        "span_id": "",
-        "parent_span_id": "",
-        "trace_id": "",
-        "service_name": "",
-        "operation_name": "",
-        "span_kind": "",
+        "spanId": "",
+        "parentSpanId": "",
+        "traceId": "",
+        "serviceName": "",
+        "operationName": "",
+        "spanKind": "",
         "status": "",
-        "has_error": false,
-        "duration_ms": 0,
-        "start_ns": 0
+        "hasError": false,
+        "durationMs": 0,
+        "startNs": 0
       }
     ]
   },
@@ -502,26 +696,26 @@
   "tracesQuery": {
     "results": [
       {
-        "trace_id": "t1",
-        "start_ms": 1,
-        "end_ms": 2,
-        "duration_ms": 1,
-        "root_service": "s",
-        "root_operation": "op",
-        "span_count": 3,
-        "has_error": true,
-        "error_count": 1
+        "traceId": "t1",
+        "startMs": 1,
+        "endMs": 2,
+        "durationMs": 1,
+        "rootService": "s",
+        "rootOperation": "op",
+        "spanCount": 3,
+        "hasError": true,
+        "errorCount": 1
       },
       {
-        "trace_id": "",
-        "start_ms": 0,
-        "end_ms": 0,
-        "duration_ms": 0,
-        "root_service": "",
-        "root_operation": "",
-        "span_count": 0,
-        "has_error": false,
-        "error_count": 0
+        "traceId": "",
+        "startMs": 0,
+        "endMs": 0,
+        "durationMs": 0,
+        "rootService": "",
+        "rootOperation": "",
+        "spanCount": 0,
+        "hasError": false,
+        "errorCount": 0
       }
     ],
     "pageInfo": {
@@ -532,12 +726,12 @@
   },
   "tracesTrend": [
     {
-      "time_bucket": "2026-07-16T10:00:00Z",
+      "timeBucket": "2026-07-16T10:00:00Z",
       "total": 5,
       "errors": 1
     },
     {
-      "time_bucket": "",
+      "timeBucket": "",
       "total": 0,
       "errors": 0
     }

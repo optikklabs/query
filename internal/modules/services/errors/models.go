@@ -5,34 +5,34 @@ import (
 )
 
 type ErrorGroup struct {
-	GroupID         string    `json:"group_id"`
-	ServiceName     string    `json:"service_name"`
-	OperationName   string    `json:"operation_name"`
-	StatusMessage   string    `json:"status_message"`
-	HTTPStatusCode  int       `json:"http_status_code"`
-	ErrorCount      int64     `json:"error_count"`
-	LastOccurrence  time.Time `json:"last_occurrence"`
-	FirstOccurrence time.Time `json:"first_occurrence"`
-	SampleTraceID   string    `json:"sample_trace_id"`
+	GroupID         string    `json:"groupId"`
+	ServiceName     string    `json:"serviceName"`
+	OperationName   string    `json:"operationName"`
+	StatusMessage   string    `json:"statusMessage"`
+	HTTPStatusCode  int       `json:"httpStatusCode"`
+	ErrorCount      int64     `json:"errorCount"`
+	LastOccurrence  time.Time `json:"lastOccurrence"`
+	FirstOccurrence time.Time `json:"firstOccurrence"`
+	SampleTraceID   string    `json:"sampleTraceId"`
 }
 
 type ErrorGroupDetail struct {
-	GroupID         string    `json:"group_id"`
-	ServiceName     string    `json:"service_name"`
-	OperationName   string    `json:"operation_name"`
-	HTTPStatusCode  int       `json:"http_status_code"`
-	ErrorCount      int64     `json:"error_count"`
-	LastOccurrence  time.Time `json:"last_occurrence"`
-	FirstOccurrence time.Time `json:"first_occurrence"`
-	ExceptionType   string    `json:"exception_type,omitempty"`
+	GroupID         string    `json:"groupId"`
+	ServiceName     string    `json:"serviceName"`
+	OperationName   string    `json:"operationName"`
+	HTTPStatusCode  int       `json:"httpStatusCode"`
+	ErrorCount      int64     `json:"errorCount"`
+	LastOccurrence  time.Time `json:"lastOccurrence"`
+	FirstOccurrence time.Time `json:"firstOccurrence"`
+	ExceptionType   string    `json:"exceptionType,omitempty"`
 }
 
 type ErrorGroupTrace struct {
-	TraceID    string    `json:"trace_id"`
-	SpanID     string    `json:"span_id"`
+	TraceID    string    `json:"traceId"`
+	SpanID     string    `json:"spanId"`
 	Timestamp  time.Time `json:"timestamp"`
-	DurationMs float64   `json:"duration_ms"`
-	StatusCode string    `json:"status_code"`
+	DurationMs float64   `json:"durationMs"`
+	StatusCode string    `json:"statusCode"`
 }
 
 type PaginatedErrorTraces struct {
@@ -42,16 +42,16 @@ type PaginatedErrorTraces struct {
 
 // ErrorLatestOccurrence is the context of a group's most recent error span.
 type ErrorLatestOccurrence struct {
-	TraceID        string    `json:"trace_id"`
-	SpanID         string    `json:"span_id"`
+	TraceID        string    `json:"traceId"`
+	SpanID         string    `json:"spanId"`
 	Timestamp      time.Time `json:"timestamp"`
-	DurationMs     float64   `json:"duration_ms"`
+	DurationMs     float64   `json:"durationMs"`
 	Message        string    `json:"message"`
 	Stacktrace     string    `json:"stacktrace,omitempty"`
-	HTTPMethod     string    `json:"http_method"`
-	HTTPRoute      string    `json:"http_route"`
-	HTTPStatusCode string    `json:"http_status_code"`
-	ServiceVersion string    `json:"service_version"`
+	HTTPMethod     string    `json:"httpMethod"`
+	HTTPRoute      string    `json:"httpRoute"`
+	HTTPStatusCode string    `json:"httpStatusCode"`
+	ServiceVersion string    `json:"serviceVersion"`
 	Environment    string    `json:"environment"`
 	Pod            string    `json:"pod"`
 	Host           string    `json:"host"`
@@ -69,17 +69,17 @@ type ErrorFacetGroup struct {
 }
 
 type TimeSeriesPoint struct {
-	ServiceName  string    `json:"service_name"`
+	ServiceName  string    `json:"serviceName"`
 	Timestamp    time.Time `json:"timestamp"`
-	RequestCount int64     `json:"request_count"`
-	ErrorCount   int64     `json:"error_count"`
-	ErrorRate    float64   `json:"error_rate"`
-	AvgLatency   float64   `json:"avg_latency"`
+	RequestCount int64     `json:"requestCount"`
+	ErrorCount   int64     `json:"errorCount"`
+	ErrorRate    float64   `json:"errorRate"`
+	AvgLatency   float64   `json:"avgLatency"`
 }
 
 type ErrorHotspotCell struct {
-	ServiceName   string `json:"service_name"   ch:"service"`
-	OperationName string `json:"operation_name" ch:"operation_name"`
-	GroupID       string `json:"group_id"       ch:"error_group_id"`
-	ErrorCount    int64  `json:"error_count"    ch:"error_count"`
+	ServiceName   string `json:"serviceName"   ch:"service"`
+	OperationName string `json:"operationName" ch:"operation_name"`
+	GroupID       string `json:"groupId"       ch:"error_group_id"`
+	ErrorCount    int64  `json:"errorCount"    ch:"error_count"`
 }

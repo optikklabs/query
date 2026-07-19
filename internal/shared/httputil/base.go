@@ -4,17 +4,15 @@ package httputil
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	dbutil "github.com/optikklabs/query/internal/infra/database"
 	types "github.com/optikklabs/query/internal/shared/contracts"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
@@ -49,7 +47,26 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func DecodeJSON(r *http.Request, v any) error {
-	return json.NewDecoder(r.Body).Decode(v)
+	const maxBodyBytes = 1 << 20
+	limited := &io.LimitedReader{R: r.Body, N: maxBodyBytes + 1}
+	decoder := json.NewDecoder(limited)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
+		return err
+	}
+	if limited.N <= 0 {
+		return errors.New("request body exceeds 1 MiB")
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("request body must contain one JSON value")
+		}
+		return err
+	}
+	if limited.N <= 0 {
+		return errors.New("request body exceeds 1 MiB")
+	}
+	return nil
 }
 
 func RespondOK(w http.ResponseWriter, data any) {
@@ -57,18 +74,20 @@ func RespondOK(w http.ResponseWriter, data any) {
 }
 
 func RespondErrorWithCause(w http.ResponseWriter, r *http.Request, status int, code, msg string, err error) {
+	requestID := w.Header().Get("X-Request-Id")
 	if err != nil {
-		slog.Error("request error",
+		slog.ErrorContext(r.Context(), "request error",
 			slog.String("code", code), slog.String("msg", msg),
 			slog.String("method", r.Method), slog.String("path", r.URL.Path),
+			slog.String("request_id", requestID),
 			slog.Any("error", err))
-		msg = fmt.Sprintf("%s: %s", msg, dbutil.SanitizeError(err))
 	} else if status >= 500 {
-		slog.Error("request error",
+		slog.ErrorContext(r.Context(), "request error",
 			slog.String("code", code), slog.String("msg", msg),
-			slog.String("method", r.Method), slog.String("path", r.URL.Path))
+			slog.String("method", r.Method), slog.String("path", r.URL.Path),
+			slog.String("request_id", requestID))
 	}
-	WriteJSON(w, status, types.Failure(code, msg, r.URL.Path))
+	WriteJSON(w, status, types.Failure(code, msg, r.URL.Path, requestID))
 }
 
 func ParseInt64Param(r *http.Request, key string, fallback int64) int64 {
@@ -174,47 +193,8 @@ func ParseComparisonRange(r *http.Request, startMs, endMs int64) (cmpStart, cmpE
 	}
 }
 
-type ComparisonResponse struct {
-	Data       any `json:"data"`
-	Comparison any `json:"comparison,omitempty"`
-}
-
-func WithComparison(r *http.Request, startMs, endMs int64, queryFn func(s, e int64) (any, error)) (ComparisonResponse, error) {
-	cmpStart, cmpEnd, hasCmp := ParseComparisonRange(r, startMs, endMs)
-
-	if !hasCmp {
-		primary, err := queryFn(startMs, endMs)
-		if err != nil {
-			return ComparisonResponse{}, err
-		}
-		return ComparisonResponse{Data: primary}, nil
-	}
-
-	var (
-		primary, comparison any
-		primaryErr, cmpErr  error
-		wg                  sync.WaitGroup
-	)
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		primary, primaryErr = queryFn(startMs, endMs)
-	}()
-	go func() {
-		defer wg.Done()
-		comparison, cmpErr = queryFn(cmpStart, cmpEnd)
-	}()
-	wg.Wait()
-
-	if primaryErr != nil {
-		return ComparisonResponse{}, primaryErr
-	}
-
-	resp := ComparisonResponse{Data: primary}
-	if cmpErr == nil {
-		resp.Comparison = comparison
-	} else {
-		slog.Error("comparison query failed", slog.Any("error", cmpErr))
-	}
-	return resp, nil
+// RespondOKWithComparison writes both periods into the single response
+// envelope. comparison is omitted from the body when nil.
+func RespondOKWithComparison(w http.ResponseWriter, data, comparison any) {
+	WriteJSON(w, http.StatusOK, types.SuccessWithComparison(data, comparison))
 }

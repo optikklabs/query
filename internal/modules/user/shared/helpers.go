@@ -7,7 +7,6 @@ import (
 	"strings"
 )
 
-
 // "ok_" prefix enables secret-scanning; 32 bytes gives 256-bit entropy.
 func GenerateAPIKey() (string, error) {
 	bytes := make([]byte, 32)
@@ -48,7 +47,6 @@ func GenerateRevokedKey() (string, error) {
 	return revokedKeyPrefix + hex.EncodeToString(bytes), nil
 }
 
-
 // userCodeAlphabet excludes ambiguous chars (0/O, 1/I) for typo-free entry.
 const userCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -81,4 +79,3 @@ func NullableString(s string) *string {
 	}
 	return &trimmed
 }
-

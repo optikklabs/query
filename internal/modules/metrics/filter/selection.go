@@ -2,6 +2,7 @@ package filter
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/optikklabs/query/internal/infra/timebucket"
@@ -24,8 +25,8 @@ func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols s
 
 	fpsSel := "fingerprint"
 	fpsGrp := "fingerprint"
-	for _, key := range f.GroupBy {
-		alias := "g_" + SanitizeKey(key)
+	for i, key := range f.GroupBy {
+		alias := "g" + strconv.Itoa(i)
 		fpsSel += ", " + seriesColumn(key) + " AS " + alias
 		fpsGrp += ", " + alias
 	}
@@ -41,10 +42,14 @@ func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols s
 		)
 `
 	joins = " INNER JOIN fps ON m.fingerprint = fps.fingerprint"
-	for _, key := range f.GroupBy {
-		alias := "`group_" + SanitizeKey(key) + "`"
-		selectCols += ", fps.g_" + SanitizeKey(key) + " AS " + alias
-		groupByCols += ", " + alias
+	groupValues := make([]string, 0, len(f.GroupBy))
+	for i := range f.GroupBy {
+		column := "fps.g" + strconv.Itoa(i)
+		groupByCols += ", " + column
+		groupValues = append(groupValues, "toString("+column+")")
+	}
+	if len(groupValues) > 0 {
+		selectCols += ", [" + strings.Join(groupValues, ", ") + "] AS group_values"
 	}
 	return fromTable, cte, joins, selectCols, groupByCols, args
 }

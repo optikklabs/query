@@ -84,7 +84,7 @@ func (r *Repository) CountChannelUsage(ctx context.Context, tenantID int64) (map
 	rows, err := r.db.QueryxContext(ctx, `
 		SELECT j.channel_id AS cid, COUNT(*) AS cnt
 		  FROM optikk.monitors m
-		  JOIN JSON_TABLE(m.notify_json, '$.channel_ids[*]'
+		  JOIN JSON_TABLE(m.notify_json, '$.channelIds[*]'
 		         COLUMNS (channel_id BIGINT PATH '$')) AS j
 		 WHERE m.tenant_id = ?
 		 GROUP BY j.channel_id
@@ -226,7 +226,7 @@ func (r *Repository) ChannelInUse(ctx context.Context, channelID, tenantID int64
 	err := dbutil.GetSQL(ctx, r.db, "notifications.ChannelInUse", &cnt, `
 		SELECT COUNT(*)
 		  FROM optikk.monitors m
-		  JOIN JSON_TABLE(m.notify_json, '$.channel_ids[*]'
+		  JOIN JSON_TABLE(m.notify_json, '$.channelIds[*]'
 		         COLUMNS (channel_id BIGINT PATH '$')) AS j
 		 WHERE m.tenant_id = ? AND j.channel_id = ?
 	`, tenantID, channelID)

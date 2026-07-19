@@ -67,12 +67,8 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "Invalid request body", nil)
 		return
 	}
-	if req.StartTime <= 0 || req.EndTime <= 0 {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "startTime and endTime are required", nil)
-		return
-	}
-	if len(req.Queries) == 0 {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "At least one query is required", nil)
+	if err := validateQueryRequest(req); err != nil {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, err.Error(), nil)
 		return
 	}
 

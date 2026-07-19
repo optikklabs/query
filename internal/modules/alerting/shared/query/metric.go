@@ -30,7 +30,7 @@ func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, q model
 
 	expr := metricSource(q.Metric.Aggregation)
 	query := `
-		SELECT ` + expr + ` AS value
+		SELECT count() AS samples, ` + expr + ` AS value
 		FROM optikk.metrics
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name = @metricName
@@ -45,7 +45,7 @@ func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, q model
 		return ScalarResult{}, nil
 	}
 	r := rows[0]
-	return ScalarResult{Value: r.Value, HasData: !r.IsZeroNoData()}, nil
+	return ScalarResult{Value: r.Value, HasData: r.Samples > 0}, nil
 }
 
 func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, _ models.Conditions, windowMs int64, now time.Time) ([]Point, error) {
@@ -107,10 +107,9 @@ func metricArgs(tenantID int64, metricName string, startMs, endMs int64) []any {
 }
 
 type scalarRow struct {
-	Value float64 `ch:"value"`
+	Samples uint64  `ch:"samples"`
+	Value   float64 `ch:"value"`
 }
-
-func (s scalarRow) IsZeroNoData() bool { return false }
 
 type bucketRow struct {
 	Bucket time.Time `ch:"bucket"`

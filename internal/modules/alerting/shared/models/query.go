@@ -34,7 +34,7 @@ type MetricQuery struct {
 
 	Aggregation string `json:"aggregation"`
 
-	WindowSec int `json:"window_sec"`
+	WindowSec int `json:"windowSec"`
 }
 
 type APMQuery struct {
@@ -42,18 +42,18 @@ type APMQuery struct {
 	Resource string `json:"resource,omitempty"`
 
 	Track     string `json:"track"`
-	WindowSec int    `json:"window_sec"`
+	WindowSec int    `json:"windowSec"`
 }
 
 type LogQuery struct {
 	Query string `json:"query"`
 
-	GroupBy   string `json:"group_by,omitempty"`
-	WindowSec int    `json:"window_sec"`
+	GroupBy   string `json:"groupBy,omitempty"`
+	WindowSec int    `json:"windowSec"`
 }
 
 type NotifyTargets struct {
-	ChannelIDs []int64 `json:"channel_ids"`
+	ChannelIDs []int64 `json:"channelIds"`
 }
 
 func (n *NotifyTargets) Scan(value interface{}) error {

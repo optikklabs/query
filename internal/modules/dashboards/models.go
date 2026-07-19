@@ -55,13 +55,13 @@ type DashboardPageResponse struct {
 	Name        string     `json:"name"`
 	Description string     `json:"description,omitempty"`
 	Icon        string     `json:"icon"`
-	IconColor   string     `json:"icon_color"`
+	IconColor   string     `json:"iconColor"`
 	Tags        []string   `json:"tags"`
-	IsFavorite  bool       `json:"is_favorite"`
-	WidgetCount int        `json:"widget_count"`
+	IsFavorite  bool       `json:"isFavorite"`
+	WidgetCount int        `json:"widgetCount"`
 	Owner       *Owner     `json:"owner,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   *time.Time `json:"updatedAt,omitempty"`
 }
 
 // DashboardPageListResponse is the catalog list payload.
@@ -73,15 +73,15 @@ type DashboardPageListResponse struct {
 // WidgetResponse round-trips the persisted widget definition with no data loss.
 type WidgetResponse struct {
 	ID            int64           `json:"id"`
-	PageID        int64           `json:"page_id"`
+	PageID        int64           `json:"pageId"`
 	Title         string          `json:"title,omitempty"`
-	PanelType     string          `json:"panel_type"`
-	LayoutVariant string          `json:"layout_variant,omitempty"`
+	PanelType     string          `json:"panelType"`
+	LayoutVariant string          `json:"layoutVariant,omitempty"`
 	Spec          json.RawMessage `json:"spec"`
 	Layout        json.RawMessage `json:"layout"`
 	Position      int             `json:"position"`
-	CreatedAt     time.Time       `json:"created_at"`
-	UpdatedAt     *time.Time      `json:"updated_at,omitempty"`
+	CreatedAt     time.Time       `json:"createdAt"`
+	UpdatedAt     *time.Time      `json:"updatedAt,omitempty"`
 }
 
 // DashboardPageDetailResponse is a page plus its widgets, for the detail screen.

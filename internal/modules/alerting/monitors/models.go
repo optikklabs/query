@@ -14,22 +14,22 @@ type MonitorResponse struct {
 	Type             string               `json:"type"`
 	Priority         string               `json:"priority"`
 	Status           string               `json:"status"`
-	CurrentValue     *float64             `json:"current_value,omitempty"`
+	CurrentValue     *float64             `json:"currentValue,omitempty"`
 	Scope            models.Scope         `json:"scope"`
 	Query            models.MonitorQuery  `json:"query"`
 	Conditions       models.Conditions    `json:"conditions"`
 	Notify           models.NotifyTargets `json:"notify"`
-	MessageBody      string               `json:"message_body,omitempty"`
-	RunbookURL       string               `json:"runbook_url,omitempty"`
+	MessageBody      string               `json:"messageBody,omitempty"`
+	RunbookURL       string               `json:"runbookUrl,omitempty"`
 	Tags             []string             `json:"tags"`
-	EvalEverySec     int                  `json:"eval_every_sec"`
-	RenotifyEverySec *int                 `json:"renotify_every_sec,omitempty"`
-	MutedUntil       *time.Time           `json:"muted_until,omitempty"`
+	EvalEverySec     int                  `json:"evalEverySec"`
+	RenotifyEverySec *int                 `json:"renotifyEverySec,omitempty"`
+	MutedUntil       *time.Time           `json:"mutedUntil,omitempty"`
 	Active           bool                 `json:"active"`
-	LastEvaluatedAt  *time.Time           `json:"last_evaluated_at,omitempty"`
-	TriggeredAt      *time.Time           `json:"triggered_at,omitempty"`
-	CreatedAt        time.Time            `json:"created_at"`
-	UpdatedAt        *time.Time           `json:"updated_at,omitempty"`
+	LastEvaluatedAt  *time.Time           `json:"lastEvaluatedAt,omitempty"`
+	TriggeredAt      *time.Time           `json:"triggeredAt,omitempty"`
+	CreatedAt        time.Time            `json:"createdAt"`
+	UpdatedAt        *time.Time           `json:"updatedAt,omitempty"`
 }
 
 type MonitorListResponse struct {
@@ -41,7 +41,7 @@ type StatusCounts struct {
 	Alert  int `json:"alert"`
 	Warn   int `json:"warn"`
 	OK     int `json:"ok"`
-	NoData int `json:"no_data"`
+	NoData int `json:"noData"`
 	Muted  int `json:"muted"`
 	Total  int `json:"total"`
 }

@@ -25,7 +25,7 @@ type slackAttachment struct {
 	Color    string       `json:"color"`
 	Pretext  string       `json:"pretext,omitempty"`
 	Title    string       `json:"title"`
-	TitleURL string       `json:"title_link,omitempty"`
+	TitleURL string       `json:"titleLink,omitempty"`
 	Text     string       `json:"text,omitempty"`
 	Fields   []slackField `json:"fields,omitempty"`
 	Footer   string       `json:"footer,omitempty"`
@@ -48,7 +48,7 @@ func (s *SlackWebhook) Send(ctx context.Context, ch models.ChannelRow, p Payload
 		return fmt.Errorf("invalid slack config: %w", err)
 	}
 	if cfg.WebhookURL == "" {
-		return fmt.Errorf("slack channel %d missing webhook_url", ch.ID)
+		return fmt.Errorf("slack channel %d missing webhookUrl", ch.ID)
 	}
 
 	body := slackBody{Attachments: []slackAttachment{buildAttachment(p)}}

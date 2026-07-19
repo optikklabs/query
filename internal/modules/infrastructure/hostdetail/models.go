@@ -4,7 +4,7 @@ import "time"
 
 // SeriesPoint is one display-grain bucket of one named series.
 type SeriesPoint struct {
-	TimeBucket time.Time `json:"time_bucket" ch:"time_bucket"`
+	TimeBucket time.Time `json:"timeBucket" ch:"time_bucket"`
 	Series     string    `json:"series"      ch:"series"`
 	Value      float64   `json:"value"       ch:"value"`
 }
@@ -14,32 +14,32 @@ type SeriesPoint struct {
 // that metric in the selected range.
 type HostOverview struct {
 	Host             string     `json:"host"`
-	LastSeen         string     `json:"last_seen,omitempty"`
+	LastSeen         string     `json:"lastSeen,omitempty"`
 	Environments     []string   `json:"environments"`
 	Namespaces       []string   `json:"namespaces"`
-	CPUPct           *float64   `json:"cpu_pct"`
-	MemoryPct        *float64   `json:"memory_pct"`
-	DiskPct          *float64   `json:"disk_pct"`
-	Load1m           *float64   `json:"load_1m"`
-	Load5m           *float64   `json:"load_5m"`
-	Load15m          *float64   `json:"load_15m"`
-	ProcessCount     *float64   `json:"process_count"`
-	AvailableMetrics []string   `json:"available_metrics"`
+	CPUPct           *float64   `json:"cpuPct"`
+	MemoryPct        *float64   `json:"memoryPct"`
+	DiskPct          *float64   `json:"diskPct"`
+	Load1m           *float64   `json:"load1m"`
+	Load5m           *float64   `json:"load5m"`
+	Load15m          *float64   `json:"load15m"`
+	ProcessCount     *float64   `json:"processCount"`
+	AvailableMetrics []string   `json:"availableMetrics"`
 	About            *HostAbout `json:"about,omitempty"`
 }
 
 // HostAbout is host machine metadata from retained resource attributes.
 // Present only when the host reports at least one attribute.
 type HostAbout struct {
-	OSType        string `json:"os_type,omitempty"`
-	OSDescription string `json:"os_description,omitempty"`
+	OSType        string `json:"osType,omitempty"`
+	OSDescription string `json:"osDescription,omitempty"`
 	Arch          string `json:"arch,omitempty"`
-	HostID        string `json:"host_id,omitempty"`
-	CloudProvider string `json:"cloud_provider,omitempty"`
-	CloudPlatform string `json:"cloud_platform,omitempty"`
-	CloudRegion   string `json:"cloud_region,omitempty"`
-	CloudZone     string `json:"cloud_zone,omitempty"`
-	K8SNodeName   string `json:"k8s_node_name,omitempty"`
+	HostID        string `json:"hostId,omitempty"`
+	CloudProvider string `json:"cloudProvider,omitempty"`
+	CloudPlatform string `json:"cloudPlatform,omitempty"`
+	CloudRegion   string `json:"cloudRegion,omitempty"`
+	CloudZone     string `json:"cloudZone,omitempty"`
+	K8SNodeName   string `json:"k8sNodeName,omitempty"`
 }
 
 type hostMetaRow struct {

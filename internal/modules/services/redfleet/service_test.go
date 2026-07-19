@@ -70,3 +70,20 @@ func TestAverageFloats(t *testing.T) {
 		t.Errorf("averageFloats([10,20,30]) = %v, want 20", got)
 	}
 }
+
+func TestFleetTotalsUseMergedHistogramRow(t *testing.T) {
+	rows := []redMetricsRow{
+		{ServiceName: "api", TotalCount: 90, ErrorCount: 9, P99Ms: 100},
+		{ServiceName: "worker", TotalCount: 10, ErrorCount: 1, P99Ms: 1000},
+		{IsTotal: 1, TotalCount: 100, ErrorCount: 10, P50Ms: 20, P95Ms: 80, P99Ms: 900},
+	}
+	services := mapFleetServices(rows)
+	totals := computeFleetTotals(fleetTotalRow(rows), len(services), 0, 10_000)
+
+	if totals.ServiceCount != 2 || totals.TotalSpanCount != 100 || totals.TotalErrors != 10 {
+		t.Fatalf("totals = %+v", totals)
+	}
+	if totals.AvgP99Ms != 900 {
+		t.Fatalf("fleet p99 = %v, want merged value 900", totals.AvgP99Ms)
+	}
+}
