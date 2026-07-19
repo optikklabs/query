@@ -2,6 +2,8 @@ package filter
 
 import (
 	"errors"
+	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -54,8 +56,35 @@ func (f *Filters) Validate() error {
 	if (f.EndMs - f.StartMs) > maxTimeRangeMs {
 		f.StartMs = f.EndMs - maxTimeRangeMs
 	}
-	if strings.TrimSpace(f.SearchMode) == "" {
-		f.SearchMode = "ngram"
+	return ValidateAttrs(f.Attributes)
+}
+
+var validAttrOps = map[string]struct{}{
+	"": {}, "eq": {}, "neq": {}, "contains": {}, "regex": {},
+	"gt": {}, "gte": {}, "lt": {}, "lte": {}, "exists": {}, "not_exists": {},
+}
+
+// ValidateAttrs rejects attribute filters that would otherwise produce
+// silently-wrong SQL: unknown ops, empty keys, non-numeric comparison
+// values, and regexes that ClickHouse would fail on at query time.
+func ValidateAttrs(attrs []AttrFilter) error {
+	for _, af := range attrs {
+		if strings.TrimSpace(af.Key) == "" {
+			return errors.New("filters: attribute key is required")
+		}
+		if _, ok := validAttrOps[af.Op]; !ok {
+			return fmt.Errorf("filters: unsupported attribute op %q", af.Op)
+		}
+		switch af.Op {
+		case "gt", "gte", "lt", "lte":
+			if _, err := strconv.ParseFloat(af.Value, 64); err != nil {
+				return fmt.Errorf("filters: attribute %q: op %q requires a numeric value", af.Key, af.Op)
+			}
+		case "regex":
+			if _, err := regexp.Compile(af.Value); err != nil {
+				return fmt.Errorf("filters: attribute %q: invalid regex: %v", af.Key, err)
+			}
+		}
 	}
 	return nil
 }
@@ -135,12 +164,12 @@ func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 	}
 
 	if len(f.Severities) > 0 {
-		where += ` AND severity_text IN @severities`
-		args = append(args, clickhouse.Named("severities", f.Severities))
+		where += ` AND upper(severity_text) IN @severities`
+		args = append(args, clickhouse.Named("severities", upperAll(f.Severities)))
 	}
 	if len(f.ExcludeSeverities) > 0 {
-		where += ` AND severity_text NOT IN @excSeverities`
-		args = append(args, clickhouse.Named("excSeverities", f.ExcludeSeverities))
+		where += ` AND upper(severity_text) NOT IN @excSeverities`
+		args = append(args, clickhouse.Named("excSeverities", upperAll(f.ExcludeSeverities)))
 	}
 	if f.TraceID != "" {
 		where += ` AND trace_id = @traceID`
@@ -151,42 +180,107 @@ func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 		args = append(args, clickhouse.Named("spanID", f.SpanID))
 	}
 	if f.Search != "" {
-		if f.SearchMode == "exact" {
-			where += ` AND lower(body) LIKE concat('%', lower(@search), '%')`
-		} else {
-			where += ` AND hasToken(body, lower(@search))`
-		}
+		// Case-insensitive substring: the only search semantic. The legacy
+		// searchMode field is still accepted on the wire but ignored.
+		where += ` AND positionCaseInsensitive(body, @search) > 0`
 		args = append(args, clickhouse.Named("search", f.Search))
 	}
 	for i, af := range f.Attributes {
-		idx := strconv.Itoa(i)
-		kName := "akey_" + idx
-		vName := "aval_" + idx
-
-		mapCol := "attributes_string"
-		var val any = af.Value
-
-		if af.Op == "" || af.Op == "neq" {
-			if n, err := strconv.ParseFloat(af.Value, 64); err == nil {
-				mapCol = "attributes_number"
-				val = n
-			} else if b, err := strconv.ParseBool(af.Value); err == nil {
-				mapCol = "attributes_bool"
-				val = b
-			}
-		}
-
-		switch af.Op {
-		case "neq":
-			where += ` AND ` + mapCol + `[@` + kName + `] != @` + vName
-		case "contains":
-			where += ` AND positionCaseInsensitive(attributes_string[@` + kName + `], @` + vName + `) > 0`
-		case "regex":
-			where += ` AND match(attributes_string[@` + kName + `], @` + vName + `)`
-		default:
-			where += ` AND ` + mapCol + `[@` + kName + `] = @` + vName
-		}
-		args = append(args, clickhouse.Named(kName, af.Key), clickhouse.Named(vName, val))
+		clause, clauseArgs := buildAttrClause(af, i)
+		where += clause
+		args = append(args, clauseArgs...)
 	}
 	return resourceWhere, where, args
+}
+
+func upperAll(vs []string) []string {
+	out := make([]string, len(vs))
+	for i, v := range vs {
+		out[i] = strings.ToUpper(v)
+	}
+	return out
+}
+
+// buildAttrClause emits the WHERE predicate for one attribute filter.
+// Values live in three typed maps; eq/neq check the string map and, when the
+// value parses as a number or bool, the matching typed map as well, so a
+// filter works regardless of how the producer typed the attribute.
+func buildAttrClause(af AttrFilter, i int) (string, []any) {
+	idx := strconv.Itoa(i)
+	k := "akey_" + idx
+	v := "aval_" + idx
+	keyArg := clickhouse.Named(k, af.Key)
+
+	switch af.Op {
+	case "", "eq":
+		return buildAttrEqClause(af, k, v, keyArg, false)
+	case "neq":
+		return buildAttrEqClause(af, k, v, keyArg, true)
+	case "contains":
+		return ` AND positionCaseInsensitive(attributes_string[@` + k + `], @` + v + `) > 0`,
+			[]any{keyArg, clickhouse.Named(v, af.Value)}
+	case "regex":
+		return ` AND match(attributes_string[@` + k + `], @` + v + `)`,
+			[]any{keyArg, clickhouse.Named(v, af.Value)}
+	case "gt", "gte", "lt", "lte":
+		// Validate guarantees the value parses; NULL (missing key or
+		// non-numeric string value) compares false and drops the row.
+		n, _ := strconv.ParseFloat(af.Value, 64)
+		expr := `coalesce(toFloat64OrNull(attributes_string[@` + k + `]),` +
+			` if(mapContains(attributes_number, @` + k + `), attributes_number[@` + k + `], NULL))`
+		return ` AND ` + expr + ` ` + cmpSQL(af.Op) + ` @` + v,
+			[]any{keyArg, clickhouse.Named(v, n)}
+	case "exists":
+		return ` AND ` + attrExistsExpr(k), []any{keyArg}
+	case "not_exists":
+		return ` AND NOT ` + attrExistsExpr(k), []any{keyArg}
+	}
+	return "", nil // unreachable: ops are whitelisted in Validate
+}
+
+// buildAttrEqClause handles eq/neq. neq requires the key to exist so that
+// "not equals" never matches rows missing the attribute entirely.
+func buildAttrEqClause(af AttrFilter, k, v string, keyArg any, negate bool) (string, []any) {
+	op := "="
+	if negate {
+		op = "!="
+	}
+	strCmp := `attributes_string[@` + k + `] ` + op + ` @` + v
+	if negate {
+		strCmp = `(mapContains(attributes_string, @` + k + `) AND ` + strCmp + `)`
+	}
+	args := []any{keyArg, clickhouse.Named(v, af.Value)}
+
+	if n, err := strconv.ParseFloat(af.Value, 64); err == nil {
+		vn := v + "_n"
+		clause := `(` + strCmp + ` OR (mapContains(attributes_number, @` + k + `)` +
+			` AND attributes_number[@` + k + `] ` + op + ` @` + vn + `))`
+		return ` AND ` + clause, append(args, clickhouse.Named(vn, n))
+	}
+	if b, err := strconv.ParseBool(af.Value); err == nil {
+		vb := v + "_b"
+		clause := `(` + strCmp + ` OR (mapContains(attributes_bool, @` + k + `)` +
+			` AND attributes_bool[@` + k + `] ` + op + ` @` + vb + `))`
+		return ` AND ` + clause, append(args, clickhouse.Named(vb, b))
+	}
+	return ` AND ` + strCmp, args
+}
+
+func attrExistsExpr(k string) string {
+	return `(mapContains(attributes_string, @` + k + `)` +
+		` OR mapContains(attributes_number, @` + k + `)` +
+		` OR mapContains(attributes_bool, @` + k + `))`
+}
+
+func cmpSQL(op string) string {
+	switch op {
+	case "gt":
+		return ">"
+	case "gte":
+		return ">="
+	case "lt":
+		return "<"
+	default:
+		return "<="
+	}
 }

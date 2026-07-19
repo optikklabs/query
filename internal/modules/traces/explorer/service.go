@@ -44,6 +44,7 @@ func NewService(repo TraceRepository) *Service {
 
 func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, error) {
 	limit := pickExplorerLimit(req.Limit, 50, 500)
+	req.Limit = limit
 	rows, hasMore, err := s.repo.Query(ctx, req)
 	if err != nil {
 		return QueryResponse{}, err

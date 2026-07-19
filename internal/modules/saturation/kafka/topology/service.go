@@ -15,8 +15,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-// GetClients lists the tenant's Kafka clients, busiest first. Separate from the
-// graph so the picker stays complete while the graph stays scoped.
+// GetClients lists the tenant's Kafka clients. It is separate from the graph so
+// the picker stays complete while the graph stays scoped.
 func (s *Service) GetClients(ctx context.Context, tenantID, startMs, endMs int64) ([]string, error) {
 	clients, err := s.repo.QueryClients(ctx, tenantID, startMs, endMs)
 	if err != nil {
@@ -46,11 +46,24 @@ func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int6
 	return buildGraph(rows, winSecs), nil
 }
 
-func p95(qs []float64) float64 {
-	if len(qs) >= 2 {
-		return qs[1]
+type percentileValues struct {
+	p50 float64
+	p95 float64
+	p99 float64
+}
+
+func percentiles(qs []float64) percentileValues {
+	var values percentileValues
+	if len(qs) > 0 {
+		values.p50 = qs[0]
 	}
-	return 0
+	if len(qs) > 1 {
+		values.p95 = qs[1]
+	}
+	if len(qs) > 2 {
+		values.p99 = qs[2]
+	}
+	return values
 }
 
 func errRate(errors, calls uint64) float64 {
@@ -58,9 +71,9 @@ func errRate(errors, calls uint64) float64 {
 }
 
 type nodeAgg struct {
-	calls  uint64
-	errors uint64
-	maxP95 float64
+	calls   uint64
+	errors  uint64
+	latency percentileValues
 }
 
 // buildGraph folds the edge rows into the graph. Produce rows must be applied
@@ -83,10 +96,11 @@ func buildGraph(rows []edgeRow, winSecs float64) TopologyResponse {
 		if row.ConsumerGroup != "" {
 			continue
 		}
-		acc(producers, row.Service, row.CallCount, row.ErrorCount, p95(row.QS))
+		acc(producers, row.Service, row.CallCount, row.ErrorCount, percentiles(row.QS))
 		topicProduce[row.Topic] += row.CallCount
 		addSet(topicProducers, row.Topic, row.Service)
-		if row.CallCount >= topicTop[row.Topic].calls {
+		top, exists := topicTop[row.Topic]
+		if !exists || row.CallCount > top.calls || (row.CallCount == top.calls && row.Service < top.svc) {
 			topicTop[row.Topic] = struct {
 				svc   string
 				calls uint64
@@ -105,7 +119,7 @@ func buildGraph(rows []edgeRow, winSecs float64) TopologyResponse {
 			continue
 		}
 		key := row.Service + "|" + row.ConsumerGroup
-		acc(consumers, key, row.CallCount, row.ErrorCount, p95(row.QS))
+		acc(consumers, key, row.CallCount, row.ErrorCount, percentiles(row.QS))
 		consumerMeta[key] = [2]string{row.Service, row.ConsumerGroup}
 		addSet(topicGroups, row.Topic, row.ConsumerGroup)
 		consumeEdge[[2]string{row.Topic, row.Service}] += row.CallCount
@@ -133,7 +147,7 @@ func buildGraph(rows []edgeRow, winSecs float64) TopologyResponse {
 	}
 }
 
-func acc(m map[string]*nodeAgg, key string, calls, errors uint64, p float64) {
+func acc(m map[string]*nodeAgg, key string, calls, errors uint64, latency percentileValues) {
 	a := m[key]
 	if a == nil {
 		a = &nodeAgg{}
@@ -141,9 +155,9 @@ func acc(m map[string]*nodeAgg, key string, calls, errors uint64, p float64) {
 	}
 	a.calls += calls
 	a.errors += errors
-	if p > a.maxP95 {
-		a.maxP95 = p
-	}
+	a.latency.p50 = max(a.latency.p50, latency.p50)
+	a.latency.p95 = max(a.latency.p95, latency.p95)
+	a.latency.p99 = max(a.latency.p99, latency.p99)
 }
 
 func addSet(m map[string]map[string]struct{}, key, val string) {
@@ -158,10 +172,16 @@ func producerNodes(m map[string]*nodeAgg, winSecs float64) []ProducerNode {
 	for svc, a := range m {
 		out = append(out, ProducerNode{
 			Service: svc, RatePerSec: float64(a.calls) / winSecs,
-			ErrorRate: errRate(a.errors, a.calls), P95Ms: a.maxP95,
+			ErrorRate: errRate(a.errors, a.calls),
+			P50Ms:     a.latency.p50, P95Ms: a.latency.p95, P99Ms: a.latency.p99,
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].RatePerSec > out[j].RatePerSec })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].RatePerSec != out[j].RatePerSec {
+			return out[i].RatePerSec > out[j].RatePerSec
+		}
+		return out[i].Service < out[j].Service
+	})
 	return out
 }
 
@@ -180,7 +200,12 @@ func topicNodes(produce map[string]uint64, producers, groups map[string]map[stri
 			ProducerCount: len(producers[t]), ConsumerGroupCount: len(groups[t]),
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].RatePerSec > out[j].RatePerSec })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].RatePerSec != out[j].RatePerSec {
+			return out[i].RatePerSec > out[j].RatePerSec
+		}
+		return out[i].Topic < out[j].Topic
+	})
 	return out
 }
 
@@ -190,9 +215,18 @@ func consumerNodes(m map[string]*nodeAgg, meta map[string][2]string, winSecs flo
 		out = append(out, ConsumerNode{
 			Service: meta[key][0], Group: meta[key][1],
 			RatePerSec: float64(a.calls) / winSecs,
-			ErrorRate:  errRate(a.errors, a.calls), P95Ms: a.maxP95,
+			ErrorRate:  errRate(a.errors, a.calls),
+			P50Ms:      a.latency.p50, P95Ms: a.latency.p95, P99Ms: a.latency.p99,
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].RatePerSec > out[j].RatePerSec })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].RatePerSec != out[j].RatePerSec {
+			return out[i].RatePerSec > out[j].RatePerSec
+		}
+		if out[i].Service != out[j].Service {
+			return out[i].Service < out[j].Service
+		}
+		return out[i].Group < out[j].Group
+	})
 	return out
 }

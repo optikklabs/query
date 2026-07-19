@@ -36,8 +36,53 @@ const traceIndexColumns = `trace_id,
 		false                                                      AS truncated,
 		timestamp                                                  AS last_seen`
 
+// rootScanParts assembles the shared core of every explorer query: an
+// optional WITH prologue plus the PREWHERE/WHERE over root spans. Span-level
+// filters run in an any-span trace_id subquery so a match on a child span
+// still surfaces its trace; trace-level filters stay on the root scan.
+func rootScanParts(c filter.Clauses) (with, prewhere, where string) {
+	var ctes []string
+	prewhere = `
+		PREWHERE tenant_id = @tenantID`
+	where = `
+		WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + c.Root
+	if c.HasSpanMatch() {
+		inner := `SELECT DISTINCT trace_id
+		    FROM optikk.spans
+		    PREWHERE tenant_id = @tenantID`
+		if c.Resource != "" {
+			ctes = append(ctes, `match_fps AS (
+		    SELECT DISTINCT fingerprint
+		    FROM optikk.spans_resource
+		    PREWHERE tenant_id = @tenantID`+c.Resource+`
+		)`)
+			inner += ` AND fingerprint IN match_fps`
+		}
+		ctes = append(ctes, `matched AS (
+		    `+inner+`
+		    WHERE timestamp BETWEEN @start AND @end`+c.Span+`
+		)`)
+		where += ` AND trace_id IN matched`
+	}
+	if c.ExcludeResource != "" {
+		ctes = append(ctes, `keep_fps AS (
+		    SELECT DISTINCT fingerprint
+		    FROM optikk.spans_resource
+		    PREWHERE tenant_id = @tenantID`+c.ExcludeResource+`
+		)`)
+		prewhere += ` AND fingerprint IN keep_fps`
+	}
+	if len(ctes) > 0 {
+		with = `
+		WITH ` + strings.Join(ctes, `, `)
+	}
+	return with, prewhere, where
+}
+
 func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, bool, error) {
-	resourceWhere, where, args := filter.BuildClauses(req.Filters)
+	clauses := filter.BuildClauses(req.Filters)
+	args := clauses.Args
+	with, prewhere, where := rootScanParts(clauses)
 	cur, _ := DecodeCursor(req.Cursor)
 	if !cur.IsZero() {
 		where += ` AND (timestamp, span_id) < (@curStart, @curSpanID)`
@@ -49,29 +94,11 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 	}
 	args = append(args, clickhouse.Named("pgLimit", uint64(req.Limit+1)))
 
-	var query string
-	if resourceWhere == "" {
-		query = `
-			SELECT ` + traceIndexColumns + `
-			FROM optikk.spans
-			PREWHERE tenant_id = @tenantID
-			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
-			ORDER BY timestamp DESC, span_id DESC
-			LIMIT @pgLimit`
-	} else {
-		query = `
-			WITH active_fps AS (
-			    SELECT DISTINCT fingerprint
-			    FROM optikk.spans_resource
-			    PREWHERE tenant_id = @tenantID` + resourceWhere + `
-			)
-			SELECT ` + traceIndexColumns + `
-			FROM optikk.spans
-			PREWHERE tenant_id = @tenantID AND fingerprint IN active_fps
-			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
-			ORDER BY timestamp DESC, span_id DESC
-			LIMIT @pgLimit`
-	}
+	query := with + `
+		SELECT ` + traceIndexColumns + `
+		FROM optikk.spans` + prewhere + where + `
+		ORDER BY timestamp DESC, span_id DESC
+		LIMIT @pgLimit`
 
 	var rows []traceIndexRowDTO
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "traces.Query", &rows, query, args...); err != nil {
@@ -85,21 +112,12 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 }
 
 func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets, error) {
-	resourceWhere, where, args := filter.BuildClauses(req.Filters)
+	clauses := filter.BuildClauses(req.Filters)
+	args := clauses.Args
+	with, prewhere, where := rootScanParts(clauses)
 
-	cte, prewhereFP := "", ""
-	if resourceWhere != "" {
-		cte = `
-			WITH active_fps AS (
-			    SELECT DISTINCT fingerprint
-			    FROM optikk.spans_resource
-			    PREWHERE tenant_id = @tenantID` + resourceWhere + `
-			)`
-		prewhereFP = " AND fingerprint IN active_fps"
-	}
-
-	query := cte + `
-		SELECT 
+	query := with + `
+		SELECT
 			multiIf(service != '', 'service',
 					name != '', 'operation',
 					http_method != '', 'http_method',
@@ -113,9 +131,7 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets
 					status_code_string != '', status_code_string,
 					'') as value,
 			count() as cnt
-		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID` + prewhereFP + `
-		WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
+		FROM optikk.spans` + prewhere + where + `
 		GROUP BY GROUPING SETS (
 			(service),
 			(name),
@@ -155,36 +171,18 @@ func pivotFacets(rows []facetDimRow) Facets {
 }
 
 func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBucket, error) {
-	resourceWhere, where, args := filter.BuildClauses(req.Filters)
+	clauses := filter.BuildClauses(req.Filters)
+	args := clauses.Args
+	with, prewhere, where := rootScanParts(clauses)
 	grainSQL := timebucket.DisplayGrainSQL(req.EndTime - req.StartTime)
 
-	var query string
-	if resourceWhere == "" {
-		query = `
-			SELECT ` + grainSQL + `                          AS time_bucket,
-			       countIf(is_error = 0)                     AS total,
-			       countIf(is_error = 1)                     AS errors
-			FROM optikk.spans
-			PREWHERE tenant_id = @tenantID
-			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
-			GROUP BY time_bucket
-			ORDER BY time_bucket ASC`
-	} else {
-		query = `
-			WITH active_fps AS (
-			    SELECT DISTINCT fingerprint
-			    FROM optikk.spans_resource
-			    PREWHERE tenant_id = @tenantID` + resourceWhere + `
-			)
-			SELECT ` + grainSQL + `                          AS time_bucket,
-			       countIf(is_error = 0)                     AS total,
-			       countIf(is_error = 1)                     AS errors
-			FROM optikk.spans
-			PREWHERE tenant_id = @tenantID AND fingerprint IN active_fps
-			WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + where + `
-			GROUP BY time_bucket
-			ORDER BY time_bucket ASC`
-	}
+	query := with + `
+		SELECT ` + grainSQL + `                          AS time_bucket,
+		       countIf(is_error = 0)                     AS total,
+		       countIf(is_error = 1)                     AS errors
+		FROM optikk.spans` + prewhere + where + `
+		GROUP BY time_bucket
+		ORDER BY time_bucket ASC`
 
 	var rows []struct {
 		TimeBucket time.Time `ch:"time_bucket"`

@@ -13,6 +13,7 @@ type Config struct {
 
 func RegisterRoutes(v1 chi.Router, h *Handler) {
 	v1.Post("/logs/query", h.Query)
+	v1.Post("/logs/suggest", h.Suggest)
 }
 
 func NewModule(nativeQuerier clickhouse.Conn) registry.Module {

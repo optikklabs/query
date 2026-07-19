@@ -1,6 +1,9 @@
 package topology
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestErrRate(t *testing.T) {
 	if got := errRate(0, 0); got != 0 {
@@ -14,15 +17,23 @@ func TestErrRate(t *testing.T) {
 	}
 }
 
-func TestP95(t *testing.T) {
-	if got := p95(nil); got != 0 {
-		t.Errorf("p95(nil) = %v, want 0", got)
+func TestPercentiles(t *testing.T) {
+	tests := []struct {
+		name string
+		qs   []float64
+		want percentileValues
+	}{
+		{name: "empty", want: percentileValues{}},
+		{name: "p50 only", qs: []float64{1}, want: percentileValues{p50: 1}},
+		{name: "p50 and p95", qs: []float64{1, 5}, want: percentileValues{p50: 1, p95: 5}},
+		{name: "all", qs: []float64{1, 5, 9}, want: percentileValues{p50: 1, p95: 5, p99: 9}},
 	}
-	if got := p95([]float64{1}); got != 0 {
-		t.Errorf("p95(len1) = %v, want 0", got)
-	}
-	if got := p95([]float64{1, 5, 9}); got != 5 {
-		t.Errorf("p95([1,5,9]) = %v, want 5 (index 1)", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := percentiles(tt.qs); got != tt.want {
+				t.Fatalf("percentiles(%v) = %+v, want %+v", tt.qs, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -48,8 +59,8 @@ func TestBuildGraph_Flow(t *testing.T) {
 		t.Fatalf("got %d producers, want 2: %+v", len(g.Producers), g.Producers)
 	}
 	pa := g.Producers[0]
-	if pa.Service != "svcA" || pa.RatePerSec != 15 || pa.P95Ms != 8 || pa.ErrorRate != 1000.0/150.0 {
-		t.Errorf("producer svcA = %+v, want rate 15, p95 8, error rate 10/150", pa)
+	if pa.Service != "svcA" || pa.RatePerSec != 15 || pa.P50Ms != 2 || pa.P95Ms != 8 || pa.P99Ms != 12 || pa.ErrorRate != 1000.0/150.0 {
+		t.Errorf("producer svcA = %+v, want rate 15, p50/p95/p99 2/8/12, error rate 10/150", pa)
 	}
 	if g.Producers[1].Service != "svcB" || g.Producers[1].RatePerSec != 2 {
 		t.Errorf("producer[1] = %+v, want svcB rate 2 (sorted)", g.Producers[1])
@@ -70,8 +81,8 @@ func TestBuildGraph_Flow(t *testing.T) {
 	for _, cn := range g.Consumers {
 		cons[cn.Service+"|"+cn.Group] = cn
 	}
-	if c := cons["consumer1|g1"]; c.RatePerSec != 12 || c.P95Ms != 6 || c.ErrorRate != 400.0/120.0 {
-		t.Errorf("consumer1|g1 = %+v, want rate 12, p95 6, error rate 4/120", c)
+	if c := cons["consumer1|g1"]; c.RatePerSec != 12 || c.P50Ms != 1 || c.P95Ms != 6 || c.P99Ms != 10 || c.ErrorRate != 400.0/120.0 {
+		t.Errorf("consumer1|g1 = %+v, want rate 12, p50/p95/p99 1/6/10, error rate 4/120", c)
 	}
 	if c := cons["consumer2|g2"]; c.RatePerSec != 1 {
 		t.Errorf("consumer2|g2 = %+v, want rate 1", c)
@@ -102,6 +113,31 @@ func TestBuildGraph_Flow(t *testing.T) {
 				t.Errorf("orders/g1 pathway = %+v, want consume 8, produce 12, error rate 4/80", pw)
 			}
 		}
+	}
+}
+
+func TestBuildGraph_TopProducerTieIsDeterministic(t *testing.T) {
+	rows := []edgeRow{
+		{Service: "z-service", Topic: "orders", CallCount: 10},
+		{Service: "a-service", Topic: "orders", CallCount: 10},
+		{Service: "consumer", Topic: "orders", ConsumerGroup: "group", CallCount: 5},
+	}
+
+	graph := buildGraph(rows, 1)
+	if got := graph.Pathways[0].Producer; got != "a-service" {
+		t.Fatalf("top producer = %q, want deterministic lexical tie-breaker", got)
+	}
+}
+
+func TestQueriesDoNotSortByTraffic(t *testing.T) {
+	if strings.Contains(clientsQuery, "count()") {
+		t.Fatal("clients query must not rank services by series count")
+	}
+	if !strings.Contains(clientsQuery, "SELECT DISTINCT service") || !strings.Contains(clientsQuery, "ORDER BY service") {
+		t.Fatal("clients query must return distinct services in deterministic name order")
+	}
+	if strings.Contains(edgesQuery("rollup"), "ORDER BY call_count") {
+		t.Fatal("edges query must not sort aggregated rows by call count")
 	}
 }
 

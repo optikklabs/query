@@ -5,7 +5,9 @@ type ProducerNode struct {
 	Service    string  `json:"service"`
 	RatePerSec float64 `json:"rate_per_sec"`
 	ErrorRate  float64 `json:"error_rate"`
+	P50Ms      float64 `json:"p50_ms"`
 	P95Ms      float64 `json:"p95_ms"`
+	P99Ms      float64 `json:"p99_ms"`
 }
 
 type TopicNode struct {
@@ -20,7 +22,9 @@ type ConsumerNode struct {
 	Group      string  `json:"group"`
 	RatePerSec float64 `json:"rate_per_sec"`
 	ErrorRate  float64 `json:"error_rate"`
+	P50Ms      float64 `json:"p50_ms"`
 	P95Ms      float64 `json:"p95_ms"`
+	P99Ms      float64 `json:"p99_ms"`
 }
 
 type StreamEdge struct {

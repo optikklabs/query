@@ -19,18 +19,18 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// QueryClients lists the services with Kafka messaging spans in the window,
-// busiest first so callers can default to the tenant's most active client.
+const clientsQuery = `
+	SELECT DISTINCT service
+	FROM optikk.metrics_series
+	PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' AND service != ''
+	WHERE ` + filter.AttrSystem + ` = 'kafka' AND ` + filter.AttrTopic + ` != ''
+	ORDER BY service`
+
+// QueryClients lists Kafka services in deterministic name order. The frontend
+// uses the first result as its initial selection.
 func (r *Repository) QueryClients(ctx context.Context, tenantID, startMs, endMs int64) ([]string, error) {
-	query := `
-		SELECT service AS service
-		FROM optikk.metrics_series
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' AND service != ''
-		WHERE ` + filter.AttrSystem + ` = 'kafka' AND ` + filter.AttrTopic + ` != ''
-		GROUP BY service
-		ORDER BY count() DESC, service`
 	var rows []string
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryClients", &rows, query, chargs.RangeArgs(tenantID, startMs, endMs)...)
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryClients", &rows, clientsQuery, chargs.RangeArgs(tenantID, startMs, endMs)...)
 }
 
 // QueryEdges returns one row per (service, topic, consumer group) for the
@@ -38,7 +38,14 @@ func (r *Repository) QueryClients(ctx context.Context, tenantID, startMs, endMs 
 // what separates the two sides of the graph -- so one scan of the rollup
 // answers both, rather than a near-identical query per side.
 func (r *Repository) QueryEdges(ctx context.Context, tenantID, startMs, endMs int64, services []string) ([]edgeRow, error) {
-	query := `
+	query := edgesQuery(timebucket.MetricsHistRollup(endMs - startMs))
+	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs), clickhouse.Named("services", services))
+	var rows []edgeRow
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryEdges", &rows, query, args...)
+}
+
+func edgesQuery(rollupTable string) string {
+	return `
 		WITH scoped_topics AS (
 		    SELECT DISTINCT ` + filter.AttrTopic + ` AS topic
 		    FROM optikk.metrics_series
@@ -62,14 +69,10 @@ func (r *Repository) QueryEdges(ctx context.Context, tenantID, startMs, endMs in
 		       sum(m.hist_count)                                               AS call_count,
 		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)         AS error_count,
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(m.latency_state) AS qs
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
+		FROM ` + rollupTable + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
 		PREWHERE m.tenant_id = @tenantID
 		     AND m.timestamp BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		GROUP BY service, topic, consumer_group
-		ORDER BY call_count DESC`
-	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs), clickhouse.Named("services", services))
-	var rows []edgeRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryEdges", &rows, query, args...)
+		GROUP BY service, topic, consumer_group`
 }

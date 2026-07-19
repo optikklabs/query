@@ -41,24 +41,42 @@ func TestValidate(t *testing.T) {
 			t.Errorf("window = %d, want clamped to %d", f.EndMs-f.StartMs, maxTimeRangeMs)
 		}
 	})
-	t.Run("defaults search mode", func(t *testing.T) {
-		f := Filters{StartMs: 1, EndMs: 2}
-		if err := f.Validate(); err != nil {
-			t.Fatal(err)
+	t.Run("unknown attr op rejected", func(t *testing.T) {
+		f := Filters{StartMs: 1, EndMs: 2, Attributes: []AttrFilter{{Key: "k", Op: "like", Value: "v"}}}
+		if err := f.Validate(); err == nil {
+			t.Error("want error for unknown op")
 		}
-		if f.SearchMode != "ngram" {
-			t.Errorf("SearchMode = %q, want ngram", f.SearchMode)
+	})
+	t.Run("empty attr key rejected", func(t *testing.T) {
+		f := Filters{StartMs: 1, EndMs: 2, Attributes: []AttrFilter{{Key: "", Op: "eq", Value: "v"}}}
+		if err := f.Validate(); err == nil {
+			t.Error("want error for empty key")
+		}
+	})
+	t.Run("comparison requires numeric value", func(t *testing.T) {
+		f := Filters{StartMs: 1, EndMs: 2, Attributes: []AttrFilter{{Key: "k", Op: "gt", Value: "x"}}}
+		if err := f.Validate(); err == nil {
+			t.Error("want error for non-numeric comparison value")
+		}
+	})
+	t.Run("invalid regex rejected", func(t *testing.T) {
+		f := Filters{StartMs: 1, EndMs: 2, Attributes: []AttrFilter{{Key: "k", Op: "regex", Value: "("}}}
+		if err := f.Validate(); err == nil {
+			t.Error("want error for invalid regex")
 		}
 	})
 }
 
-// No filters -> only the five base bind args, no predicate fragments.
+// No filters -> only the three base bind args, no predicate fragments.
 func TestBuildClauses_Base(t *testing.T) {
-	rw, w, args := BuildClauses(Filters{TenantID: 1, StartMs: 1000, EndMs: 2000})
-	if rw != "" || w != "" {
-		t.Errorf("base clauses should be empty, got rw=%q w=%q", rw, w)
+	c := BuildClauses(Filters{TenantID: 1, StartMs: 1000, EndMs: 2000})
+	if c.Resource != "" || c.ExcludeResource != "" || c.Span != "" || c.Root != "" {
+		t.Errorf("base clauses should be empty, got %+v", c)
 	}
-	m := namedArgs(args)
+	if c.HasSpanMatch() {
+		t.Error("no filters should not require span match")
+	}
+	m := namedArgs(c.Args)
 	for _, k := range []string{"tenantID", "start", "end"} {
 		if _, ok := m[k]; !ok {
 			t.Errorf("missing base arg %q", k)
@@ -69,70 +87,127 @@ func TestBuildClauses_Base(t *testing.T) {
 	}
 }
 
-func TestBuildClauses_ResourceVsSpanSplit(t *testing.T) {
-	rw, w, args := BuildClauses(Filters{
+// Span-matchable predicates land in Span (any-span semantics); exclusions,
+// trace id, and duration stay in Root (root-span semantics).
+func TestBuildClauses_SpanVsRootSplit(t *testing.T) {
+	c := BuildClauses(Filters{
 		StartMs: 1, EndMs: 2,
-		Services:   []string{"svc"},
-		Operations: []string{"GET /"},
+		Services:        []string{"svc"},
+		Operations:      []string{"GET /"},
+		ExcludeServices: []string{"noise"},
+		ExcludeStatuses: []string{"OK"},
+		TraceID:         "t1",
+		MinDurationNs:   5,
 	})
-	if !strings.Contains(rw, "service IN @services") {
-		t.Errorf("resourceWhere missing service clause: %q", rw)
+	if !strings.Contains(c.Resource, "service IN @services") {
+		t.Errorf("Resource missing service clause: %q", c.Resource)
 	}
-	if !strings.Contains(w, "name IN @operations") {
-		t.Errorf("where missing operations clause: %q", w)
+	if !strings.Contains(c.ExcludeResource, "service NOT IN @excServices") {
+		t.Errorf("ExcludeResource missing clause: %q", c.ExcludeResource)
 	}
-	m := namedArgs(args)
-	if _, ok := m["services"]; !ok {
-		t.Error("services arg not bound")
+	if !strings.Contains(c.Span, "name IN @operations") {
+		t.Errorf("Span missing operations clause: %q", c.Span)
+	}
+	for _, want := range []string{
+		"status_code_string NOT IN @excStatuses",
+		"trace_id = @traceID",
+		"duration_nano >= @minDur",
+	} {
+		if !strings.Contains(c.Root, want) {
+			t.Errorf("Root missing %q: %q", want, c.Root)
+		}
+	}
+	if !c.HasSpanMatch() {
+		t.Error("span filters should require span match")
 	}
 }
 
+func TestBuildClauses_HasSpanMatch(t *testing.T) {
+	cases := []struct {
+		name string
+		f    Filters
+		want bool
+	}{
+		{"none", Filters{StartMs: 1, EndMs: 2}, false},
+		{"service", Filters{StartMs: 1, EndMs: 2, Services: []string{"a"}}, true},
+		{"environment", Filters{StartMs: 1, EndMs: 2, Environments: []string{"prod"}}, true},
+		{"search", Filters{StartMs: 1, EndMs: 2, Search: "x"}, true},
+		{"attr", Filters{StartMs: 1, EndMs: 2, Attributes: []AttrFilter{{Key: "k", Value: "v"}}}, true},
+		{"only exclude service", Filters{StartMs: 1, EndMs: 2, ExcludeServices: []string{"a"}}, false},
+		{"only duration", Filters{StartMs: 1, EndMs: 2, MinDurationNs: 1}, false},
+		{"only trace id", Filters{StartMs: 1, EndMs: 2, TraceID: "t"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := BuildClauses(c.f).HasSpanMatch(); got != c.want {
+				t.Errorf("HasSpanMatch = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+// hasError=true means "an error anywhere in the trace" (any-span); false
+// keeps root-span semantics.
 func TestBuildClauses_HasError(t *testing.T) {
 	tru, fls := true, false
-	if _, w, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, HasError: &tru}); !strings.Contains(w, "has_error = 1") {
-		t.Errorf("HasError=true should emit has_error = 1, got %q", w)
+	if c := BuildClauses(Filters{StartMs: 1, EndMs: 2, HasError: &tru}); !strings.Contains(c.Span, "has_error = 1") {
+		t.Errorf("HasError=true should be a span clause, got %+v", c)
 	}
-	if _, w, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, HasError: &fls}); !strings.Contains(w, "has_error = 0") {
-		t.Errorf("HasError=false should emit has_error = 0, got %q", w)
+	if c := BuildClauses(Filters{StartMs: 1, EndMs: 2, HasError: &fls}); !strings.Contains(c.Root, "has_error = 0") {
+		t.Errorf("HasError=false should be a root clause, got %+v", c)
 	}
-	if _, w, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2}); strings.Contains(w, "has_error") {
-		t.Errorf("nil HasError should emit no clause, got %q", w)
+	if c := BuildClauses(Filters{StartMs: 1, EndMs: 2}); strings.Contains(c.Span+c.Root, "has_error") {
+		t.Errorf("nil HasError should emit no clause, got %+v", c)
 	}
 }
 
+// Name search is always case-insensitive substring regardless of searchMode.
 func TestBuildClauses_Search(t *testing.T) {
-	_, exact, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: "exact"})
-	if !strings.Contains(exact, "positionCaseInsensitive(name, @search)") {
-		t.Errorf("exact search clause wrong: %q", exact)
-	}
-	_, ng, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: "ngram"})
-	if !strings.Contains(ng, "hasToken(lower(name), lower(@search))") {
-		t.Errorf("ngram search clause wrong: %q", ng)
+	for _, mode := range []string{"", "exact", "ngram"} {
+		c := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: mode})
+		if !strings.Contains(c.Span, "positionCaseInsensitive(name, @search) > 0") {
+			t.Errorf("mode %q search clause wrong: %q", mode, c.Span)
+		}
 	}
 }
 
 func TestBuildClauses_AttributeOps(t *testing.T) {
 	cases := []struct {
-		op   string
+		name string
+		attr AttrFilter
 		want string
 	}{
-		{"", "attributes[@akey_0]::String = @aval_0"},
-		{"neq", "attributes[@akey_0]::String != @aval_0"},
-		{"contains", "positionCaseInsensitive(attributes[@akey_0]::String, @aval_0) > 0"},
-		{"regex", "match(attributes[@akey_0]::String, @aval_0)"},
+		{"eq", AttrFilter{Key: "k", Op: "", Value: "v"}, "attributes[@akey_0]::String = @aval_0"},
+		{
+			"neq requires key present",
+			AttrFilter{Key: "k", Op: "neq", Value: "v"},
+			"(NOT (attributes[@akey_0] IS NULL) AND attributes[@akey_0]::String != @aval_0)",
+		},
+		{
+			"contains",
+			AttrFilter{Key: "k", Op: "contains", Value: "v"},
+			"positionCaseInsensitive(attributes[@akey_0]::String, @aval_0) > 0",
+		},
+		{"regex", AttrFilter{Key: "k", Op: "regex", Value: "v.*"}, "match(attributes[@akey_0]::String, @aval_0)"},
+		{
+			"gte",
+			AttrFilter{Key: "k", Op: "gte", Value: "500"},
+			"toFloat64OrNull(attributes[@akey_0]::String) >= @aval_0",
+		},
+		{"exists", AttrFilter{Key: "k", Op: "exists"}, "NOT (attributes[@akey_0] IS NULL)"},
+		{"not_exists", AttrFilter{Key: "k", Op: "not_exists"}, "attributes[@akey_0] IS NULL"},
 	}
 	for _, c := range cases {
-		t.Run(c.op, func(t *testing.T) {
-			_, w, args := BuildClauses(Filters{
+		t.Run(c.name, func(t *testing.T) {
+			cl := BuildClauses(Filters{
 				StartMs: 1, EndMs: 2,
-				Attributes: []AttrFilter{{Key: "k", Op: c.op, Value: "v"}},
+				Attributes: []AttrFilter{c.attr},
 			})
-			if !strings.Contains(w, c.want) {
-				t.Errorf("op %q -> %q, want substring %q", c.op, w, c.want)
+			if !strings.Contains(cl.Span, c.want) {
+				t.Errorf("got %q, want substring %q", cl.Span, c.want)
 			}
-			m := namedArgs(args)
-			if m["akey_0"] != "k" || m["aval_0"] != "v" {
-				t.Errorf("attr binds = %v, want k/v", m)
+			if m := namedArgs(cl.Args); m["akey_0"] != "k" {
+				t.Errorf("attr key bind = %v, want k", m["akey_0"])
 			}
 		})
 	}

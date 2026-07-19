@@ -39,13 +39,44 @@ func TestValidate(t *testing.T) {
 			t.Errorf("window = %d, want clamped to %d", f.EndMs-f.StartMs, maxTimeRangeMs)
 		}
 	})
-	t.Run("defaults search mode", func(t *testing.T) {
-		f := Filters{StartMs: 1, EndMs: 2}
-		if err := f.Validate(); err != nil {
-			t.Fatal(err)
+}
+
+func TestValidateAttrs(t *testing.T) {
+	valid := func(af AttrFilter) error {
+		f := Filters{StartMs: 1, EndMs: 2, Attributes: []AttrFilter{af}}
+		return f.Validate()
+	}
+	t.Run("unknown op rejected", func(t *testing.T) {
+		if err := valid(AttrFilter{Key: "k", Op: "like", Value: "v"}); err == nil {
+			t.Error("want error for unknown op")
 		}
-		if f.SearchMode != "ngram" {
-			t.Errorf("SearchMode = %q, want ngram", f.SearchMode)
+	})
+	t.Run("empty key rejected", func(t *testing.T) {
+		if err := valid(AttrFilter{Key: " ", Op: "eq", Value: "v"}); err == nil {
+			t.Error("want error for empty key")
+		}
+	})
+	t.Run("comparison requires numeric value", func(t *testing.T) {
+		if err := valid(AttrFilter{Key: "k", Op: "gte", Value: "abc"}); err == nil {
+			t.Error("want error for non-numeric comparison value")
+		}
+		if err := valid(AttrFilter{Key: "k", Op: "gte", Value: "500"}); err != nil {
+			t.Errorf("numeric comparison should pass: %v", err)
+		}
+	})
+	t.Run("invalid regex rejected", func(t *testing.T) {
+		if err := valid(AttrFilter{Key: "k", Op: "regex", Value: "("}); err == nil {
+			t.Error("want error for invalid regex")
+		}
+		if err := valid(AttrFilter{Key: "k", Op: "regex", Value: "err.*"}); err != nil {
+			t.Errorf("valid regex should pass: %v", err)
+		}
+	})
+	t.Run("all supported ops pass", func(t *testing.T) {
+		for _, op := range []string{"", "eq", "neq", "contains", "exists", "not_exists"} {
+			if err := valid(AttrFilter{Key: "k", Op: op, Value: "v"}); err != nil {
+				t.Errorf("op %q should pass: %v", op, err)
+			}
 		}
 	})
 }
@@ -76,46 +107,126 @@ func TestBuildClauses_ResourceVsSpanSplit(t *testing.T) {
 			t.Errorf("resourceWhere missing %q: %q", want, rw)
 		}
 	}
-	for _, want := range []string{"severity_text IN @severities", "span_id = @spanID"} {
+	for _, want := range []string{"upper(severity_text) IN @severities", "span_id = @spanID"} {
 		if !strings.Contains(w, want) {
 			t.Errorf("where missing %q: %q", want, w)
 		}
 	}
 }
 
-func TestBuildClauses_Search(t *testing.T) {
-	_, exact, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: "exact"})
-	if !strings.Contains(exact, "lower(body) LIKE concat('%', lower(@search), '%')") {
-		t.Errorf("exact search clause wrong: %q", exact)
+// Severity matching is case-insensitive: the column is uppercased in SQL and
+// the incoming values are uppercased before binding.
+func TestBuildClauses_SeverityCaseInsensitive(t *testing.T) {
+	_, w, args := BuildClauses(Filters{
+		StartMs: 1, EndMs: 2,
+		Severities:        []string{"error", "Warn"},
+		ExcludeSeverities: []string{"info"},
+	})
+	if !strings.Contains(w, "upper(severity_text) IN @severities") ||
+		!strings.Contains(w, "upper(severity_text) NOT IN @excSeverities") {
+		t.Errorf("severity clauses wrong: %q", w)
 	}
-	_, ng, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: "ngram"})
-	if !strings.Contains(ng, "hasToken(body, lower(@search))") {
-		t.Errorf("ngram search clause wrong: %q", ng)
+	m := namedArgs(args)
+	sev := m["severities"].([]string)
+	if sev[0] != "ERROR" || sev[1] != "WARN" {
+		t.Errorf("severities not uppercased: %v", sev)
+	}
+	if exc := m["excSeverities"].([]string); exc[0] != "INFO" {
+		t.Errorf("excSeverities not uppercased: %v", exc)
+	}
+}
+
+// Body search is always case-insensitive substring; the legacy searchMode
+// field no longer changes semantics.
+func TestBuildClauses_Search(t *testing.T) {
+	for _, mode := range []string{"", "exact", "ngram"} {
+		_, w, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: mode})
+		if !strings.Contains(w, "positionCaseInsensitive(body, @search) > 0") {
+			t.Errorf("mode %q search clause wrong: %q", mode, w)
+		}
 	}
 }
 
 func TestBuildClauses_AttributeOps(t *testing.T) {
 	cases := []struct {
-		op   string
-		want string
+		name  string
+		attr  AttrFilter
+		want  string
+		binds map[string]any
 	}{
-		{"", "attributes_string[@akey_0] = @aval_0"},
-		{"neq", "attributes_string[@akey_0] != @aval_0"},
-		{"contains", "positionCaseInsensitive(attributes_string[@akey_0], @aval_0) > 0"},
-		{"regex", "match(attributes_string[@akey_0], @aval_0)"},
+		{
+			name:  "eq string",
+			attr:  AttrFilter{Key: "k", Op: "eq", Value: "v"},
+			want:  " AND attributes_string[@akey_0] = @aval_0",
+			binds: map[string]any{"akey_0": "k", "aval_0": "v"},
+		},
+		{
+			name: "eq numeric checks string and number maps",
+			attr: AttrFilter{Key: "k", Op: "", Value: "200"},
+			want: "(attributes_string[@akey_0] = @aval_0 OR (mapContains(attributes_number, @akey_0)" +
+				" AND attributes_number[@akey_0] = @aval_0_n))",
+			binds: map[string]any{"aval_0": "200", "aval_0_n": 200.0},
+		},
+		{
+			name: "eq bool checks string and bool maps",
+			attr: AttrFilter{Key: "k", Op: "eq", Value: "true"},
+			want: "(attributes_string[@akey_0] = @aval_0 OR (mapContains(attributes_bool, @akey_0)" +
+				" AND attributes_bool[@akey_0] = @aval_0_b))",
+			binds: map[string]any{"aval_0": "true", "aval_0_b": true},
+		},
+		{
+			name: "neq requires key to exist",
+			attr: AttrFilter{Key: "k", Op: "neq", Value: "v"},
+			want: "(mapContains(attributes_string, @akey_0) AND attributes_string[@akey_0] != @aval_0)",
+		},
+		{
+			name: "contains",
+			attr: AttrFilter{Key: "k", Op: "contains", Value: "v"},
+			want: "positionCaseInsensitive(attributes_string[@akey_0], @aval_0) > 0",
+		},
+		{
+			name: "regex",
+			attr: AttrFilter{Key: "k", Op: "regex", Value: "v.*"},
+			want: "match(attributes_string[@akey_0], @aval_0)",
+		},
+		{
+			name: "gte coalesces string and number maps",
+			attr: AttrFilter{Key: "k", Op: "gte", Value: "500"},
+			want: "coalesce(toFloat64OrNull(attributes_string[@akey_0])," +
+				" if(mapContains(attributes_number, @akey_0), attributes_number[@akey_0], NULL)) >= @aval_0",
+			binds: map[string]any{"aval_0": 500.0},
+		},
+		{
+			name: "lt",
+			attr: AttrFilter{Key: "k", Op: "lt", Value: "10"},
+			want: "NULL)) < @aval_0",
+		},
+		{
+			name: "exists spans all maps",
+			attr: AttrFilter{Key: "k", Op: "exists"},
+			want: " AND (mapContains(attributes_string, @akey_0) OR mapContains(attributes_number, @akey_0)" +
+				" OR mapContains(attributes_bool, @akey_0))",
+		},
+		{
+			name: "not_exists",
+			attr: AttrFilter{Key: "k", Op: "not_exists"},
+			want: " AND NOT (mapContains(attributes_string, @akey_0)",
+		},
 	}
 	for _, c := range cases {
-		t.Run(c.op, func(t *testing.T) {
+		t.Run(c.name, func(t *testing.T) {
 			_, w, args := BuildClauses(Filters{
 				StartMs: 1, EndMs: 2,
-				Attributes: []AttrFilter{{Key: "k", Op: c.op, Value: "v"}},
+				Attributes: []AttrFilter{c.attr},
 			})
 			if !strings.Contains(w, c.want) {
-				t.Errorf("op %q -> %q, want substring %q", c.op, w, c.want)
+				t.Errorf("got %q, want substring %q", w, c.want)
 			}
 			m := namedArgs(args)
-			if m["akey_0"] != "k" || m["aval_0"] != "v" {
-				t.Errorf("attr binds = %v, want k/v", m)
+			for k, v := range c.binds {
+				if m[k] != v {
+					t.Errorf("bind %q = %v, want %v", k, m[k], v)
+				}
 			}
 		})
 	}
