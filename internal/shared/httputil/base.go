@@ -9,9 +9,11 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	types "github.com/optikklabs/query/internal/shared/contracts"
 	"github.com/optikklabs/query/internal/shared/errorcode"
@@ -21,6 +23,13 @@ const APIV1Base = "/api/v1"
 
 func Tenant(r *http.Request) types.TenantContext {
 	return types.TenantFrom(r.Context())
+}
+
+// URLParamLower reads a path parameter and lowercases it. Ingest writes trace
+// and span ids as lowercase hex, and ClickHouse string comparison is case
+// sensitive, so uppercase ids from a client would otherwise match nothing.
+func URLParamLower(r *http.Request, key string) string {
+	return strings.ToLower(chi.URLParam(r, key))
 }
 
 func ClientIP(r *http.Request) string {

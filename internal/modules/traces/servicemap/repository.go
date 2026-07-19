@@ -5,7 +5,6 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
-	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
 type Repository struct {
@@ -16,28 +15,35 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) GetServiceMapSpans(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]serviceMapSpanRow, error) {
+// traceArgs binds the identity of a trace. The idx_trace_id bloom filter keeps
+// the lookup cheap without a time window.
+func traceArgs(tenantID int64, traceID string) []any {
+	return []any{
+		clickhouse.Named("tenantID", uint32(tenantID)),
+		clickhouse.Named("traceID", traceID),
+	}
+}
+
+func (r *Repository) GetServiceMapSpans(ctx context.Context, tenantID int64, traceID string) ([]serviceMapSpanRow, error) {
 	const query = `
 		SELECT span_id,
 		       parent_span_id,
 		       service,
 		       duration_nano / 1000000.0 AS duration_ms,
-		       has_error
+		       is_error = 1              AS has_error
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC
 		LIMIT 10000`
 	var rows []serviceMapSpanRow
-	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetServiceMapSpans", &rows, query,
-		args...,
+		traceArgs(tenantID, traceID)...,
 	)
 	return rows, err
 }
 
-func (r *Repository) GetTraceErrors(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]traceErrorRow, error) {
+func (r *Repository) GetTraceErrors(ctx context.Context, tenantID int64, traceID string) ([]traceErrorRow, error) {
 	const query = `
 		SELECT span_id,
 		       service,
@@ -49,15 +55,13 @@ func (r *Repository) GetTraceErrors(ctx context.Context, tenantID int64, traceID
 		       duration_nano / 1000000.0  AS duration_ms
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
-		WHERE has_error = true OR status_code_string = 'ERROR'
+		WHERE is_error = 1
 		ORDER BY timestamp ASC
 		LIMIT 1000`
 	var rows []traceErrorRow
-	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "servicemap.GetTraceErrors", &rows, query,
-		args...,
+		traceArgs(tenantID, traceID)...,
 	)
 	return rows, err
 }

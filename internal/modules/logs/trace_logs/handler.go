@@ -3,7 +3,6 @@ package trace_logs
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
@@ -25,7 +24,7 @@ func NewHandler(svc *Service) *Handler {
 
 // GetByTrace powers GET /api/v1/logs/trace/{traceID} — all logs for a trace.
 func (h *Handler) GetByTrace(w http.ResponseWriter, r *http.Request) {
-	traceID := chi.URLParam(r, "traceID")
+	traceID := modulecommon.URLParamLower(r, "traceID")
 	if traceID == "" {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
@@ -37,11 +36,7 @@ func (h *Handler) GetByTrace(w http.ResponseWriter, r *http.Request) {
 	if limit > maxLimit {
 		limit = maxLimit
 	}
-	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
-	if !ok {
-		return
-	}
-	logs, err := h.svc.GetByTraceID(r.Context(), modulecommon.Tenant(r).TenantID, traceID, limit, startTimeMs, endTimeMs)
+	logs, err := h.svc.GetByTraceID(r.Context(), modulecommon.Tenant(r).TenantID, traceID, limit)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch logs by trace", err)
 		return

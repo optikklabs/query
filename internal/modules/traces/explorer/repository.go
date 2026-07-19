@@ -19,22 +19,18 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
+// traceIndexColumns selects only what the root span actually knows. Trace-level
+// facts (span count, error count, services, real end time) come from
+// EnrichTraces; fabricating them here made every row report 1 span.
 const traceIndexColumns = `trace_id,
 		span_id,
 		timestamp                                                  AS start_time,
-		timestamp                                                  AS end_time,
 		duration_nano                                              AS duration_ns,
 		service                                                    AS root_service,
 		name                                                       AS root_operation,
 		status_code_string                                         AS root_status,
 		http_method                                                AS root_http_method,
-		response_status_code                                       AS root_http_status,
-		1                                                          AS span_count,
-		has_error,
-		(CASE WHEN has_error THEN 1 ELSE 0 END)                    AS error_count,
-		[service]                                                  AS service_set,
-		false                                                      AS truncated,
-		timestamp                                                  AS last_seen`
+		response_status_code                                       AS root_http_status`
 
 // rootScanParts assembles the shared core of every explorer query: an
 // optional WITH prologue plus the PREWHERE/WHERE over root spans. Span-level
@@ -104,11 +100,45 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "traces.Query", &rows, query, args...); err != nil {
 		return nil, false, err
 	}
+
 	hasMore := len(rows) > req.Limit
 	if hasMore {
 		rows = rows[:req.Limit]
 	}
 	return rows, hasMore, nil
+}
+
+// EnrichTraces returns the trace-level aggregates for one already-paginated
+// page of trace ids. Bounded to the page (not the window), and cheap because
+// idx_trace_id skips granules — one extra round trip, never an N+1.
+func (r *Repository) EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string) (map[string]traceAggRow, error) {
+	if len(traceIDs) == 0 {
+		return nil, nil
+	}
+	const query = `
+		SELECT trace_id,
+		       count()                                              AS span_count,
+		       countIf(is_error = 1)                                AS error_count,
+		       min(timestamp)                                       AS start_time,
+		       max(timestamp + toIntervalNanosecond(duration_nano)) AS end_time,
+		       groupUniqArray(service)                              AS service_set
+		FROM optikk.spans
+		PREWHERE tenant_id = @tenantID
+		     AND trace_id IN @traceIDs
+		GROUP BY trace_id`
+
+	var rows []traceAggRow
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "traces.EnrichTraces", &rows, query,
+		clickhouse.Named("tenantID", uint32(tenantID)),
+		clickhouse.Named("traceIDs", traceIDs),
+	); err != nil {
+		return nil, err
+	}
+	byTrace := make(map[string]traceAggRow, len(rows))
+	for _, row := range rows {
+		byTrace[row.TraceID] = row
+	}
+	return byTrace, nil
 }
 
 func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets, error) {

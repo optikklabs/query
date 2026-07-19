@@ -3,7 +3,6 @@ package detail
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
@@ -22,16 +21,12 @@ func NewHandler(svc *Service) *Handler {
 
 func (h *Handler) GetTraceSummary(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
-	traceID := chi.URLParam(r, "traceId")
+	traceID := modulecommon.URLParamLower(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
-	if !ok {
-		return
-	}
-	resp, err := h.svc.GetTraceSummary(r.Context(), tenantID, traceID, startTimeMs, endTimeMs)
+	resp, err := h.svc.GetTraceSummary(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch trace", err)
 		return
@@ -45,16 +40,12 @@ func (h *Handler) GetTraceSummary(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetSpanEvents(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
-	traceID := chi.URLParam(r, "traceId")
+	traceID := modulecommon.URLParamLower(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
-	if !ok {
-		return
-	}
-	events, err := h.svc.GetSpanEvents(r.Context(), tenantID, traceID, startTimeMs, endTimeMs)
+	events, err := h.svc.GetSpanEvents(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query span events", err)
 		return
@@ -64,8 +55,8 @@ func (h *Handler) GetSpanEvents(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
-	traceID := chi.URLParam(r, "traceId")
-	spanID := chi.URLParam(r, "spanId")
+	traceID := modulecommon.URLParamLower(r, "traceId")
+	spanID := modulecommon.URLParamLower(r, "spanId")
 	if traceID == "" {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
@@ -74,12 +65,8 @@ func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "spanId is required", nil)
 		return
 	}
-	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
-	if !ok {
-		return
-	}
 
-	attrs, err := h.svc.GetSpanAttributes(r.Context(), tenantID, traceID, spanID, startTimeMs, endTimeMs)
+	attrs, err := h.svc.GetSpanAttributes(r.Context(), tenantID, traceID, spanID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query span attributes", err)
 		return
@@ -91,9 +78,11 @@ func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, attrs)
 }
 
+// GetRelatedTraces keeps its time range: "other recent traces like this one"
+// is genuinely a range query, not a lookup by trace identity.
 func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
-	traceID := chi.URLParam(r, "traceId")
+	traceID := modulecommon.URLParamLower(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
@@ -125,16 +114,12 @@ func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetTraceSpans(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
-	traceID := chi.URLParam(r, "traceId")
+	traceID := modulecommon.URLParamLower(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
-	if !ok {
-		return
-	}
-	items, err := h.svc.ListSpansByTrace(r.Context(), tenantID, traceID, startTimeMs, endTimeMs)
+	items, err := h.svc.ListSpansByTrace(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to list trace spans", err)
 		return

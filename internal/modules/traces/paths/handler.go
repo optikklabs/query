@@ -3,7 +3,6 @@ package paths
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
@@ -20,16 +19,12 @@ func NewHandler(svc *Service) *Handler {
 
 func (h *Handler) GetCriticalPath(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
-	traceID := chi.URLParam(r, "traceId")
+	traceID := modulecommon.URLParamLower(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
-	if !ok {
-		return
-	}
-	path, err := h.svc.GetCriticalPath(r.Context(), tenantID, traceID, startTimeMs, endTimeMs)
+	path, err := h.svc.GetCriticalPath(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to compute critical path", err)
 		return
@@ -39,16 +34,12 @@ func (h *Handler) GetCriticalPath(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetErrorPath(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
-	traceID := chi.URLParam(r, "traceId")
+	traceID := modulecommon.URLParamLower(r, "traceId")
 	if traceID == "" {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
-	if !ok {
-		return
-	}
-	path, err := h.svc.GetErrorPath(r.Context(), tenantID, traceID, startTimeMs, endTimeMs)
+	path, err := h.svc.GetErrorPath(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to compute error path", err)
 		return

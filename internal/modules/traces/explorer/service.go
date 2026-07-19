@@ -28,6 +28,7 @@ func IsScalarField(field string) bool {
 
 type TraceRepository interface {
 	Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, bool, error)
+	EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string) (map[string]traceAggRow, error)
 	QueryFacets(ctx context.Context, req FacetsRequest) (Facets, error)
 	QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBucket, error)
 	SuggestAttribute(ctx context.Context, tenantID int64, start, end int64, field, prefix string, limit int) ([]Suggestion, error)
@@ -49,10 +50,24 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, e
 	if err != nil {
 		return QueryResponse{}, err
 	}
+	// The root scan owns ordering and paging; this fills in the trace-level
+	// facts a single root span cannot know.
+	aggs, err := s.repo.EnrichTraces(ctx, req.TenantID, traceIDsOf(rows))
+	if err != nil {
+		return QueryResponse{}, err
+	}
 	return QueryResponse{
-		Results:  mapTraces(rows),
+		Results:  mapTraces(rows, aggs),
 		PageInfo: buildPageInfo(rows, hasMore, limit),
 	}, nil
+}
+
+func traceIDsOf(rows []traceIndexRowDTO) []string {
+	ids := make([]string, len(rows))
+	for i, r := range rows {
+		ids[i] = r.TraceID
+	}
+	return ids
 }
 
 func pickExplorerLimit(v, def, maxLimit int) int {
@@ -74,29 +89,41 @@ func buildPageInfo(rows []traceIndexRowDTO, hasMore bool, limit int) PageInfo {
 	return info
 }
 
-func mapTrace(d traceIndexRowDTO) Trace {
-	return Trace{
+// mapTrace merges the root span with its trace-level aggregate. The aggregate
+// is authoritative for span/error counts, services and the real end time; the
+// root row is authoritative for the entry-point fields.
+func mapTrace(d traceIndexRowDTO, agg traceAggRow, ok bool) Trace {
+	t := Trace{
 		TraceID:        d.TraceID,
 		StartMs:        uint64(d.StartTime.UnixMilli()),
-		EndMs:          uint64(d.EndTime.UnixMilli()),
+		EndMs:          uint64(d.StartTime.UnixMilli()),
 		DurationMs:     float64(d.DurationNs) / 1_000_000,
 		RootService:    d.RootService,
 		RootOperation:  d.RootOperation,
 		RootStatus:     d.RootStatus,
 		RootHTTPMethod: d.RootHTTPMethod,
 		RootHTTPStatus: d.RootHTTPStatus,
-		SpanCount:      uint32(d.SpanCount),
-		HasError:       d.HasError,
-		ErrorCount:     uint32(d.ErrorCount),
-		ServiceSet:     d.ServiceSet,
-		Truncated:      d.Truncated,
+		SpanCount:      1,
+		ServiceSet:     []string{d.RootService},
 	}
+	if !ok {
+		return t
+	}
+	t.StartMs = uint64(agg.StartTime.UnixMilli())
+	t.EndMs = uint64(agg.EndTime.UnixMilli())
+	t.DurationMs = float64(agg.EndTime.Sub(agg.StartTime).Nanoseconds()) / 1_000_000
+	t.SpanCount = uint32(agg.SpanCount)
+	t.ErrorCount = uint32(agg.ErrorCount)
+	t.HasError = agg.ErrorCount > 0
+	t.ServiceSet = agg.ServiceSet
+	return t
 }
 
-func mapTraces(rows []traceIndexRowDTO) []Trace {
+func mapTraces(rows []traceIndexRowDTO, aggs map[string]traceAggRow) []Trace {
 	out := make([]Trace, len(rows))
 	for i, r := range rows {
-		out[i] = mapTrace(r)
+		agg, ok := aggs[r.TraceID]
+		out[i] = mapTrace(r, agg, ok)
 	}
 	return out
 }
