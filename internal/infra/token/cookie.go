@@ -3,13 +3,12 @@ package token
 import (
 	"net/http"
 	"strings"
-
-	"github.com/optikklabs/query/internal/shared/httputil"
+	"time"
 )
 
-// RefreshCookiePath scopes the refresh cookie to the auth endpoints so it
-// reaches both /refresh (rotation) and /logout (revocation).
-const RefreshCookiePath = httputil.APIV1Base + "/auth"
+// RefreshCookiePath scopes the refresh cookie to all endpoints.
+// Path="/" ensures proxies and different browser contexts do not drop the cookie.
+const RefreshCookiePath = "/"
 
 type cookieOpts struct {
 	name     string
@@ -29,6 +28,7 @@ func (s *Service) SetRefreshCookie(w http.ResponseWriter, token string) {
 		Path:     RefreshCookiePath,
 		Domain:   s.cookie.domain,
 		MaxAge:   int(s.refreshTTL.Seconds()),
+		Expires:  time.Now().Add(s.refreshTTL),
 		HttpOnly: true,
 		Secure:   s.cookie.secure,
 		SameSite: s.cookie.sameSite,
@@ -42,6 +42,7 @@ func (s *Service) ClearRefreshCookie(w http.ResponseWriter) {
 		Path:     RefreshCookiePath,
 		Domain:   s.cookie.domain,
 		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
 		HttpOnly: true,
 		Secure:   s.cookie.secure,
 		SameSite: s.cookie.sameSite,
