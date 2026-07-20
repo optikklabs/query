@@ -1,6 +1,6 @@
-// Package log_facets provides top-N facet buckets per dimension.
+// Package logfacets provides top-N facet buckets per dimension.
 // It is also exposed as a Service method for external callers.
-package log_facets //nolint:revive,stylecheck
+package logfacets //nolint:revive,stylecheck
 
 import (
 	"github.com/ClickHouse/clickhouse-go/v2"

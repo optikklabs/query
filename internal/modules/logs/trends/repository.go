@@ -1,4 +1,4 @@
-package log_trends //nolint:revive,stylecheck
+package logtrends //nolint:revive,stylecheck
 
 import (
 	"context"

@@ -1,7 +1,6 @@
-package log_facets //nolint:revive,stylecheck
+package logfacets //nolint:revive,stylecheck
 
 import (
-	"log/slog"
 	"net/http"
 
 	"github.com/optikklabs/query/internal/shared/errorcode"
@@ -21,15 +20,7 @@ func NewHandler(svc *Service) *Handler {
 // Facets powers POST /api/v1/logs/facets.
 func (h *Handler) Facets(w http.ResponseWriter, r *http.Request) {
 	var req Request
-	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
-		return
-	}
-	req.Filters.TenantID = modulecommon.Tenant(r).TenantID
-	req.Filters.StartMs = req.StartTime
-	req.Filters.EndMs = req.EndTime
-	if err := req.Filters.Validate(); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid filters", err)
+	if !modulecommon.BindFiltered(w, r, &req) {
 		return
 	}
 	resp, err := h.svc.ComputeResponse(r.Context(), req.Filters)
@@ -37,6 +28,5 @@ func (h *Handler) Facets(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query logs facets", err)
 		return
 	}
-	slog.Debug("Logs facets queried successfully", slog.Any("resp", resp))
 	modulecommon.RespondOK(w, resp)
 }

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/traces/filter"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 type QueryRequest struct {
@@ -13,6 +14,13 @@ type QueryRequest struct {
 	Cursor    string `json:"cursor"`
 
 	filter.Filters
+}
+
+func (r *QueryRequest) BindTenant(tenantID int64) error {
+	r.Filters.TenantID = tenantID
+	r.Filters.StartMs = r.StartTime
+	r.Filters.EndMs = r.EndTime
+	return r.Filters.Validate()
 }
 
 type QueryResponse struct {
@@ -50,6 +58,13 @@ type FacetsRequest struct {
 	filter.Filters
 }
 
+func (r *FacetsRequest) BindTenant(tenantID int64) error {
+	r.Filters.TenantID = tenantID
+	r.Filters.StartMs = r.StartTime
+	r.Filters.EndMs = r.EndTime
+	return r.Filters.Validate()
+}
+
 type facetDimRow struct {
 	Dim   string `ch:"dim"`
 	Value string `ch:"value"`
@@ -63,15 +78,15 @@ type TrendRequest struct {
 	filter.Filters
 }
 
-type SuggestRequest struct {
-	StartTime int64  `json:"startTime"`
-	EndTime   int64  `json:"endTime"`
-	Field     string `json:"field"`
-	Prefix    string `json:"prefix"`
-	Limit     int    `json:"limit"`
+func (r *TrendRequest) BindTenant(tenantID int64) error {
+	r.Filters.TenantID = tenantID
+	r.Filters.StartMs = r.StartTime
+	r.Filters.EndMs = r.EndTime
+	return r.Filters.Validate()
 }
 
-type suggestionRow struct {
-	Value string `ch:"value"`
-	Count uint64 `ch:"count"`
-}
+// SuggestRequest is a type alias for the shared suggest wire payload.
+type SuggestRequest = filterutil.SuggestRequest
+
+// suggestionRow is a type alias for the shared ClickHouse scan target.
+type suggestionRow = filterutil.SuggestionRow

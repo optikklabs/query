@@ -22,10 +22,10 @@ import (
 	ingestion "github.com/optikklabs/query/internal/modules/ingestion"
 	llm "github.com/optikklabs/query/internal/modules/llm"
 	log_explorer "github.com/optikklabs/query/internal/modules/logs/explorer"
-	log_facets "github.com/optikklabs/query/internal/modules/logs/facets"
+	logfacets "github.com/optikklabs/query/internal/modules/logs/facets"
 	log_detail "github.com/optikklabs/query/internal/modules/logs/logdetail"
 	log_trace_logs "github.com/optikklabs/query/internal/modules/logs/trace_logs"
-	log_trends "github.com/optikklabs/query/internal/modules/logs/trends"
+	logtrends "github.com/optikklabs/query/internal/modules/logs/trends"
 	metrics_explorer "github.com/optikklabs/query/internal/modules/metrics/explorer"
 	saturation_explorer "github.com/optikklabs/query/internal/modules/saturation/database/explorer"
 	saturation_database_latency "github.com/optikklabs/query/internal/modules/saturation/database/latency"
@@ -72,8 +72,8 @@ func configuredModules(
 		cloud.NewModule(nativeQuerier),
 		log_explorer.NewModule(nativeQuerier),
 		log_detail.NewModule(nativeQuerier),
-		log_facets.NewModule(nativeQuerier),
-		log_trends.NewModule(nativeQuerier),
+		logfacets.NewModule(nativeQuerier),
+		logtrends.NewModule(nativeQuerier),
 		log_trace_logs.NewModule(nativeQuerier),
 		metrics_explorer.NewModule(nativeQuerier),
 		ingestion.NewModule(nativeQuerier),

@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-const (
-	defaultSuggestLimit = 10
-	maxSuggestLimit     = 50
-)
+
 
 var scalarFields = map[string]struct{}{
 	"service":     {},
@@ -44,7 +43,7 @@ func NewService(repo TraceRepository) *Service {
 }
 
 func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, error) {
-	limit := pickExplorerLimit(req.Limit, 50, 500)
+	limit := filterutil.PickLimit(req.Limit, 50, 500)
 	req.Limit = limit
 	rows, hasMore, err := s.repo.Query(ctx, req)
 	if err != nil {
@@ -70,15 +69,7 @@ func traceIDsOf(rows []traceIndexRowDTO) []string {
 	return ids
 }
 
-func pickExplorerLimit(v, def, maxLimit int) int {
-	if v <= 0 {
-		return def
-	}
-	if v > maxLimit {
-		return maxLimit
-	}
-	return v
-}
+
 
 func buildPageInfo(rows []traceIndexRowDTO, hasMore bool, limit int) PageInfo {
 	info := PageInfo{HasMore: hasMore, Limit: limit}
@@ -137,7 +128,7 @@ func (s *Service) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBuck
 }
 
 func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int64) (SuggestResponse, error) {
-	limit := pickSuggestLimit(req.Limit)
+	limit := filterutil.PickLimit(req.Limit, 10, 50)
 	rows, err := s.fetchSuggest(ctx, tenantID, req, limit)
 	if err != nil {
 		slog.ErrorContext(ctx, "suggest: Suggest failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("field", req.Field))
@@ -156,12 +147,4 @@ func (s *Service) fetchSuggest(ctx context.Context, tenantID int64, req SuggestR
 	return s.repo.SuggestScalar(ctx, tenantID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
 }
 
-func pickSuggestLimit(v int) int {
-	if v <= 0 {
-		return defaultSuggestLimit
-	}
-	if v > maxSuggestLimit {
-		return maxSuggestLimit
-	}
-	return v
-}
+

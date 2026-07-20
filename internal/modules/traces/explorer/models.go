@@ -2,6 +2,7 @@ package explorer
 
 import (
 	"github.com/optikklabs/query/internal/infra/cursor"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 type Trace struct {
@@ -64,11 +65,11 @@ type TrendBucket struct {
 	Errors     uint64 `json:"errors"`
 }
 
-type Suggestion struct {
-	Value string `json:"value"`
-	Count uint64 `json:"count"`
-}
+// Suggestion is a type alias for the shared suggestion value+count pair.
+// Kept as an alias so existing callers (e.g. wirefixtures) can still
+// reference tracesexplorer.Suggestion without changes.
+type Suggestion = filterutil.Suggestion
 
-type SuggestResponse struct {
-	Suggestions []Suggestion `json:"suggestions"`
-}
+// SuggestResponse is a type alias for the shared suggest wire response.
+type SuggestResponse = filterutil.SuggestResponse
+

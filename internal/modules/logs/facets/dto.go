@@ -1,4 +1,4 @@
-package log_facets //nolint:revive,stylecheck
+package logfacets //nolint:revive,stylecheck
 
 import (
 	"github.com/optikklabs/query/internal/modules/logs/filter"
@@ -12,6 +12,13 @@ type Request struct {
 	EndTime   int64 `json:"endTime"`
 
 	filter.Filters
+}
+
+func (r *Request) BindTenant(tenantID int64) error {
+	r.Filters.TenantID = tenantID
+	r.Filters.StartMs = r.StartTime
+	r.Filters.EndMs = r.EndTime
+	return r.Filters.Validate()
 }
 
 type Response struct {

@@ -1,9 +1,8 @@
-package log_trends //nolint:revive,stylecheck
+package logtrends //nolint:revive,stylecheck
 
 import (
 	"net/http"
 
-	"github.com/optikklabs/query/internal/modules/logs/filter"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
@@ -20,11 +19,11 @@ func NewHandler(svc *Service) *Handler {
 
 // Summary powers POST /api/v1/logs/summary — total / errors / warns counts.
 func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
-	f, ok := h.bindFilters(w, r)
-	if !ok {
+	var req Request
+	if !modulecommon.BindFiltered(w, r, &req) {
 		return
 	}
-	sum, err := h.svc.Summary(r.Context(), f)
+	sum, err := h.svc.Summary(r.Context(), req.Filters)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query logs summary", err)
 		return
@@ -33,11 +32,11 @@ func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Trend(w http.ResponseWriter, r *http.Request) {
-	f, ok := h.bindFilters(w, r)
-	if !ok {
+	var req Request
+	if !modulecommon.BindFiltered(w, r, &req) {
 		return
 	}
-	tr, err := h.svc.Trend(r.Context(), f)
+	tr, err := h.svc.Trend(r.Context(), req.Filters)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query logs trend", err)
 		return
@@ -45,18 +44,4 @@ func (h *Handler) Trend(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, TrendResponse{Trend: tr})
 }
 
-func (h *Handler) bindFilters(w http.ResponseWriter, r *http.Request) (filter.Filters, bool) {
-	var req Request
-	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
-		return filter.Filters{}, false
-	}
-	req.Filters.TenantID = modulecommon.Tenant(r).TenantID
-	req.Filters.StartMs = req.StartTime
-	req.Filters.EndMs = req.EndTime
-	if err := req.Filters.Validate(); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid filters", err)
-		return filter.Filters{}, false
-	}
-	return req.Filters, true
-}
+

@@ -1,4 +1,4 @@
-package log_facets //nolint:revive,stylecheck
+package logfacets //nolint:revive,stylecheck
 
 import (
 	"context"

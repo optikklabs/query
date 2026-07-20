@@ -1,4 +1,4 @@
-package log_trends
+package logtrends
 
 import (
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -6,12 +6,8 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-type Config struct{ Enabled bool }
-
-func DefaultConfig() Config { return Config{Enabled: true} }
-
-func RegisterRoutes(cfg Config, v1 chi.Router, h *Handler) {
-	if !cfg.Enabled || h == nil {
+func RegisterRoutes(v1 chi.Router, h *Handler) {
+	if h == nil {
 		return
 	}
 	v1.Post("/logs/summary", h.Summary)
@@ -37,5 +33,5 @@ func (m *module) configure(db clickhouse.Conn) {
 }
 
 func (m *module) RegisterRoutes(group chi.Router) {
-	RegisterRoutes(DefaultConfig(), group, m.handler)
+	RegisterRoutes(group, m.handler)
 }

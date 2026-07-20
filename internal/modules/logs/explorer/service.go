@@ -6,12 +6,10 @@ import (
 	"strings"
 
 	"github.com/optikklabs/query/internal/modules/logs/shared/models"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-const (
-	defaultSuggestLimit = 10
-	maxSuggestLimit     = 50
-)
+
 
 // Service orchestrates POST /api/v1/logs/query. It owns the list path.
 type Service struct {
@@ -40,7 +38,7 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, e
 // Suggest returns value suggestions for a scalar field or @attribute key,
 // mirroring the traces suggest behavior.
 func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int64) (SuggestResponse, error) {
-	limit := pickSuggestLimit(req.Limit)
+	limit := filterutil.PickLimit(req.Limit, 10, 50)
 	var rows []Suggestion
 	var err error
 	if strings.HasPrefix(req.Field, "@") {
@@ -54,15 +52,7 @@ func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int6
 	return SuggestResponse{Suggestions: rows}, nil
 }
 
-func pickSuggestLimit(v int) int {
-	if v <= 0 {
-		return defaultSuggestLimit
-	}
-	if v > maxSuggestLimit {
-		return maxSuggestLimit
-	}
-	return v
-}
+
 
 func buildPageInfo(rows []models.LogRow, hasMore bool, limit int) models.PageInfo {
 	info := models.PageInfo{HasMore: hasMore, Limit: limit}

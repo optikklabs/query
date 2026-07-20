@@ -1,17 +1,17 @@
 package filter
 
 import (
-	"errors"
-	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-const maxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
+const maxTimeRangeMs = filterutil.MaxTimeRangeMs
+
+type AttrFilter = filterutil.AttrFilter
 
 type Filters struct {
 	TenantID int64 `json:"-"`
@@ -37,57 +37,14 @@ type Filters struct {
 	Attributes []AttrFilter `json:"attributes,omitempty"`
 }
 
-type AttrFilter struct {
-	Key   string `json:"key"`
-	Op    string `json:"op,omitempty"`
-	Value string `json:"value"`
-}
-
 func (f *Filters) Validate() error {
-	if f.EndMs <= 0 {
-		f.EndMs = time.Now().UnixMilli()
+	if err := filterutil.ValidateTimeRange(&f.StartMs, &f.EndMs); err != nil {
+		return err
 	}
-	if f.StartMs <= 0 {
-		return errors.New("filters: startTime is required")
-	}
-	if f.EndMs <= f.StartMs {
-		return errors.New("filters: endTime must be after startTime")
-	}
-	if (f.EndMs - f.StartMs) > maxTimeRangeMs {
-		f.StartMs = f.EndMs - maxTimeRangeMs
-	}
-	return ValidateAttrs(f.Attributes)
+	return filterutil.ValidateAttrs(f.Attributes)
 }
 
-var validAttrOps = map[string]struct{}{
-	"": {}, "eq": {}, "neq": {}, "contains": {}, "regex": {},
-	"gt": {}, "gte": {}, "lt": {}, "lte": {}, "exists": {}, "not_exists": {},
-}
-
-// ValidateAttrs rejects attribute filters that would otherwise produce
-// silently-wrong SQL: unknown ops, empty keys, non-numeric comparison
-// values, and regexes that ClickHouse would fail on at query time.
-func ValidateAttrs(attrs []AttrFilter) error {
-	for _, af := range attrs {
-		if strings.TrimSpace(af.Key) == "" {
-			return errors.New("filters: attribute key is required")
-		}
-		if _, ok := validAttrOps[af.Op]; !ok {
-			return fmt.Errorf("filters: unsupported attribute op %q", af.Op)
-		}
-		switch af.Op {
-		case "gt", "gte", "lt", "lte":
-			if _, err := strconv.ParseFloat(af.Value, 64); err != nil {
-				return fmt.Errorf("filters: attribute %q: op %q requires a numeric value", af.Key, af.Op)
-			}
-		case "regex":
-			if _, err := regexp.Compile(af.Value); err != nil {
-				return fmt.Errorf("filters: attribute %q: invalid regex: %v", af.Key, err)
-			}
-		}
-	}
-	return nil
-}
+var ValidateAttrs = filterutil.ValidateAttrs
 
 // BuildFingerprintCTE turns a resource filter into a fingerprint-pruning CTE.
 // It resolves matching fingerprints from the small logs_resource dimension table
@@ -228,7 +185,7 @@ func buildAttrClause(af AttrFilter, i int) (string, []any) {
 		n, _ := strconv.ParseFloat(af.Value, 64)
 		expr := `coalesce(toFloat64OrNull(attributes_string[@` + k + `]),` +
 			` if(mapContains(attributes_number, @` + k + `), attributes_number[@` + k + `], NULL))`
-		return ` AND ` + expr + ` ` + cmpSQL(af.Op) + ` @` + v,
+		return ` AND ` + expr + ` ` + filterutil.CmpSQL(af.Op) + ` @` + v,
 			[]any{keyArg, clickhouse.Named(v, n)}
 	case "exists":
 		return ` AND ` + attrExistsExpr(k), []any{keyArg}
@@ -270,17 +227,4 @@ func attrExistsExpr(k string) string {
 	return `(mapContains(attributes_string, @` + k + `)` +
 		` OR mapContains(attributes_number, @` + k + `)` +
 		` OR mapContains(attributes_bool, @` + k + `))`
-}
-
-func cmpSQL(op string) string {
-	switch op {
-	case "gt":
-		return ">"
-	case "gte":
-		return ">="
-	case "lt":
-		return "<"
-	default:
-		return "<="
-	}
 }

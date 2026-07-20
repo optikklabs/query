@@ -3,6 +3,7 @@ package explorer
 import (
 	"github.com/optikklabs/query/internal/modules/logs/filter"
 	"github.com/optikklabs/query/internal/modules/logs/shared/models"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 // QueryRequest is the wire payload for POST /api/v1/logs/query.
@@ -15,31 +16,26 @@ type QueryRequest struct {
 	filter.Filters
 }
 
+func (r *QueryRequest) BindTenant(tenantID int64) error {
+	r.Filters.TenantID = tenantID
+	r.Filters.StartMs = r.StartTime
+	r.Filters.EndMs = r.EndTime
+	return r.Filters.Validate()
+}
+
 type QueryResponse struct {
 	Results  []models.Log    `json:"results"`
 	PageInfo models.PageInfo `json:"pageInfo"`
 }
 
-// SuggestRequest is the wire payload for POST /api/v1/logs/suggest. It
-// mirrors the traces suggest contract.
-type SuggestRequest struct {
-	StartTime int64  `json:"startTime"`
-	EndTime   int64  `json:"endTime"`
-	Field     string `json:"field"`
-	Prefix    string `json:"prefix"`
-	Limit     int    `json:"limit"`
-}
+// SuggestRequest is a type alias for the shared suggest wire payload.
+type SuggestRequest = filterutil.SuggestRequest
 
-type SuggestResponse struct {
-	Suggestions []Suggestion `json:"suggestions"`
-}
+// SuggestResponse is a type alias for the shared suggest wire response.
+type SuggestResponse = filterutil.SuggestResponse
 
-type Suggestion struct {
-	Value string `json:"value"`
-	Count uint64 `json:"count"`
-}
+// Suggestion is a type alias for the shared suggestion value+count pair.
+type Suggestion = filterutil.Suggestion
 
-type suggestionRow struct {
-	Value string `ch:"value"`
-	Count uint64 `ch:"count"`
-}
+// suggestionRow is a type alias for the shared ClickHouse scan target.
+type suggestionRow = filterutil.SuggestionRow

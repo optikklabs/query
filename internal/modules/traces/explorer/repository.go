@@ -9,6 +9,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/traces/filter"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 type Repository struct {
@@ -254,11 +255,7 @@ func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestScalar", &rows, query, suggestArgs(tenantID, startMs, endMs, prefix, limit)...); err != nil {
 		return nil, err
 	}
-	out := make([]Suggestion, len(rows))
-	for i, row := range rows {
-		out[i] = Suggestion{Value: row.Value, Count: row.Count}
-	}
-	return out, nil
+	return filterutil.MapSuggestionRows(rows), nil
 }
 
 func (r *Repository) SuggestAttribute(ctx context.Context, tenantID, startMs, endMs int64, attrKey, prefix string, limit int) ([]Suggestion, error) {
@@ -279,11 +276,7 @@ func (r *Repository) SuggestAttribute(ctx context.Context, tenantID, startMs, en
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestAttribute", &rows, query, args...); err != nil {
 		return nil, err
 	}
-	out := make([]Suggestion, len(rows))
-	for i, row := range rows {
-		out[i] = Suggestion{Value: row.Value, Count: row.Count}
-	}
-	return out, nil
+	return filterutil.MapSuggestionRows(rows), nil
 }
 
 func suggestArgs(tenantID, startMs, endMs int64, prefix string, limit int) []any {

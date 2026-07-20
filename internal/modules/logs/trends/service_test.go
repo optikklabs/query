@@ -1,4 +1,4 @@
-package log_trends
+package logtrends
 
 import (
 	"testing"
