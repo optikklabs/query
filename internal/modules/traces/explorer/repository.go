@@ -148,18 +148,22 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) (Facets
 
 	query := with + `
 		SELECT
-			multiIf(service != '', 'service',
-					name != '', 'operation',
-					http_method != '', 'http_method',
-					response_status_code != '', 'http_status',
-					status_code_string != '', 'status',
-					'') as dim,
-			multiIf(service != '', service,
-					name != '', name,
-					http_method != '', http_method,
-					response_status_code != '', response_status_code,
-					status_code_string != '', status_code_string,
-					'') as value,
+			multiIf(
+				grouping(service) = 0, 'service',
+				grouping(name) = 0, 'operation',
+				grouping(http_method) = 0, 'http_method',
+				grouping(response_status_code) = 0, 'http_status',
+				grouping(status_code_string) = 0, 'status',
+				''
+			) as dim,
+			multiIf(
+				grouping(service) = 0, service,
+				grouping(name) = 0, name,
+				grouping(http_method) = 0, http_method,
+				grouping(response_status_code) = 0, response_status_code,
+				grouping(status_code_string) = 0, status_code_string,
+				''
+			) as value,
 			count() as cnt
 		FROM optikk.spans` + prewhere + where + `
 		GROUP BY GROUPING SETS (
@@ -208,7 +212,7 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 
 	query := with + `
 		SELECT ` + grainSQL + `                          AS time_bucket,
-		       countIf(is_error = 0)                     AS total,
+		       count()                                   AS total,
 		       countIf(is_error = 1)                     AS errors
 		FROM optikk.spans` + prewhere + where + `
 		GROUP BY time_bucket
