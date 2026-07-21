@@ -36,14 +36,17 @@ type TrendRow struct {
 func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow, error) {
 	resourceWhere, where, args := filter.BuildClauses(f)
 	cte, prewhereFP := filter.BuildFingerprintCTE(resourceWhere)
+	timeWhere := " AND timestamp BETWEEN @start AND @end"
+	if f.TraceID != "" {
+		timeWhere = ""
+	}
 
 	query := cte + `
 	SELECT count()                       AS total,
 	       countIf(severity_bucket >= 4) AS errors,
 	       countIf(severity_bucket = 3)  AS warns
 	FROM optikk.logs
-	PREWHERE tenant_id = @tenantID` + prewhereFP + `
-	     AND timestamp BETWEEN @start AND @end` + where
+	PREWHERE tenant_id = @tenantID` + prewhereFP + timeWhere + where
 
 	var row SummaryRow
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Summary",
@@ -54,6 +57,10 @@ func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, e
 	resourceWhere, where, args := filter.BuildClauses(f)
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	cte, prewhereFP := filter.BuildFingerprintCTE(resourceWhere)
+	timeWhere := " AND timestamp BETWEEN @start AND @end"
+	if f.TraceID != "" {
+		timeWhere = ""
+	}
 
 	query := cte + `
 	SELECT ` + grainSQL + ` AS time_bucket,
@@ -63,8 +70,7 @@ func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, e
 	       countIf(severity_bucket = 2)  AS info,
 	       countIf(severity_bucket <= 1) AS debug
 	FROM optikk.logs
-	PREWHERE tenant_id = @tenantID` + prewhereFP + `
-	     AND timestamp BETWEEN @start AND @end` + where + `
+	PREWHERE tenant_id = @tenantID` + prewhereFP + timeWhere + where + `
 	GROUP BY time_bucket
 	ORDER BY time_bucket ASC`
 

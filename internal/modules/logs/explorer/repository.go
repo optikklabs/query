@@ -30,11 +30,14 @@ func (r *Repository) getLogs(ctx context.Context, f filter.Filters, limit int, c
 	args = append(args, clickhouse.Named("pgLimit", uint64(limit+1)))
 
 	cte, prewhereFP := filter.BuildFingerprintCTE(resourceWhere)
+	timeWhere := " AND timestamp BETWEEN @start AND @end"
+	if f.TraceID != "" {
+		timeWhere = ""
+	}
 	query := cte + `
 		SELECT ` + models.LogColumns + `
 		FROM optikk.logs
-		PREWHERE tenant_id = @tenantID` + prewhereFP + `
-		     AND timestamp BETWEEN @start AND @end` + where + `
+		PREWHERE tenant_id = @tenantID` + prewhereFP + timeWhere + where + `
 		ORDER BY timestamp DESC, log_id DESC
 		LIMIT @pgLimit`
 

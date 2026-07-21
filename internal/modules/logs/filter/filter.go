@@ -89,7 +89,9 @@ func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 	if f.HasResourceFilters() {
 		resourceWhere += ` AND ts_bucket BETWEEN @startBucket AND @endBucket`
 	}
-	where += ` AND ts_bucket BETWEEN @startBucket AND @endBucket`
+	if f.TraceID == "" {
+		where += ` AND ts_bucket BETWEEN @startBucket AND @endBucket`
+	}
 
 	if len(f.Services) > 0 {
 		resourceWhere += ` AND service IN @services`
