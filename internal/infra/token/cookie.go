@@ -10,6 +10,11 @@ import (
 // Path="/" ensures proxies and different browser contexts do not drop the cookie.
 const RefreshCookiePath = "/"
 
+// legacyRefreshCookiePath is the pre-"/" scope. Sessions created before the
+// path widened still hold a cookie here; logout must clear it too, or the
+// browser keeps sending a stale token that shadows the current one.
+const legacyRefreshCookiePath = "/api/v1/auth"
+
 type cookieOpts struct {
 	name     string
 	domain   string
@@ -36,17 +41,21 @@ func (s *Service) SetRefreshCookie(w http.ResponseWriter, token string) {
 }
 
 func (s *Service) ClearRefreshCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.cookie.name,
-		Value:    "",
-		Path:     RefreshCookiePath,
-		Domain:   s.cookie.domain,
-		MaxAge:   -1,
-		Expires:  time.Unix(0, 0),
-		HttpOnly: true,
-		Secure:   s.cookie.secure,
-		SameSite: s.cookie.sameSite,
-	})
+	// Clear both the current and legacy paths: a browser may hold a cookie at
+	// either, and each (name, path) pair is a distinct cookie to the browser.
+	for _, path := range []string{RefreshCookiePath, legacyRefreshCookiePath} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     s.cookie.name,
+			Value:    "",
+			Path:     path,
+			Domain:   s.cookie.domain,
+			MaxAge:   -1,
+			Expires:  time.Unix(0, 0),
+			HttpOnly: true,
+			Secure:   s.cookie.secure,
+			SameSite: s.cookie.sameSite,
+		})
+	}
 }
 
 func parseSameSite(raw string) http.SameSite {
