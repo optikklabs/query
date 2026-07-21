@@ -33,17 +33,9 @@ func (s *stubRepo) SuggestScalar(context.Context, int64, int64, int64, string, s
 	return nil, nil
 }
 
-// A row must report its trace's facts, not its root span's. Previously
-// span_count was hardcoded to 1, so every row claimed a single-span trace.
-func TestServiceQuery_RowsReportTraceLevelFacts(t *testing.T) {
+func TestServiceEnrichTraces_ReportsTraceLevelFacts(t *testing.T) {
 	start := time.Unix(1000, 0)
 	repo := &stubRepo{
-		rows: []traceIndexRowDTO{{
-			TraceID:     "abc",
-			StartTime:   start,
-			DurationNs:  2_000_000, // root span: 2ms
-			RootService: "gateway",
-		}},
 		aggs: map[string]traceAggRow{"abc": {
 			TraceID:    "abc",
 			SpanCount:  5,
@@ -53,11 +45,11 @@ func TestServiceQuery_RowsReportTraceLevelFacts(t *testing.T) {
 			ServiceSet: []string{"gateway", "orders", "ledger"},
 		}},
 	}
-	resp, err := NewService(repo).Query(context.Background(), QueryRequest{})
+	resp, err := NewService(repo).EnrichTraces(context.Background(), 1, []string{"abc"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := resp.Results[0]
+	got := resp.Enrichments["abc"]
 	if got.SpanCount != 5 {
 		t.Errorf("span_count = %d, want 5", got.SpanCount)
 	}
@@ -67,27 +59,11 @@ func TestServiceQuery_RowsReportTraceLevelFacts(t *testing.T) {
 	if len(got.ServiceSet) != 3 {
 		t.Errorf("service_set = %v, want 3 services", got.ServiceSet)
 	}
-	// Duration must be trace wall-clock, not the root span's 2ms.
 	if got.DurationMs != 50 {
 		t.Errorf("duration_ms = %v, want 50", got.DurationMs)
 	}
 	if got.EndMs <= got.StartMs {
 		t.Errorf("end_ms %d must exceed start_ms %d", got.EndMs, got.StartMs)
-	}
-}
-
-// A trace whose spans aged out of the aggregate still renders from its root.
-func TestServiceQuery_FallsBackWhenAggregateMissing(t *testing.T) {
-	repo := &stubRepo{
-		rows: []traceIndexRowDTO{{TraceID: "gone", RootService: "gateway", DurationNs: 3_000_000}},
-		aggs: map[string]traceAggRow{},
-	}
-	resp, err := NewService(repo).Query(context.Background(), QueryRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := resp.Results[0]; got.SpanCount != 1 || got.DurationMs != 3 {
-		t.Errorf("fallback = span_count %d / duration %v, want 1 / 3", got.SpanCount, got.DurationMs)
 	}
 }
 

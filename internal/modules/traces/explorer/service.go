@@ -47,16 +47,31 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, e
 	if err != nil {
 		return QueryResponse{}, err
 	}
-	// The root scan owns ordering and paging; this fills in the trace-level
-	// facts a single root span cannot know.
-	aggs, err := s.repo.EnrichTraces(ctx, req.TenantID, traceIDsOf(rows))
-	if err != nil {
-		return QueryResponse{}, err
-	}
 	return QueryResponse{
-		Results:  mapTraces(rows, aggs),
+		Results:  mapTraces(rows, nil),
 		PageInfo: buildPageInfo(rows, hasMore, limit),
 	}, nil
+}
+
+func (s *Service) EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string) (EnrichResponse, error) {
+	aggs, err := s.repo.EnrichTraces(ctx, tenantID, traceIDs)
+	if err != nil {
+		slog.ErrorContext(ctx, "explorer: EnrichTraces failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID))
+		return EnrichResponse{}, err
+	}
+	enrichments := make(map[string]TraceEnrichment, len(aggs))
+	for id, agg := range aggs {
+		enrichments[id] = TraceEnrichment{
+			SpanCount:  uint32(agg.SpanCount),
+			ErrorCount: uint32(agg.ErrorCount),
+			HasError:   agg.ErrorCount > 0,
+			ServiceSet: agg.ServiceSet,
+			StartMs:    uint64(agg.StartTime.UnixMilli()),
+			EndMs:      uint64(agg.EndTime.UnixMilli()),
+			DurationMs: float64(agg.EndTime.Sub(agg.StartTime).Nanoseconds()) / 1_000_000,
+		}
+	}
+	return EnrichResponse{Enrichments: enrichments}, nil
 }
 
 func traceIDsOf(rows []traceIndexRowDTO) []string {

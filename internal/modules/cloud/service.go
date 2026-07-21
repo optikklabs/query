@@ -21,96 +21,76 @@ var categoryOrder = []string{
 	CategoryNetwork, CategoryStreaming, CategoryAI, CategoryOther,
 }
 
-// GetOverview assembles the cross-provider landing payload from telemetry.
-func (s *Service) GetOverview(ctx context.Context, tenantID, startMs, endMs int64) (CloudOverview, error) {
-	inventory, err := s.repo.QueryProviderInventory(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return CloudOverview{}, err
-	}
-	categories, err := s.repo.QueryProviderCategories(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return CloudOverview{}, err
-	}
-	health, err := s.repo.QueryProviderHealth(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return CloudOverview{}, err
-	}
-	restarts, err := s.repo.QueryRestarts(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return CloudOverview{}, err
-	}
-
-	categoriesByProvider := aggregateCategories(categories)
-	healthByProvider := aggregateHealth(health)
-	restartsByProvider := indexRestarts(restarts)
-
-	out := CloudOverview{Providers: make([]ProviderSummary, 0, len(inventory))}
-	for _, inv := range inventory {
-		h := healthByProvider[inv.Provider]
-		summary := ProviderSummary{
-			Provider:   inv.Provider,
-			Accounts:   int64(inv.Accounts),
-			Regions:    int64(inv.Regions),
-			Nodes:      int64(inv.Nodes),
-			Pods:       int64(inv.Pods),
-			Resources:  int64(inv.Resources),
-			Restarts:   int64(restartsByProvider[inv.Provider]),
-			Categories: categoriesByProvider[inv.Provider],
-			Health:     h,
-			LastSeen:   formatTime(inv.LastSeen),
-		}
-		out.Providers = append(out.Providers, summary)
-
-		out.TotalResources += summary.Resources
-		out.TotalAccounts += summary.Accounts
-		out.TotalRegions += summary.Regions
-		out.TotalNodes += summary.Nodes
-		out.TotalPods += summary.Pods
-		out.Unhealthy += h.Unhealthy
-		out.Degraded += h.Degraded
-	}
-	return out, nil
+func (s *Service) GetInventory(ctx context.Context, tenantID, startMs, endMs int64) ([]InventoryRow, error) {
+	return s.repo.QueryProviderInventory(ctx, tenantID, startMs, endMs)
 }
 
-// GetProviderDetail assembles the per-provider drill-in payload.
-func (s *Service) GetProviderDetail(ctx context.Context, tenantID int64, provider string, startMs, endMs int64) (CloudProviderDetail, error) {
+func (s *Service) GetCategories(ctx context.Context, tenantID, startMs, endMs int64) (map[string][]CategoryCount, error) {
+	categories, err := s.repo.QueryProviderCategories(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return nil, err
+	}
+	return aggregateCategories(categories), nil
+}
+
+func (s *Service) GetHealth(ctx context.Context, tenantID, startMs, endMs int64) (map[string]HealthCounts, error) {
+	health, err := s.repo.QueryProviderHealth(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return nil, err
+	}
+	return aggregateHealth(health), nil
+}
+
+func (s *Service) GetRestarts(ctx context.Context, tenantID, startMs, endMs int64) (map[string]uint64, error) {
+	restarts, err := s.repo.QueryRestarts(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return nil, err
+	}
+	return indexRestarts(restarts), nil
+}
+
+func (s *Service) GetProviderPlatforms(ctx context.Context, tenantID int64, provider string, startMs, endMs int64) ([]PlatformService, error) {
 	platforms, err := s.repo.QueryPlatformServices(ctx, tenantID, provider, startMs, endMs)
 	if err != nil {
-		return CloudProviderDetail{}, err
+		return nil, err
 	}
-	accounts, err := s.repo.QueryAccountBreakdown(ctx, tenantID, provider, startMs, endMs)
-	if err != nil {
-		return CloudProviderDetail{}, err
-	}
-	resources, err := s.repo.QueryProviderResources(ctx, tenantID, provider, startMs, endMs)
-	if err != nil {
-		return CloudProviderDetail{}, err
-	}
-
-	detail := CloudProviderDetail{
-		Provider:  provider,
-		Services:  make([]PlatformService, 0, len(platforms)),
-		Accounts:  make([]AccountBreakdown, 0, len(accounts)),
-		Resources: make([]AttentionResource, 0, len(resources)),
-	}
+	out := make([]PlatformService, 0, len(platforms))
 	for _, p := range platforms {
-		detail.Services = append(detail.Services, PlatformService{
+		out = append(out, PlatformService{
 			Platform: p.Platform,
 			Category: CategoryFor(p.Platform),
 			Count:    int64(p.Count),
 		})
 	}
+	return out, nil
+}
+
+func (s *Service) GetProviderAccounts(ctx context.Context, tenantID int64, provider string, startMs, endMs int64) ([]AccountBreakdown, error) {
+	accounts, err := s.repo.QueryAccountBreakdown(ctx, tenantID, provider, startMs, endMs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AccountBreakdown, 0, len(accounts))
 	for _, a := range accounts {
-		detail.Accounts = append(detail.Accounts, AccountBreakdown{
+		out = append(out, AccountBreakdown{
 			Account:   a.Account,
 			Resources: int64(a.Resources),
 			Nodes:     int64(a.Nodes),
 			Pods:      int64(a.Pods),
 		})
 	}
+	return out, nil
+}
+
+func (s *Service) GetProviderResources(ctx context.Context, tenantID int64, provider string, startMs, endMs int64) ([]AttentionResource, error) {
+	resources, err := s.repo.QueryProviderResources(ctx, tenantID, provider, startMs, endMs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AttentionResource, 0, len(resources))
 	for _, r := range resources {
 		errorRate, avgLatency := redDerivations(r.RequestCount, r.ErrorCount, r.DurationMsSum)
-		detail.Resources = append(detail.Resources, AttentionResource{
+		out = append(out, AttentionResource{
 			Entity:       r.Entity,
 			Service:      r.Service,
 			Region:       r.Region,
@@ -121,7 +101,7 @@ func (s *Service) GetProviderDetail(ctx context.Context, tenantID int64, provide
 			RequestCount: int64(r.RequestCount),
 		})
 	}
-	return detail, nil
+	return out, nil
 }
 
 // aggregateCategories folds per-platform counts into ordered category buckets.

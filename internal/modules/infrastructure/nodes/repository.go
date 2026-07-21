@@ -68,32 +68,13 @@ func (r *Repository) QueryInfrastructureNodes(ctx context.Context, tenantID int6
 }
 
 func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, tenantID int64, startMs, endMs int64) (NodeSummaryRow, error) {
-	query := hostSeriesCTE + `
-		SELECT
-		    series.host                                            AS host,
-		    sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `) AS error_count,
-		    sum(m.hist_count)                                      AS request_count,
-		    uniqIf(series.pod, series.pod != '')                  AS pod_count
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp   BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
-		GROUP BY host`
-	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
-	type nodeRawSummaryRow struct {
-		Host         string `ch:"host"`
-		ErrorCount   uint64 `ch:"error_count"`
-		RequestCount uint64 `ch:"request_count"`
-		PodCount     uint64 `ch:"pod_count"`
-	}
-	var rawRows []nodeRawSummaryRow
-	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "nodes.QueryInfrastructureNodeSummary", &rawRows, query, args...); err != nil {
+	nodeRows, err := r.QueryInfrastructureNodes(ctx, tenantID, startMs, endMs)
+	if err != nil {
 		return NodeSummaryRow{}, err
 	}
 
 	var healthy, degraded, unhealthy, totalPods uint64
-	for _, raw := range rawRows {
+	for _, raw := range nodeRows {
 		totalPods += raw.PodCount
 		errorRate := metrics.Percentage(raw.ErrorCount, raw.RequestCount)
 		switch {

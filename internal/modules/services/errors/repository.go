@@ -130,9 +130,9 @@ func (r *Repository) ErrorVolumeRowsByService(ctx context.Context, tenantID int6
 }
 
 func (r *Repository) ErrorGroupRowsAll(ctx context.Context, tenantID int64, startMs, endMs int64, limit int, cursor ErrorGroupsCursor) ([]rawErrorGroupRow, error) {
-	var paginationFilter string
+	var havingClause string
 	if !cursor.IsZero() {
-		paginationFilter = "AND (error_count < @cursorCount OR (error_count = @cursorCount AND error_group_id > @cursorID))"
+		havingClause = "HAVING (error_count < @cursorCount OR (error_count = @cursorCount AND error_group_id > @cursorID))"
 	}
 
 	query := `
@@ -146,7 +146,7 @@ func (r *Repository) ErrorGroupRowsAll(ctx context.Context, tenantID int64, star
 		FROM optikk.spans
 		PREWHERE tenant_id   = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1
 		GROUP BY error_group_id, service, name, http_status_bucket
-		HAVING error_count > 0 ` + paginationFilter + `
+		` + havingClause + `
 		ORDER BY error_count DESC, error_group_id ASC
 		LIMIT @limit`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
@@ -159,9 +159,9 @@ func (r *Repository) ErrorGroupRowsAll(ctx context.Context, tenantID int64, star
 }
 
 func (r *Repository) ErrorGroupRowsByService(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, limit int, cursor ErrorGroupsCursor) ([]rawErrorGroupRow, error) {
-	var paginationFilter string
+	var havingClause string
 	if !cursor.IsZero() {
-		paginationFilter = "AND (error_count < @cursorCount OR (error_count = @cursorCount AND error_group_id > @cursorID))"
+		havingClause = "HAVING (error_count < @cursorCount OR (error_count = @cursorCount AND error_group_id > @cursorID))"
 	}
 
 	query := `
@@ -175,7 +175,7 @@ func (r *Repository) ErrorGroupRowsByService(ctx context.Context, tenantID int64
 		FROM optikk.spans
 		PREWHERE tenant_id     = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1 AND service = @serviceName
 		GROUP BY error_group_id, service, name, http_status_bucket
-		HAVING error_count > 0 ` + paginationFilter + `
+		` + havingClause + `
 		ORDER BY error_count DESC, error_group_id ASC
 		LIMIT @limit`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
@@ -304,22 +304,46 @@ func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, tenantID
 	return &row, nil
 }
 
-func (r *Repository) ErrorGroupFacetRows(ctx context.Context, tenantID int64, startMs, endMs int64, groupID, column string) ([]rawErrorFacetRow, error) {
-	query := `
-		SELECT ` + column + `             AS value,
-		       count()                    AS count
+type rawErrorFacetGroupRow struct {
+	Dim   string `ch:"dim"`
+	Value string `ch:"value"`
+	Count uint64 `ch:"cnt"`
+}
+
+func (r *Repository) ErrorGroupFacetRowsAll(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]rawErrorFacetGroupRow, error) {
+	const query = `
+		SELECT
+			multiIf(
+				grouping(service_version) = 0, 'service_version',
+				grouping(environment) = 0, 'environment',
+				grouping(pod) = 0, 'pod',
+				grouping(http_route) = 0, 'http_route',
+				''
+			) as dim,
+			multiIf(
+				grouping(service_version) = 0, service_version,
+				grouping(environment) = 0, environment,
+				grouping(pod) = 0, pod,
+				grouping(http_route) = 0, http_route,
+				''
+			) as value,
+			count() as cnt
 		FROM optikk.spans
 		PREWHERE tenant_id     = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1 AND error_group_id = @groupID
-		WHERE ` + column + ` != ''
-		GROUP BY value
-		HAVING count > 0
-		ORDER BY count DESC
-		LIMIT 8`
+		GROUP BY GROUPING SETS (
+			(service_version),
+			(environment),
+			(pod),
+			(http_route)
+		)
+		HAVING value != ''
+		ORDER BY dim, cnt DESC
+		LIMIT 8 BY dim`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("groupID", groupID),
 	)
-	var rows []rawErrorFacetRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupFacet", &rows, query, args...)
+	var rows []rawErrorFacetGroupRow
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupFacetAll", &rows, query, args...)
 }
 
 func (r *Repository) ErrorHotspotRows(ctx context.Context, tenantID int64, startMs, endMs int64) ([]rawErrorHotspotRow, error) {

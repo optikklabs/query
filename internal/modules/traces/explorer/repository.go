@@ -126,7 +126,8 @@ func (r *Repository) EnrichTraces(ctx context.Context, tenantID int64, traceIDs 
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
 		     AND trace_id IN @traceIDs
-		GROUP BY trace_id`
+		GROUP BY trace_id
+		LIMIT 500`
 
 	var rows []traceAggRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "traces.EnrichTraces", &rows, query,
@@ -239,6 +240,24 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendB
 }
 
 func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs int64, field, prefix string, limit int) ([]Suggestion, error) {
+	if field == "service" || field == "environment" {
+		query := `
+			SELECT ` + field + `          AS value,
+			       count()                AS count
+			FROM optikk.spans_resource
+			PREWHERE tenant_id = @tenantID
+			WHERE ` + field + ` != ''
+			  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
+			GROUP BY value
+			ORDER BY count DESC
+			LIMIT @limit`
+		var rows []suggestionRow
+		if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestResourceScalar", &rows, query, suggestArgs(tenantID, startMs, endMs, prefix, limit)...); err != nil {
+			return nil, err
+		}
+		return filterutil.MapSuggestionRows(rows), nil
+	}
+
 	column := scalarFieldExpr(field)
 	query := `
 		SELECT ` + column + `        AS value,

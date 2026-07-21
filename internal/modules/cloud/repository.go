@@ -134,6 +134,7 @@ func (r *Repository) QueryProviderHealth(ctx context.Context, tenantID, startMs,
 // QueryRestarts returns the summed latest container-restart count per provider.
 // Empty when the collector does not export kubeletstats k8s metrics.
 func (r *Repository) QueryRestarts(ctx context.Context, tenantID, startMs, endMs int64) ([]RestartRow, error) {
+	rollupTable := timebucket.MetricsRollup(endMs - startMs)
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
@@ -146,16 +147,16 @@ func (r *Repository) QueryRestarts(ctx context.Context, tenantID, startMs, endMs
 		)
 		SELECT provider, toUInt64(sum(latest)) AS restarts
 		FROM (
-		    SELECT s.provider                        AS provider,
-		           s.pod                             AS pod,
-		           argMax(m.value, m.timestamp)      AS latest
-		    FROM optikk.metrics AS m
+		    SELECT s.provider                     AS provider,
+		           s.pod                          AS pod,
+		           argMax(m.val_max, m.timestamp) AS latest
+		    FROM ` + rollupTable + ` AS m
 		    INNER JOIN series AS s ON m.fingerprint = s.fingerprint
 		    PREWHERE m.tenant_id = @tenantID AND m.timestamp BETWEEN @start AND @end AND m.metric_name = '` + restartMetric + `'
 		    GROUP BY provider, pod
 		)
 		GROUP BY provider`
-	args := chargs.RangeArgs(tenantID, startMs, endMs)
+	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
 	var rows []RestartRow
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryRestarts", &rows, query, args...)
 }

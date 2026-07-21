@@ -6,14 +6,14 @@ import "time"
 
 // InventoryRow is one provider's inventory aggregate.
 type InventoryRow struct {
-	Provider  string    `ch:"provider"`
-	Accounts  uint64    `ch:"accounts"`
-	Regions   uint64    `ch:"regions"`
-	Nodes     uint64    `ch:"nodes"`
-	Pods      uint64    `ch:"pods"`
-	Platforms uint64    `ch:"platforms"`
-	Resources uint64    `ch:"resources"`
-	LastSeen  time.Time `ch:"last_seen"`
+	Provider  string    `ch:"provider"  json:"provider"`
+	Accounts  uint64    `ch:"accounts"  json:"accounts"`
+	Regions   uint64    `ch:"regions"   json:"regions"`
+	Nodes     uint64    `ch:"nodes"     json:"nodes"`
+	Pods      uint64    `ch:"pods"      json:"pods"`
+	Platforms uint64    `ch:"platforms" json:"platforms"`
+	Resources uint64    `ch:"resources" json:"resources"`
+	LastSeen  time.Time `ch:"last_seen" json:"lastSeen"`
 }
 
 // CategoryRow is a per-provider, per-platform entity count.

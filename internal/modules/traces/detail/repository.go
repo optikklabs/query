@@ -57,15 +57,14 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, trac
 		     AND trace_id = @traceID
 		     AND span_id  = @spanID
 		LIMIT 1`
-	var rows []spanAttributeRow
+	var row spanAttributeRow
 	args := append(traceArgs(tenantID, traceID), clickhouse.Named("spanID", spanID))
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &rows, query, args...); err != nil {
+	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &row, query, args...); err != nil {
 		return nil, err
 	}
-	if len(rows) == 0 {
+	if row.SpanID == "" {
 		return nil, nil
 	}
-	row := rows[0]
 	return &row, nil
 }
 

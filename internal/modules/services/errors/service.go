@@ -308,26 +308,32 @@ func (s *Service) GetErrorGroupLatestOccurrence(ctx context.Context, tenantID in
 }
 
 func (s *Service) GetErrorGroupFacets(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]ErrorFacetGroup, error) {
+	rows, err := s.repo.ErrorGroupFacetRowsAll(ctx, tenantID, startMs, endMs, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	byDim := make(map[string][]rawErrorFacetGroupRow)
+	totDim := make(map[string]int64)
+	for _, r := range rows {
+		byDim[r.Dim] = append(byDim[r.Dim], r)
+		totDim[r.Dim] += int64(r.Count)
+	}
+
 	groups := make([]ErrorFacetGroup, 0, len(facetColumns))
 	for _, col := range facetColumns {
-		raw, err := s.repo.ErrorGroupFacetRows(ctx, tenantID, startMs, endMs, groupID, col)
-		if err != nil {
-			return nil, err
-		}
-		if len(raw) == 0 {
+		dimRows := byDim[col]
+		if len(dimRows) == 0 {
 			continue
 		}
-		var total int64
-		for _, r := range raw {
-			total += int64(r.Count)
-		}
-		facets := make([]ErrorFacet, len(raw))
-		for i, r := range raw {
-			count := int64(r.Count)
+		total := totDim[col]
+		facets := make([]ErrorFacet, len(dimRows))
+		for i, r := range dimRows {
+			cnt := int64(r.Count)
 			facets[i] = ErrorFacet{
 				Name:  r.Value,
-				Count: count,
-				Pct:   facetPct(count, total),
+				Count: cnt,
+				Pct:   facetPct(cnt, total),
 			}
 		}
 		groups = append(groups, ErrorFacetGroup{Key: col, Facets: facets})

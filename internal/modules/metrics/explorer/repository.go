@@ -50,14 +50,13 @@ func (r *Repository) ListMetricNames(ctx context.Context, tenantID, startMs, end
 func (r *Repository) ListAttributeTagKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]tagKeyDTO, error) {
 
 	const dynamicQuery = `
-		SELECT DISTINCT arrayJoin(mapKeys(JSONAllPathsWithTypes(attributes))) AS tag_key
+		SELECT DISTINCT arrayJoin(mapKeys(attributes)) AS tag_key
 		FROM optikk.metrics_series
 		PREWHERE tenant_id     = @tenantID
 		     AND timestamp   BETWEEN @start AND @end
 		     AND metric_name = @metricName
 		ORDER BY tag_key
-		LIMIT 200
-		SETTINGS use_query_cache = 0`
+		LIMIT 200`
 
 	dynamicArgs := []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
