@@ -26,8 +26,7 @@ func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int6
 		           service,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE s.service != ''
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' AND s.service != ''
 		    GROUP BY fingerprint, service, status_code
 		)
 		SELECT series.service                                                       AS service,
@@ -71,7 +70,7 @@ func (r *Repository) GetEdges(ctx context.Context, tenantID, startMs, endMs int6
 		    FROM optikk.metrics_series
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
 		      AND metric_name IN ('traces_service_graph_request_total', 'traces_service_graph_request_failed_total')
-		    WHERE ` + edgeFilter + `
+		      AND ` + edgeFilter + `
 		    GROUP BY fingerprint, client, server, metric_name
 		),
 		counts AS (
@@ -91,7 +90,7 @@ func (r *Repository) GetEdges(ctx context.Context, tenantID, startMs, endMs int6
 		           ` + seriesattr.Server + ` AS server
 		    FROM optikk.metrics_series
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces_service_graph_request_server'
-		    WHERE ` + edgeFilter + `
+		      AND ` + edgeFilter + `
 		    GROUP BY fingerprint, client, server
 		),
 		latency AS (

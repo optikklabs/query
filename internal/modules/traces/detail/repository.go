@@ -86,12 +86,12 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 		       timestamp                  AS start_time
 		FROM optikk.spans
 		PREWHERE tenant_id      = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND is_root = 1
 		     AND fingerprint  IN active_fps
 		     AND service      = @serviceName
 		     AND name         = @operationName
-		WHERE is_root = 1
-		  AND timestamp BETWEEN @start AND @end
-		  AND trace_id != @excludeTraceID
+		WHERE trace_id != @excludeTraceID
 		ORDER BY timestamp DESC
 		LIMIT @limit`
 	args := []any{

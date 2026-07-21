@@ -35,10 +35,7 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 		           service,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE 1=1
-		          ` + seriesWhere + `
-
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' ` + seriesWhere + `
 		    GROUP BY fingerprint, service, status_code
 		)
 		SELECT series.service                                              AS service,
@@ -76,10 +73,7 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f RED
 		    SELECT fingerprint,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE 1=1
-		          ` + seriesWhere + `
-
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' ` + seriesWhere + `
 		    GROUP BY fingerprint, status_code
 		)
 		SELECT ` + timebucket.DisplayGrainSQL(f.EndMs-f.StartMs) + ` AS bucket_at,
@@ -153,10 +147,7 @@ func (r *Repository) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]s
 		    SELECT fingerprint,
 		           ` + seriesattr.HTTPStatusCode + ` AS http_status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE 1=1
-		          ` + seriesWhere + `
-
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' ` + seriesWhere + `
 		    GROUP BY fingerprint, http_status_code
 		)
 		SELECT ` + grainSQL + ` AS bucket_at,
@@ -182,10 +173,7 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDF
 		WITH series AS (
 		    SELECT fingerprint
 		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE 1=1
-		          ` + seriesWhere + `
-
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' ` + seriesWhere + `
 		    GROUP BY fingerprint
 		)
 		SELECT ` + grainSQL + ` AS bucket_at,
@@ -217,10 +205,7 @@ func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilter
 		           ` + seriesattr.HTTPRoute + `  AS http_route,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE 1=1
-		          ` + seriesWhere + `
-
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' ` + seriesWhere + `
 		    GROUP BY fingerprint, http_route, status_code
 		)
 		SELECT ` + grainSQL + ` AS bucket_at,
@@ -259,10 +244,8 @@ func (r *Repository) GetTopEndpointsCombined(
 		           ` + seriesattr.HTTPRoute + `  AS http_route,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE 1=1
-		          ` + seriesWhere + `
-
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' ` + seriesWhere + `
+		          AND ` + seriesattr.SpanName + ` != ''
 		    GROUP BY fingerprint, service, span_name, span_kind, http_route, status_code
 		)
 		SELECT any(series.service)                                                  AS service,
@@ -314,10 +297,9 @@ func (r *Repository) GetTopDBQueriesCombined(
 		           ` + seriesattr.DBSystem + `   AS db_system,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE 1=1
-		          ` + seriesWhere + `
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' ` + seriesWhere + `
 		          AND ` + seriesattr.DBSpanPred + `
+		          AND ` + seriesattr.SpanName + ` != ''
 		    GROUP BY fingerprint, service, span_name, db_system, status_code
 		)
 		SELECT any(series.service)                                                  AS service,
@@ -364,10 +346,7 @@ func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters)
 		    SELECT fingerprint,
 		           service AS service_name
 		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE 1=1
-		          ` + seriesWhere + `
-
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' ` + seriesWhere + `
 		    GROUP BY fingerprint, service_name
 		)
 		SELECT ` + timebucket.DisplayGrainSQL(f.EndMs-f.StartMs) + ` AS bucket_at,
@@ -391,8 +370,7 @@ func (r *Repository) GetOperationBaseline(ctx context.Context, tenantID int64, s
 		WITH series AS (
 		    SELECT fingerprint
 		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE ` + seriesattr.SpanName + ` = @operationName AND service = @serviceName
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' AND ` + seriesattr.SpanName + ` = @operationName AND service = @serviceName
 		    GROUP BY fingerprint
 		)
 		SELECT sum(m.hist_count)                                            AS span_count,
