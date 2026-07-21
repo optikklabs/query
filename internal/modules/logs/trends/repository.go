@@ -43,8 +43,7 @@ func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow,
 	       countIf(severity_bucket = 3)  AS warns
 	FROM optikk.logs
 	PREWHERE tenant_id = @tenantID` + prewhereFP + `
-	     AND timestamp BETWEEN @start AND @end
-	WHERE timestamp BETWEEN @start AND @end` + where
+	     AND timestamp BETWEEN @start AND @end` + where
 
 	var row SummaryRow
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Summary",
@@ -65,8 +64,7 @@ func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, e
 	       countIf(severity_bucket <= 1) AS debug
 	FROM optikk.logs
 	PREWHERE tenant_id = @tenantID` + prewhereFP + `
-	     AND timestamp BETWEEN @start AND @end
-	WHERE timestamp BETWEEN @start AND @end` + where + `
+	     AND timestamp BETWEEN @start AND @end` + where + `
 	GROUP BY time_bucket
 	ORDER BY time_bucket ASC`
 

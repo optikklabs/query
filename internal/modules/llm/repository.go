@@ -234,8 +234,8 @@ func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req Traces
 		       llm.cost             AS cost
 		FROM optikk.spans AS s
 		INNER JOIN llm ON s.trace_id = llm.trace_id
-		PREWHERE s.tenant_id = @tenantID
-		WHERE s.timestamp BETWEEN @start AND @end AND s.is_root = 1` + where + `
+		PREWHERE s.tenant_id = @tenantID AND s.timestamp BETWEEN @start AND @end AND s.is_root = 1
+		WHERE 1=1` + where + `
 		ORDER BY s.timestamp DESC, s.span_id DESC
 		LIMIT @pgLimit`
 

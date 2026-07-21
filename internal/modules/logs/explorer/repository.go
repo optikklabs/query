@@ -35,7 +35,6 @@ func (r *Repository) getLogs(ctx context.Context, f filter.Filters, limit int, c
 		FROM optikk.logs
 		PREWHERE tenant_id = @tenantID` + prewhereFP + `
 		     AND timestamp BETWEEN @start AND @end` + where + `
-		WHERE timestamp BETWEEN @start AND @end
 		ORDER BY timestamp DESC, log_id DESC
 		LIMIT @pgLimit`
 
