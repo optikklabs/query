@@ -40,13 +40,13 @@ const traceIndexColumns = `trace_id,
 func rootScanParts(c filter.Clauses) (with, prewhere, where string) {
 	var ctes []string
 	prewhere = `
-		PREWHERE tenant_id = @tenantID`
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND is_root = 1`
 	where = `
-		WHERE timestamp BETWEEN @start AND @end AND is_root = 1` + c.Root
+		WHERE 1=1` + c.Root
 	if c.HasSpanMatch() {
 		inner := `SELECT DISTINCT trace_id
 		    FROM optikk.spans
-		    PREWHERE tenant_id = @tenantID`
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end`
 		if c.Resource != "" {
 			ctes = append(ctes, `match_fps AS (
 		    SELECT DISTINCT fingerprint
@@ -57,7 +57,7 @@ func rootScanParts(c filter.Clauses) (with, prewhere, where string) {
 		}
 		ctes = append(ctes, `matched AS (
 		    `+inner+`
-		    WHERE timestamp BETWEEN @start AND @end`+c.Span+`
+		    WHERE 1=1`+c.Span+`
 		)`)
 		where += ` AND trace_id IN matched`
 	}
@@ -244,9 +244,8 @@ func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs
 		SELECT ` + column + `        AS value,
 		       count()               AS count
 		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID
-		WHERE timestamp BETWEEN @startMs AND @endMs
-		  AND ` + column + ` != ''
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @startMs AND @endMs
+		WHERE ` + column + ` != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
 		ORDER BY count DESC
@@ -262,9 +261,8 @@ func (r *Repository) SuggestAttribute(ctx context.Context, tenantID, startMs, en
 	const query = `
 		SELECT attributes[@attrKey]::String AS value, count() AS count
 		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID
-		WHERE timestamp BETWEEN @startMs AND @endMs
-		  AND value != ''
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @startMs AND @endMs
+		WHERE value != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
 		ORDER BY count DESC
