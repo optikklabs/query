@@ -1,16 +1,13 @@
 package app
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
 	"net"
-	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 
-	mysqlembed "github.com/optikklabs/query/db/mysql"
 	"github.com/optikklabs/query/internal/config"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/token"
@@ -58,10 +55,6 @@ func openMySQL(cfg config.Config) (*sql.DB, error) {
 		slog.String("database", cfg.MySQL.Database),
 		slog.Int("max_open_conns", cfg.MySQL.MaxOpenConns),
 	)
-	if err := runMySQLMigrate(dbConn); err != nil {
-		_ = dbConn.Close()
-		return nil, fmt.Errorf("mysql migrate: %w", err)
-	}
 	return dbConn, nil
 }
 
@@ -75,22 +68,6 @@ func openClickHouse(cfg config.Config) (clickhouse.Conn, error) {
 		slog.String("database", cfg.ClickHouse.Database),
 	)
 	return chConn, nil
-}
-
-func runMySQLMigrate(db *sql.DB) error {
-	m := &dbutil.MySQLMigrator{
-		DB:     db,
-		FS:     mysqlembed.FS,
-		Logger: func(format string, args ...any) { slog.Info(fmt.Sprintf("mysqlmigrate: "+format, args...)) },
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	stmts, err := m.Up(ctx)
-	if err != nil {
-		return err
-	}
-	slog.Info("mysqlmigrate: complete", slog.Int("statements", stmts))
-	return nil
 }
 
 func (i *Infra) Close() error {
