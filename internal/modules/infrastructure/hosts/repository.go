@@ -16,7 +16,7 @@ const defaultUnknownHost = "unknown"
 
 // stateAttr resolves the hostmetrics per-state label (idle/user/used/...) from
 // a metrics_series row, used to pick the meaningful utilization slice.
-const stateAttr = "attributes.`state`::String"
+const stateAttr = "attributes['state']"
 
 type Repository struct {
 	db clickhouse.Conn

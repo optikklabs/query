@@ -42,11 +42,11 @@ func BuildSpanClauses(f Filters) (where string, args []any) {
 		args = append(args, clickhouse.Named("dbCollection", f.Collection))
 	}
 	if len(f.Namespace) > 0 {
-		where += ` AND attributes.'` + AttrDBNamespace + `'::String IN @dbNamespace`
+		where += ` AND attributes[` + AttrDBNamespace + `] IN @dbNamespace`
 		args = append(args, clickhouse.Named("dbNamespace", f.Namespace))
 	}
 	if len(f.Server) > 0 {
-		where += ` AND attributes.'` + AttrServerAddress + `'::String IN @dbServer`
+		where += ` AND attributes[` + AttrServerAddress + `] IN @dbServer`
 		args = append(args, clickhouse.Named("dbServer", f.Server))
 	}
 	return where, args
@@ -56,7 +56,7 @@ func BuildSpanClauses(f Filters) (where string, args []any) {
 // producer. Collection, namespace, and server remain raw-span filters.
 func BuildMetricsClauses(f Filters) (where string, args []any) {
 	if len(f.DBSystem) > 0 {
-		where += " AND attributes.`db.system`::String IN @dbSystem"
+		where += " AND attributes['db.system'] IN @dbSystem"
 		args = append(args, clickhouse.Named("dbSystem", f.DBSystem))
 	}
 	return where, args

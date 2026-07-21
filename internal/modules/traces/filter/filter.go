@@ -167,16 +167,17 @@ func buildAttrClause(af AttrFilter, i int) (string, []any) {
 
 	switch af.Op {
 	case "", "eq":
-		return ` AND attributes[@` + k + `]::String = @` + v, strArgs
+		return ` AND attributes[@` + k + `] = @` + v, strArgs
 	case "neq":
-		return ` AND (NOT (attributes[@` + k + `] IS NULL) AND attributes[@` + k + `]::String != @` + v + `)`, strArgs
+		return ` AND (NOT (attributes[@` + k + `] IS NULL) AND attributes[@` + k + `] != @` + v + `)`, strArgs
 	case "contains":
-		return ` AND positionCaseInsensitive(attributes[@` + k + `]::String, @` + v + `) > 0`, strArgs
+		return ` AND positionCaseInsensitive(attributes[@` + k + `], @` + v + `) > 0`, strArgs
 	case "regex":
-		return ` AND match(attributes[@` + k + `]::String, @` + v + `)`, strArgs
+		return ` AND match(attributes[@` + k + `], @` + v + `)`, strArgs
 	case "gt", "gte", "lt", "lte":
 		n, _ := strconv.ParseFloat(af.Value, 64)
-		return ` AND toFloat64OrNull(attributes[@` + k + `]::String) ` + filterutil.CmpSQL(af.Op) + ` @` + v,
+		// Note: since all Map values are Strings, numeric comparisons require casting
+		return ` AND toFloat64OrNull(attributes[@` + k + `]) ` + filterutil.CmpSQL(af.Op) + ` @` + v,
 			[]any{keyArg, clickhouse.Named(v, n)}
 	case "exists":
 		return ` AND NOT (attributes[@` + k + `] IS NULL)`, []any{keyArg}

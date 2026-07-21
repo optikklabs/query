@@ -6,7 +6,7 @@ package filter
 // join. Keys match the canonical names written at ingest (see
 // ingest/internal/ingestion/metrics/normalize.go).
 const (
-	AttrTopic         = "attributes.`messaging.destination.name`::String"
-	AttrConsumerGroup = "attributes.`messaging.consumer.group.name`::String"
-	AttrSystem        = "attributes.`messaging.system`::String"
+	AttrTopic         = "attributes['messaging.destination.name']"
+	AttrConsumerGroup = "attributes['messaging.consumer.group.name']"
+	AttrSystem        = "attributes['messaging.system']"
 )

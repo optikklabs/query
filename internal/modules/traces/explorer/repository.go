@@ -259,7 +259,7 @@ func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs
 
 func (r *Repository) SuggestAttribute(ctx context.Context, tenantID, startMs, endMs int64, attrKey, prefix string, limit int) ([]Suggestion, error) {
 	const query = `
-		SELECT attributes[@attrKey]::String AS value, count() AS count
+		SELECT attributes[@attrKey] AS value, count() AS count
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @startMs AND @endMs
 		WHERE value != ''

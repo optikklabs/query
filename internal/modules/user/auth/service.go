@@ -120,10 +120,6 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (LoginRespon
 		return LoginResponse{}, "", shared.NewUnauthorizedError("Invalid or expired refresh token", err)
 	}
 
-	if err := s.repo.RevokeRefreshToken(ctx, hash); err != nil {
-		return LoginResponse{}, "", shared.NewInternalError("Failed to rotate refresh token", err)
-	}
-
 	authUser := shared.AuthUser{
 		ID:       user.ID,
 		Email:    user.Email,
@@ -131,11 +127,30 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (LoginRespon
 		TenantID: user.TenantID,
 		Role:     user.Role,
 	}
-	response, refresh, err := s.issueTokens(ctx, authUser, stored.FamilyID)
+
+	response, err := s.buildAuthContextResponse(ctx, authUser)
 	if err != nil {
 		return LoginResponse{}, "", err
 	}
-	return response, refresh, nil
+
+	access, err := s.tokens.SignAccess(token.AuthState{
+		UserID:          user.ID,
+		Email:           user.Email,
+		Role:            user.Role,
+		DefaultTenantID: response.Tenant.ID,
+		TenantIDs:       []int64{response.Tenant.ID},
+	})
+	if err != nil {
+		return LoginResponse{}, "", shared.NewInternalError("Failed to issue access token", err)
+	}
+
+	// Extend the session life instead of rotating the refresh token
+	expiresAt := time.Now().UTC().Add(s.tokens.RefreshTTL())
+	if err := s.repo.ExtendRefreshToken(ctx, hash, expiresAt); err != nil {
+		return LoginResponse{}, "", shared.NewInternalError("Failed to extend refresh token", err)
+	}
+
+	return LoginResponse{AuthContextResponse: response, AccessToken: access}, refreshToken, nil
 }
 
 // IssueTokens mints a fresh session (new token family) for a user. Used by the

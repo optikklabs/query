@@ -86,6 +86,13 @@ func (r *Repository) RevokeRefreshToken(ctx context.Context, tokenHash string) e
 	return err
 }
 
+func (r *Repository) ExtendRefreshToken(ctx context.Context, tokenHash string, expiresAt time.Time) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.ExtendRefreshToken", `
+		UPDATE refresh_tokens SET expires_at = ? WHERE token_hash = ? AND revoked_at IS NULL
+	`, expiresAt, tokenHash)
+	return err
+}
+
 func (r *Repository) RevokeRefreshTokenFamily(ctx context.Context, familyID string) error {
 	_, err := dbutil.ExecSQL(ctx, r.db, "user.RevokeRefreshTokenFamily", `
 		UPDATE refresh_tokens SET revoked_at = ? WHERE family_id = ? AND revoked_at IS NULL

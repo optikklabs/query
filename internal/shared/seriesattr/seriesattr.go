@@ -6,18 +6,18 @@
 package seriesattr
 
 const (
-	StatusCode     = "attributes.status.code::String"
-	HTTPStatusCode = "attributes.http.status_code::String"
-	HTTPRoute      = "attributes.http.route::String"
-	SpanName       = "attributes.span.name::String"
-	SpanKind       = "attributes.span.kind::String"
-	DBSystem       = "attributes.db.system::String"
-	Client         = "attributes.client::String"
-	Server         = "attributes.server::String"
+	StatusCode     = "attributes['status.code']"
+	HTTPStatusCode = "attributes['http.status_code']"
+	HTTPRoute      = "attributes['http.route']"
+	SpanName       = "attributes['span.name']"
+	SpanKind       = "attributes['span.kind']"
+	DBSystem       = "attributes['db.system']"
+	Client         = "attributes['client']"
+	Server         = "attributes['server']"
 
 	Le = "attributes.le::Float64"
 )
 
 const StatusErrorPred = "(series.status_code = 'STATUS_CODE_ERROR' OR series.status_code = 'ERROR')"
 
-const DBSpanPred = "attributes.db.system::String != ''"
+const DBSpanPred = "attributes['db.system'] != ''"

@@ -31,18 +31,18 @@ const entityExpr = `if(pod != '', pod,
 const invSeries = `
 	WITH cloud_series AS (
 	    SELECT fingerprint,
-	           attributes.cloud.provider::String                                            AS provider,
-	           attributes.cloud.account.id::String                                          AS account,
-	           if(attributes.cloud.region::String != '',
-	              attributes.cloud.region::String, attributes.aws.region::String)           AS region,
-	           attributes.cloud.platform::String                                            AS platform,
-	           attributes.k8s.node.name::String                                             AS k8s_node,
+	           attributes['cloud.provider']                                            AS provider,
+	           attributes['cloud.account.id']                                          AS account,
+	           if(attributes['cloud.region'] != '',
+	              attributes['cloud.region'], attributes['aws.region'])           AS region,
+	           attributes['cloud.platform']                                            AS platform,
+	           attributes['k8s.node.name']                                             AS k8s_node,
 	           pod, host, service,
 	           ` + entityExpr + `                                                           AS entity,
 	           max(timestamp)                                                               AS last_seen_ts
 	    FROM optikk.metrics_series
 	    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
-	    WHERE attributes.cloud.provider::String != ''
+	    WHERE attributes['cloud.provider'] != ''
 	    GROUP BY fingerprint, provider, account, region, platform, k8s_node, pod, host, service
 	)`
 
@@ -52,17 +52,17 @@ const invSeries = `
 const redSeries = `
 	WITH series AS (
 	    SELECT fingerprint,
-	           attributes.cloud.provider::String                                            AS provider,
-	           attributes.cloud.platform::String                                            AS platform,
-	           if(attributes.cloud.region::String != '',
-	              attributes.cloud.region::String, attributes.aws.region::String)           AS region,
-	           attributes.k8s.node.name::String                                             AS k8s_node,
+	           attributes['cloud.provider']                                            AS provider,
+	           attributes['cloud.platform']                                            AS platform,
+	           if(attributes['cloud.region'] != '',
+	              attributes['cloud.region'], attributes['aws.region'])           AS region,
+	           attributes['k8s.node.name']                                             AS k8s_node,
 	           pod, host, service,
 	           ` + entityExpr + `                                                           AS entity,
 	           ` + seriesattr.StatusCode + `                                                AS status_code
 	    FROM optikk.metrics_series
 	    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = '` + spanMetric + `'
-	    WHERE attributes.cloud.provider::String != ''
+	    WHERE attributes['cloud.provider'] != ''
 	    GROUP BY fingerprint, provider, platform, region, k8s_node, pod, host, service, status_code
 	)`
 
@@ -137,11 +137,11 @@ func (r *Repository) QueryRestarts(ctx context.Context, tenantID, startMs, endMs
 	query := `
 		WITH series AS (
 		    SELECT fingerprint,
-		           attributes.cloud.provider::String AS provider,
+		           attributes['cloud.provider'] AS provider,
 		           pod
 		    FROM optikk.metrics_series
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = '` + restartMetric + `'
-		    WHERE attributes.cloud.provider::String != ''
+		    WHERE attributes['cloud.provider'] != ''
 		    GROUP BY fingerprint, provider, pod
 		)
 		SELECT provider, toUInt64(sum(latest)) AS restarts

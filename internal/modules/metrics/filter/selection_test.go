@@ -42,7 +42,7 @@ func TestBuildSelectionAttrFilterUsesSeries(t *testing.T) {
 	if !strings.Contains(cte, "optikk.metrics_series") || !strings.Contains(cte, "fps AS") {
 		t.Fatalf("cte missing metrics_series fps: %q", cte)
 	}
-	if !strings.Contains(cte, "attributes.`db.name`::String = @mf0") {
+	if !strings.Contains(cte, "attributes['db.name'] = @mf0") {
 		t.Fatalf("cte missing attr clause: %q", cte)
 	}
 	if !strings.Contains(joins, "INNER JOIN fps ON m.fingerprint = fps.fingerprint") {
@@ -60,7 +60,7 @@ func TestBuildSelectionGroupByCarriesLabels(t *testing.T) {
 	if !strings.Contains(cte, "service AS g0") {
 		t.Fatalf("cte missing resource group: %q", cte)
 	}
-	if !strings.Contains(cte, "attributes.`db.name`::String AS g1") {
+	if !strings.Contains(cte, "attributes['db.name'] AS g1") {
 		t.Fatalf("cte missing attr group: %q", cte)
 	}
 	if !strings.Contains(selectCols, "[toString(fps.g0), toString(fps.g1)] AS group_values") {

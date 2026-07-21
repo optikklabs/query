@@ -3,12 +3,11 @@ package detail
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
+	"time"
 )
 
 type Service struct {
@@ -39,15 +38,22 @@ func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID str
 	events := make([]SpanEvent, 0, len(eventRows))
 	seenException := make(map[string]bool, len(eventRows))
 	for _, row := range eventRows {
-		name, attrJSON := parseEventJSON(row.EventJSON)
-		if name == "exception" {
+		if row.Event.Name == "exception" {
 			seenException[row.SpanID] = true
 		}
+
+		attrJSON := "{}"
+		if len(row.Event.Attributes) > 0 {
+			if b, marshalErr := json.Marshal(row.Event.Attributes); marshalErr == nil {
+				attrJSON = string(b)
+			}
+		}
+
 		events = append(events, SpanEvent{
 			SpanID:     row.SpanID,
 			TraceID:    row.TraceID,
-			EventName:  name,
-			Timestamp:  row.Timestamp,
+			EventName:  row.Event.Name,
+			Timestamp:  time.Unix(0, int64(row.Event.TimeUnixNano)),
 			Attributes: attrJSON,
 		})
 	}
@@ -103,11 +109,21 @@ func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID
 		return nil, nil
 	}
 
-	attrs := flattenJSONAttrs(row.AttributesJSON)
+	attrs := row.Attributes
 	if attrs == nil {
 		attrs = map[string]string{}
 	}
 	resourceAttrs := map[string]string{}
+
+	outLinks := make([]SpanLink, 0, len(row.Links))
+	for _, l := range row.Links {
+		outLinks = append(outLinks, SpanLink{
+			TraceID:    l.TraceID,
+			SpanID:     l.SpanID,
+			TraceState: l.TraceState,
+			Attributes: l.Attributes,
+		})
+	}
 
 	return &SpanAttributes{
 		SpanID:                row.SpanID,
@@ -124,7 +140,7 @@ func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID
 		DBName:                row.DBName,
 		DBStatement:           row.DBStatement,
 		DBStatementNormalized: normalizeDBStatement(row.DBStatement),
-		Links:                 parseSpanLinks(row.Links),
+		Links:                 outLinks,
 	}, nil
 }
 
@@ -147,96 +163,11 @@ func fillStartNs(items []SpanListItem) {
 	}
 }
 
-func flattenJSONAttrs(jsonStr string) map[string]string {
-	jsonStr = strings.TrimSpace(jsonStr)
-	if jsonStr == "" || jsonStr == "{}" || jsonStr == "null" {
-		return nil
-	}
-	dec := json.NewDecoder(strings.NewReader(jsonStr))
-	dec.UseNumber()
-	var root any
-	if err := dec.Decode(&root); err != nil {
-		return nil
-	}
-	out := map[string]string{}
-	walkJSONAttrs(out, "", root)
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func walkJSONAttrs(out map[string]string, prefix string, v any) {
-	switch x := v.(type) {
-	case map[string]any:
-		for k, vv := range x {
-			next := k
-			if prefix != "" {
-				next = prefix + "." + k
-			}
-			walkJSONAttrs(out, next, vv)
-		}
-	case []any:
-		for i, vv := range x {
-			next := strconv.Itoa(i)
-			if prefix != "" {
-				next = prefix + "." + strconv.Itoa(i)
-			}
-			walkJSONAttrs(out, next, vv)
-		}
-	case nil:
-		if prefix != "" {
-			out[prefix] = ""
-		}
-	case string:
-		if prefix != "" {
-			out[prefix] = x
-		}
-	case bool:
-		if prefix != "" {
-			if x {
-				out[prefix] = "true"
-			} else {
-				out[prefix] = "false"
-			}
-		}
-	case json.Number:
-		if prefix != "" {
-			out[prefix] = x.String()
-		}
-	default:
-		if prefix != "" {
-			out[prefix] = fmt.Sprint(x)
-		}
-	}
-}
-
-func parseSpanLinks(raw string) []SpanLink {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "[]" {
-		return nil
-	}
-	var wire []spanLinkWire
-	if err := json.Unmarshal([]byte(raw), &wire); err != nil {
-		return nil
-	}
-	out := make([]SpanLink, 0, len(wire))
-	for _, l := range wire {
-		out = append(out, SpanLink{
-			TraceID:    l.TraceID,
-			SpanID:     l.SpanID,
-			TraceState: l.TraceState,
-			Attributes: l.Attributes,
-		})
-	}
-	return out
-}
-
-type spanLinkWire struct {
-	TraceID    string            `json:"traceId"`
-	SpanID     string            `json:"spanId"`
-	TraceState string            `json:"traceState,omitempty"`
-	Attributes map[string]string `json:"attributes,omitempty"`
+type spanEventRow struct {
+	SpanID    string
+	TraceID   string
+	Timestamp time.Time
+	Event     spanEventTuple
 }
 
 func splitEventRows(rows []spanEventCombinedRow) ([]spanEventRow, []exceptionRow) {
@@ -245,7 +176,7 @@ func splitEventRows(rows []spanEventCombinedRow) ([]spanEventRow, []exceptionRow
 	for _, r := range rows {
 		for _, ev := range r.Events {
 			events = append(events, spanEventRow{
-				SpanID: r.SpanID, TraceID: r.TraceID, Timestamp: r.Timestamp, EventJSON: ev,
+				SpanID: r.SpanID, TraceID: r.TraceID, Timestamp: r.Timestamp, Event: ev,
 			})
 		}
 		if r.ExceptionType != "" {
@@ -276,29 +207,4 @@ func normalizeDBStatement(stmt string) string {
 	s = reNumberLiteral.ReplaceAllString(s, "?")
 	s = reMultiSpace.ReplaceAllString(s, " ")
 	return strings.TrimSpace(s)
-}
-
-func parseEventJSON(raw string) (name string, attrs string) {
-	raw = strings.TrimSpace(raw)
-	if len(raw) == 0 {
-		return "", "{}"
-	}
-	if raw[0] != '{' {
-		return raw, "{}"
-	}
-	var obj struct {
-		Name       string            `json:"name"`
-		Attributes map[string]string `json:"attributes"`
-	}
-	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
-		return raw, "{}"
-	}
-	if len(obj.Attributes) == 0 {
-		return obj.Name, "{}"
-	}
-	b, err := json.Marshal(obj.Attributes)
-	if err != nil {
-		return obj.Name, "{}"
-	}
-	return obj.Name, string(b)
 }

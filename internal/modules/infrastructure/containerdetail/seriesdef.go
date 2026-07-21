@@ -5,9 +5,9 @@ import "github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 // Datapoint-attribute accessors on metrics_series.attributes (JSON).
 // Keys match what the OTel kubeletstats receiver and JVM SDKs emit.
 const (
-	attrDirection     = "coalesce(attributes.`direction`::String, '')"
-	attrInterface     = "coalesce(attributes.`interface`::String, '')"
-	attrJVMMemoryType = "coalesce(attributes.`jvm.memory.type`::String, '')"
+	attrDirection     = "coalesce(attributes['direction'], '')"
+	attrInterface     = "coalesce(attributes['interface'], '')"
+	attrJVMMemoryType = "coalesce(attributes['jvm.memory.type'], '')"
 )
 
 // containerLabel names series by the k8s container column, falling back to

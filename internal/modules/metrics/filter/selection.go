@@ -62,7 +62,7 @@ func seriesColumn(key string) string {
 	if canonical := Canonical(key); canonical != "" {
 		return ResourceColumn(canonical)
 	}
-	return "attributes.`" + SanitizeKey(key) + "`::String"
+	return "attributes['" + SanitizeKey(key) + "']"
 }
 
 func BuildTagValueArms(keys []string) (arms []string, args []any) {

@@ -5,10 +5,10 @@ import "github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 // Datapoint-attribute accessors on metrics_series.attributes (JSON).
 // Keys match what the OTel hostmetrics scrapers actually emit.
 const (
-	attrState      = "coalesce(attributes.`state`::String, '')"
-	attrDevice     = "coalesce(attributes.`device`::String, '')"
-	attrDirection  = "coalesce(attributes.`direction`::String, '')"
-	attrMountpoint = "coalesce(attributes.`mountpoint`::String, '')"
+	attrState      = "coalesce(attributes['state'], '')"
+	attrDevice     = "coalesce(attributes['device'], '')"
+	attrDirection  = "coalesce(attributes['direction'], '')"
+	attrMountpoint = "coalesce(attributes['mountpoint'], '')"
 )
 
 type aggKind int

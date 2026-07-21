@@ -93,7 +93,7 @@ func ResourceColumn(canonical string) string {
 }
 
 func AttrColumn(key string) string {
-	return "attributes.`" + SanitizeKey(key) + "`::String"
+	return "attributes['" + SanitizeKey(key) + "']"
 }
 
 func SanitizeKey(key string) string {

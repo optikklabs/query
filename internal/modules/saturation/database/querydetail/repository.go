@@ -62,7 +62,7 @@ func (r *Repository) GetSummary(ctx context.Context, tenantID, startMs, endMs in
 		SELECT any(db_statement_normalized)                       AS query_text,
 		       any(db_system)                                     AS db_system,
 		       any(db_name)                                       AS collection_name,
-		       any(attributes.'db.operation.name'::String)        AS operation_name,
+		       any(attributes[''db.operation.name''])        AS operation_name,
 		       count()                                            AS call_count,
 		       countIf(is_error)                                  AS error_count,
 		       quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,

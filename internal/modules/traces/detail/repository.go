@@ -44,7 +44,7 @@ func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID 
 func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string) (*spanAttributeRow, error) {
 	const query = `
 		SELECT span_id, trace_id, name AS operation_name, service,
-		       toJSONString(attributes)                AS attributes_json,
+		       attributes,
 		       exception_type,
 			   exception_message, 
 			   exception_stacktrace,

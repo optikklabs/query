@@ -65,7 +65,7 @@ func (r *Repository) QuerySeries(ctx context.Context, tenantID int64, host strin
 // aboutAttrSQL selects the latest non-empty value of one host resource
 // attribute retained by ingest in the resource_attributes JSON column.
 func aboutAttrSQL(key, alias string) string {
-	expr := "coalesce(resource_attributes.`" + key + "`::String, '')"
+	expr := "coalesce(resource_attributes['" + key + "'], '')"
 	return "anyLastIf(" + expr + ", " + expr + " != '') AS " + alias
 }
 

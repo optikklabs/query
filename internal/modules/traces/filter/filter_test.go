@@ -177,22 +177,20 @@ func TestBuildClauses_AttributeOps(t *testing.T) {
 		attr AttrFilter
 		want string
 	}{
-		{"eq", AttrFilter{Key: "k", Op: "", Value: "v"}, "attributes[@akey_0]::String = @aval_0"},
+		{"eq", AttrFilter{Key: "k", Op: "", Value: "v"}, "attributes[@akey_0] = @aval_0"},
+		{"eq exp", AttrFilter{Key: "k", Op: "eq", Value: "v"}, "attributes[@akey_0] = @aval_0"},
 		{
-			"neq requires key present",
-			AttrFilter{Key: "k", Op: "neq", Value: "v"},
-			"(NOT (attributes[@akey_0] IS NULL) AND attributes[@akey_0]::String != @aval_0)",
+			"neq", AttrFilter{Key: "k", Op: "neq", Value: "v"},
+			"(NOT (attributes[@akey_0] IS NULL) AND attributes[@akey_0] != @aval_0)",
 		},
 		{
-			"contains",
-			AttrFilter{Key: "k", Op: "contains", Value: "v"},
-			"positionCaseInsensitive(attributes[@akey_0]::String, @aval_0) > 0",
+			"contains", AttrFilter{Key: "k", Op: "contains", Value: "v"},
+			"positionCaseInsensitive(attributes[@akey_0], @aval_0) > 0",
 		},
-		{"regex", AttrFilter{Key: "k", Op: "regex", Value: "v.*"}, "match(attributes[@akey_0]::String, @aval_0)"},
+		{"regex", AttrFilter{Key: "k", Op: "regex", Value: "v.*"}, "match(attributes[@akey_0], @aval_0)"},
 		{
-			"gte",
-			AttrFilter{Key: "k", Op: "gte", Value: "500"},
-			"toFloat64OrNull(attributes[@akey_0]::String) >= @aval_0",
+			"gt", AttrFilter{Key: "k", Op: "gte", Value: "4"},
+			"toFloat64OrNull(attributes[@akey_0]) >= @aval_0",
 		},
 		{"exists", AttrFilter{Key: "k", Op: "exists"}, "NOT (attributes[@akey_0] IS NULL)"},
 		{"not_exists", AttrFilter{Key: "k", Op: "not_exists"}, "attributes[@akey_0] IS NULL"},
