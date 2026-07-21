@@ -186,4 +186,3 @@ func buildAttrClause(af AttrFilter, i int) (string, []any) {
 	}
 	return "", nil // unreachable: ops are whitelisted in Validate
 }
-

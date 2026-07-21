@@ -9,8 +9,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-
-
 // Service orchestrates POST /api/v1/logs/query. It owns the list path.
 type Service struct {
 	repo *Repository
@@ -51,8 +49,6 @@ func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int6
 	}
 	return SuggestResponse{Suggestions: rows}, nil
 }
-
-
 
 func buildPageInfo(rows []models.LogRow, hasMore bool, limit int) models.PageInfo {
 	info := models.PageInfo{HasMore: hasMore, Limit: limit}

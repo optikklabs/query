@@ -43,5 +43,3 @@ func (h *Handler) Trend(w http.ResponseWriter, r *http.Request) {
 	}
 	modulecommon.RespondOK(w, TrendResponse{Trend: tr})
 }
-
-

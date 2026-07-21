@@ -72,4 +72,3 @@ type Suggestion = filterutil.Suggestion
 
 // SuggestResponse is a type alias for the shared suggest wire response.
 type SuggestResponse = filterutil.SuggestResponse
-

@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-
-
 func TestNormalizeDBStatement(t *testing.T) {
 	cases := map[string]string{
 		"":                                   "",
@@ -20,8 +18,6 @@ func TestNormalizeDBStatement(t *testing.T) {
 		}
 	}
 }
-
-
 
 func TestFillStartNs(t *testing.T) {
 	ts := time.Unix(1, 500)

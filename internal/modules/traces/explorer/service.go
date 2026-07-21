@@ -9,8 +9,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-
-
 var scalarFields = map[string]struct{}{
 	"service":     {},
 	"operation":   {},
@@ -68,8 +66,6 @@ func traceIDsOf(rows []traceIndexRowDTO) []string {
 	}
 	return ids
 }
-
-
 
 func buildPageInfo(rows []traceIndexRowDTO, hasMore bool, limit int) PageInfo {
 	info := PageInfo{HasMore: hasMore, Limit: limit}
@@ -146,5 +142,3 @@ func (s *Service) fetchSuggest(ctx context.Context, tenantID int64, req SuggestR
 	}
 	return s.repo.SuggestScalar(ctx, tenantID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
 }
-
-
