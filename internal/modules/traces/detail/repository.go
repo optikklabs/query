@@ -130,31 +130,15 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
 		     AND trace_id = @traceID
-		GROUP BY trace_id`
-	var rows []struct {
-		TraceID        string    `ch:"trace_id"`
-		StartTime      time.Time `ch:"start_time"`
-		EndTime        time.Time `ch:"end_time"`
-		RootService    string    `ch:"root_service"`
-		RootOperation  string    `ch:"root_operation"`
-		RootStatus     string    `ch:"root_status"`
-		RootHTTPMethod string    `ch:"root_http_method"`
-		RootHTTPStatus string    `ch:"root_http_status"`
-		SpanCount      uint64    `ch:"span_count"`
-		ErrorCount     uint64    `ch:"error_count"`
-		HasError       bool      `ch:"trace_has_error"`
-		ServiceSet     []string  `ch:"service_set"`
-		RootMissing    bool      `ch:"root_missing"`
-	}
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &rows, query,
-		traceArgs(tenantID, traceID)...,
-	); err != nil {
+		GROUP BY trace_id
+		LIMIT 1`
+	var res traceSummaryRow
+	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &res, query, traceArgs(tenantID, traceID)...); err != nil {
 		return nil, err
 	}
-	if len(rows) == 0 {
+	if res.TraceID == "" {
 		return nil, nil
 	}
-	res := rows[0]
 	return &TraceSummary{
 		TraceID:        res.TraceID,
 		StartMs:        uint64(res.StartTime.UnixMilli()),

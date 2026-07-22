@@ -25,20 +25,35 @@ type Transition struct {
 	At       time.Time
 }
 
+type metricKey struct {
+	tenantID   int64
+	metricName string
+}
+
 // Engine owns bounded, in-process window state. Kafka partitions serialize
 // events today; the mutex also makes the domain object safe in tests and
 // future batch consumers.
 type Engine struct {
-	mu       sync.Mutex
-	monitors map[int64]models.MonitorRow
-	states   map[int64]models.MonitorStateRow
-	windows  map[int64][]sample
+	mu          sync.Mutex
+	monitors    map[int64]models.MonitorRow
+	states      map[int64]models.MonitorStateRow
+	windows     map[int64][]sample
+	metricIndex map[metricKey][]int64
 }
 
 func NewEngine(monitors []models.MonitorRow, states []models.MonitorStateRow) *Engine {
-	e := &Engine{monitors: make(map[int64]models.MonitorRow, len(monitors)), states: make(map[int64]models.MonitorStateRow, len(states)), windows: make(map[int64][]sample)}
+	e := &Engine{
+		monitors:    make(map[int64]models.MonitorRow, len(monitors)),
+		states:      make(map[int64]models.MonitorStateRow, len(states)),
+		windows:     make(map[int64][]sample),
+		metricIndex: make(map[metricKey][]int64),
+	}
 	for _, m := range monitors {
 		e.monitors[m.ID] = m
+		if m.Active && m.Type == "metric" && m.Query.Metric != nil && m.Query.Metric.Metric != "" {
+			key := metricKey{tenantID: m.TenantID, metricName: m.Query.Metric.Metric}
+			e.metricIndex[key] = append(e.metricIndex[key], m.ID)
+		}
 	}
 	for _, s := range states {
 		e.states[s.MonitorID] = s
@@ -49,10 +64,17 @@ func NewEngine(monitors []models.MonitorRow, states []models.MonitorStateRow) *E
 func (e *Engine) OnMetric(event MetricEvent) []Transition {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	key := metricKey{tenantID: event.TenantID, metricName: event.MetricName}
+	matchingIDs := e.metricIndex[key]
+	if len(matchingIDs) == 0 {
+		return nil
+	}
+
 	at := time.Unix(0, event.TimestampNs).UTC()
 	var out []Transition
-	for id, monitor := range e.monitors {
-		if !monitor.Active || monitor.Type != "metric" || monitor.TenantID != event.TenantID || monitor.Query.Metric == nil || monitor.Query.Metric.Metric != event.MetricName {
+	for _, id := range matchingIDs {
+		monitor, exists := e.monitors[id]
+		if !exists || !monitor.Active || monitor.Type != "metric" || monitor.Query.Metric == nil {
 			continue
 		}
 		windowSeconds := monitor.Query.Metric.WindowSec
@@ -61,8 +83,10 @@ func (e *Engine) OnMetric(event MetricEvent) []Transition {
 		}
 		cutoff := at.Add(-time.Duration(windowSeconds) * time.Second)
 		samples := append(e.windows[id], sample{at: at, value: event.Value})
-		// Keep time order even if a producer sends a late sample.
-		sort.Slice(samples, func(i, j int) bool { return samples[i].at.Before(samples[j].at) })
+		// Fast-path: if timestamps are strictly in order, skip full slice sort.
+		if len(samples) > 1 && samples[len(samples)-1].at.Before(samples[len(samples)-2].at) {
+			sort.Slice(samples, func(i, j int) bool { return samples[i].at.Before(samples[j].at) })
+		}
 		first := sort.Search(len(samples), func(i int) bool { return !samples[i].at.Before(cutoff) })
 		samples = samples[first:]
 		e.windows[id] = samples

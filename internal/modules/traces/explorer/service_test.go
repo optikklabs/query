@@ -9,34 +9,34 @@ import (
 type stubRepo struct {
 	gotLimit int
 	rows     []traceIndexRowDTO
-	aggs     map[string]traceAggRow
+	aggs     []traceAggRow
 }
 
-func (s *stubRepo) Query(_ context.Context, req QueryRequest) ([]traceIndexRowDTO, bool, error) {
+func (s *stubRepo) Query(_ context.Context, req QueryRequest) ([]traceIndexRowDTO, error) {
 	s.gotLimit = req.Limit
-	return s.rows, false, nil
+	return s.rows, nil
 }
 
-func (s *stubRepo) EnrichTraces(context.Context, int64, []string) (map[string]traceAggRow, error) {
+func (s *stubRepo) EnrichTraces(context.Context, int64, []string) ([]traceAggRow, error) {
 	return s.aggs, nil
 }
-func (s *stubRepo) QueryFacets(context.Context, FacetsRequest) (Facets, error) {
-	return Facets{}, nil
-}
-func (s *stubRepo) QueryTrend(context.Context, TrendRequest) ([]TrendBucket, error) {
+func (s *stubRepo) QueryFacets(context.Context, FacetsRequest) ([]facetDimRow, error) {
 	return nil, nil
 }
-func (s *stubRepo) SuggestAttribute(context.Context, int64, int64, int64, string, string, int) ([]Suggestion, error) {
+func (s *stubRepo) QueryTrend(context.Context, TrendRequest) ([]trendRow, error) {
 	return nil, nil
 }
-func (s *stubRepo) SuggestScalar(context.Context, int64, int64, int64, string, string, int) ([]Suggestion, error) {
+func (s *stubRepo) SuggestAttribute(context.Context, int64, int64, int64, string, string, int) ([]suggestionRow, error) {
+	return nil, nil
+}
+func (s *stubRepo) SuggestScalar(context.Context, int64, int64, int64, string, string, int) ([]suggestionRow, error) {
 	return nil, nil
 }
 
 func TestServiceEnrichTraces_ReportsTraceLevelFacts(t *testing.T) {
 	start := time.Unix(1000, 0)
 	repo := &stubRepo{
-		aggs: map[string]traceAggRow{"abc": {
+		aggs: []traceAggRow{{
 			TraceID:    "abc",
 			SpanCount:  5,
 			ErrorCount: 2,

@@ -89,6 +89,13 @@ type facetDimRow struct {
 	Count uint64 `ch:"cnt"`
 }
 
+// trendRow is one time bucket scanned from the trend query.
+type trendRow struct {
+	TimeBucket time.Time `ch:"time_bucket"`
+	Total      uint64    `ch:"total"`
+	Errors     uint64    `ch:"errors"`
+}
+
 type TrendRequest struct {
 	StartTime int64 `json:"startTime"`
 	EndTime   int64 `json:"endTime"`

@@ -50,3 +50,19 @@ type spanAttributeRow struct {
 	DBStatement         string            `ch:"db_statement"`
 	Links               []spanLinkTuple   `ch:"links"`
 }
+
+type traceSummaryRow struct {
+	TraceID        string    `ch:"trace_id"`
+	StartTime      time.Time `ch:"start_time"`
+	EndTime        time.Time `ch:"end_time"`
+	RootService    string    `ch:"root_service"`
+	RootOperation  string    `ch:"root_operation"`
+	RootStatus     string    `ch:"root_status"`
+	RootHTTPMethod string    `ch:"root_http_method"`
+	RootHTTPStatus string    `ch:"root_http_status"`
+	SpanCount      uint64    `ch:"span_count"`
+	ErrorCount     uint64    `ch:"error_count"`
+	HasError       bool      `ch:"trace_has_error"`
+	ServiceSet     []string  `ch:"service_set"`
+	RootMissing    bool      `ch:"root_missing"`
+}

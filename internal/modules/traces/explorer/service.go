@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -24,12 +25,12 @@ func IsScalarField(field string) bool {
 }
 
 type TraceRepository interface {
-	Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, bool, error)
-	EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string) (map[string]traceAggRow, error)
-	QueryFacets(ctx context.Context, req FacetsRequest) (Facets, error)
-	QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBucket, error)
-	SuggestAttribute(ctx context.Context, tenantID int64, start, end int64, field, prefix string, limit int) ([]Suggestion, error)
-	SuggestScalar(ctx context.Context, tenantID int64, start, end int64, field, prefix string, limit int) ([]Suggestion, error)
+	Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, error)
+	EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string) ([]traceAggRow, error)
+	QueryFacets(ctx context.Context, req FacetsRequest) ([]facetDimRow, error)
+	QueryTrend(ctx context.Context, req TrendRequest) ([]trendRow, error)
+	SuggestAttribute(ctx context.Context, tenantID int64, start, end int64, attrKey, prefix string, limit int) ([]suggestionRow, error)
+	SuggestScalar(ctx context.Context, tenantID int64, start, end int64, field, prefix string, limit int) ([]suggestionRow, error)
 }
 
 type Service struct {
@@ -43,9 +44,13 @@ func NewService(repo TraceRepository) *Service {
 func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, error) {
 	limit := filterutil.PickLimit(req.Limit, 50, 500)
 	req.Limit = limit
-	rows, hasMore, err := s.repo.Query(ctx, req)
+	rows, err := s.repo.Query(ctx, req)
 	if err != nil {
 		return QueryResponse{}, err
+	}
+	hasMore := len(rows) > limit
+	if hasMore {
+		rows = rows[:limit]
 	}
 	return QueryResponse{
 		Results:  mapTraces(rows, nil),
@@ -60,8 +65,8 @@ func (s *Service) EnrichTraces(ctx context.Context, tenantID int64, traceIDs []s
 		return EnrichResponse{}, err
 	}
 	enrichments := make(map[string]TraceEnrichment, len(aggs))
-	for id, agg := range aggs {
-		enrichments[id] = TraceEnrichment{
+	for _, agg := range aggs {
+		enrichments[agg.TraceID] = TraceEnrichment{
 			SpanCount:  uint32(agg.SpanCount),
 			ErrorCount: uint32(agg.ErrorCount),
 			HasError:   agg.ErrorCount > 0,
@@ -131,11 +136,47 @@ func mapTraces(rows []traceIndexRowDTO, aggs map[string]traceAggRow) []Trace {
 }
 
 func (s *Service) QueryFacets(ctx context.Context, req FacetsRequest) (Facets, error) {
-	return s.repo.QueryFacets(ctx, req)
+	rows, err := s.repo.QueryFacets(ctx, req)
+	if err != nil {
+		return Facets{}, err
+	}
+	return pivotFacets(rows), nil
+}
+
+func pivotFacets(rows []facetDimRow) Facets {
+	var f Facets
+	for _, row := range rows {
+		b := FacetBucket{Value: row.Value, Count: row.Count}
+		switch row.Dim {
+		case "service":
+			f.Service = append(f.Service, b)
+		case "operation":
+			f.Operation = append(f.Operation, b)
+		case "http_method":
+			f.HTTPMethod = append(f.HTTPMethod, b)
+		case "http_status":
+			f.HTTPStatus = append(f.HTTPStatus, b)
+		case "status":
+			f.Status = append(f.Status, b)
+		}
+	}
+	return f
 }
 
 func (s *Service) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBucket, error) {
-	return s.repo.QueryTrend(ctx, req)
+	rows, err := s.repo.QueryTrend(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TrendBucket, len(rows))
+	for i, r := range rows {
+		out[i] = TrendBucket{
+			TimeBucket: timebucket.FormatDisplayBucket(r.TimeBucket),
+			Total:      r.Total,
+			Errors:     r.Errors,
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int64) (SuggestResponse, error) {
@@ -149,11 +190,18 @@ func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int6
 }
 
 func (s *Service) fetchSuggest(ctx context.Context, tenantID int64, req SuggestRequest, limit int) ([]Suggestion, error) {
-	if strings.HasPrefix(req.Field, "@") {
-		return s.repo.SuggestAttribute(ctx, tenantID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
-	}
-	if !IsScalarField(req.Field) {
+	var rows []suggestionRow
+	var err error
+	switch {
+	case strings.HasPrefix(req.Field, "@"):
+		rows, err = s.repo.SuggestAttribute(ctx, tenantID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
+	case !IsScalarField(req.Field):
 		return nil, fmt.Errorf("suggest: unknown scalar field %q", req.Field)
+	default:
+		rows, err = s.repo.SuggestScalar(ctx, tenantID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
 	}
-	return s.repo.SuggestScalar(ctx, tenantID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
+	if err != nil {
+		return nil, err
+	}
+	return filterutil.MapSuggestionRows(rows), nil
 }
