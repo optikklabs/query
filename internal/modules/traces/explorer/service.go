@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/filterutil"
@@ -26,7 +27,7 @@ func IsScalarField(field string) bool {
 
 type TraceRepository interface {
 	Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, error)
-	EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string) ([]traceAggRow, error)
+	EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string, start, end time.Time) ([]traceAggRow, error)
 	QueryFacets(ctx context.Context, req FacetsRequest) ([]facetDimRow, error)
 	QueryTrend(ctx context.Context, req TrendRequest) ([]trendRow, error)
 	SuggestAttribute(ctx context.Context, tenantID int64, start, end int64, attrKey, prefix string, limit int) ([]suggestionRow, error)
@@ -41,6 +42,10 @@ func NewService(repo TraceRepository) *Service {
 	return &Service{repo: repo}
 }
 
+// enrichSlack pads the page's root-span time span so trace-level aggregation
+// still sees spans whose clocks skew slightly past the root's window.
+const enrichSlack = 5 * time.Minute
+
 func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, error) {
 	limit := filterutil.PickLimit(req.Limit, 50, 500)
 	req.Limit = limit
@@ -52,31 +57,51 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, e
 	if hasMore {
 		rows = rows[:limit]
 	}
+	aggs, err := s.enrichPage(ctx, req.TenantID, rows)
+	if err != nil {
+		return QueryResponse{}, err
+	}
 	return QueryResponse{
-		Results:  mapTraces(rows, nil),
+		Results:  mapTraces(rows, aggs),
 		PageInfo: buildPageInfo(rows, hasMore, limit),
 	}, nil
 }
 
-func (s *Service) EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string) (EnrichResponse, error) {
-	aggs, err := s.repo.EnrichTraces(ctx, tenantID, traceIDs)
-	if err != nil {
-		slog.ErrorContext(ctx, "explorer: EnrichTraces failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID))
-		return EnrichResponse{}, err
+// enrichPage aggregates trace-level facts for the page in one bounded round
+// trip. The bound is the page's own root-span span, padded by enrichSlack, so
+// the spans primary key prunes to a couple of partitions.
+func (s *Service) enrichPage(ctx context.Context, tenantID int64, rows []traceIndexRowDTO) (map[string]traceAggRow, error) {
+	if len(rows) == 0 {
+		return nil, nil
 	}
-	enrichments := make(map[string]TraceEnrichment, len(aggs))
-	for _, agg := range aggs {
-		enrichments[agg.TraceID] = TraceEnrichment{
-			SpanCount:  uint32(agg.SpanCount),
-			ErrorCount: uint32(agg.ErrorCount),
-			HasError:   agg.ErrorCount > 0,
-			ServiceSet: agg.ServiceSet,
-			StartMs:    uint64(agg.StartTime.UnixMilli()),
-			EndMs:      uint64(agg.EndTime.UnixMilli()),
-			DurationMs: float64(agg.EndTime.Sub(agg.StartTime).Nanoseconds()) / 1_000_000,
+	ids := traceIDsOf(rows)
+	start, end := pageBounds(rows)
+	aggList, err := s.repo.EnrichTraces(ctx, tenantID, ids, start.Add(-enrichSlack), end.Add(enrichSlack))
+	if err != nil {
+		slog.ErrorContext(ctx, "explorer: enrichPage failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID))
+		return nil, err
+	}
+	aggs := make(map[string]traceAggRow, len(aggList))
+	for _, a := range aggList {
+		aggs[a.TraceID] = a
+	}
+	return aggs, nil
+}
+
+// pageBounds returns the earliest root start and latest root end on the page.
+func pageBounds(rows []traceIndexRowDTO) (start, end time.Time) {
+	start = rows[0].StartTime
+	end = rows[0].StartTime
+	for _, r := range rows {
+		if r.StartTime.Before(start) {
+			start = r.StartTime
+		}
+		rowEnd := r.StartTime.Add(time.Duration(r.DurationNs))
+		if rowEnd.After(end) {
+			end = rowEnd
 		}
 	}
-	return EnrichResponse{Enrichments: enrichments}, nil
+	return start, end
 }
 
 func traceIDsOf(rows []traceIndexRowDTO) []string {

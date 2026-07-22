@@ -17,7 +17,7 @@ func (s *stubRepo) Query(_ context.Context, req QueryRequest) ([]traceIndexRowDT
 	return s.rows, nil
 }
 
-func (s *stubRepo) EnrichTraces(context.Context, int64, []string) ([]traceAggRow, error) {
+func (s *stubRepo) EnrichTraces(context.Context, int64, []string, time.Time, time.Time) ([]traceAggRow, error) {
 	return s.aggs, nil
 }
 func (s *stubRepo) QueryFacets(context.Context, FacetsRequest) ([]facetDimRow, error) {
@@ -33,9 +33,17 @@ func (s *stubRepo) SuggestScalar(context.Context, int64, int64, int64, string, s
 	return nil, nil
 }
 
-func TestServiceEnrichTraces_ReportsTraceLevelFacts(t *testing.T) {
+// Query folds trace-level aggregates into each result in one round trip.
+func TestServiceQuery_FoldsTraceLevelFacts(t *testing.T) {
 	start := time.Unix(1000, 0)
 	repo := &stubRepo{
+		rows: []traceIndexRowDTO{{
+			TraceID:     "abc",
+			SpanID:      "root",
+			StartTime:   start,
+			DurationNs:  50_000_000,
+			RootService: "gateway",
+		}},
 		aggs: []traceAggRow{{
 			TraceID:    "abc",
 			SpanCount:  5,
@@ -45,11 +53,14 @@ func TestServiceEnrichTraces_ReportsTraceLevelFacts(t *testing.T) {
 			ServiceSet: []string{"gateway", "orders", "ledger"},
 		}},
 	}
-	resp, err := NewService(repo).EnrichTraces(context.Background(), 1, []string{"abc"})
+	resp, err := NewService(repo).Query(context.Background(), QueryRequest{Limit: 50})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := resp.Enrichments["abc"]
+	if len(resp.Results) != 1 {
+		t.Fatalf("results = %d, want 1", len(resp.Results))
+	}
+	got := resp.Results[0]
 	if got.SpanCount != 5 {
 		t.Errorf("span_count = %d, want 5", got.SpanCount)
 	}

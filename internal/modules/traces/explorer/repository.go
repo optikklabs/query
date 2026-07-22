@@ -20,12 +20,13 @@ func NewRepository(db clickhouse.Conn) *Repository {
 }
 
 // buildScanClauses turns the filter clauses into the WITH/PREWHERE/WHERE
-// fragments of the root-span scan. Span predicates run in a trace_id subquery
-// over all spans; resource dims prune via spans_resource CTEs; root predicates
-// stay on the root-span scan.
+// fragments of the root-span scan. The scan runs over spans_root (root spans
+// only, so no is_root predicate is needed); span predicates run in a trace_id
+// subquery over all spans; resource dims prune via spans_resource CTEs; root
+// predicates stay on the root-span scan.
 func buildScanClauses(c filter.Clauses) (queryPrefix, prewhere, where string) {
 	var ctes []string
-	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND is_root = 1`
+	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end`
 	where = `WHERE 1=1` + c.Root
 
 	if c.HasSpanMatch() {
@@ -78,7 +79,7 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 			status_code_string                                         AS root_status,
 			http_method                                                AS root_http_method,
 			response_status_code                                       AS root_http_status
-		FROM optikk.spans ` + prewhere + ` ` + where + ` ORDER BY timestamp DESC, span_id DESC LIMIT @pgLimit`
+		FROM optikk.spans_root ` + prewhere + ` ` + where + ` ORDER BY timestamp DESC, span_id DESC LIMIT @pgLimit`
 
 	var rows []traceIndexRowDTO
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "traces.Query", &rows, query, args...); err != nil {
@@ -88,9 +89,10 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 }
 
 // EnrichTraces returns the trace-level aggregates for one already-paginated
-// page of trace ids. Bounded to the page (not the window), and cheap because
-// idx_trace_id skips granules — one extra round trip, never an N+1.
-func (r *Repository) EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string) ([]traceAggRow, error) {
+// page of trace ids. The [start,end] bound is the page's own root-span time
+// span (padded by the caller), so the primary key prunes to a couple of
+// partitions instead of bloom-probing the whole retention window.
+func (r *Repository) EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string, start, end time.Time) ([]traceAggRow, error) {
 	if len(traceIDs) == 0 {
 		return nil, nil
 	}
@@ -103,6 +105,7 @@ func (r *Repository) EnrichTraces(ctx context.Context, tenantID int64, traceIDs 
 		       groupUniqArray(service)                              AS service_set
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id IN @traceIDs
 		GROUP BY trace_id
 		LIMIT 500`
@@ -110,6 +113,8 @@ func (r *Repository) EnrichTraces(ctx context.Context, tenantID int64, traceIDs 
 	var rows []traceAggRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "traces.EnrichTraces", &rows, query,
 		clickhouse.Named("tenantID", uint32(tenantID)),
+		clickhouse.Named("start", start),
+		clickhouse.Named("end", end),
 		clickhouse.Named("traceIDs", traceIDs),
 	); err != nil {
 		return nil, err
@@ -138,7 +143,7 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) ([]face
 				''
 			) as value,
 			count() as cnt
-		FROM optikk.spans ` + prewhere + ` ` + where + `
+		FROM optikk.spans_root ` + prewhere + ` ` + where + `
 		GROUP BY GROUPING SETS (
 			(service),
 			(name),
@@ -161,7 +166,7 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]trendR
 	c := filter.BuildClauses(req.Filters)
 	prefix, prewhere, where := buildScanClauses(c)
 	grainSQL := timebucket.DisplayGrainSQL(req.EndTime - req.StartTime)
-	query := prefix + `SELECT ` + grainSQL + ` AS time_bucket, count() AS total, countIf(is_error = 1) AS errors FROM optikk.spans ` + prewhere + ` ` + where + ` GROUP BY time_bucket ORDER BY time_bucket ASC`
+	query := prefix + `SELECT ` + grainSQL + ` AS time_bucket, count() AS total, countIf(is_error = 1) AS errors FROM optikk.spans_root ` + prewhere + ` ` + where + ` GROUP BY time_bucket ORDER BY time_bucket ASC`
 
 	var rows []trendRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "trend.QueryTrend", &rows, query, c.Args...); err != nil {

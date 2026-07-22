@@ -30,21 +30,6 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, resp)
 }
 
-func (h *Handler) EnrichTraces(w http.ResponseWriter, r *http.Request) {
-	var req EnrichRequest
-	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "Invalid JSON payload", err)
-		return
-	}
-	tenantID := modulecommon.Tenant(r).TenantID
-	resp, err := h.svc.EnrichTraces(r.Context(), tenantID, req.TraceIDs)
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to enrich traces", err)
-		return
-	}
-	modulecommon.RespondOK(w, resp)
-}
-
 func (h *Handler) QueryFacets(w http.ResponseWriter, r *http.Request) {
 	var req FacetsRequest
 	if !modulecommon.BindFiltered(w, r, &req) {

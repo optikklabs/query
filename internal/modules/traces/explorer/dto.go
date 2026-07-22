@@ -28,24 +28,6 @@ type QueryResponse struct {
 	PageInfo PageInfo `json:"pageInfo"`
 }
 
-type EnrichRequest struct {
-	TraceIDs []string `json:"traceIds"`
-}
-
-type TraceEnrichment struct {
-	SpanCount  uint32   `json:"spanCount"`
-	ErrorCount uint32   `json:"errorCount"`
-	HasError   bool     `json:"hasError"`
-	ServiceSet []string `json:"serviceSet"`
-	StartMs    uint64   `json:"startMs"`
-	EndMs      uint64   `json:"endMs"`
-	DurationMs float64  `json:"durationMs"`
-}
-
-type EnrichResponse struct {
-	Enrichments map[string]TraceEnrichment `json:"enrichments"`
-}
-
 // traceIndexRowDTO is one root span: only what the root itself knows.
 type traceIndexRowDTO struct {
 	TraceID        string    `ch:"trace_id"`

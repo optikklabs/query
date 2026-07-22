@@ -12,7 +12,6 @@ type Config struct {
 
 func RegisterRoutes(v1 chi.Router, h *Handler) {
 	v1.Post("/traces/query", h.Query)
-	v1.Post("/traces/enrich", h.EnrichTraces)
 	v1.Post("/traces/facets", h.QueryFacets)
 	v1.Post("/traces/trend", h.QueryTrend)
 	v1.Post("/traces/suggest", h.Suggest)
