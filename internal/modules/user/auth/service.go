@@ -98,26 +98,63 @@ func (l *loginAttempts) reset(email, ip string) {
 	delete(l.entries, l.key(email, ip))
 }
 
-func (s *Service) Refresh(ctx context.Context, refreshToken string) (LoginResponse, string, error) {
+// errTokenNotUsable marks a candidate refresh token that is simply not valid
+// (unknown, revoked, or expired) so Refresh can move on to the next one. It is
+// never returned to the caller.
+var errTokenNotUsable = errors.New("refresh token not usable")
+
+// Refresh renews a session from any of the presented refresh tokens. A browser
+// may hold more than one refresh cookie of the same name (e.g. left over from a
+// cookie-path change), so we accept the first that still validates and ignore
+// stale siblings. A session is only ever ended by an explicit logout, never by
+// a stale token, so refresh can never spuriously log an active user out.
+func (s *Service) Refresh(ctx context.Context, refreshTokens []string) (LoginResponse, string, error) {
+	seen := make(map[string]struct{}, len(refreshTokens))
+	for _, raw := range refreshTokens {
+		if raw == "" {
+			continue
+		}
+		if _, dup := seen[raw]; dup {
+			continue
+		}
+		seen[raw] = struct{}{}
+
+		response, refresh, err := s.refreshOne(ctx, raw)
+		if err == nil {
+			return response, refresh, nil
+		}
+		// A real internal/decision error (DB down, trial expired) stops here;
+		// only an unusable candidate falls through to the next cookie.
+		if !errors.Is(err, errTokenNotUsable) {
+			return LoginResponse{}, "", err
+		}
+	}
+	return LoginResponse{}, "", shared.NewUnauthorizedError("Invalid or expired refresh token", nil)
+}
+
+// refreshOne validates a single refresh token and, if usable, issues a new
+// access token and extends the session. It returns errTokenNotUsable when the
+// token is unknown, revoked, or expired so the caller can try another.
+func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginResponse, string, error) {
 	hash := token.HashRefreshToken(refreshToken)
 	stored, err := s.repo.FindRefreshTokenByHash(ctx, hash)
 	if err != nil {
-		return LoginResponse{}, "", shared.NewUnauthorizedError("Invalid or expired refresh token", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return LoginResponse{}, "", errTokenNotUsable
+		}
+		return LoginResponse{}, "", shared.NewInternalError("Failed to look up refresh token", err)
 	}
 
-	if stored.RevokedAt != nil {
-		_ = s.repo.RevokeRefreshTokenFamily(ctx, stored.FamilyID)
-		slog.WarnContext(ctx, "AUTH_EVENT refresh_reuse_detected", slog.Int64("user_id", stored.UserID), slog.String("family_id", stored.FamilyID))
-		return LoginResponse{}, "", shared.NewUnauthorizedError("Invalid or expired refresh token", nil)
-	}
-
-	if time.Now().UTC().After(stored.ExpiresAt) {
-		return LoginResponse{}, "", shared.NewUnauthorizedError("Invalid or expired refresh token", nil)
+	if stored.RevokedAt != nil || time.Now().UTC().After(stored.ExpiresAt) {
+		return LoginResponse{}, "", errTokenNotUsable
 	}
 
 	user, err := s.repo.FindActiveUserByID(ctx, stored.UserID)
 	if err != nil {
-		return LoginResponse{}, "", shared.NewUnauthorizedError("Invalid or expired refresh token", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return LoginResponse{}, "", errTokenNotUsable
+		}
+		return LoginResponse{}, "", shared.NewInternalError("Failed to load user for refresh", err)
 	}
 
 	authUser := shared.AuthUser{
@@ -189,8 +226,14 @@ func (s *Service) issueTokens(ctx context.Context, user shared.AuthUser, familyI
 	return LoginResponse{AuthContextResponse: response, AccessToken: access}, raw, nil
 }
 
-func (s *Service) Logout(ctx context.Context, tenant contracts.TenantContext, refreshToken, clientIP string) shared.MessageResponse {
-	if refreshToken != "" {
+func (s *Service) Logout(ctx context.Context, tenant contracts.TenantContext, refreshTokens []string, clientIP string) shared.MessageResponse {
+	// Revoke every presented token: a browser may hold more than one refresh
+	// cookie, and logging out must invalidate the real session, not just the
+	// first cookie the browser happened to send.
+	for _, refreshToken := range refreshTokens {
+		if refreshToken == "" {
+			continue
+		}
 		if err := s.repo.RevokeRefreshToken(ctx, token.HashRefreshToken(refreshToken)); err != nil {
 			slog.WarnContext(ctx, "AUTH_EVENT logout_revoke_failed", slog.Int64("user_id", tenant.UserID), slog.Any("error", err))
 		}

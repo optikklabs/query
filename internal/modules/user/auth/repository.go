@@ -93,13 +93,6 @@ func (r *Repository) ExtendRefreshToken(ctx context.Context, tokenHash string, e
 	return err
 }
 
-func (r *Repository) RevokeRefreshTokenFamily(ctx context.Context, familyID string) error {
-	_, err := dbutil.ExecSQL(ctx, r.db, "user.RevokeRefreshTokenFamily", `
-		UPDATE refresh_tokens SET revoked_at = ? WHERE family_id = ? AND revoked_at IS NULL
-	`, time.Now().UTC(), familyID)
-	return err
-}
-
 // FindTenantByID loads a tenant regardless of active state so login can tell a
 // suspended (trial-expired) tenant apart from a genuinely missing one.
 func (r *Repository) FindTenantByID(ctx context.Context, tenantID int64) (shared.TenantRecord, error) {

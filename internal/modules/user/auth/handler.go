@@ -43,13 +43,13 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(h.Tokens.RefreshCookieName())
-	if err != nil || cookie.Value == "" {
+	candidates := h.Tokens.RefreshCookieValues(r)
+	if len(candidates) == 0 {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusUnauthorized, errorcode.Unauthorized, "Missing refresh token", nil)
 		return
 	}
 
-	response, refresh, err := h.Service.Refresh(r.Context(), cookie.Value)
+	response, refresh, err := h.Service.Refresh(r.Context(), candidates)
 	if err != nil {
 		shared.RespondServiceError(w, r, err, "Failed to refresh token")
 		return
@@ -59,11 +59,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	var refreshToken string
-	if cookie, err := r.Cookie(h.Tokens.RefreshCookieName()); err == nil {
-		refreshToken = cookie.Value
-	}
-	response := h.Service.Logout(r.Context(), modulecommon.Tenant(r), refreshToken, modulecommon.ClientIP(r))
+	response := h.Service.Logout(r.Context(), modulecommon.Tenant(r), h.Tokens.RefreshCookieValues(r), modulecommon.ClientIP(r))
 	h.Tokens.ClearRefreshCookie(w)
 	modulecommon.RespondOK(w, response)
 }
