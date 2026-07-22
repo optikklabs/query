@@ -18,8 +18,8 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (*TraceSummary, error) {
-	row, err := s.repo.GetTraceSummary(ctx, tenantID, traceID, startMs, endMs)
+func (s *Service) GetTraceSummary(ctx context.Context, tenantID int64, traceID string) (*TraceSummary, error) {
+	row, err := s.repo.GetTraceSummary(ctx, tenantID, traceID)
 	if err != nil {
 		slog.ErrorContext(ctx, "detail: GetTraceSummary failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
@@ -27,8 +27,8 @@ func (s *Service) GetTraceSummary(ctx context.Context, tenantID int64, traceID s
 	return row, nil
 }
 
-func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]SpanEvent, error) {
-	combined, err := s.repo.GetSpanEvents(ctx, tenantID, traceID, startMs, endMs)
+func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID string) ([]SpanEvent, error) {
+	combined, err := s.repo.GetSpanEvents(ctx, tenantID, traceID)
 	if err != nil {
 		slog.ErrorContext(ctx, "detail: GetSpanEvents failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
@@ -148,8 +148,8 @@ func (s *Service) GetRelatedTraces(ctx context.Context, tenantID int64, serviceN
 	return s.repo.GetRelatedTraces(ctx, tenantID, serviceName, operationName, startMs, endMs, excludeTraceID, limit)
 }
 
-func (s *Service) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]SpanListItem, error) {
-	rows, err := s.repo.ListSpansByTrace(ctx, tenantID, traceID, startMs, endMs)
+func (s *Service) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string) ([]SpanListItem, error) {
+	rows, err := s.repo.ListSpansByTrace(ctx, tenantID, traceID)
 	if err != nil {
 		return nil, err
 	}

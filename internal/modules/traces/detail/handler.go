@@ -26,11 +26,7 @@ func (h *Handler) GetTraceSummary(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	resp, err := h.svc.GetTraceSummary(r.Context(), tenantID, traceID, startMs, endMs)
+	resp, err := h.svc.GetTraceSummary(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch trace", err)
 		return
@@ -49,11 +45,7 @@ func (h *Handler) GetSpanEvents(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	events, err := h.svc.GetSpanEvents(r.Context(), tenantID, traceID, startMs, endMs)
+	events, err := h.svc.GetSpanEvents(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query span events", err)
 		return
@@ -127,11 +119,7 @@ func (h *Handler) GetTraceSpans(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	items, err := h.svc.ListSpansByTrace(r.Context(), tenantID, traceID, startMs, endMs)
+	items, err := h.svc.ListSpansByTrace(r.Context(), tenantID, traceID)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to list trace spans", err)
 		return
