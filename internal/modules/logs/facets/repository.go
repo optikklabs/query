@@ -24,7 +24,7 @@ type dimRow struct {
 }
 
 func (r *Repository) Compute(ctx context.Context, f filter.Filters) ([]dimRow, error) {
-	resourceWhere, _, args := filter.BuildClauses(f)
+	resourceWhere, _, _, args := filter.BuildClauses(f)
 	args = append(args, clickhouse.Named("facetLimit", uint64(facetTopN)))
 
 	// One UNION ALL arm per facet dimension; querying logs_resource directly.

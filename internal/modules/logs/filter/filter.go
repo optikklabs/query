@@ -74,7 +74,7 @@ func (f Filters) HasResourceFilters() bool {
 		len(f.Environments) > 0
 }
 
-func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
+func BuildClauses(f Filters) (resourceWhere, prewhere, where string, args []any) {
 	startBucket := uint32((f.StartMs / 1000) / 300 * 300)
 	endBucket := uint32((f.EndMs / 1000) / 300 * 300)
 
@@ -86,10 +86,13 @@ func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 		clickhouse.Named("endBucket", endBucket),
 	}
 
+	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket`
+
 	if f.HasResourceFilters() {
 		resourceWhere += ` AND ts_bucket BETWEEN @startBucket AND @endBucket`
 	}
-	where += ` AND ts_bucket BETWEEN @startBucket AND @endBucket AND timestamp BETWEEN @start AND @end`
+
+	where = `WHERE 1=1`
 
 	if len(f.Services) > 0 {
 		resourceWhere += ` AND service IN @services`
@@ -147,7 +150,7 @@ func BuildClauses(f Filters) (resourceWhere, where string, args []any) {
 		where += clause
 		args = append(args, clauseArgs...)
 	}
-	return resourceWhere, where, args
+	return resourceWhere, prewhere, where, args
 }
 
 func upperAll(vs []string) []string {

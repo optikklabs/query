@@ -82,10 +82,10 @@ func TestValidateAttrs(t *testing.T) {
 }
 
 func TestBuildClauses_Base(t *testing.T) {
-	rw, w, args := BuildClauses(Filters{TenantID: 1, StartMs: 1000, EndMs: 2000})
-	wantClause := " AND ts_bucket BETWEEN @startBucket AND @endBucket AND timestamp BETWEEN @start AND @end"
-	if rw != "" || w != wantClause {
-		t.Errorf("base clauses wrong, got rw=%q w=%q", rw, w)
+	rw, pw, w, args := BuildClauses(Filters{TenantID: 1, StartMs: 1000, EndMs: 2000})
+	wantPrewhere := "PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket"
+	if rw != "" || pw != wantPrewhere || w != "WHERE 1=1" {
+		t.Errorf("base clauses wrong, got rw=%q pw=%q w=%q", rw, pw, w)
 	}
 	if got := len(namedArgs(args)); got != 5 {
 		t.Errorf("got %d args, want 5 base args", got)
@@ -95,7 +95,7 @@ func TestBuildClauses_Base(t *testing.T) {
 // Resource dims (service/host/pod/container/env) go to resourceWhere; severity,
 // trace/span ids and search go to where.
 func TestBuildClauses_ResourceVsSpanSplit(t *testing.T) {
-	rw, w, _ := BuildClauses(Filters{
+	rw, _, w, _ := BuildClauses(Filters{
 		StartMs: 1, EndMs: 2,
 		Services:   []string{"svc"},
 		Hosts:      []string{"h1"},
@@ -117,7 +117,7 @@ func TestBuildClauses_ResourceVsSpanSplit(t *testing.T) {
 // Severity matching is case-insensitive: the column is uppercased in SQL and
 // the incoming values are uppercased before binding.
 func TestBuildClauses_SeverityCaseInsensitive(t *testing.T) {
-	_, w, args := BuildClauses(Filters{
+	_, _, w, args := BuildClauses(Filters{
 		StartMs: 1, EndMs: 2,
 		Severities:        []string{"error", "Warn"},
 		ExcludeSeverities: []string{"info"},
@@ -140,7 +140,7 @@ func TestBuildClauses_SeverityCaseInsensitive(t *testing.T) {
 // field no longer changes semantics.
 func TestBuildClauses_Search(t *testing.T) {
 	for _, mode := range []string{"", "exact", "ngram"} {
-		_, w, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: mode})
+		_, _, w, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: mode})
 		if !strings.Contains(w, "positionCaseInsensitive(body, @search) > 0") {
 			t.Errorf("mode %q search clause wrong: %q", mode, w)
 		}
@@ -215,7 +215,7 @@ func TestBuildClauses_AttributeOps(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, w, args := BuildClauses(Filters{
+			_, _, w, args := BuildClauses(Filters{
 				StartMs: 1, EndMs: 2,
 				Attributes: []AttrFilter{c.attr},
 			})
