@@ -195,25 +195,19 @@ func (s *Service) GetErrorGroups(ctx context.Context, tenantID int64, startMs, e
 		raw = raw[:limit]
 	}
 
-	samples, err := s.fetchErrorGroupSamples(ctx, tenantID, startMs, endMs, raw)
-	if err != nil {
-		return PaginatedErrorGroups{}, err
-	}
-
 	results := make([]ErrorGroup, len(raw))
 	for i, row := range raw {
 		code := httpBucketToCode(row.HTTPStatusBucket)
-		sample := samples[row.GroupID]
 		results[i] = ErrorGroup{
 			GroupID:         row.GroupID,
 			ServiceName:     row.ServiceName,
 			OperationName:   row.OperationName,
-			StatusMessage:   sample.StatusMessage,
+			StatusMessage:   row.StatusMessage,
 			HTTPStatusCode:  code,
 			ErrorCount:      int64(row.ErrorCount),
 			LastOccurrence:  row.LastOccurrence,
 			FirstOccurrence: row.FirstOccurrence,
-			SampleTraceID:   sample.SampleTraceID,
+			SampleTraceID:   row.SampleTraceID,
 		}
 	}
 	var nextCursor string

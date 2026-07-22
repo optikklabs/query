@@ -32,14 +32,14 @@ func buildScanClauses(c filter.Clauses) (queryPrefix, prewhere, where string) {
 	if c.HasSpanMatch() {
 		inner := `SELECT DISTINCT trace_id FROM optikk.spans PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end`
 		if c.Resource != "" {
-			ctes = append(ctes, `match_fps AS (SELECT DISTINCT fingerprint FROM optikk.spans_resource PREWHERE tenant_id = @tenantID`+c.Resource+`)`)
+			ctes = append(ctes, `match_fps AS (SELECT DISTINCT fingerprint FROM optikk.spans_resource PREWHERE tenant_id = @tenantID AND last_seen >= @start`+c.Resource+`)`)
 			inner += ` AND fingerprint IN match_fps`
 		}
 		ctes = append(ctes, `matched AS (`+inner+` WHERE 1=1`+c.Span+`)`)
 		where += ` AND trace_id IN matched`
 	}
 	if c.ExcludeResource != "" {
-		ctes = append(ctes, `keep_fps AS (SELECT DISTINCT fingerprint FROM optikk.spans_resource PREWHERE tenant_id = @tenantID`+c.ExcludeResource+`)`)
+		ctes = append(ctes, `keep_fps AS (SELECT DISTINCT fingerprint FROM optikk.spans_resource PREWHERE tenant_id = @tenantID AND last_seen >= @start`+c.ExcludeResource+`)`)
 		prewhere += ` AND fingerprint IN keep_fps`
 	}
 

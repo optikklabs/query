@@ -404,32 +404,14 @@ func (r *Repository) GetOperationBaseline(ctx context.Context, tenantID int64, s
 func (r *Repository) GetServiceSaturationAggs(
 	ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, metricNames []string,
 ) ([]serviceMetricRow, error) {
-
-	hostQuery := `
-		SELECT DISTINCT host
-		FROM optikk.metrics_series
-		PREWHERE tenant_id     = @tenantID
-		     AND metric_name = 'traces.span.metrics.duration'
-		WHERE service = @serviceName
-		  AND host    != ''`
-	var hostRows []struct {
-		Host string `ch:"host"`
-	}
-	hostArgs := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("serviceName", serviceName),
-	}
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetServiceHosts",
-		&hostRows, hostQuery, hostArgs...); err != nil {
-		return nil, err
-	}
-
-	hosts := make([]string, len(hostRows))
-	for i, row := range hostRows {
-		hosts[i] = row.Host
-	}
-
 	query := `
+		WITH service_hosts AS (
+		    SELECT DISTINCT host
+		    FROM optikk.metrics_series
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		      AND metric_name = 'traces.span.metrics.duration'
+		    WHERE service = @serviceName AND host != ''
+		)
 		SELECT
 		    @serviceName                      AS service,
 		    m.metric_name                     AS metric_name,
@@ -440,13 +422,12 @@ func (r *Repository) GetServiceSaturationAggs(
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
 		WHERE s.service = @serviceName
-		   OR (s.host != '' AND s.host IN @hosts)
+		   OR (s.host != '' AND s.host IN (SELECT host FROM service_hosts))
 		GROUP BY metric_name`
 
 	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("metricNames", metricNames),
-		clickhouse.Named("hosts", hosts),
 	)
 	var rows []serviceMetricRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetServiceSaturationAggs",
@@ -459,33 +440,15 @@ func (r *Repository) GetServiceSaturationAggs(
 func (r *Repository) GetServiceSaturationTimeSeries(
 	ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, metricNames []string,
 ) ([]saturationTimeSeriesRawRow, error) {
-
-	hostQuery := `
-		SELECT DISTINCT host
-		FROM optikk.metrics_series
-		PREWHERE tenant_id     = @tenantID
-		     AND metric_name = 'traces.span.metrics.duration'
-		WHERE service = @serviceName
-		  AND host    != ''`
-	var hostRows []struct {
-		Host string `ch:"host"`
-	}
-	hostArgs := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("serviceName", serviceName),
-	}
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetServiceHosts",
-		&hostRows, hostQuery, hostArgs...); err != nil {
-		return nil, err
-	}
-
-	hosts := make([]string, len(hostRows))
-	for i, row := range hostRows {
-		hosts[i] = row.Host
-	}
-
 	grainSQL := timebucket.DisplayGrainSQL(endMs - startMs)
 	query := `
+		WITH service_hosts AS (
+		    SELECT DISTINCT host
+		    FROM optikk.metrics_series
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		      AND metric_name = 'traces.span.metrics.duration'
+		    WHERE service = @serviceName AND host != ''
+		)
 		SELECT
 		    ` + grainSQL + ` AS bucket_at,
 		    sum(m.val_sum) / sum(m.val_count) AS value
@@ -495,14 +458,13 @@ func (r *Repository) GetServiceSaturationTimeSeries(
 		     AND m.metric_name IN @metricNames
 		     AND m.timestamp   BETWEEN @start AND @end
 		WHERE s.service = @serviceName
-		   OR (s.host != '' AND s.host IN @hosts)
+		   OR (s.host != '' AND s.host IN (SELECT host FROM service_hosts))
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 
 	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("metricNames", metricNames),
-		clickhouse.Named("hosts", hosts),
 	)
 	var rows []saturationTimeSeriesRawRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetServiceSaturationTimeSeries",

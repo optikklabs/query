@@ -27,6 +27,8 @@ type rawErrorGroupRow struct {
 	ErrorCount       uint64    `ch:"error_count"`
 	LastOccurrence   time.Time `ch:"last_occurrence"`
 	FirstOccurrence  time.Time `ch:"first_occurrence"`
+	StatusMessage    string    `ch:"status_message"`
+	SampleTraceID    string    `ch:"sample_trace_id"`
 }
 
 type rawErrorGroupSampleRow struct {

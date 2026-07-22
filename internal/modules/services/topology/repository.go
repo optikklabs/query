@@ -19,14 +19,20 @@ func NewRepository(db clickhouse.Conn) *Repository {
 }
 
 // GetNodes returns per-service RED aggregates and p50/p95/p99 latency.
-func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int64, _ string) ([]nodeAggRow, error) {
+func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int64, focusService string) ([]nodeAggRow, error) {
 	query := `
-		WITH series AS (
+		WITH neighbor_services AS (
+		    SELECT ` + seriesattr.Client + ` AS service FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE ` + seriesattr.Server + ` = @focusService AND @focusService != '' AND ` + seriesattr.Client + ` != ''
+		    UNION ALL
+		    SELECT ` + seriesattr.Server + ` AS service FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE ` + seriesattr.Client + ` = @focusService AND @focusService != '' AND ` + seriesattr.Server + ` != ''
+		),
+		series AS (
 		    SELECT fingerprint,
 		           service,
 		           ` + seriesattr.StatusCode + ` AS status_code
 		    FROM optikk.metrics_series AS s
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' AND s.service != ''
+		      AND (@focusService = '' OR s.service = @focusService OR s.service IN (SELECT service FROM neighbor_services))
 		    GROUP BY fingerprint, service, status_code
 		)
 		SELECT series.service                                                       AS service,
@@ -39,7 +45,8 @@ func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int6
 		  AND m.metric_name = 'traces.span.metrics.duration'
 		GROUP BY service`
 	var rows []nodeAggRow
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetNodes", &rows, query, chargs.RollupRangeArgs(tenantID, startMs, endMs)...); err != nil {
+	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs), clickhouse.Named("focusService", focusService))
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetNodes", &rows, query, args...); err != nil {
 		return nil, err
 	}
 	for i := range rows {
