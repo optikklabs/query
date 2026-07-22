@@ -16,27 +16,28 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// traceArgs binds the identity of a trace. A trace is identified by its id
-// alone; the idx_trace_id bloom filter keeps the lookup cheap without a
-// time window, which callers could not compute correctly anyway.
-func traceArgs(tenantID int64, traceID string) []any {
+// traceArgs binds the identity of a trace with time bounds.
+func traceArgs(tenantID int64, traceID string, startMs, endMs int64) []any {
 	return []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("traceID", traceID),
+		clickhouse.Named("start", time.UnixMilli(startMs)),
+		clickhouse.Named("end", time.UnixMilli(endMs)),
 	}
 }
 
-func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID string) ([]spanEventCombinedRow, error) {
+func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]spanEventCombinedRow, error) {
 	const query = `
 		SELECT span_id, trace_id, timestamp, events,
 		       exception_type, exception_message, exception_stacktrace
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
 		WHERE NOT empty(events) OR NOT empty(exception_type)`
 	var rows []spanEventCombinedRow
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanEvents", &rows, query,
-		traceArgs(tenantID, traceID)...,
+		traceArgs(tenantID, traceID, startMs, endMs)...,
 	)
 	return rows, err
 }
@@ -58,7 +59,11 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, trac
 		     AND span_id  = @spanID
 		LIMIT 1`
 	var row spanAttributeRow
-	args := append(traceArgs(tenantID, traceID), clickhouse.Named("spanID", spanID))
+	args := []any{
+		clickhouse.Named("tenantID", uint32(tenantID)),
+		clickhouse.Named("traceID", traceID),
+		clickhouse.Named("spanID", spanID),
+	}
 	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &row, query, args...); err != nil {
 		return nil, err
 	}
@@ -107,10 +112,8 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 	return rows, err
 }
 
-// GetTraceSummary aggregates the whole trace rather than reading its root span.
-// A trace whose root was sampled out or dropped still has a summary; the
-// earliest span stands in for the root and root_missing marks it as partial.
-func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string) (*TraceSummary, error) {
+// GetTraceSummary aggregates the whole trace within the time window.
+func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (*TraceSummary, error) {
 	const query = `
 		SELECT trace_id,
 		       min(timestamp)                                            AS start_time,
@@ -122,18 +125,17 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 		       argMin(response_status_code, timestamp)                   AS root_http_status,
 		       count()                                                   AS span_count,
 		       countIf(is_error = 1)                                     AS error_count,
-		       -- aliased away from the has_error column, which cannot be
-		       -- shadowed by an aggregate over itself.
 		       error_count > 0                                           AS trace_has_error,
 		       groupUniqArray(service)                                   AS service_set,
 		       countIf(is_root = 1) = 0                                  AS root_missing
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
 		GROUP BY trace_id
 		LIMIT 1`
 	var res traceSummaryRow
-	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &res, query, traceArgs(tenantID, traceID)...); err != nil {
+	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &res, query, traceArgs(tenantID, traceID, startMs, endMs)...); err != nil {
 		return nil, err
 	}
 	if res.TraceID == "" {
@@ -157,7 +159,7 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 	}, nil
 }
 
-func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string) ([]SpanListItem, error) {
+func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]SpanListItem, error) {
 	const query = `
 		SELECT span_id,
 		       parent_span_id,
@@ -171,12 +173,13 @@ func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, trace
 		       timestamp
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC
 		LIMIT 5000`
 	var rows []SpanListItem
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.ListSpansByTrace", &rows, query,
-		traceArgs(tenantID, traceID)...,
+		traceArgs(tenantID, traceID, startMs, endMs)...,
 	)
 	return rows, err
 }
