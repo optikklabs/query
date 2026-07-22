@@ -83,7 +83,7 @@ func TestValidateAttrs(t *testing.T) {
 
 func TestBuildClauses_Base(t *testing.T) {
 	rw, w, args := BuildClauses(Filters{TenantID: 1, StartMs: 1000, EndMs: 2000})
-	wantClause := " AND ts_bucket BETWEEN @startBucket AND @endBucket"
+	wantClause := " AND ts_bucket BETWEEN @startBucket AND @endBucket AND timestamp BETWEEN @start AND @end"
 	if rw != "" || w != wantClause {
 		t.Errorf("base clauses wrong, got rw=%q w=%q", rw, w)
 	}
