@@ -19,6 +19,7 @@ type Config struct {
 	Alerting    AlertingConfig   `yaml:"alerting"`
 	Auth        AuthConfig       `yaml:"auth"`
 	Email       EmailConfig      `yaml:"email"`
+	LLM         LLMConfig        `yaml:"llm"`
 }
 
 // Load reads YAML configuration with environment variable overrides.
@@ -163,5 +164,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("email.resend_api_key", "")
 	v.SetDefault("email.from", "")
 	v.SetDefault("email.verify_base_url", "")
+
+	v.SetDefault("llm.key_encryption_key", "")
 
 }

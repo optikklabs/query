@@ -9,6 +9,8 @@ import (
 func RegisterRoutes(v1 chi.Router, h *Handler) {
 	v1.Get("/llm/overview", h.Overview)
 	v1.Get("/llm/apps", h.Apps)
+	v1.Get("/llm/models", h.Models)
+	v1.Get("/llm/pricing", h.Pricing)
 	v1.Get("/llm/timeseries", h.Timeseries)
 	v1.Get("/llm/cost/breakdown", h.CostBreakdown)
 	v1.Post("/llm/traces/query", h.TracesQuery)

@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/optikklabs/query/internal/infra/cursor"
+	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
@@ -90,6 +91,28 @@ func deriveKind(a appAggRow) string {
 	default:
 		return "workflow"
 	}
+}
+
+// Models returns the Dashboard per-model usage table.
+func (s *Service) Models(ctx context.Context, tenantID, startMs, endMs int64) (ModelsResponse, error) {
+	rows, err := s.repo.ModelUsage(ctx, tenantID, startMs, endMs)
+	if err != nil {
+		return ModelsResponse{}, err
+	}
+	models := make([]ModelUsage, len(rows))
+	for i, r := range rows {
+		models[i] = ModelUsage{
+			Model:        r.Model,
+			Vendor:       r.Vendor,
+			Traces:       r.Traces,
+			InputTokens:  r.InputTokens,
+			OutputTokens: r.OutputTokens,
+			P50Ms:        qsAt(r.QS, 0),
+			P95Ms:        qsAt(r.QS, 1),
+			Cost:         r.Cost,
+		}
+	}
+	return ModelsResponse{Models: models}, nil
 }
 
 // Overview folds the two-window aggregates, trace counts and sparkline
@@ -250,7 +273,9 @@ func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQue
 		return TracesQueryResponse{}, err
 	}
 	results := make([]LLMTrace, len(rows))
+	traceIDs := make([]string, len(rows))
 	for i, r := range rows {
+		traceIDs[i] = r.TraceID
 		results[i] = LLMTrace{
 			TraceID:       r.TraceID,
 			StartMs:       r.StartTime.UnixMilli(),
@@ -259,13 +284,23 @@ func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQue
 			Operation:     r.Operation,
 			Status:        r.Status,
 			HasError:      r.HasError,
+			Level:         levelOf(r.HasError),
 			Vendor:        r.Vendor,
 			Model:         r.Model,
+			UserID:        r.UserID,
+			SessionID:     r.SessionID,
+			Tags:          r.Tags,
 			LLMCalls:      r.LLMCalls,
 			PromptPreview: r.PromptPreview,
 			InputTokens:   r.InputTokens,
 			OutputTokens:  r.OutputTokens,
 			Cost:          r.Cost,
+		}
+	}
+	if scores, err := s.repo.ScoresForTraces(ctx, tenantID, req.StartTime, req.EndTime, traceIDs); err == nil {
+		byTrace := groupScores(scores)
+		for i := range results {
+			results[i].Scores = byTrace[results[i].TraceID]
 		}
 	}
 	info := PageInfo{HasMore: hasMore, Limit: req.Limit}
@@ -278,6 +313,30 @@ func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQue
 
 func decodeTraceCursor(raw string) (traceCursor, bool) {
 	return cursor.Decode[traceCursor](raw)
+}
+
+// levelOf maps a trace's error state to the UI severity level.
+func levelOf(hasError bool) string {
+	if hasError {
+		return "ERROR"
+	}
+	return "DEFAULT"
+}
+
+// groupScores buckets score rows by trace id for O(1) decoration.
+func groupScores(rows []traceScoreRow) map[string][]TraceScore {
+	out := make(map[string][]TraceScore)
+	for _, r := range rows {
+		out[r.TraceID] = append(out[r.TraceID], TraceScore{
+			Name:     r.Name,
+			DataType: r.DataType,
+			Value:    r.Value,
+			String:   r.String,
+			Source:   r.Source,
+			Comment:  r.Comment,
+		})
+	}
+	return out
 }
 
 func pickLimit(v, def, max int) int {
@@ -297,21 +356,25 @@ func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID strin
 	}
 	resp := TraceDetailResponse{TraceID: traceID, Spans: make([]LLMSpan, len(rows))}
 	for i, r := range rows {
-		cost := costOf(r.Model, r.InputTokens, r.OutputTokens)
+		cost := pricing.CostOf(r.Model, r.InputTokens, r.OutputTokens)
 		resp.Spans[i] = LLMSpan{
-			SpanID:       r.SpanID,
-			ParentSpanID: r.ParentSpanID,
-			Name:         r.Name,
-			Service:      r.Service,
-			Operation:    r.Operation,
-			Vendor:       r.Vendor,
-			Model:        r.Model,
-			StartMs:      r.Timestamp.UnixMilli(),
-			DurationMs:   float64(r.DurationNano) / 1e6,
-			HasError:     r.HasError,
-			InputTokens:  r.InputTokens,
-			OutputTokens: r.OutputTokens,
-			Cost:         cost,
+			SpanID:        r.SpanID,
+			ParentSpanID:  r.ParentSpanID,
+			Name:          r.Name,
+			Service:       r.Service,
+			Operation:     r.Operation,
+			Kind:          r.Kind,
+			Vendor:        r.Vendor,
+			Model:         r.Model,
+			ResponseModel: r.ResponseModel,
+			StartMs:       r.Timestamp.UnixMilli(),
+			DurationMs:    float64(r.DurationNano) / 1e6,
+			HasError:      r.HasError,
+			InputTokens:   r.InputTokens,
+			OutputTokens:  r.OutputTokens,
+			Cost:          cost,
+			Prompt:        r.Prompt,
+			Completion:    r.Completion,
 		}
 		resp.InputTokens += r.InputTokens
 		resp.OutputTokens += r.OutputTokens
@@ -319,12 +382,20 @@ func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID strin
 		resp.HasError = resp.HasError || r.HasError
 		// root span carries the request identity and prompt/output text
 		if r.ParentSpanID == "" {
+			resp.Name = r.Name
 			resp.Service = r.Service
+			resp.Environment = r.Environment
+			resp.UserID = r.UserID
+			resp.SessionID = r.SessionID
+			resp.Release = r.Release
 			resp.StartMs = r.Timestamp.UnixMilli()
 			resp.DurationMs = float64(r.DurationNano) / 1e6
 			resp.Prompt = r.Prompt
 			resp.Output = r.Completion
 		}
+	}
+	if scores, err := s.repo.ScoresForTraces(ctx, tenantID, startTimeMs, endTimeMs, []string{traceID}); err == nil {
+		resp.Scores = groupScores(scores)[traceID]
 	}
 	// SDKs often attach content to the chat span, not the root: fall back
 	// to the first prompt and the last completion in trace order.

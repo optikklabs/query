@@ -1,9 +1,13 @@
 package app
 
 import (
+	"log/slog"
+
 	"github.com/ClickHouse/clickhouse-go/v2"
 
 	"github.com/optikklabs/query/internal/app/registry"
+	"github.com/optikklabs/query/internal/infra/llmproviders"
+	"github.com/optikklabs/query/internal/infra/secretbox"
 
 	alerting_evaluator "github.com/optikklabs/query/internal/modules/alerting/evaluator"
 	alerting_monitors "github.com/optikklabs/query/internal/modules/alerting/monitors"
@@ -21,6 +25,14 @@ import (
 	infrastructure_nodes "github.com/optikklabs/query/internal/modules/infrastructure/nodes"
 	ingestion "github.com/optikklabs/query/internal/modules/ingestion"
 	llm "github.com/optikklabs/query/internal/modules/llm"
+	llm_datasets "github.com/optikklabs/query/internal/modules/llm/datasets"
+	llm_evaluators "github.com/optikklabs/query/internal/modules/llm/evaluators"
+	llm_playground "github.com/optikklabs/query/internal/modules/llm/playground"
+	llm_prompts "github.com/optikklabs/query/internal/modules/llm/prompts"
+	llm_providerkeys "github.com/optikklabs/query/internal/modules/llm/providerkeys"
+	llm_scores "github.com/optikklabs/query/internal/modules/llm/scores"
+	llm_sessions "github.com/optikklabs/query/internal/modules/llm/sessions"
+	llm_users "github.com/optikklabs/query/internal/modules/llm/users"
 	log_explorer "github.com/optikklabs/query/internal/modules/logs/explorer"
 	logfacets "github.com/optikklabs/query/internal/modules/logs/facets"
 	log_detail "github.com/optikklabs/query/internal/modules/logs/logdetail"
@@ -61,6 +73,16 @@ func configuredModules(
 	tenantService := user_tenant.NewService(user_tenant.NewRepository(infraDeps.DB))
 	usersService := user_users.NewService(user_users.NewRepository(infraDeps.DB), authService)
 
+	// LLM playground infra: the secretbox may be absent (no encryption key
+	// configured), in which case provider-key writes and the playground fail
+	// closed with 503 rather than being unregistered — the API stays stable.
+	box, err := secretbox.New(infraDeps.Config.LLM.KeyEncryptionKey)
+	if err != nil {
+		slog.Warn("llm: provider-key encryption disabled", slog.Any("reason", err))
+	}
+	providerKeySvc := llm_providerkeys.NewService(llm_providerkeys.NewRepository(infraDeps.DB), box)
+	llmProviders := llmproviders.NewRegistry()
+
 	return []registry.Module{
 		infrastructure_cpu.NewModule(nativeQuerier),
 		infrastructure_memory.NewModule(nativeQuerier),
@@ -78,6 +100,14 @@ func configuredModules(
 		metrics_explorer.NewModule(nativeQuerier),
 		ingestion.NewModule(nativeQuerier),
 		llm.NewModule(nativeQuerier),
+		llm_scores.NewModule(nativeQuerier),
+		llm_sessions.NewModule(nativeQuerier),
+		llm_users.NewModule(nativeQuerier),
+		llm_prompts.NewModule(infraDeps.DB),
+		llm_datasets.NewModule(infraDeps.DB, providerKeySvc, llmProviders),
+		llm_evaluators.NewModule(infraDeps.DB, nativeQuerier),
+		llm_providerkeys.NewModule(providerKeySvc),
+		llm_playground.NewModule(providerKeySvc, llmProviders, appConfig.ExpensiveQueryConcurrency()),
 		services_errors.NewModule(nativeQuerier),
 		services_redfleet.NewModule(nativeQuerier),
 		saturation_explorer.NewModule(nativeQuerier),

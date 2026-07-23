@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
@@ -27,6 +28,23 @@ func (h *Handler) Apps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	modulecommon.RespondOK(w, resp)
+}
+
+func (h *Handler) Models(w http.ResponseWriter, r *http.Request) {
+	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
+	if !ok {
+		return
+	}
+	resp, err := h.svc.Models(r.Context(), modulecommon.Tenant(r).TenantID, startMs, endMs)
+	if err != nil {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM models", err)
+		return
+	}
+	modulecommon.RespondOK(w, resp)
+}
+
+func (h *Handler) Pricing(w http.ResponseWriter, r *http.Request) {
+	modulecommon.RespondOK(w, map[string]any{"models": pricing.Table()})
 }
 
 func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {

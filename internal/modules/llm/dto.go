@@ -85,6 +85,32 @@ type latencyBucketRow struct {
 	QS       []float64 `ch:"qs"`
 }
 
+// ModelUsage is one row of the Dashboard "Model usage" table.
+type ModelUsage struct {
+	Model        string  `json:"model"`
+	Vendor       string  `json:"vendor"`
+	Traces       uint64  `json:"traces"`
+	InputTokens  uint64  `json:"inputTokens"`
+	OutputTokens uint64  `json:"outputTokens"`
+	P50Ms        float64 `json:"p50Ms"`
+	P95Ms        float64 `json:"p95Ms"`
+	Cost         float64 `json:"cost"`
+}
+
+type ModelsResponse struct {
+	Models []ModelUsage `json:"models"`
+}
+
+type modelUsageRow struct {
+	Model        string    `ch:"model"`
+	Vendor       string    `ch:"vendor"`
+	Traces       uint64    `ch:"traces"`
+	InputTokens  uint64    `ch:"in_tokens"`
+	OutputTokens uint64    `ch:"out_tokens"`
+	QS           []float64 `ch:"qs"`
+	Cost         float64   `ch:"cost"`
+}
+
 // CostBreakdownResponse groups spend by service, vendor or model.
 type CostBreakdownResponse struct {
 	GroupBy string          `json:"groupBy"`
@@ -124,20 +150,25 @@ type PageInfo struct {
 }
 
 type LLMTrace struct {
-	TraceID       string  `json:"traceId"`
-	StartMs       int64   `json:"startMs"`
-	DurationMs    float64 `json:"durationMs"`
-	Service       string  `json:"service"`
-	Operation     string  `json:"operation"`
-	Status        string  `json:"status"`
-	HasError      bool    `json:"hasError"`
-	Vendor        string  `json:"vendor"`
-	Model         string  `json:"model"`
-	LLMCalls      uint64  `json:"llmCalls"`
-	PromptPreview string  `json:"promptPreview"`
-	InputTokens   uint64  `json:"inputTokens"`
-	OutputTokens  uint64  `json:"outputTokens"`
-	Cost          float64 `json:"cost"`
+	TraceID       string       `json:"traceId"`
+	StartMs       int64        `json:"startMs"`
+	DurationMs    float64      `json:"durationMs"`
+	Service       string       `json:"service"`
+	Operation     string       `json:"operation"`
+	Status        string       `json:"status"`
+	HasError      bool         `json:"hasError"`
+	Level         string       `json:"level"`
+	Vendor        string       `json:"vendor"`
+	Model         string       `json:"model"`
+	UserID        string       `json:"userId"`
+	SessionID     string       `json:"sessionId"`
+	Tags          []string     `json:"tags"`
+	LLMCalls      uint64       `json:"llmCalls"`
+	PromptPreview string       `json:"promptPreview"`
+	InputTokens   uint64       `json:"inputTokens"`
+	OutputTokens  uint64       `json:"outputTokens"`
+	Cost          float64      `json:"cost"`
+	Scores        []TraceScore `json:"scores"`
 }
 
 type llmTraceRow struct {
@@ -151,11 +182,34 @@ type llmTraceRow struct {
 	HasError      bool      `ch:"has_error"`
 	Vendor        string    `ch:"vendor"`
 	Model         string    `ch:"model"`
+	UserID        string    `ch:"user_id"`
+	SessionID     string    `ch:"session_id"`
+	Tags          []string  `ch:"tags"`
 	LLMCalls      uint64    `ch:"llm_calls"`
 	PromptPreview string    `ch:"prompt_preview"`
 	InputTokens   uint64    `ch:"input_tokens"`
 	OutputTokens  uint64    `ch:"output_tokens"`
 	Cost          float64   `ch:"cost"`
+}
+
+// TraceScore is one evaluation score attached to a trace.
+type TraceScore struct {
+	Name     string  `json:"name"`
+	DataType string  `json:"dataType"`
+	Value    float64 `json:"value"`
+	String   string  `json:"stringValue,omitempty"`
+	Source   string  `json:"source"`
+	Comment  string  `json:"comment,omitempty"`
+}
+
+type traceScoreRow struct {
+	TraceID  string  `ch:"trace_id"`
+	Name     string  `ch:"name"`
+	DataType string  `ch:"data_type"`
+	Value    float64 `ch:"value"`
+	String   string  `ch:"string_value"`
+	Source   string  `ch:"source"`
+	Comment  string  `ch:"comment"`
 }
 
 type traceCursor struct {
@@ -165,33 +219,43 @@ type traceCursor struct {
 
 // TraceDetailResponse is the waterfall + prompt/output view of one trace.
 type TraceDetailResponse struct {
-	TraceID      string    `json:"traceId"`
-	Service      string    `json:"service"`
-	StartMs      int64     `json:"startMs"`
-	DurationMs   float64   `json:"durationMs"`
-	HasError     bool      `json:"hasError"`
-	Prompt       string    `json:"prompt"`
-	Output       string    `json:"output"`
-	InputTokens  uint64    `json:"inputTokens"`
-	OutputTokens uint64    `json:"outputTokens"`
-	Cost         float64   `json:"cost"`
-	Spans        []LLMSpan `json:"spans"`
+	TraceID      string       `json:"traceId"`
+	Name         string       `json:"name"`
+	Service      string       `json:"service"`
+	Environment  string       `json:"environment"`
+	UserID       string       `json:"userId"`
+	SessionID    string       `json:"sessionId"`
+	Release      string       `json:"release"`
+	StartMs      int64        `json:"startMs"`
+	DurationMs   float64      `json:"durationMs"`
+	HasError     bool         `json:"hasError"`
+	Prompt       string       `json:"prompt"`
+	Output       string       `json:"output"`
+	InputTokens  uint64       `json:"inputTokens"`
+	OutputTokens uint64       `json:"outputTokens"`
+	Cost         float64      `json:"cost"`
+	Spans        []LLMSpan    `json:"spans"`
+	Scores       []TraceScore `json:"scores"`
 }
 
 type LLMSpan struct {
-	SpanID       string  `json:"spanId"`
-	ParentSpanID string  `json:"parentSpanId"`
-	Name         string  `json:"name"`
-	Service      string  `json:"service"`
-	Operation    string  `json:"operation"`
-	Vendor       string  `json:"vendor"`
-	Model        string  `json:"model"`
-	StartMs      int64   `json:"startMs"`
-	DurationMs   float64 `json:"durationMs"`
-	HasError     bool    `json:"hasError"`
-	InputTokens  uint64  `json:"inputTokens"`
-	OutputTokens uint64  `json:"outputTokens"`
-	Cost         float64 `json:"cost"`
+	SpanID        string  `json:"spanId"`
+	ParentSpanID  string  `json:"parentSpanId"`
+	Name          string  `json:"name"`
+	Service       string  `json:"service"`
+	Operation     string  `json:"operation"`
+	Kind          string  `json:"kind"`
+	Vendor        string  `json:"vendor"`
+	Model         string  `json:"model"`
+	ResponseModel string  `json:"responseModel,omitempty"`
+	StartMs       int64   `json:"startMs"`
+	DurationMs    float64 `json:"durationMs"`
+	HasError      bool    `json:"hasError"`
+	InputTokens   uint64  `json:"inputTokens"`
+	OutputTokens  uint64  `json:"outputTokens"`
+	Cost          float64 `json:"cost"`
+	Prompt        string  `json:"prompt,omitempty"`
+	Completion    string  `json:"completion,omitempty"`
 }
 
 // OverviewResponse is the single KPI source for the LLM page: exact
@@ -254,18 +318,24 @@ type traceCountRow struct {
 }
 
 type traceSpanRow struct {
-	SpanID       string    `ch:"span_id"`
-	ParentSpanID string    `ch:"parent_span_id"`
-	Timestamp    time.Time `ch:"timestamp"`
-	DurationNano uint64    `ch:"duration_nano"`
-	Name         string    `ch:"name"`
-	Service      string    `ch:"service"`
-	Vendor       string    `ch:"gen_ai_system"`
-	Operation    string    `ch:"gen_ai_operation"`
-	Model        string    `ch:"gen_ai_request_model"`
-	InputTokens  uint64    `ch:"gen_ai_input_tokens"`
-	OutputTokens uint64    `ch:"gen_ai_output_tokens"`
-	HasError     bool      `ch:"has_error"`
-	Prompt       string    `ch:"prompt"`
-	Completion   string    `ch:"completion"`
+	SpanID        string    `ch:"span_id"`
+	ParentSpanID  string    `ch:"parent_span_id"`
+	Timestamp     time.Time `ch:"timestamp"`
+	DurationNano  uint64    `ch:"duration_nano"`
+	Name          string    `ch:"name"`
+	Service       string    `ch:"service"`
+	Environment   string    `ch:"environment"`
+	Vendor        string    `ch:"gen_ai_system"`
+	Operation     string    `ch:"gen_ai_operation"`
+	Kind          string    `ch:"gen_ai_span_kind"`
+	Model         string    `ch:"gen_ai_request_model"`
+	ResponseModel string    `ch:"gen_ai_response_model"`
+	InputTokens   uint64    `ch:"gen_ai_input_tokens"`
+	OutputTokens  uint64    `ch:"gen_ai_output_tokens"`
+	HasError      bool      `ch:"has_error"`
+	UserID        string    `ch:"llm_user_id"`
+	SessionID     string    `ch:"llm_session_id"`
+	Release       string    `ch:"llm_release"`
+	Prompt        string    `ch:"prompt"`
+	Completion    string    `ch:"completion"`
 }
