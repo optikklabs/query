@@ -167,11 +167,6 @@ func (r *Repository) ErrorGroupRowsByService(ctx context.Context, tenantID int64
 	}
 
 	query := `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE tenant_id = @tenantID AND service = @serviceName AND last_seen >= @start
-		)
 		SELECT error_group_id                    AS error_group_id,
 		       service                          AS service,
 		       name                             AS operation_name,
@@ -182,7 +177,7 @@ func (r *Repository) ErrorGroupRowsByService(ctx context.Context, tenantID int64
 		       argMax(status_message, timestamp) AS status_message,
 		       argMax(trace_id, timestamp)       AS sample_trace_id
 		FROM optikk.spans
-		PREWHERE tenant_id     = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1 AND fingerprint IN active_fps
+		PREWHERE tenant_id     = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1 AND service = @serviceName
 		GROUP BY error_group_id, service, name, http_status_bucket
 		` + havingClause + `
 		ORDER BY error_count DESC, error_group_id ASC

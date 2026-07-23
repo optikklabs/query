@@ -22,25 +22,17 @@ func NewRepository(db clickhouse.Conn) *Repository {
 // buildScanClauses turns the filter clauses into the WITH/PREWHERE/WHERE
 // fragments of the root-span scan. The scan runs over spans_root (root spans
 // only, so no is_root predicate is needed); span predicates run in a trace_id
-// subquery over all spans; resource dims prune via spans_resource CTEs; root
-// predicates stay on the root-span scan.
+// subquery over all spans; resource dims (service) filter directly in the
+// inner spans scan PREWHERE; root predicates stay on the root-span scan.
 func buildScanClauses(c filter.Clauses) (queryPrefix, prewhere, where string) {
 	var ctes []string
 	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end`
 	where = `WHERE 1=1` + c.Root
 
 	if c.HasSpanMatch() {
-		inner := `SELECT DISTINCT trace_id FROM optikk.spans PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end`
-		if c.Resource != "" {
-			ctes = append(ctes, `match_fps AS (SELECT DISTINCT fingerprint FROM optikk.spans_resource PREWHERE tenant_id = @tenantID AND last_seen >= @start`+c.Resource+`)`)
-			inner += ` AND fingerprint IN match_fps`
-		}
+		inner := `SELECT DISTINCT trace_id FROM optikk.spans PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end` + c.Resource
 		ctes = append(ctes, `matched AS (`+inner+` WHERE 1=1`+c.Span+`)`)
 		where += ` AND trace_id IN matched`
-	}
-	if c.ExcludeResource != "" {
-		ctes = append(ctes, `keep_fps AS (SELECT DISTINCT fingerprint FROM optikk.spans_resource PREWHERE tenant_id = @tenantID AND last_seen >= @start`+c.ExcludeResource+`)`)
-		prewhere += ` AND fingerprint IN keep_fps`
 	}
 
 	if len(ctes) > 0 {
@@ -176,24 +168,6 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]trendR
 }
 
 func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs int64, field, prefix string, limit int) ([]suggestionRow, error) {
-	if field == "service" || field == "environment" {
-		query := `
-			SELECT ` + field + `          AS value,
-			       count()                AS count
-			FROM optikk.spans_resource
-			PREWHERE tenant_id = @tenantID
-			WHERE ` + field + ` != ''
-			  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
-			GROUP BY value
-			ORDER BY count DESC
-			LIMIT @limit`
-		var rows []suggestionRow
-		if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestResourceScalar", &rows, query, suggestArgs(tenantID, startMs, endMs, prefix, limit)...); err != nil {
-			return nil, err
-		}
-		return rows, nil
-	}
-
 	column := scalarFieldExpr(field)
 	query := `
 		SELECT ` + column + `        AS value,

@@ -3,6 +3,7 @@ package explorer
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
@@ -18,7 +19,7 @@ type Repository struct {
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
 func (r *Repository) getLogs(ctx context.Context, f filter.Filters, limit int, cur models.Cursor) ([]models.LogRow, bool, error) {
-	resourceWhere, prewhere, where, args := filter.BuildClauses(f)
+	prewhere, where, args := filter.BuildClauses(f)
 	if !cur.IsZero() {
 		where += ` AND (timestamp, log_id) < (@curTs, @curLid)`
 		args = append(args,
@@ -29,11 +30,10 @@ func (r *Repository) getLogs(ctx context.Context, f filter.Filters, limit int, c
 	}
 	args = append(args, clickhouse.Named("pgLimit", uint64(limit+1)))
 
-	cte, prewhereFP := filter.BuildFingerprintCTE(resourceWhere)
-	query := cte + `
+	query := `
 		SELECT ` + models.LogColumns + `
 		FROM optikk.logs
-		` + prewhere + prewhereFP + ` ` + where + `
+		` + prewhere + ` ` + where + `
 		ORDER BY timestamp DESC, log_id DESC
 		LIMIT @pgLimit`
 
@@ -49,8 +49,7 @@ func (r *Repository) getLogs(ctx context.Context, f filter.Filters, limit int, c
 	return rows, hasMore, nil
 }
 
-// suggestResourceColumns maps suggestable API field names to columns on the
-// small logs_resource dimension table.
+// suggestResourceColumns maps suggestable API field names to columns on logs.
 var suggestResourceColumns = map[string]string{
 	"service_name": "service",
 	"host":         "host",
@@ -79,10 +78,9 @@ func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs
 	query := `
 		SELECT ` + column + `        AS value,
 		       count()               AS count
-		FROM optikk.logs_resource
-		PREWHERE tenant_id = @tenantID
-		WHERE ts_bucket BETWEEN @startBucket AND @endBucket
-		  AND value != ''
+		FROM optikk.logs
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket
+		WHERE value != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
 		ORDER BY count DESC
@@ -134,6 +132,8 @@ func (r *Repository) runSuggest(ctx context.Context, op, query string, args []an
 func suggestArgs(tenantID, startMs, endMs int64, prefix string, limit int) []any {
 	return []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
+		clickhouse.Named("start", time.UnixMilli(startMs)),
+		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("startBucket", uint32((startMs/1000)/300*300)),
 		clickhouse.Named("endBucket", uint32((endMs/1000)/300*300)),
 		clickhouse.Named("prefix", prefix),

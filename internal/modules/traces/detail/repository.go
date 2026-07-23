@@ -72,12 +72,6 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, trac
 
 func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]RelatedTrace, error) {
 	const query = `
-		WITH active_fps AS (
-		    SELECT fingerprint
-		    FROM optikk.spans_resource
-		    PREWHERE tenant_id = @tenantID
-		         AND service  = @serviceName
-		)
 		SELECT span_id,
 		       trace_id,
 		       name                       AS operation_name,
@@ -89,7 +83,6 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 		PREWHERE tenant_id      = @tenantID
 		     AND timestamp BETWEEN @start AND @end
 		     AND is_root = 1
-		     AND fingerprint  IN active_fps
 		     AND service      = @serviceName
 		     AND name         = @operationName
 		WHERE trace_id != @excludeTraceID

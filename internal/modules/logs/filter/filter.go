@@ -46,35 +46,7 @@ func (f *Filters) Validate() error {
 
 var ValidateAttrs = filterutil.ValidateAttrs
 
-// BuildFingerprintCTE turns a resource filter into a fingerprint-pruning CTE.
-// It resolves matching fingerprints from the small logs_resource dimension table
-// so the logs table scan can be pruned by its primary key. Both return values are
-// empty when there is no resource filter.
-func BuildFingerprintCTE(resourceWhere string) (cte, prewhereFP string) {
-	if resourceWhere == "" {
-		return "", ""
-	}
-	cte = `
-		WITH active_fps AS (
-		    SELECT DISTINCT fingerprint
-		    FROM optikk.logs_resource
-		    PREWHERE tenant_id = @tenantID` + resourceWhere + `
-		)`
-	prewhereFP = " AND fingerprint IN active_fps"
-	return cte, prewhereFP
-}
-
-func (f Filters) HasResourceFilters() bool {
-	return len(f.Services) > 0 ||
-		len(f.ExcludeServices) > 0 ||
-		len(f.Hosts) > 0 ||
-		len(f.ExcludeHosts) > 0 ||
-		len(f.Pods) > 0 ||
-		len(f.Containers) > 0 ||
-		len(f.Environments) > 0
-}
-
-func BuildClauses(f Filters) (resourceWhere, prewhere, where string, args []any) {
+func BuildClauses(f Filters) (prewhere, where string, args []any) {
 	startBucket := uint32((f.StartMs / 1000) / 300 * 300)
 	endBucket := uint32((f.EndMs / 1000) / 300 * 300)
 
@@ -87,39 +59,34 @@ func BuildClauses(f Filters) (resourceWhere, prewhere, where string, args []any)
 	}
 
 	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket`
-
-	if f.HasResourceFilters() {
-		resourceWhere += ` AND ts_bucket BETWEEN @startBucket AND @endBucket`
-	}
-
 	where = `WHERE 1=1`
 
 	if len(f.Services) > 0 {
-		resourceWhere += ` AND service IN @services`
+		prewhere += ` AND service IN @services`
 		args = append(args, clickhouse.Named("services", f.Services))
 	}
 	if len(f.ExcludeServices) > 0 {
-		resourceWhere += ` AND service NOT IN @excServices`
+		prewhere += ` AND service NOT IN @excServices`
 		args = append(args, clickhouse.Named("excServices", f.ExcludeServices))
 	}
 	if len(f.Hosts) > 0 {
-		resourceWhere += ` AND host IN @hosts`
+		prewhere += ` AND host IN @hosts`
 		args = append(args, clickhouse.Named("hosts", f.Hosts))
 	}
 	if len(f.ExcludeHosts) > 0 {
-		resourceWhere += ` AND host NOT IN @excHosts`
+		prewhere += ` AND host NOT IN @excHosts`
 		args = append(args, clickhouse.Named("excHosts", f.ExcludeHosts))
 	}
 	if len(f.Pods) > 0 {
-		resourceWhere += ` AND pod IN @pods`
+		prewhere += ` AND pod IN @pods`
 		args = append(args, clickhouse.Named("pods", f.Pods))
 	}
 	if len(f.Containers) > 0 {
-		resourceWhere += ` AND container IN @containers`
+		prewhere += ` AND container IN @containers`
 		args = append(args, clickhouse.Named("containers", f.Containers))
 	}
 	if len(f.Environments) > 0 {
-		resourceWhere += ` AND environment IN @environments`
+		prewhere += ` AND environment IN @environments`
 		args = append(args, clickhouse.Named("environments", f.Environments))
 	}
 
@@ -150,7 +117,7 @@ func BuildClauses(f Filters) (resourceWhere, prewhere, where string, args []any)
 		where += clause
 		args = append(args, clauseArgs...)
 	}
-	return resourceWhere, prewhere, where, args
+	return prewhere, where, args
 }
 
 func upperAll(vs []string) []string {

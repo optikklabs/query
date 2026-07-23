@@ -55,18 +55,18 @@ var ValidateAttrs = filterutil.ValidateAttrs
 // Span predicates match ANY span of a trace (service:X means "traces that
 // touch X"), so the repository runs them in a trace_id subquery over all
 // spans. Root predicates are trace-level (duration, exclusions) and stay on
-// the root-span scan. Resource dims prune via the spans_resource CTE.
+// the root-span scan. Resource contains predicates applied directly to the
+// inner any-span spans scan PREWHERE.
 type Clauses struct {
-	Resource        string // positive resource dims (service/environment IN)
-	ExcludeResource string // resource exclusions, applied to the root span
-	Span            string // predicates matchable against any span
-	Root            string // trace-level predicates, evaluated on the root span
-	Args            []any
+	Resource string // predicates appended to inner spans scan PREWHERE (service IN)
+	Span     string // predicates matchable against any span
+	Root     string // trace-level predicates, evaluated on the root span
+	Args     []any
 }
 
 // HasSpanMatch reports whether the any-span subquery phase is needed.
 func (c Clauses) HasSpanMatch() bool {
-	return c.Span != "" || c.Resource != ""
+	return c.Span != ""
 }
 
 func BuildClauses(f Filters) Clauses {
@@ -77,15 +77,16 @@ func BuildClauses(f Filters) Clauses {
 	}}
 
 	if len(f.Services) > 0 {
+		c.Root += ` AND service IN @services`
 		c.Resource += ` AND service IN @services`
 		c.Args = append(c.Args, clickhouse.Named("services", f.Services))
 	}
 	if len(f.Environments) > 0 {
-		c.Resource += ` AND environment IN @environments`
+		c.Span += ` AND environment IN @environments`
 		c.Args = append(c.Args, clickhouse.Named("environments", f.Environments))
 	}
 	if len(f.ExcludeServices) > 0 {
-		c.ExcludeResource += ` AND service NOT IN @excServices`
+		c.Root += ` AND service NOT IN @excServices`
 		c.Args = append(c.Args, clickhouse.Named("excServices", f.ExcludeServices))
 	}
 

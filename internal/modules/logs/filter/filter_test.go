@@ -82,20 +82,20 @@ func TestValidateAttrs(t *testing.T) {
 }
 
 func TestBuildClauses_Base(t *testing.T) {
-	rw, pw, w, args := BuildClauses(Filters{TenantID: 1, StartMs: 1000, EndMs: 2000})
+	pw, w, args := BuildClauses(Filters{TenantID: 1, StartMs: 1000, EndMs: 2000})
 	wantPrewhere := "PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket"
-	if rw != "" || pw != wantPrewhere || w != "WHERE 1=1" {
-		t.Errorf("base clauses wrong, got rw=%q pw=%q w=%q", rw, pw, w)
+	if pw != wantPrewhere || w != "WHERE 1=1" {
+		t.Errorf("base clauses wrong, got pw=%q w=%q", pw, w)
 	}
 	if got := len(namedArgs(args)); got != 5 {
 		t.Errorf("got %d args, want 5 base args", got)
 	}
 }
 
-// Resource dims (service/host/pod/container/env) go to resourceWhere; severity,
+// Resource dims (service/host/pod/container/env) go to prewhere; severity,
 // trace/span ids and search go to where.
 func TestBuildClauses_ResourceVsSpanSplit(t *testing.T) {
-	rw, _, w, _ := BuildClauses(Filters{
+	pw, w, _ := BuildClauses(Filters{
 		StartMs: 1, EndMs: 2,
 		Services:   []string{"svc"},
 		Hosts:      []string{"h1"},
@@ -103,8 +103,8 @@ func TestBuildClauses_ResourceVsSpanSplit(t *testing.T) {
 		SpanID:     "abc",
 	})
 	for _, want := range []string{"service IN @services", "host IN @hosts"} {
-		if !strings.Contains(rw, want) {
-			t.Errorf("resourceWhere missing %q: %q", want, rw)
+		if !strings.Contains(pw, want) {
+			t.Errorf("prewhere missing %q: %q", want, pw)
 		}
 	}
 	for _, want := range []string{"upper(severity_text) IN @severities", "span_id = @spanID"} {
@@ -114,10 +114,23 @@ func TestBuildClauses_ResourceVsSpanSplit(t *testing.T) {
 	}
 }
 
+func TestBuildClauses_NoLogsResourceReference(t *testing.T) {
+	pw, w, _ := BuildClauses(Filters{
+		StartMs: 1, EndMs: 2,
+		Services: []string{"svc"},
+		Hosts:    []string{"h1"},
+		Pods:     []string{"p1"},
+	})
+	mainQueryClauses := pw + w
+	if strings.Contains(mainQueryClauses, "logs_resource") || strings.Contains(mainQueryClauses, "fingerprint") {
+		t.Errorf("BuildClauses emitted obsolete CTE/table references in main query clauses: %q", mainQueryClauses)
+	}
+}
+
 // Severity matching is case-insensitive: the column is uppercased in SQL and
 // the incoming values are uppercased before binding.
 func TestBuildClauses_SeverityCaseInsensitive(t *testing.T) {
-	_, _, w, args := BuildClauses(Filters{
+	_, w, args := BuildClauses(Filters{
 		StartMs: 1, EndMs: 2,
 		Severities:        []string{"error", "Warn"},
 		ExcludeSeverities: []string{"info"},
@@ -140,7 +153,7 @@ func TestBuildClauses_SeverityCaseInsensitive(t *testing.T) {
 // field no longer changes semantics.
 func TestBuildClauses_Search(t *testing.T) {
 	for _, mode := range []string{"", "exact", "ngram"} {
-		_, _, w, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: mode})
+		_, w, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: mode})
 		if !strings.Contains(w, "positionCaseInsensitive(body, @search) > 0") {
 			t.Errorf("mode %q search clause wrong: %q", mode, w)
 		}
@@ -215,7 +228,7 @@ func TestBuildClauses_AttributeOps(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, _, w, args := BuildClauses(Filters{
+			_, w, args := BuildClauses(Filters{
 				StartMs: 1, EndMs: 2,
 				Attributes: []AttrFilter{c.attr},
 			})

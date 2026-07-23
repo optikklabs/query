@@ -70,7 +70,7 @@ func TestValidate(t *testing.T) {
 // No filters -> only the three base bind args, no predicate fragments.
 func TestBuildClauses_Base(t *testing.T) {
 	c := BuildClauses(Filters{TenantID: 1, StartMs: 1000, EndMs: 2000})
-	if c.Resource != "" || c.ExcludeResource != "" || c.Span != "" || c.Root != "" {
+	if c.Resource != "" || c.Span != "" || c.Root != "" {
 		t.Errorf("base clauses should be empty, got %+v", c)
 	}
 	if c.HasSpanMatch() {
@@ -102,13 +102,12 @@ func TestBuildClauses_SpanVsRootSplit(t *testing.T) {
 	if !strings.Contains(c.Resource, "service IN @services") {
 		t.Errorf("Resource missing service clause: %q", c.Resource)
 	}
-	if !strings.Contains(c.ExcludeResource, "service NOT IN @excServices") {
-		t.Errorf("ExcludeResource missing clause: %q", c.ExcludeResource)
-	}
 	if !strings.Contains(c.Span, "name IN @operations") {
 		t.Errorf("Span missing operations clause: %q", c.Span)
 	}
 	for _, want := range []string{
+		"service IN @services",
+		"service NOT IN @excServices",
 		"status_code_string NOT IN @excStatuses",
 		"trace_id = @traceID",
 		"duration_nano >= @minDur",
@@ -129,7 +128,7 @@ func TestBuildClauses_HasSpanMatch(t *testing.T) {
 		want bool
 	}{
 		{"none", Filters{StartMs: 1, EndMs: 2}, false},
-		{"service", Filters{StartMs: 1, EndMs: 2, Services: []string{"a"}}, true},
+		{"service", Filters{StartMs: 1, EndMs: 2, Services: []string{"a"}}, false},
 		{"environment", Filters{StartMs: 1, EndMs: 2, Environments: []string{"prod"}}, true},
 		{"search", Filters{StartMs: 1, EndMs: 2, Search: "x"}, true},
 		{"attr", Filters{StartMs: 1, EndMs: 2, Attributes: []AttrFilter{{Key: "k", Value: "v"}}}, true},
@@ -143,6 +142,19 @@ func TestBuildClauses_HasSpanMatch(t *testing.T) {
 				t.Errorf("HasSpanMatch = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+func TestBuildClauses_NoSpansResourceReference(t *testing.T) {
+	c := BuildClauses(Filters{
+		StartMs: 1, EndMs: 2,
+		Services:        []string{"svc"},
+		Environments:    []string{"prod"},
+		ExcludeServices: []string{"noise"},
+	})
+	all := c.Resource + c.Span + c.Root
+	if strings.Contains(all, "spans_resource") || strings.Contains(all, "fingerprint") {
+		t.Errorf("BuildClauses emitted obsolete CTE/table references: %q", all)
 	}
 }
 

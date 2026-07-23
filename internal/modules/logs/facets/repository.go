@@ -23,26 +23,40 @@ type dimRow struct {
 	Count uint64 `ch:"cnt"`
 }
 
+func buildFacetQuery(prewhere, where string) string {
+	return `SELECT
+			multiIf(
+				grouping(service) = 0, 'service',
+				grouping(host) = 0, 'host',
+				grouping(pod) = 0, 'pod',
+				grouping(environment) = 0, 'environment',
+				''
+			) AS dim,
+			multiIf(
+				grouping(service) = 0, service,
+				grouping(host) = 0, host,
+				grouping(pod) = 0, pod,
+				grouping(environment) = 0, environment,
+				''
+			) AS value,
+			count() AS cnt
+		FROM optikk.logs ` + prewhere + ` ` + where + `
+		GROUP BY GROUPING SETS (
+			(service),
+			(host),
+			(pod),
+			(environment)
+		)
+		HAVING value != ''
+		ORDER BY dim, cnt DESC
+		LIMIT @facetLimit BY dim`
+}
+
 func (r *Repository) Compute(ctx context.Context, f filter.Filters) ([]dimRow, error) {
-	resourceWhere, _, _, args := filter.BuildClauses(f)
+	prewhere, where, args := filter.BuildClauses(f)
 	args = append(args, clickhouse.Named("facetLimit", uint64(facetTopN)))
 
-	// One UNION ALL arm per facet dimension; querying logs_resource directly.
-	arm := func(dim string) string {
-		return `
-			SELECT '` + dim + `' AS dim, ` + dim + ` AS value, count() AS cnt
-			FROM optikk.logs_resource
-			PREWHERE tenant_id = @tenantID AND ts_bucket BETWEEN @startBucket AND @endBucket` + resourceWhere + `
-			WHERE ` + dim + ` != ''
-			GROUP BY ` + dim + `
-			ORDER BY cnt DESC
-			LIMIT @facetLimit`
-	}
-
-	query := arm("service") +
-		" UNION ALL " + arm("host") +
-		" UNION ALL " + arm("pod") +
-		" UNION ALL " + arm("environment")
+	query := buildFacetQuery(prewhere, where)
 
 	var rows []dimRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "logsFacets.Compute",
