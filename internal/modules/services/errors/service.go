@@ -72,8 +72,8 @@ func (s *Service) GetServiceErrorRate(ctx context.Context, tenantID int64, start
 					Timestamp:    t,
 					RequestCount: total,
 					ErrorCount:   errs,
-					ErrorRate:    computeErrorRate(errs, total),
-					AvgLatency:   computeAvgLatency(durationMsSum, uint64(total)),
+					ErrorRate:    metrics.ComputeErrorRate(errs, total),
+					AvgLatency:   metrics.ComputeAvgLatency(durationMsSum, uint64(total)),
 				})
 			}
 		}
@@ -101,8 +101,8 @@ func (s *Service) GetServiceErrorRate(ctx context.Context, tenantID int64, start
 			Timestamp:    t,
 			RequestCount: total,
 			ErrorCount:   errs,
-			ErrorRate:    computeErrorRate(errs, total),
-			AvgLatency:   computeAvgLatency(durationMsSum, uint64(total)),
+			ErrorRate:    metrics.ComputeErrorRate(errs, total),
+			AvgLatency:   metrics.ComputeAvgLatency(durationMsSum, uint64(total)),
 		})
 	}
 	return points, nil
@@ -327,7 +327,7 @@ func (s *Service) GetErrorGroupFacets(ctx context.Context, tenantID int64, start
 			facets[i] = ErrorFacet{
 				Name:  r.Value,
 				Count: cnt,
-				Pct:   facetPct(cnt, total),
+				Pct:   metrics.FacetPercentage(cnt, total),
 			}
 		}
 		groups = append(groups, ErrorFacetGroup{Key: col, Facets: facets})
@@ -335,12 +335,6 @@ func (s *Service) GetErrorGroupFacets(ctx context.Context, tenantID int64, start
 	return groups, nil
 }
 
-func facetPct(count, total int64) float64 {
-	if total <= 0 {
-		return 0
-	}
-	return float64(count) * 100.0 / float64(total)
-}
 
 func (s *Service) GetErrorGroupTraces(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string, limit int, cursorIn ErrorTracesCursor) (PaginatedErrorTraces, error) {
 	raw, err := s.repo.ErrorGroupTraceRows(ctx, tenantID, startMs, endMs, groupID, limit+1, cursorIn)
@@ -427,24 +421,3 @@ func (s *Service) GetErrorHotspot(ctx context.Context, tenantID int64, startMs, 
 	return cells, nil
 }
 
-func httpBucketToCode(bucket string) int {
-	switch bucket {
-	case "4xx":
-		return 400
-	case "5xx":
-		return 500
-	default:
-		return 0
-	}
-}
-
-func computeErrorRate(errs, total int64) float64 {
-	return metrics.PercentageInt(errs, total)
-}
-
-func computeAvgLatency(sumMs float64, count uint64) float64 {
-	if count == 0 {
-		return 0
-	}
-	return sumMs / float64(count)
-}

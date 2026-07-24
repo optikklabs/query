@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/optikklabs/query/internal/config"
 )
 
 const (
@@ -91,6 +92,29 @@ var explorerSettings = clickhouse.Settings{
 	"use_query_condition_cache":       1,
 	"max_threads":                     16,
 	"priority":                        10,
+}
+
+func InitQueryBudgets(budgets config.QueryBudgetsConfig) {
+	dashboardSettings["max_execution_time"] = budgets.Dashboard.MaxExecutionTime
+	dashboardSettings["max_rows_to_read"] = budgets.Dashboard.MaxRowsToRead
+	dashboardSettings["max_memory_usage"] = budgets.Dashboard.MaxMemoryUsage
+	dashboardSettings["max_result_rows"] = budgets.Dashboard.MaxResultRows
+	dashboardSettings["max_threads"] = budgets.Dashboard.MaxThreads
+	dashboardSettings["priority"] = budgets.Dashboard.Priority
+
+	overviewSettings["max_execution_time"] = budgets.Overview.MaxExecutionTime
+	overviewSettings["max_rows_to_read"] = budgets.Overview.MaxRowsToRead
+	overviewSettings["max_memory_usage"] = budgets.Overview.MaxMemoryUsage
+	overviewSettings["max_result_rows"] = budgets.Overview.MaxResultRows
+	overviewSettings["max_threads"] = budgets.Overview.MaxThreads
+	overviewSettings["priority"] = budgets.Overview.Priority
+
+	explorerSettings["max_execution_time"] = budgets.Explorer.MaxExecutionTime
+	explorerSettings["max_rows_to_read"] = budgets.Explorer.MaxRowsToRead
+	explorerSettings["max_memory_usage"] = budgets.Explorer.MaxMemoryUsage
+	explorerSettings["max_result_rows"] = budgets.Explorer.MaxResultRows
+	explorerSettings["max_threads"] = budgets.Explorer.MaxThreads
+	explorerSettings["priority"] = budgets.Explorer.Priority
 }
 
 func DashboardCtx(ctx context.Context) context.Context {

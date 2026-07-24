@@ -8,9 +8,25 @@ type ClickHouseConfig struct {
 	Database     string `yaml:"database"`
 	User         string `yaml:"user"`
 	Password     string `yaml:"password"`
-	Secure       bool   `yaml:"secure"`
-	MaxOpenConns int    `yaml:"max_open_conns"`
-	MaxIdleConns int    `yaml:"max_idle_conns"`
+	Secure       bool               `yaml:"secure"`
+	MaxOpenConns int                `yaml:"max_open_conns"`
+	MaxIdleConns int                `yaml:"max_idle_conns"`
+	QueryBudgets QueryBudgetsConfig `yaml:"query_budgets"`
+}
+
+type QueryBudgetsConfig struct {
+	Dashboard QueryBudget `yaml:"dashboard"`
+	Overview  QueryBudget `yaml:"overview"`
+	Explorer  QueryBudget `yaml:"explorer"`
+}
+
+type QueryBudget struct {
+	MaxExecutionTime int   `yaml:"max_execution_time"`
+	MaxRowsToRead    int64 `yaml:"max_rows_to_read"`
+	MaxMemoryUsage   int64 `yaml:"max_memory_usage"`
+	MaxResultRows    int64 `yaml:"max_result_rows"`
+	MaxThreads       int   `yaml:"max_threads"`
+	Priority         int   `yaml:"priority"`
 }
 
 // Pool defaults bound pressure on the single ClickHouse server. A small pool

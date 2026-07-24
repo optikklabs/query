@@ -1,6 +1,10 @@
 package errors
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/optikklabs/query/internal/shared/metrics"
+)
 
 func TestHTTPBucketToCode(t *testing.T) {
 	cases := map[string]int{"4xx": 400, "5xx": 500, "": 0, "2xx": 0}
@@ -22,26 +26,26 @@ func TestComputeErrorRate(t *testing.T) {
 		{3, 3, 100},
 	}
 	for _, c := range cases {
-		if got := computeErrorRate(c.errs, c.total); got != c.want {
-			t.Errorf("computeErrorRate(%d,%d) = %v, want %v", c.errs, c.total, got, c.want)
+		if got := metrics.ComputeErrorRate(c.errs, c.total); got != c.want {
+			t.Errorf("metrics.ComputeErrorRate(%d,%d) = %v, want %v", c.errs, c.total, got, c.want)
 		}
 	}
 }
 
 func TestComputeAvgLatency(t *testing.T) {
-	if got := computeAvgLatency(100, 0); got != 0 {
+	if got := metrics.ComputeAvgLatency(100, 0); got != 0 {
 		t.Errorf("zero count must avoid div-by-zero, got %v", got)
 	}
-	if got := computeAvgLatency(100, 4); got != 25 {
-		t.Errorf("computeAvgLatency(100,4) = %v, want 25", got)
+	if got := metrics.ComputeAvgLatency(100, 4); got != 25 {
+		t.Errorf("metrics.ComputeAvgLatency(100,4) = %v, want 25", got)
 	}
 }
 
 func TestFacetPct(t *testing.T) {
-	if got := facetPct(1, 0); got != 0 {
+	if got := metrics.FacetPercentage(1, 0); got != 0 {
 		t.Errorf("zero total must return 0, got %v", got)
 	}
-	if got := facetPct(1, 4); got != 25 {
-		t.Errorf("facetPct(1,4) = %v, want 25", got)
+	if got := metrics.FacetPercentage(1, 4); got != 25 {
+		t.Errorf("metrics.FacetPercentage(1,4) = %v, want 25", got)
 	}
 }

@@ -102,3 +102,36 @@ func WithBucketGrainSec(args []any, startMs, endMs int64) []any {
 	}
 	return append(args, clickhouse.Named("bucketGrainSec", sec))
 }
+
+// DenseBuckets returns an ordered slice of time.Time buckets aligned to grain.
+func DenseBuckets(startMs, endMs int64, grain time.Duration) []time.Time {
+	start := time.UnixMilli(startMs).UTC().Truncate(grain)
+	end := time.UnixMilli(endMs).UTC().Truncate(grain)
+	var out []time.Time
+	for b := start; !b.After(end); b = b.Add(grain) {
+		out = append(out, b)
+	}
+	return out
+}
+
+// BuildDenseTimestamps generates an ordered slice of bucket-aligned millisecond timestamps.
+func BuildDenseTimestamps(startMs, endMs int64, bucketSec int64) []int64 {
+	flooredStart := FloorMsToBucket(startMs, bucketSec)
+	bucketMs := bucketSec * 1000
+
+	var ts []int64
+	for t := flooredStart; t <= endMs; t += bucketMs {
+		ts = append(ts, t)
+	}
+	return ts
+}
+
+// ZeroFillGaps replaces nil entries in values with pointers to 0.0.
+func ZeroFillGaps(values []*float64) {
+	zero := 0.0
+	for i, v := range values {
+		if v == nil {
+			values[i] = &zero
+		}
+	}
+}

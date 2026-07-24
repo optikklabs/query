@@ -59,6 +59,7 @@ func openMySQL(cfg config.Config) (*sql.DB, error) {
 }
 
 func openClickHouse(cfg config.Config) (clickhouse.Conn, error) {
+	dbutil.InitQueryBudgets(cfg.ClickHouse.QueryBudgets)
 	chConn, err := dbutil.OpenClickHouseConn(cfg.ClickHouseDSN(), cfg.ClickHouseMaxOpenConns(), cfg.ClickHouseMaxIdleConns())
 	if err != nil {
 		return nil, fmt.Errorf("clickhouse: %w", err)

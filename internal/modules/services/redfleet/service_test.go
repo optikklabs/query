@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
 // denseBuckets must cover every grain-aligned bucket in [start, end] so quiet
@@ -12,7 +14,7 @@ func TestDenseBucketsCoversWindow(t *testing.T) {
 	start := time.Date(2026, 6, 22, 10, 0, 30, 0, time.UTC).UnixMilli()
 	end := time.Date(2026, 6, 22, 10, 4, 10, 0, time.UTC).UnixMilli()
 
-	got := denseBuckets(start, end, time.Minute)
+	got := timebucket.DenseBuckets(start, end, time.Minute)
 
 	want := []time.Time{
 		time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),

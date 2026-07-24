@@ -126,3 +126,42 @@ func MapSuggestionRows(rows []SuggestionRow) []Suggestion {
 	}
 	return out
 }
+
+// MapOperator translates frontend query operators (eq, neq, in, not_in) to SQL operators.
+func MapOperator(op string) string {
+	switch op {
+	case "eq":
+		return "="
+	case "neq":
+		return "!="
+	case "in":
+		return "IN"
+	case "not_in":
+		return "NOT IN"
+	default:
+		return op
+	}
+}
+
+// ExtractValues normalizes string, []string, []any, or scalar filter values into []string.
+func ExtractValues(v any) []string {
+	switch val := v.(type) {
+	case string:
+		return []string{val}
+	case []any:
+		out := make([]string, 0, len(val))
+		for _, item := range val {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		return val
+	default:
+		if s := fmt.Sprint(v); s != "" {
+			return []string{s}
+		}
+		return nil
+	}
+}

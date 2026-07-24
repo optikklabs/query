@@ -31,4 +31,11 @@ var (
 		Name:      "in_flight_requests",
 		Help:      "HTTP requests currently being processed.",
 	})
+
+	APIRateLimitedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "optikk",
+		Subsystem: "http",
+		Name:      "api_rate_limited_total",
+		Help:      "Total HTTP requests rate limited, labeled by tenant_id.",
+	}, []string{"tenant_id"})
 )
