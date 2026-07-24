@@ -22,9 +22,10 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int64, focusService string) ([]nodeAggRow, error) {
 	query := `
 		WITH neighbor_services AS (
-		    SELECT ` + seriesattr.Client + ` AS service FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE ` + seriesattr.Server + ` = @focusService AND @focusService != '' AND ` + seriesattr.Client + ` != ''
-		    UNION ALL
-		    SELECT ` + seriesattr.Server + ` AS service FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE ` + seriesattr.Client + ` = @focusService AND @focusService != '' AND ` + seriesattr.Server + ` != ''
+		    SELECT if(` + seriesattr.Server + ` = @focusService, ` + seriesattr.Client + `, ` + seriesattr.Server + `) AS service
+		    FROM optikk.metrics_series
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		    WHERE ` + seriesattr.Server + ` = @focusService AND ` + seriesattr.Client + ` != '' OR (` + seriesattr.Client + ` = @focusService AND ` + seriesattr.Server + ` != '')
 		),
 		series AS (
 		    SELECT fingerprint,

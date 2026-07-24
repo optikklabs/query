@@ -54,10 +54,10 @@ func TestDisplayGrainSQLDispatch(t *testing.T) {
 		windowMs int64
 		want     string
 	}{
-		{int64(time.Hour / time.Millisecond), "toStartOfMinute(timestamp)"},
-		{12 * int64(time.Hour/time.Millisecond), "toStartOfFiveMinutes(timestamp)"},
-		{3 * 24 * int64(time.Hour/time.Millisecond), "toStartOfHour(timestamp)"},
-		{30 * 24 * int64(time.Hour/time.Millisecond), "toStartOfDay(timestamp)"},
+		{int64(time.Hour / time.Millisecond), "toStartOfInterval(timestamp, INTERVAL 60 SECOND)"},
+		{12 * int64(time.Hour/time.Millisecond), "toStartOfInterval(timestamp, INTERVAL 300 SECOND)"},
+		{3 * 24 * int64(time.Hour/time.Millisecond), "toStartOfInterval(timestamp, INTERVAL 3600 SECOND)"},
+		{30 * 24 * int64(time.Hour/time.Millisecond), "toStartOfInterval(timestamp, INTERVAL 86400 SECOND)"},
 	}
 	for _, c := range cases {
 		if got := DisplayGrainSQL(c.windowMs); got != c.want {

@@ -190,7 +190,7 @@ func (r *Repository) OverviewSeries(ctx context.Context, tenantID, startMs, endM
 func (r *Repository) TraceCounts(ctx context.Context, tenantID, startMs, endMs int64) ([]traceCountRow, error) {
 	query := `
 		SELECT if(timestamp >= @start, 1, 0) AS is_current,
-		       uniq(trace_id) AS traces,
+		       uniqCombined64(trace_id) AS traces,
 		       count()        AS spans
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @prevStart AND @end

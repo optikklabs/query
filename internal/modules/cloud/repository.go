@@ -78,12 +78,12 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func (r *Repository) QueryProviderInventory(ctx context.Context, tenantID, startMs, endMs int64) ([]InventoryRow, error) {
 	query := invSeries + `
 		SELECT provider,
-		       uniqIf(account, account != '')     AS accounts,
-		       uniqIf(region, region != '')       AS regions,
-		       uniqIf(k8s_node, k8s_node != '')   AS nodes,
-		       uniqIf(pod, pod != '')             AS pods,
-		       uniqIf(platform, platform != '')   AS platforms,
-		       uniq(entity)                       AS resources,
+		       uniqCombined64If(account, account != '')     AS accounts,
+		       uniqCombined64If(region, region != '')       AS regions,
+		       uniqCombined64If(k8s_node, k8s_node != '')   AS nodes,
+		       uniqCombined64If(pod, pod != '')             AS pods,
+		       uniqCombined64If(platform, platform != '')   AS platforms,
+		       uniqCombined64(entity)                       AS resources,
 		       max(last_seen_ts)                  AS last_seen
 		FROM cloud_series
 		GROUP BY provider
@@ -99,7 +99,7 @@ func (r *Repository) QueryProviderInventory(ctx context.Context, tenantID, start
 // QueryProviderCategories returns per-provider, per-platform entity counts.
 func (r *Repository) QueryProviderCategories(ctx context.Context, tenantID, startMs, endMs int64) ([]CategoryRow, error) {
 	query := invSeries + `
-		SELECT provider, platform, uniq(entity) AS count
+		SELECT provider, platform, uniqCombined64(entity) AS count
 		FROM cloud_series
 		WHERE platform != ''
 		GROUP BY provider, platform

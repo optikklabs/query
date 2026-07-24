@@ -22,7 +22,7 @@ func (r *Repository) QueryCPUUtilizationAgg(ctx context.Context, tenantID int64,
 	query := `
 		SELECT
 		    metric_name AS metric_name,
-		    sum(val_sum) / sum(val_count)  AS value
+		    if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count))  AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
 		PREWHERE tenant_id        = @tenantID
 		     AND metric_name   IN @metricNames
@@ -54,7 +54,7 @@ func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, tenantID
 		    r.container                   AS container,
 		    r.service                     AS service,
 		    m.metric_name                 AS metric_name,
-		    sum(m.val_sum) / sum(m.val_count) AS value
+		    if(sum(m.val_count) = 0, 0, sum(m.val_sum) / sum(m.val_count)) AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
 		INNER JOIN fps AS r ON m.fingerprint = r.fingerprint
 		PREWHERE m.tenant_id     = @tenantID

@@ -3,6 +3,7 @@
 package timebucket
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -52,20 +53,10 @@ func RollupTableForGrain(grainSec int64) string {
 }
 
 func GrainSQL(grainSec int64) string {
-	switch grainSec {
-	case 60:
-		return "toStartOfMinute(timestamp)"
-	case 300:
-		return "toStartOfFiveMinutes(timestamp)"
-	case 900:
-		return "toStartOfFifteenMinutes(timestamp)"
-	case 3600:
-		return "toStartOfHour(timestamp)"
-	case 86400:
-		return "toStartOfDay(timestamp)"
-	default:
-		return "toStartOfFiveMinutes(timestamp)"
+	if grainSec <= 0 {
+		grainSec = 300
 	}
+	return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL %d SECOND)", grainSec)
 }
 
 func UseHourRollup(windowMs int64) bool {

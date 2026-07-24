@@ -143,8 +143,8 @@ func (r *Repository) ErrorGroupRowsAll(ctx context.Context, tenantID int64, star
 		       count()                          AS error_count,
 		       max(timestamp)                   AS last_occurrence,
 		       min(timestamp)                   AS first_occurrence,
-		       argMax(status_message, timestamp) AS status_message,
-		       argMax(trace_id, timestamp)       AS sample_trace_id
+		       anyLast(status_message)          AS status_message,
+		       anyLast(trace_id)                AS sample_trace_id
 		FROM optikk.spans
 		PREWHERE tenant_id   = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1
 		GROUP BY error_group_id, service, name, http_status_bucket
@@ -174,8 +174,8 @@ func (r *Repository) ErrorGroupRowsByService(ctx context.Context, tenantID int64
 		       count()                          AS error_count,
 		       max(timestamp)                   AS last_occurrence,
 		       min(timestamp)                   AS first_occurrence,
-		       argMax(status_message, timestamp) AS status_message,
-		       argMax(trace_id, timestamp)       AS sample_trace_id
+		       anyLast(status_message)          AS status_message,
+		       anyLast(trace_id)                AS sample_trace_id
 		FROM optikk.spans
 		PREWHERE tenant_id     = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1 AND service = @serviceName
 		GROUP BY error_group_id, service, name, http_status_bucket
@@ -195,8 +195,8 @@ func (r *Repository) ErrorGroupRowsByService(ctx context.Context, tenantID int64
 func (r *Repository) ErrorGroupSamples(ctx context.Context, tenantID int64, startMs, endMs int64, groupIDs []string) ([]rawErrorGroupSampleRow, error) {
 	const query = `
 		SELECT error_group_id                    AS error_group_id,
-		       argMax(status_message, timestamp) AS status_message,
-		       argMax(trace_id, timestamp)       AS sample_trace_id
+		       anyLast(status_message)          AS status_message,
+		       anyLast(trace_id)                AS sample_trace_id
 		FROM optikk.spans
 		PREWHERE tenant_id   = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1 AND error_group_id IN @groupIDs
 		GROUP BY error_group_id`

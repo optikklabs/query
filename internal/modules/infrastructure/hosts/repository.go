@@ -85,7 +85,7 @@ func (r *Repository) QueryHostSpans(
 		    any(series.environment)                                 AS zone,
 		    sum(m.hist_count)                                        AS request_count,
 		    sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `) AS error_count,
-		    toFloat32(quantilesPrometheusHistogramMerge(0.99)(m.latency_state)[1]) AS p99_ms,
+		    toFloat32(quantilePrometheusHistogramMerge(0.99)(m.latency_state)) AS p99_ms,
 		    max(m.timestamp)                                        AS last_seen
 		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint

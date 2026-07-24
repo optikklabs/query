@@ -74,7 +74,7 @@ func slowQueryPatternsQuery(filterWhere string) string {
 		           db_name                                                    AS collection_name,
 		           ''                                                         AS namespace,
 		           ''                                                         AS server,
-		           quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
+		           quantiles(0.5, 0.95, 0.99)(duration_nano / 1000000.0)       AS qs,
 		           count()                                                   AS call_count,
 		           countIf(is_error)                                         AS error_count
 		    FROM optikk.spans
