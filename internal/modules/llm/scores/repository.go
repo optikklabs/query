@@ -40,13 +40,17 @@ type scoreInsert struct {
 // LookupTraceContext fetches service/session/user for a trace's root span so
 // submitted scores carry the same denormalised context as ingested ones.
 func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, traceID string) (scoreInsert, error) {
+	now := time.Now()
+	start := now.Add(-30 * 24 * time.Hour)
 	query := `
 		SELECT anyLast(service)        AS service,
 		       anyLast(environment)    AS environment,
 		       anyLastIf(llm_session_id, llm_session_id != '') AS session_id,
 		       anyLastIf(llm_user_id, llm_user_id != '')       AS user_id
 		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID AND trace_id = @traceID
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND trace_id = @traceID
 		LIMIT 1`
 	var row struct {
 		Service     string `ch:"service"`
@@ -54,7 +58,12 @@ func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, tra
 		SessionID   string `ch:"session_id"`
 		UserID      string `ch:"user_id"`
 	}
-	args := []any{clickhouse.Named("tenantID", tenantID), clickhouse.Named("traceID", traceID)}
+	args := []any{
+		clickhouse.Named("tenantID", tenantID),
+		clickhouse.Named("traceID", traceID),
+		clickhouse.Named("start", start),
+		clickhouse.Named("end", now),
+	}
 	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "llm.scores.LookupTraceContext", &row, query, args...); err != nil {
 		return scoreInsert{}, err
 	}

@@ -135,7 +135,7 @@ func ParseRange(r *http.Request) (startMs, endMs int64, err error) {
 		end = now
 	}
 	if start <= 0 {
-		return 0, 0, errors.New("start time is required")
+		start = end - (7 * 24 * 3600 * 1000)
 	}
 	if start >= end {
 		return 0, 0, errors.New("start must be before end")

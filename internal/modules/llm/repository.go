@@ -236,7 +236,8 @@ func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req Traces
 		           sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
 		    FROM optikk.spans
 		    PREWHERE tenant_id = @tenantID
-		    WHERE timestamp BETWEEN @start AND @end AND is_gen_ai
+		         AND timestamp BETWEEN @start AND @end
+		         AND is_gen_ai
 		    GROUP BY trace_id
 		)
 		SELECT s.trace_id           AS trace_id,

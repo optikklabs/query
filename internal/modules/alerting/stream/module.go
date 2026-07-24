@@ -102,19 +102,27 @@ func (m *Module) run() {
 				continue
 			}
 			for _, transition := range engine.OnMetric(event) {
-				if err := m.repo.PersistTransition(context.Background(), transition); err != nil {
-					failed = true
-					slog.Error("alerting stream transition persistence failed", slog.Int64("monitor_id", transition.Monitor.ID), slog.Any("error", err))
-					break
+				const maxRetries = 5
+				persisted := false
+				for attempt := 1; attempt <= maxRetries; attempt++ {
+					if err := m.repo.PersistTransition(context.Background(), transition); err != nil {
+						slog.Error("alerting stream transition persistence failed",
+							slog.Int("attempt", attempt),
+							slog.Int64("monitor_id", transition.Monitor.ID),
+							slog.Any("error", err),
+						)
+						if attempt < maxRetries {
+							time.Sleep(time.Duration(attempt*50) * time.Millisecond)
+						}
+					} else {
+						persisted = true
+						break
+					}
 				}
-				engine.Commit(transition)
+				if !persisted {
+					slog.Warn("alerting stream dropped poison pill transition after max retries", slog.Int64("monitor_id", transition.Monitor.ID))
+				}
 			}
-			if failed {
-				break
-			}
-		}
-		if failed {
-			continue
 		}
 		if err := client.CommitRecords(context.Background(), records...); err != nil {
 			slog.Warn("alerting stream offset commit failed", slog.Any("error", err))

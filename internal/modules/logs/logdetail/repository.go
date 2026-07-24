@@ -2,6 +2,7 @@ package logdetail
 
 import (
 	"context"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
@@ -15,17 +16,21 @@ type Repository struct {
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
 // GetByID resolves a single log row by its stable log_id.
-// It queries ClickHouse by tenantID and logID using the log_id skip-index.
-func (r *Repository) GetByID(ctx context.Context, tenantID int64, logID string) (*models.LogRow, error) {
+// It queries ClickHouse by tenantID and logID using timestamp range partition pruning.
+func (r *Repository) GetByID(ctx context.Context, tenantID int64, logID string, startMs, endMs int64) (*models.LogRow, error) {
 	args := []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("logID", logID),
+		clickhouse.Named("start", time.UnixMilli(startMs)),
+		clickhouse.Named("end", time.UnixMilli(endMs)),
 	}
 
 	query := `
 		SELECT ` + models.LogColumns + `
 		FROM optikk.logs
-		PREWHERE tenant_id = @tenantID AND log_id = @logID
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND log_id = @logID
 		LIMIT 1`
 
 	var rows []models.LogRow

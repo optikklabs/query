@@ -34,8 +34,8 @@ func (b *LogBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		FROM optikk.logs
 		PREWHERE tenant_id   = @tenantID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		WHERE timestamp BETWEEN @start AND @end
-		  AND (@searchTerm = '' OR hasToken(body, @searchTerm))`
+		     AND timestamp BETWEEN @start AND @end
+		WHERE @searchTerm = '' OR hasToken(body, @searchTerm)`
 
 	args := logArgs(m.TenantID, q.Log.Query, startMs, endMs)
 	var rows []logCountRow
@@ -61,8 +61,8 @@ func (b *LogBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 		FROM optikk.logs
 		PREWHERE tenant_id   = @tenantID
 		     AND ts_bucket BETWEEN @bucketStart AND @bucketEnd
-		WHERE timestamp BETWEEN @start AND @end
-		  AND (@searchTerm = '' OR hasToken(body, @searchTerm))
+		     AND timestamp BETWEEN @start AND @end
+		WHERE @searchTerm = '' OR hasToken(body, @searchTerm)
 		GROUP BY bucket
 		ORDER BY bucket`
 

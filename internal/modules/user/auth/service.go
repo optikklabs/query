@@ -98,18 +98,21 @@ func (l *loginAttempts) reset(email, ip string) {
 	delete(l.entries, l.key(email, ip))
 }
 
-// errTokenNotUsable marks a candidate refresh token that is simply not valid
-// (unknown, revoked, or expired) so Refresh can move on to the next one. It is
-// never returned to the caller.
-var errTokenNotUsable = errors.New("refresh token not usable")
+// notUsableError marks a candidate refresh token that is simply not valid so
+// Refresh can move on to the next one. It carries why the candidate failed so
+// a rejected refresh is diagnosable from logs. Never returned to the caller.
+type notUsableError struct{ reason string }
+
+func (e *notUsableError) Error() string { return "refresh token not usable: " + e.reason }
 
 // Refresh renews a session from any of the presented refresh tokens. A browser
 // may hold more than one refresh cookie of the same name (e.g. left over from a
 // cookie-path change), so we accept the first that still validates and ignore
 // stale siblings. A session is only ever ended by an explicit logout, never by
 // a stale token, so refresh can never spuriously log an active user out.
-func (s *Service) Refresh(ctx context.Context, refreshTokens []string) (LoginResponse, string, error) {
+func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP string) (LoginResponse, string, error) {
 	seen := make(map[string]struct{}, len(refreshTokens))
+	var reasons []string
 	for _, raw := range refreshTokens {
 		if raw == "" {
 			continue
@@ -121,38 +124,56 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string) (LoginRes
 
 		response, refresh, err := s.refreshOne(ctx, raw)
 		if err == nil {
+			slog.InfoContext(ctx, "AUTH_EVENT refresh_success",
+				slog.Int64("user_id", response.User.ID),
+				slog.Int("candidates", len(refreshTokens)),
+				slog.String("ip", clientIP))
 			return response, refresh, nil
 		}
 		// A real internal/decision error (DB down, trial expired) stops here;
 		// only an unusable candidate falls through to the next cookie.
-		if !errors.Is(err, errTokenNotUsable) {
+		var notUsable *notUsableError
+		if !errors.As(err, &notUsable) {
+			slog.WarnContext(ctx, "AUTH_EVENT refresh_error",
+				slog.Int("candidates", len(refreshTokens)),
+				slog.String("ip", clientIP),
+				slog.Any("error", err))
 			return LoginResponse{}, "", err
 		}
+		reasons = append(reasons, notUsable.reason)
 	}
+	// Every rejected refresh forces a re-login, so it must leave a trace.
+	slog.WarnContext(ctx, "AUTH_EVENT refresh_rejected",
+		slog.Int("candidates", len(refreshTokens)),
+		slog.Any("reasons", reasons),
+		slog.String("ip", clientIP))
 	return LoginResponse{}, "", shared.NewUnauthorizedError("Invalid or expired refresh token", nil)
 }
 
 // refreshOne validates a single refresh token and, if usable, issues a new
-// access token and extends the session. It returns errTokenNotUsable when the
+// access token and extends the session. It returns a notUsableError when the
 // token is unknown, revoked, or expired so the caller can try another.
 func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginResponse, string, error) {
 	hash := token.HashRefreshToken(refreshToken)
 	stored, err := s.repo.FindRefreshTokenByHash(ctx, hash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return LoginResponse{}, "", errTokenNotUsable
+			return LoginResponse{}, "", &notUsableError{reason: "unknown_token"}
 		}
 		return LoginResponse{}, "", shared.NewInternalError("Failed to look up refresh token", err)
 	}
 
-	if stored.RevokedAt != nil || time.Now().UTC().After(stored.ExpiresAt) {
-		return LoginResponse{}, "", errTokenNotUsable
+	if stored.RevokedAt != nil {
+		return LoginResponse{}, "", &notUsableError{reason: "revoked"}
+	}
+	if time.Now().UTC().After(stored.ExpiresAt) {
+		return LoginResponse{}, "", &notUsableError{reason: "expired"}
 	}
 
 	user, err := s.repo.FindActiveUserByID(ctx, stored.UserID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return LoginResponse{}, "", errTokenNotUsable
+			return LoginResponse{}, "", &notUsableError{reason: "user_inactive"}
 		}
 		return LoginResponse{}, "", shared.NewInternalError("Failed to load user for refresh", err)
 	}

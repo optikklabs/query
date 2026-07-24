@@ -48,8 +48,8 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		FROM optikk.metrics AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
 		PREWHERE m.tenant_id     = @tenantID
-		     AND m.metric_name = 'traces.span.metrics.duration'
-		WHERE m.timestamp BETWEEN @start AND @end`
+		     AND m.timestamp BETWEEN @start AND @end
+		     AND m.metric_name = 'traces.span.metrics.duration'`
 
 	args := apmArgs(m.TenantID, q.APM.Service, startMs, endMs)
 	var rows []apmAggRow
@@ -88,8 +88,8 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 		FROM optikk.metrics AS m
 		INNER JOIN series ON m.fingerprint = series.fingerprint
 		PREWHERE m.tenant_id     = @tenantID
+		     AND m.timestamp BETWEEN @start AND @end
 		     AND m.metric_name = 'traces.span.metrics.duration'
-		WHERE m.timestamp BETWEEN @start AND @end
 		GROUP BY bucket
 		ORDER BY bucket`
 

@@ -33,8 +33,8 @@ func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, q model
 		SELECT count() AS samples, ` + expr + ` AS value
 		FROM optikk.metrics
 		PREWHERE tenant_id     = @tenantID
-		     AND metric_name = @metricName
-		WHERE timestamp BETWEEN @start AND @end`
+		     AND timestamp BETWEEN @start AND @end
+		     AND metric_name = @metricName`
 
 	args := metricArgs(m.TenantID, q.Metric.Metric, startMs, endMs)
 	var rows []scalarRow
@@ -61,8 +61,8 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q model
 		expr + ` AS value
 		FROM optikk.metrics
 		PREWHERE tenant_id     = @tenantID
+		     AND timestamp BETWEEN @start AND @end
 		     AND metric_name = @metricName
-		WHERE timestamp BETWEEN @start AND @end
 		GROUP BY bucket
 		ORDER BY bucket`
 
