@@ -112,6 +112,8 @@ type topEndpointRow struct {
 	OperationName string    `ch:"operation_name"`
 	SpanKind      string    `ch:"kind_string"`
 	HTTPRoute     string    `ch:"http_route"`
+	HTTPMethod    string    `ch:"http_method"`
+	RPCSystem     string    `ch:"rpc_system"`
 	TotalCount    uint64    `ch:"total_count"`
 	ErrorCount    uint64    `ch:"error_count"`
 	QS            []float64 `ch:"qs"`
@@ -194,6 +196,8 @@ func (r *Repository) GetTopEndpointsCombined(
 		       span_name                                         AS operation_name,
 		       any(kind_string)                                  AS kind_string,
 		       any(http_route)                                   AS http_route,
+		       any(http_method)                                  AS http_method,
+		       any(rpc_system)                                   AS rpc_system,
 		       sum(request_count)                                AS total_count,
 		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
 		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs

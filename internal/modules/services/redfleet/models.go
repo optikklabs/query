@@ -66,6 +66,8 @@ type TopEndpoint struct {
 	ServiceName   string  `json:"serviceName"`
 	SpanKind      string  `json:"spanKind"`
 	HTTPRoute     string  `json:"httpRoute"`
+	HTTPMethod    string  `json:"httpMethod"`
+	RPCSystem     string  `json:"rpcSystem"`
 	RPS           float64 `json:"rps"`
 	ErrorRate     float64 `json:"errorRate"`
 	ErrorCount    int64   `json:"errorCount"`

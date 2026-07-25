@@ -99,6 +99,8 @@ func toTopEndpoint(row topEndpointRow, durationSec float64) TopEndpoint {
 		ServiceName:   row.ServiceName,
 		SpanKind:      row.SpanKind,
 		HTTPRoute:     row.HTTPRoute,
+		HTTPMethod:    row.HTTPMethod,
+		RPCSystem:     row.RPCSystem,
 		RPS:           float64(total) / durationSec,
 		ErrorRate:     errRate,
 		ErrorCount:    errs,
