@@ -195,7 +195,7 @@ func (r *Repository) GetTopEndpointsCombined(
 		       span_name        AS operation_name,
 		       any(kind_string) AS kind_string_any,
 		       any(http_route)  AS http_route_any,
-		       any(http_method) AS http_method_any,
+		       anyIf(http_method, http_method != '') AS http_method_any,
 		       any(rpc_system)  AS rpc_system_any,
 		       ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `,
