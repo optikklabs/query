@@ -21,15 +21,15 @@ func NewRepository(db clickhouse.Conn) *Repository {
 
 func (r *Repository) ServiceErrorRateRowsAll(ctx context.Context, tenantID int64, startMs, endMs int64) ([]rawServiceRateRow, error) {
 	query := `
-		SELECT service                                           AS service,
+		SELECT service                                           AS service_name,
 		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       sum(request_count)                                AS request_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
-		       sum(duration_ms_sum)                              AS duration_ms_sum
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.DurationSum + `
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
-		GROUP BY service, bucket_at
+		GROUP BY service_name, bucket_at
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
 	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
@@ -39,16 +39,16 @@ func (r *Repository) ServiceErrorRateRowsAll(ctx context.Context, tenantID int64
 
 func (r *Repository) ServiceErrorRateRowsByService(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]rawServiceRateRow, error) {
 	query := `
-		SELECT service                                           AS service,
+		SELECT service                                           AS service_name,
 		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       sum(request_count)                                AS request_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
-		       sum(duration_ms_sum)                              AS duration_ms_sum
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.DurationSum + `
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
 		     AND service = @serviceName
-		GROUP BY service, bucket_at
+		GROUP BY service_name, bucket_at
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
 	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
@@ -60,13 +60,13 @@ func (r *Repository) ServiceErrorRateRowsByService(ctx context.Context, tenantID
 
 func (r *Repository) ErrorVolumeRowsAll(ctx context.Context, tenantID int64, startMs, endMs int64) ([]rawServiceErrorRow, error) {
 	query := `
-		SELECT service                                           AS service,
+		SELECT service                                           AS service_name,
 		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count
+		       ` + spanstats.Errors + `
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
-		GROUP BY service, bucket_at
+		GROUP BY service_name, bucket_at
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
 	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
@@ -76,14 +76,14 @@ func (r *Repository) ErrorVolumeRowsAll(ctx context.Context, tenantID int64, sta
 
 func (r *Repository) ErrorVolumeRowsByService(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]rawServiceErrorRow, error) {
 	query := `
-		SELECT service                                           AS service,
+		SELECT service                                           AS service_name,
 		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count
+		       ` + spanstats.Errors + `
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
 		     AND service = @serviceName
-		GROUP BY service, bucket_at
+		GROUP BY service_name, bucket_at
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
 	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),

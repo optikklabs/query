@@ -43,8 +43,8 @@ func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, tra
 	now := time.Now()
 	start := now.Add(-30 * 24 * time.Hour)
 	query := `
-		SELECT anyLast(service)        AS service,
-		       anyLast(environment)    AS environment,
+		SELECT anyLast(service)        AS service_any,
+		       anyLast(environment)    AS environment_any,
 		       anyLastIf(llm_session_id, llm_session_id != '') AS session_id,
 		       anyLastIf(llm_user_id, llm_user_id != '')       AS user_id
 		FROM optikk.spans
@@ -53,8 +53,8 @@ func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, tra
 		     AND trace_id = @traceID
 		LIMIT 1`
 	var row struct {
-		Service     string `ch:"service"`
-		Environment string `ch:"environment"`
+		Service     string `ch:"service_any"`
+		Environment string `ch:"environment_any"`
 		SessionID   string `ch:"session_id"`
 		UserID      string `ch:"user_id"`
 	}

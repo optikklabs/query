@@ -6,17 +6,17 @@ import "time"
 // All Go-side derivations live in service.go.
 
 type rawServiceRateRow struct {
-	ServiceName   string    `ch:"service"`
+	ServiceName   string    `ch:"service_name"`
 	BucketAt      time.Time `ch:"bucket_at"`
-	RequestCount  uint64    `ch:"request_count"`
-	ErrorCount    uint64    `ch:"error_count"`
-	DurationMsSum float64   `ch:"duration_ms_sum"`
+	RequestCount  uint64    `ch:"request_total"`
+	ErrorCount    uint64    `ch:"error_total"`
+	DurationMsSum float64   `ch:"duration_ms_total"`
 }
 
 type rawServiceErrorRow struct {
-	ServiceName string    `ch:"service"`
+	ServiceName string    `ch:"service_name"`
 	BucketAt    time.Time `ch:"bucket_at"`
-	ErrorCount  uint64    `ch:"error_count"`
+	ErrorCount  uint64    `ch:"error_total"`
 }
 
 type rawErrorGroupRow struct {

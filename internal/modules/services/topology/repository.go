@@ -35,26 +35,23 @@ func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int6
 		    WHERE ` + edgeWhere + `
 		      AND (service = @focusService OR peer_name = @focusService)
 		)
-		SELECT service                                            AS service,
-		       sum(request_count)                                 AS request_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `)  AS error_count,
-		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs
+		SELECT service AS service_name,
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.LatencyP50P95P99.SQL() + `
 		FROM ` + rollup + `
 		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
 		  AND service != ''
 		  AND (@focusService = '' OR service = @focusService OR service IN (SELECT service FROM neighbor_services))
-		GROUP BY service`
+		GROUP BY service_name`
 	var rows []nodeAggRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetNodes",
 		&rows, query, topologyArgs(tenantID, startMs, endMs, focusService)...); err != nil {
 		return nil, err
 	}
 	for i := range rows {
-		if len(rows[i].QS) >= 3 {
-			rows[i].P50Ms = float32(rows[i].QS[0])
-			rows[i].P95Ms = float32(rows[i].QS[1])
-			rows[i].P99Ms = float32(rows[i].QS[2])
-		}
+		p50, p95, p99 := spanstats.LatencyP50P95P99.P50P95P99(rows[i].QS)
+		rows[i].P50Ms, rows[i].P95Ms, rows[i].P99Ms = float32(p50), float32(p95), float32(p99)
 	}
 	return rows, nil
 }
@@ -64,11 +61,11 @@ func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int6
 // observed it, so the numbers include network and queueing time.
 func (r *Repository) GetEdges(ctx context.Context, tenantID, startMs, endMs int64, focusService string) ([]edgeAggRow, error) {
 	query := `
-		SELECT service                                           AS source,
-		       peer_name                                         AS target,
-		       sum(request_count)                                AS call_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
-		       quantilesTDigestMerge(0.5, 0.95)(latency_state)   AS qs
+		SELECT service   AS source,
+		       peer_name AS target,
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.LatencyP50P95.SQL() + `
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
 		WHERE ` + edgeWhere + `
@@ -80,10 +77,8 @@ func (r *Repository) GetEdges(ctx context.Context, tenantID, startMs, endMs int6
 		return nil, err
 	}
 	for i := range rows {
-		if len(rows[i].QS) >= 2 {
-			rows[i].P50Ms = float32(rows[i].QS[0])
-			rows[i].P95Ms = float32(rows[i].QS[1])
-		}
+		p50, p95 := spanstats.LatencyP50P95.P50P95(rows[i].QS)
+		rows[i].P50Ms, rows[i].P95Ms = float32(p50), float32(p95)
 	}
 	return rows, nil
 }

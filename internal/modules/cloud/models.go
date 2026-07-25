@@ -28,8 +28,8 @@ type CategoryRow struct {
 type HealthRow struct {
 	Provider     string `ch:"provider"`
 	Entity       string `ch:"entity"`
-	RequestCount uint64 `ch:"request_count"`
-	ErrorCount   uint64 `ch:"error_count"`
+	RequestCount uint64 `ch:"request_total"`
+	ErrorCount   uint64 `ch:"error_total"`
 }
 
 // RestartRow is the summed latest container-restart count per provider.
@@ -49,10 +49,10 @@ type AccountRow struct {
 // ResourceRow is one entity needing attention (sorted by error rate).
 type ResourceRow struct {
 	Entity        string  `ch:"entity"`
-	Service       string  `ch:"service"`
+	Service       string  `ch:"service_any"`
 	Region        string  `ch:"region"`
 	Platform      string  `ch:"platform"`
-	RequestCount  uint64  `ch:"request_count"`
-	ErrorCount    uint64  `ch:"error_count"`
-	DurationMsSum float64 `ch:"duration_ms_sum"`
+	RequestCount  uint64  `ch:"request_total"`
+	ErrorCount    uint64  `ch:"error_total"`
+	DurationMsSum float64 `ch:"duration_ms_total"`
 }

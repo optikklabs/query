@@ -31,9 +31,9 @@ func (r *Repository) QueryFleetPods(ctx context.Context, tenantID int64, startMs
 		    pod                                                      AS pod,
 		    if(host != '', host, @defaultUnknown)                    AS host,
 		    groupUniqArray(service)                                  AS services,
-		    sum(request_count)                                       AS request_count,
-		    sumIf(request_count, ` + spanstats.ErrorPred + `)        AS error_count,
-		    sum(duration_ms_sum)                                     AS duration_ms_sum,
+		    ` + spanstats.Requests + `,
+		    ` + spanstats.Errors + `,
+		    ` + spanstats.DurationSum + `,
 		    toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms,
 		    max(timestamp)                                           AS last_seen
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
@@ -41,7 +41,7 @@ func (r *Repository) QueryFleetPods(ctx context.Context, tenantID int64, startMs
 		     AND timestamp BETWEEN @start AND @end
 		WHERE pod != '' AND (@hostFilter = '' OR host = @hostFilter)
 		GROUP BY pod, host
-		ORDER BY request_count DESC
+		ORDER BY ` + spanstats.RequestTotal + ` DESC
 		LIMIT @maxFleetPods`
 	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
 	args = append(args,

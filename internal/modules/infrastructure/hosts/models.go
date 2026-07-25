@@ -45,8 +45,8 @@ type hostMetricRow struct {
 type hostSpansRow struct {
 	Host         string    `ch:"host"`
 	Zone         string    `ch:"zone"`
-	RequestCount uint64    `ch:"request_count"`
-	ErrorCount   uint64    `ch:"error_count"`
+	RequestCount uint64    `ch:"request_total"`
+	ErrorCount   uint64    `ch:"error_total"`
 	P99Ms        float32   `ch:"p99_ms"`
 	LastSeen     time.Time `ch:"last_seen"`
 }

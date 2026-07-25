@@ -33,16 +33,16 @@ func (r *Repository) QueryInfrastructureNodes(ctx context.Context, tenantID int6
 		SELECT
 		    if(host != '', host, @defaultUnknown)                    AS host,
 		    uniqIf(pod, pod != '')                                   AS pod_count,
-		    sum(request_count)                                       AS request_count,
-		    sumIf(request_count, ` + spanstats.ErrorPred + `)        AS error_count,
-		    sum(duration_ms_sum)                                     AS duration_ms_sum,
+		    ` + spanstats.Requests + `,
+		    ` + spanstats.Errors + `,
+		    ` + spanstats.DurationSum + `,
 		    toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms,
 		    max(timestamp)                                           AS last_seen
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
 		GROUP BY host
-		ORDER BY request_count DESC
+		ORDER BY ` + spanstats.RequestTotal + ` DESC
 		LIMIT @maxNodes`
 	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
 	args = append(args,
@@ -85,9 +85,9 @@ func (r *Repository) QueryInfrastructureNodeServices(ctx context.Context, tenant
 	query := `
 		SELECT
 		    service                                                  AS service,
-		    sum(request_count)                                       AS request_count,
-		    sumIf(request_count, ` + spanstats.ErrorPred + `)        AS error_count,
-		    sum(duration_ms_sum)                                     AS duration_ms_sum,
+		    ` + spanstats.Requests + `,
+		    ` + spanstats.Errors + `,
+		    ` + spanstats.DurationSum + `,
 		    toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms,
 		    uniqIf(pod, pod != '')                                   AS pod_count
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
@@ -95,7 +95,7 @@ func (r *Repository) QueryInfrastructureNodeServices(ctx context.Context, tenant
 		     AND timestamp BETWEEN @start AND @end
 		WHERE if(host != '', host, @defaultUnknown) = @host
 		GROUP BY service
-		ORDER BY request_count DESC
+		ORDER BY ` + spanstats.RequestTotal + ` DESC
 		LIMIT @maxServices`
 	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
 	args = append(args,

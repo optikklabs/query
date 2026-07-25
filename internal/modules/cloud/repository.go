@@ -98,10 +98,10 @@ func (r *Repository) QueryProviderCategories(ctx context.Context, tenantID, star
 // service can classify entity health (same source as the nodes module).
 func (r *Repository) QueryProviderHealth(ctx context.Context, tenantID, startMs, endMs int64) ([]HealthRow, error) {
 	query := `
-		SELECT cloud_provider                                    AS provider,
-		       ` + entityExpr + `                                AS entity,
-		       sum(request_count)                                AS request_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count
+		SELECT cloud_provider     AS provider,
+		       ` + entityExpr + ` AS entity,
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
@@ -183,19 +183,19 @@ func (r *Repository) QueryPlatformServices(ctx context.Context, tenantID int64, 
 // provider, sorted by error volume then request volume.
 func (r *Repository) QueryProviderResources(ctx context.Context, tenantID int64, provider string, startMs, endMs int64) ([]ResourceRow, error) {
 	query := `
-		SELECT ` + entityExpr + `                                AS entity,
-		       any(service)                                      AS service,
-		       any(cloud_region)                                 AS region,
-		       any(cloud_platform)                               AS platform,
-		       sum(request_count)                                AS request_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
-		       sum(duration_ms_sum)                              AS duration_ms_sum
+		SELECT ` + entityExpr + `  AS entity,
+		       any(service)        AS service_any,
+		       any(cloud_region)   AS region,
+		       any(cloud_platform) AS platform,
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.DurationSum + `
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
 		     AND cloud_provider = @provider
 		GROUP BY entity
-		ORDER BY error_count DESC, request_count DESC
+		ORDER BY ` + spanstats.ErrorTotal + ` DESC, ` + spanstats.RequestTotal + ` DESC
 		LIMIT @maxResources`
 	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("provider", provider),

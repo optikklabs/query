@@ -29,10 +29,10 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 	startMs := endMs - windowSec*1000
 
 	// Evaluation windows are short, so the 1m tier is always the right grain.
-	const query = `
-		SELECT sum(request_count)                                AS request_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
-		       quantilesTDigestMerge(0.99)(latency_state)        AS qs
+	query := `
+		SELECT ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.LatencyP99.SQL() + `
 		FROM optikk.span_stats_1m
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
@@ -47,9 +47,7 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		return ScalarResult{HasData: false}, nil
 	}
 	row := rows[0]
-	if len(row.QS) > 0 {
-		row.P99 = row.QS[0]
-	}
+	row.P99 = spanstats.LatencyP99.At(row.QS, spanstats.P99)
 
 	if cond.MinSample != nil && row.RequestCount < uint64(*cond.MinSample) {
 		return ScalarResult{HasData: false}, nil
@@ -68,10 +66,10 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + `      AS bucket,
-		       sum(request_count)                                AS request_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
-		       quantilesTDigestMerge(0.99)(latency_state)        AS qs
+		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket,
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.LatencyP99.SQL() + `
 		FROM ` + timebucket.SpanStatsRollup(windowMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
@@ -91,9 +89,7 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 	}
 	for _, r := range rows {
 		var p99 float64
-		if len(r.QS) > 0 {
-			p99 = r.QS[0]
-		}
+		p99 = spanstats.LatencyP99.At(r.QS, spanstats.P99)
 		row := apmAggRow{RequestCount: r.RequestCount, ErrorCount: r.ErrorCount, P99: p99}
 		out = append(out, Point{BucketMs: r.Bucket.UnixMilli(), Value: apmTrackValue(q.APM.Track, row, windowSec)})
 	}
@@ -131,16 +127,16 @@ func apmArgs(tenantID int64, service string, startMs, endMs int64) []any {
 }
 
 type apmAggRow struct {
-	RequestCount uint64    `ch:"request_count"`
-	ErrorCount   uint64    `ch:"error_count"`
+	RequestCount uint64    `ch:"request_total"`
+	ErrorCount   uint64    `ch:"error_total"`
 	QS           []float64 `ch:"qs"`
 	P99          float64   `ch:"p99"`
 }
 
 type apmSeriesRow struct {
 	Bucket       time.Time `ch:"bucket"`
-	RequestCount uint64    `ch:"request_count"`
-	ErrorCount   uint64    `ch:"error_count"`
+	RequestCount uint64    `ch:"request_total"`
+	ErrorCount   uint64    `ch:"error_total"`
 	QS           []float64 `ch:"qs"`
 	P99          float64   `ch:"p99"`
 }
