@@ -30,7 +30,7 @@ type PodOverview struct {
 
 type podMetaRow struct {
 	LastSeen     time.Time `ch:"last_seen"`
-	Host         string    `ch:"host"`
+	Host         string    `ch:"host_any"`
 	Containers   []string  `ch:"containers"`
 	Services     []string  `ch:"services"`
 	Environments []string  `ch:"environments"`
@@ -39,8 +39,8 @@ type podMetaRow struct {
 }
 
 type podREDRow struct {
-	RequestCount  uint64  `ch:"request_count"`
-	ErrorCount    uint64  `ch:"error_count"`
-	DurationMsSum float64 `ch:"duration_ms_sum"`
+	RequestCount  uint64  `ch:"request_total"`
+	ErrorCount    uint64  `ch:"error_total"`
+	DurationMsSum float64 `ch:"duration_ms_total"`
 	P95LatencyMs  float32 `ch:"p95_latency_ms"`
 }

@@ -37,18 +37,18 @@ type InfrastructureNodeSummary struct {
 type NodeAggregateRow struct {
 	Host          string    `ch:"host"`
 	PodCount      uint64    `ch:"pod_count"`
-	RequestCount  uint64    `ch:"request_count"`
-	ErrorCount    uint64    `ch:"error_count"`
-	DurationMsSum float64   `ch:"duration_ms_sum"`
+	RequestCount  uint64    `ch:"request_total"`
+	ErrorCount    uint64    `ch:"error_total"`
+	DurationMsSum float64   `ch:"duration_ms_total"`
 	P95LatencyMs  float32   `ch:"p95_latency_ms"`
 	LastSeen      time.Time `ch:"last_seen"`
 }
 
 type NodeServiceAggregateRow struct {
 	Service       string  `ch:"service"`
-	RequestCount  uint64  `ch:"request_count"`
-	ErrorCount    uint64  `ch:"error_count"`
-	DurationMsSum float64 `ch:"duration_ms_sum"`
+	RequestCount  uint64  `ch:"request_total"`
+	ErrorCount    uint64  `ch:"error_total"`
+	DurationMsSum float64 `ch:"duration_ms_total"`
 	P95LatencyMs  float32 `ch:"p95_latency_ms"`
 	PodCount      uint64  `ch:"pod_count"`
 }

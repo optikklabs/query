@@ -45,7 +45,7 @@ func clampExecutionsLimit(limit int) int {
 
 type summaryRawDTO struct {
 	QueryText      string    `ch:"query_text"`
-	DbSystem       string    `ch:"db_system"`
+	DbSystem       string    `ch:"db_system_any"`
 	CollectionName string    `ch:"collection_name"`
 	OperationName  string    `ch:"operation_name"`
 	CallCount      uint64    `ch:"call_count"`
@@ -60,7 +60,7 @@ func (r *Repository) GetSummary(ctx context.Context, tenantID, startMs, endMs in
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
 		SELECT any(db_statement_normalized)                       AS query_text,
-		       any(db_system)                                     AS db_system,
+		       any(db_system)                                     AS db_system_any,
 		       any(db_name)                                       AS collection_name,
 		       any(attributes['db.operation.name'])               AS operation_name,
 		       count()                                            AS call_count,

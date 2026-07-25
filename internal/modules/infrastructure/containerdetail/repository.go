@@ -35,7 +35,7 @@ func (r *Repository) QueryPodMeta(ctx context.Context, tenantID int64, pod strin
 	query := `
 		SELECT
 		    max(timestamp)                                                        AS last_seen,
-		    anyLastIf(host, host != '')                                           AS host,
+		    anyLastIf(host, host != '')                                           AS host_any,
 		    groupUniqArrayIf(container, container != '')                          AS containers,
 		    groupUniqArrayIf(service, service != '')                              AS services,
 		    groupUniqArrayIf(environment, environment != '')                      AS environments,
@@ -57,9 +57,9 @@ func (r *Repository) QueryPodMeta(ctx context.Context, tenantID int64, pod strin
 func (r *Repository) QueryPodRED(ctx context.Context, tenantID int64, pod string, startMs, endMs int64) (podREDRow, error) {
 	query := `
 		SELECT
-		    sum(request_count)                                       AS request_count,
-		    sumIf(request_count, ` + spanstats.ErrorPred + `)        AS error_count,
-		    sum(duration_ms_sum)                                     AS duration_ms_sum,
+		    ` + spanstats.Requests + `,
+		    ` + spanstats.Errors + `,
+		    ` + spanstats.DurationSum + `,
 		    toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID

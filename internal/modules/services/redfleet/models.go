@@ -91,10 +91,10 @@ type TopDBQuery struct {
 }
 
 type redMetricsRow struct {
-	ServiceName string    `ch:"service"`
+	ServiceName string    `ch:"service_name"`
 	IsTotal     uint64    `ch:"is_total"`
-	TotalCount  uint64    `ch:"total_count"`
-	ErrorCount  uint64    `ch:"error_count"`
+	TotalCount  uint64    `ch:"request_total"`
+	ErrorCount  uint64    `ch:"error_total"`
 	QS          []float64 `ch:"qs"`
 	P50Ms       float32   `ch:"p50_ms"`
 	P95Ms       float32   `ch:"p95_ms"`
@@ -138,7 +138,7 @@ type RequestRatePoint struct {
 }
 
 type operationBaselineRow struct {
-	SpanCount uint64    `ch:"span_count"`
+	SpanCount uint64    `ch:"request_total"`
 	QS        []float64 `ch:"qs"`
 	P50Ms     float32   `ch:"p50_ms"`
 	P95Ms     float32   `ch:"p95_ms"`

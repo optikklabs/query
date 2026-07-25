@@ -73,8 +73,8 @@ func (r *Repository) QueryHostSpans(
 		SELECT
 		    if(host != '', host, @unknownHost)                       AS host,
 		    any(environment)                                         AS zone,
-		    sum(request_count)                                       AS request_count,
-		    sumIf(request_count, ` + spanstats.ErrorPred + `)        AS error_count,
+		    ` + spanstats.Requests + `,
+		    ` + spanstats.Errors + `,
 		    toFloat32(quantileTDigestMerge(0.99)(latency_state))     AS p99_ms,
 		    max(timestamp)                                           AS last_seen
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
@@ -82,7 +82,7 @@ func (r *Repository) QueryHostSpans(
 		     AND timestamp BETWEEN @start AND @end
 		     AND service = @serviceName
 		GROUP BY host
-		ORDER BY request_count DESC
+		ORDER BY ` + spanstats.RequestTotal + ` DESC
 		LIMIT 200`
 	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),

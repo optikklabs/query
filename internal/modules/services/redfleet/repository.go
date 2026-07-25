@@ -15,12 +15,10 @@ type Repository struct {
 	db clickhouse.Conn
 }
 
-// extractQS unpacks the quantiles array into typed p50/p95/p99 fields.
+// extractQS narrows the projected quantiles to this package's float32 fields.
 func extractQS(qs []float64) (p50, p95, p99 float32) {
-	if len(qs) >= 3 {
-		return float32(qs[0]), float32(qs[1]), float32(qs[2])
-	}
-	return 0, 0, 0
+	a, b, c := spanstats.LatencyP50P95P99.P50P95P99(qs)
+	return float32(a), float32(b), float32(c)
 }
 
 func NewRepository(db clickhouse.Conn) *Repository {
@@ -30,15 +28,15 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]redMetricsRow, error) {
 	where, args := BuildREDClauses(f)
 	query := `
-		SELECT service                                            AS service,
-		       grouping(service)                                  AS is_total,
-		       sum(request_count)                                 AS total_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `)  AS error_count,
-		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs
+		SELECT service            AS service_name,
+		       grouping(service)  AS is_total,
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.LatencyP50P95P99.SQL() + `
 		FROM ` + timebucket.SpanStatsRollup(f.EndMs-f.StartMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end` + where + `
-		GROUP BY GROUPING SETS ((service), ())`
+		GROUP BY GROUPING SETS ((service_name), ())`
 	var rows []redMetricsRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetFleetREDMetrics",
 		&rows, query, args...); err != nil {
@@ -52,16 +50,16 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 
 type requestRateRawRow struct {
 	BucketAt     time.Time `ch:"bucket_at"`
-	RequestCount uint64    `ch:"request_count"`
-	ErrorCount   uint64    `ch:"error_count"`
+	RequestCount uint64    `ch:"request_total"`
+	ErrorCount   uint64    `ch:"error_total"`
 }
 
 func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFilters) ([]requestRateRawRow, error) {
 	where, args := BuildREDClauses(f)
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(f.EndMs-f.StartMs) + ` AS bucket_at,
-		       sum(request_count)                                AS request_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `
 		FROM ` + timebucket.SpanStatsRollup(f.EndMs-f.StartMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end` + where + `
@@ -76,7 +74,7 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f RED
 type statusBucketTimeseriesRow struct {
 	BucketAt     time.Time `ch:"bucket_at"`
 	StatusBucket string    `ch:"http_status_bucket"`
-	RequestCount uint64    `ch:"request_count"`
+	RequestCount uint64    `ch:"request_total"`
 }
 
 type latencyPercentilesTimeseriesRow struct {
@@ -90,17 +88,17 @@ type latencyPercentilesTimeseriesRow struct {
 type endpointRateRow struct {
 	BucketAt     time.Time `ch:"bucket_at"`
 	HTTPRoute    string    `ch:"http_route"`
-	RequestCount uint64    `ch:"request_count"`
-	ErrorCount   uint64    `ch:"error_count"`
+	RequestCount uint64    `ch:"request_total"`
+	ErrorCount   uint64    `ch:"error_total"`
 	QS           []float64 `ch:"qs"`
 }
 
 type topDBQueryRow struct {
-	ServiceName   string    `ch:"service"`
+	ServiceName   string    `ch:"service_any"`
 	OperationName string    `ch:"operation_name"`
-	DBSystem      string    `ch:"db_system"`
-	TotalCount    uint64    `ch:"total_count"`
-	ErrorCount    uint64    `ch:"error_count"`
+	DBSystem      string    `ch:"db_system_any"`
+	TotalCount    uint64    `ch:"request_total"`
+	ErrorCount    uint64    `ch:"error_total"`
 	QS            []float64 `ch:"qs"`
 	P50Ms         float32   `ch:"p50_ms"`
 	P95Ms         float32   `ch:"p95_ms"`
@@ -108,14 +106,14 @@ type topDBQueryRow struct {
 }
 
 type topEndpointRow struct {
-	ServiceName   string    `ch:"service"`
+	ServiceName   string    `ch:"service_any"`
 	OperationName string    `ch:"operation_name"`
-	SpanKind      string    `ch:"kind_string"`
-	HTTPRoute     string    `ch:"http_route"`
-	HTTPMethod    string    `ch:"http_method"`
-	RPCSystem     string    `ch:"rpc_system"`
-	TotalCount    uint64    `ch:"total_count"`
-	ErrorCount    uint64    `ch:"error_count"`
+	SpanKind      string    `ch:"kind_string_any"`
+	HTTPRoute     string    `ch:"http_route_any"`
+	HTTPMethod    string    `ch:"http_method_any"`
+	RPCSystem     string    `ch:"rpc_system_any"`
+	TotalCount    uint64    `ch:"request_total"`
+	ErrorCount    uint64    `ch:"error_total"`
 	QS            []float64 `ch:"qs"`
 	P50Ms         float32   `ch:"p50_ms"`
 	P95Ms         float32   `ch:"p95_ms"`
@@ -128,7 +126,7 @@ func (r *Repository) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]s
 	query := `
 		SELECT ` + grainSQL + `    AS bucket_at,
 		       http_status_bucket AS http_status_bucket,
-		       sum(request_count) AS request_count
+		       ` + spanstats.Requests + `
 		FROM ` + timebucket.SpanStatsRollup(f.EndMs-f.StartMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end` + where + `
@@ -145,7 +143,7 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDF
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	query := `
 		SELECT ` + grainSQL + ` AS bucket_at,
-		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs
+		       ` + spanstats.LatencyP50P95P99.SQL() + `
 		FROM ` + timebucket.SpanStatsRollup(f.EndMs-f.StartMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end` + where + `
@@ -166,11 +164,11 @@ func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilter
 	where, args := BuildREDClauses(f)
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	query := `
-		SELECT ` + grainSQL + `                                   AS bucket_at,
-		       http_route                                        AS http_route,
-		       sum(request_count)                                AS request_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
-		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs
+		SELECT ` + grainSQL + ` AS bucket_at,
+		       http_route       AS http_route,
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.LatencyP50P95P99.SQL() + `
 		FROM ` + timebucket.SpanStatsRollup(f.EndMs-f.StartMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end` + where + `
@@ -188,26 +186,27 @@ func (r *Repository) GetTopEndpointsCombined(
 	where, args := BuildREDClauses(f)
 	var paginationFilter string
 	if !cursor.IsZero() {
-		paginationFilter = "AND (total_count < @cursorCount OR (total_count = @cursorCount AND operation_name > @cursorOp))"
+		paginationFilter = "AND (" + spanstats.RequestTotal + " < @cursorCount OR (" +
+			spanstats.RequestTotal + " = @cursorCount AND operation_name > @cursorOp))"
 	}
 
 	query := `
-		SELECT any(service)                                      AS service,
-		       span_name                                         AS operation_name,
-		       any(kind_string)                                  AS kind_string,
-		       any(http_route)                                   AS http_route,
-		       any(http_method)                                  AS http_method,
-		       any(rpc_system)                                   AS rpc_system,
-		       sum(request_count)                                AS total_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
-		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs
+		SELECT any(service)     AS service_any,
+		       span_name        AS operation_name,
+		       any(kind_string) AS kind_string_any,
+		       any(http_route)  AS http_route_any,
+		       any(http_method) AS http_method_any,
+		       any(rpc_system)  AS rpc_system_any,
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.LatencyP50P95P99.SQL() + `
 		FROM ` + timebucket.SpanStatsRollup(f.EndMs-f.StartMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
 		     AND span_name != ''` + where + `
 		GROUP BY operation_name
 		HAVING operation_name != '' ` + paginationFilter + `
-		ORDER BY total_count DESC, operation_name ASC
+		ORDER BY ` + spanstats.RequestTotal + ` DESC, operation_name ASC
 		LIMIT @limit`
 	args = append(args,
 		clickhouse.Named("limit", limit),
@@ -231,16 +230,17 @@ func (r *Repository) GetTopDBQueriesCombined(
 	where, args := BuildREDClauses(f)
 	var paginationFilter string
 	if !cursor.IsZero() {
-		paginationFilter = "AND (total_count < @cursorCount OR (total_count = @cursorCount AND operation_name > @cursorOp))"
+		paginationFilter = "AND (" + spanstats.RequestTotal + " < @cursorCount OR (" +
+			spanstats.RequestTotal + " = @cursorCount AND operation_name > @cursorOp))"
 	}
 
 	query := `
-		SELECT any(service)                                      AS service,
-		       span_name                                         AS operation_name,
-		       any(db_system)                                    AS db_system,
-		       sum(request_count)                                AS total_count,
-		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
-		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs
+		SELECT any(service)   AS service_any,
+		       span_name      AS operation_name,
+		       any(db_system) AS db_system_any,
+		       ` + spanstats.Requests + `,
+		       ` + spanstats.Errors + `,
+		       ` + spanstats.LatencyP50P95P99.SQL() + `
 		FROM ` + timebucket.SpanStatsRollup(f.EndMs-f.StartMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
@@ -248,7 +248,7 @@ func (r *Repository) GetTopDBQueriesCombined(
 		     AND span_name != ''` + where + `
 		GROUP BY operation_name
 		HAVING operation_name != '' ` + paginationFilter + `
-		ORDER BY total_count DESC, operation_name ASC
+		ORDER BY ` + spanstats.RequestTotal + ` DESC, operation_name ASC
 		LIMIT @limit`
 	args = append(args,
 		clickhouse.Named("limit", limit),
@@ -269,7 +269,7 @@ func (r *Repository) GetTopDBQueriesCombined(
 type serviceRequestRateRawRow struct {
 	BucketAt     time.Time `ch:"bucket_at"`
 	ServiceName  string    `ch:"service_name"`
-	RequestCount uint64    `ch:"request_count"`
+	RequestCount uint64    `ch:"request_total"`
 }
 
 func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters) ([]serviceRequestRateRawRow, error) {
@@ -277,7 +277,7 @@ func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters)
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(f.EndMs-f.StartMs) + ` AS bucket_at,
 		       service            AS service_name,
-		       sum(request_count) AS request_count
+		       ` + spanstats.Requests + `
 		FROM ` + timebucket.SpanStatsRollup(f.EndMs-f.StartMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end` + where + `
@@ -291,8 +291,8 @@ func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters)
 
 func (r *Repository) GetOperationBaseline(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName, operationName string) (operationBaselineRow, error) {
 	query := `
-		SELECT sum(request_count) AS span_count,
-		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs
+		SELECT ` + spanstats.Requests + `,
+		       ` + spanstats.LatencyP50P95P99.SQL() + `
 		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
@@ -311,11 +311,7 @@ func (r *Repository) GetOperationBaseline(ctx context.Context, tenantID int64, s
 		return operationBaselineRow{}, nil
 	}
 	row := rows[0]
-	if len(row.QS) >= 3 {
-		row.P50Ms = float32(row.QS[0])
-		row.P95Ms = float32(row.QS[1])
-		row.P99Ms = float32(row.QS[2])
-	}
+	row.P50Ms, row.P95Ms, row.P99Ms = extractQS(row.QS)
 	return row, nil
 }
 
