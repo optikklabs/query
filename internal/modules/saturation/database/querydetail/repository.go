@@ -62,13 +62,13 @@ func (r *Repository) GetSummary(ctx context.Context, tenantID, startMs, endMs in
 		SELECT any(db_statement_normalized)                       AS query_text,
 		       any(db_system)                                     AS db_system,
 		       any(db_name)                                       AS collection_name,
-		       any(attributes[''db.operation.name''])        AS operation_name,
+		       any(attributes['db.operation.name'])               AS operation_name,
 		       count()                                            AS call_count,
 		       countIf(is_error)                                  AS error_count,
 		       quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
 		       avg(duration_nano / 1000000.0)                     AS avg_ms,
 		       sum(duration_nano) / 1000000.0                     AS total_time_ms,
-		       avgOrNull(toFloat64OrNull(toString(attributes.'db.response.returned_rows'))) AS avg_rows
+		       avgOrNull(toFloat64OrNull(attributes['db.response.returned_rows'])) AS avg_rows
 		FROM optikk.spans` + prewhere + filterWhere
 
 	args := append(hashArgs(tenantID, startMs, endMs, hash), filterArgs...)
@@ -148,7 +148,7 @@ func (r *Repository) GetExecutions(ctx context.Context, tenantID, startMs, endMs
 		       is_error                  AS is_err,
 		       service,
 		       host,
-		       toFloat64OrNull(toString(attributes.'db.response.returned_rows')) AS row_count
+		       toFloat64OrNull(attributes['db.response.returned_rows']) AS row_count
 		FROM optikk.spans` + prewhere + filterWhere + `
 		ORDER BY timestamp DESC
 		LIMIT @qLimit`

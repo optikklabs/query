@@ -150,13 +150,26 @@ func TestBuildClauses_SeverityCaseInsensitive(t *testing.T) {
 }
 
 // Body search is always case-insensitive substring; the legacy searchMode
-// field no longer changes semantics.
+// field no longer changes semantics. The clause uses lowerUTF8(body) LIKE so
+// the idx_body_ngram skip index can prune granules.
 func TestBuildClauses_Search(t *testing.T) {
 	for _, mode := range []string{"", "exact", "ngram"} {
-		_, w, _ := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "x", SearchMode: mode})
-		if !strings.Contains(w, "positionCaseInsensitive(body, @search) > 0") {
+		_, w, args := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "X", SearchMode: mode})
+		if !strings.Contains(w, "lowerUTF8(body) LIKE @search") {
 			t.Errorf("mode %q search clause wrong: %q", mode, w)
 		}
+		if got := namedArgs(args)["search"]; got != "%x%" {
+			t.Errorf("mode %q search pattern = %v, want %%x%%", mode, got)
+		}
+	}
+}
+
+// LIKE metacharacters in the raw term are escaped so the search is a literal
+// substring, not a wildcard.
+func TestBuildClauses_SearchEscapesWildcards(t *testing.T) {
+	_, _, args := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "50%_off"})
+	if got := namedArgs(args)["search"]; got != `%50\%\_off%` {
+		t.Errorf("search pattern = %v, want %%50\\%%\\_off%%", got)
 	}
 }
 

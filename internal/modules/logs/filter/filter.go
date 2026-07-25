@@ -109,8 +109,9 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 	if f.Search != "" {
 		// Case-insensitive substring: the only search semantic. The legacy
 		// searchMode field is still accepted on the wire but ignored.
-		where += ` AND positionCaseInsensitive(body, @search) > 0`
-		args = append(args, clickhouse.Named("search", f.Search))
+		// LIKE (not position*) so the idx_body_ngram skip index can prune.
+		where += ` AND lowerUTF8(body) LIKE @search`
+		args = append(args, clickhouse.Named("search", likeSubstringPattern(f.Search)))
 	}
 	for i, af := range f.Attributes {
 		clause, clauseArgs := buildAttrClause(af, i)
@@ -118,6 +119,14 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 		args = append(args, clauseArgs...)
 	}
 	return prewhere, where, args
+}
+
+// likeSubstringPattern turns a raw search term into a %term% LIKE pattern,
+// lowercased to match the lowerUTF8(body) column expression and with LIKE
+// metacharacters escaped so user input always means a literal substring.
+func likeSubstringPattern(term string) string {
+	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.ToLower(term))
+	return "%" + esc + "%"
 }
 
 func upperAll(vs []string) []string {

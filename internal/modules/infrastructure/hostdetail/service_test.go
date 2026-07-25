@@ -52,7 +52,7 @@ func TestFoldKPIsSkipsInvalidValues(t *testing.T) {
 }
 
 func TestGroupsForMetricNames(t *testing.T) {
-	groups := groupsForMetricNames([]string{
+	groups := catalog.GroupsFor([]string{
 		infraconsts.MetricSystemNetworkDropped,
 		infraconsts.MetricSystemCPUUtilization,
 	})

@@ -8,21 +8,8 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
-	"github.com/optikklabs/query/internal/shared/seriesattr"
+	"github.com/optikklabs/query/internal/shared/spanstats"
 )
-
-// durationStatusCTE resolves the spanmetrics status_code per fingerprint for the
-// 'duration' histogram, joined to the rollup on fingerprint.
-const durationStatusCTE = `
-		WITH series AS (
-		    SELECT fingerprint,
-		           any(service)                       AS service,
-		           any(` + seriesattr.StatusCode + `) AS status_code
-		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE s.service = @service
-		    GROUP BY fingerprint
-		)`
 
 type APMBackend struct {
 	db clickhouse.Conn
@@ -41,15 +28,15 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 	endMs := now.UnixMilli()
 	startMs := endMs - windowSec*1000
 
-	const query = durationStatusCTE + `
-		SELECT sum(m.hist_count)                                          AS request_count,
-		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)    AS error_count,
-		       quantilesPrometheusHistogramMerge(0.99)(quantilesPrometheusHistogramArrayState(0.99)(m.hist_buckets, arrayCumSum(m.hist_counts))) AS qs
-		FROM optikk.metrics AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'`
+	// Evaluation windows are short, so the 1m tier is always the right grain.
+	const query = `
+		SELECT sum(request_count)                                AS request_count,
+		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
+		       quantilesTDigestMerge(0.99)(latency_state)        AS qs
+		FROM optikk.span_stats_1m
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND service = @service`
 
 	args := apmArgs(m.TenantID, q.APM.Service, startMs, endMs)
 	var rows []apmAggRow
@@ -80,16 +67,15 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 	startMs := endMs - windowMs
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 
-	query := durationStatusCTE + `
-		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket,
-		       sum(m.hist_count)                                          AS request_count,
-		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)    AS error_count,
-		       quantilesPrometheusHistogramMerge(0.99)(quantilesPrometheusHistogramArrayState(0.99)(m.hist_buckets, arrayCumSum(m.hist_counts))) AS qs
-		FROM optikk.metrics AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
+	query := `
+		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + `      AS bucket,
+		       sum(request_count)                                AS request_count,
+		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
+		       quantilesTDigestMerge(0.99)(latency_state)        AS qs
+		FROM ` + timebucket.SpanStatsRollup(windowMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND service = @service
 		GROUP BY bucket
 		ORDER BY bucket`
 

@@ -8,22 +8,8 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
-	"github.com/optikklabs/query/internal/shared/seriesattr"
+	"github.com/optikklabs/query/internal/shared/spanstats"
 )
-
-// durationStatusCTE resolves the spanmetrics status_code per fingerprint for the
-// 'duration' histogram, to be joined to the rollup on fingerprint. Scoped to
-// SERVER spans so a service's error rate/volume reflects request errors.
-const durationStatusCTE = `
-		WITH series AS (
-		    SELECT fingerprint,
-		           service,
-		           ` + seriesattr.StatusCode + ` AS status_code
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-
-		    GROUP BY fingerprint, service, status_code
-		)`
 
 type Repository struct {
 	db clickhouse.Conn
@@ -34,17 +20,15 @@ func NewRepository(db clickhouse.Conn) *Repository {
 }
 
 func (r *Repository) ServiceErrorRateRowsAll(ctx context.Context, tenantID int64, startMs, endMs int64) ([]rawServiceRateRow, error) {
-	query := durationStatusCTE + `
-		SELECT series.service              AS service,
+	query := `
+		SELECT service                                           AS service,
 		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       sum(m.hist_count)                          AS request_count,
-		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `) AS error_count,
-		       sum(m.hist_sum)                            AS duration_ms_sum
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp   BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
+		       sum(request_count)                                AS request_count,
+		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
+		       sum(duration_ms_sum)                              AS duration_ms_sum
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
 		GROUP BY service, bucket_at
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
@@ -55,24 +39,15 @@ func (r *Repository) ServiceErrorRateRowsAll(ctx context.Context, tenantID int64
 
 func (r *Repository) ServiceErrorRateRowsByService(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]rawServiceRateRow, error) {
 	query := `
-		WITH series AS (
-		    SELECT fingerprint,
-		           service,
-		           ` + seriesattr.StatusCode + ` AS status_code
-		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' AND s.service = @serviceName
-		    GROUP BY fingerprint, service, status_code
-		)
-		SELECT series.service              AS service,
+		SELECT service                                           AS service,
 		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       sum(m.hist_count)                          AS request_count,
-		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `) AS error_count,
-		       sum(m.hist_sum)                            AS duration_ms_sum
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp   BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
+		       sum(request_count)                                AS request_count,
+		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
+		       sum(duration_ms_sum)                              AS duration_ms_sum
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND service = @serviceName
 		GROUP BY service, bucket_at
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
@@ -84,15 +59,13 @@ func (r *Repository) ServiceErrorRateRowsByService(ctx context.Context, tenantID
 }
 
 func (r *Repository) ErrorVolumeRowsAll(ctx context.Context, tenantID int64, startMs, endMs int64) ([]rawServiceErrorRow, error) {
-	query := durationStatusCTE + `
-		SELECT series.service          AS service,
+	query := `
+		SELECT service                                           AS service,
 		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `) AS error_count
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id   = @tenantID
-		     AND m.timestamp BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
+		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
 		GROUP BY service, bucket_at
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
@@ -103,22 +76,13 @@ func (r *Repository) ErrorVolumeRowsAll(ctx context.Context, tenantID int64, sta
 
 func (r *Repository) ErrorVolumeRowsByService(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]rawServiceErrorRow, error) {
 	query := `
-		WITH series AS (
-		    SELECT fingerprint,
-		           service,
-		           ` + seriesattr.StatusCode + ` AS status_code
-		    FROM optikk.metrics_series AS s
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration' AND s.service = @serviceName
-		    GROUP BY fingerprint, service, status_code
-		)
-		SELECT series.service          AS service,
+		SELECT service                                           AS service,
 		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `) AS error_count
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp   BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
+		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND service = @serviceName
 		GROUP BY service, bucket_at
 		ORDER BY bucket_at ASC
 		LIMIT 10000`

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
@@ -16,7 +17,7 @@ func NewService(repo *Repository) *Service {
 }
 
 func (s *Service) GetSeries(ctx context.Context, tenantID int64, pod, metricID string, startMs, endMs int64) ([]SeriesPoint, bool, error) {
-	def, ok := SeriesDefFor(metricID)
+	def, ok := catalog.Def(metricID)
 	if !ok {
 		return nil, false, nil
 	}
@@ -48,11 +49,11 @@ func (s *Service) GetOverview(ctx context.Context, tenantID int64, pod string, s
 	out := PodOverview{
 		Pod:              pod,
 		Host:             meta.Host,
-		Containers:       emptyIfNil(meta.Containers),
-		Services:         emptyIfNil(meta.Services),
-		Environments:     emptyIfNil(meta.Environments),
-		Namespaces:       emptyIfNil(meta.Namespaces),
-		AvailableMetrics: emptyIfNil(groupsForMetricNames(meta.MetricNames)),
+		Containers:       seriesgroup.EmptyIfNil(meta.Containers),
+		Services:         seriesgroup.EmptyIfNil(meta.Services),
+		Environments:     seriesgroup.EmptyIfNil(meta.Environments),
+		Namespaces:       seriesgroup.EmptyIfNil(meta.Namespaces),
+		AvailableMetrics: seriesgroup.EmptyIfNil(catalog.GroupsFor(meta.MetricNames)),
 	}
 	if !meta.LastSeen.IsZero() {
 		out.LastSeen = meta.LastSeen.UTC().Format(time.RFC3339)
@@ -71,11 +72,4 @@ func foldRED(red podREDRow, out *PodOverview) {
 	}
 	out.ErrorRate = metrics.Percentage(red.ErrorCount, red.RequestCount)
 	out.AvgLatencyMs = red.DurationMsSum / float64(red.RequestCount)
-}
-
-func emptyIfNil(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
 }

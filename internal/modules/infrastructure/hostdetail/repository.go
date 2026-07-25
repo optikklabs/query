@@ -7,65 +7,32 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
+	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// Caps series rows per request: MaxBucketPoints buckets x label cardinality.
-const maxSeriesRows = 10000
+// scopeColumn is the metrics_series column that scopes a host's series.
+const scopeColumn = "host"
 
 type Repository struct {
-	db clickhouse.Conn
+	db     clickhouse.Conn
+	series *seriesgroup.Repository
 }
 
 func NewRepository(db clickhouse.Conn) *Repository {
-	return &Repository{db: db}
+	return &Repository{db: db, series: seriesgroup.NewRepository(db)}
 }
 
 // QuerySeries returns display-grain buckets for one metric group on a host,
 // broken down by the group's label (state/direction/device/mountpoint).
-func (r *Repository) QuerySeries(ctx context.Context, tenantID int64, host string, startMs, endMs int64, def SeriesDef) ([]SeriesPoint, error) {
-	valueExpr := "if(sum(m.val_count) = 0, 0, sum(m.val_sum) / sum(m.val_count))"
-	if def.Agg == aggRate {
-		// Counters: Delta sums directly; Cumulative uses in-bucket increase.
-		valueExpr = "sum(if(fps.temporality = 'Delta', m.val_sum, greatest(m.val_max - m.val_min, 0))) / @bucketGrainSec"
-	}
-
-	query := `
-		WITH fps AS (
-		    SELECT fingerprint,
-		           any(temporality) AS temporality,
-		           ` + def.LabelSQL + ` AS label
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
-		    WHERE host = @host
-		    GROUP BY fingerprint, label
-		)
-		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS time_bucket,
-		       fps.label  AS series,
-		       ` + valueExpr + ` AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
-		INNER JOIN fps ON m.fingerprint = fps.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.metric_name IN @metricNames
-		     AND m.timestamp   BETWEEN @start AND @end
-		GROUP BY time_bucket, series
-		ORDER BY time_bucket ASC, series ASC
-		LIMIT @maxRows`
-
-	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), def.MetricNames)
-	args = timebucket.WithBucketGrainSec(args, startMs, endMs)
-	args = append(args,
-		clickhouse.Named("host", host),
-		clickhouse.Named("maxRows", uint64(maxSeriesRows)),
-	)
-	var rows []SeriesPoint
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hostdetail.QuerySeries", &rows, query, args...)
+func (r *Repository) QuerySeries(ctx context.Context, tenantID int64, host string, startMs, endMs int64, def seriesgroup.Def) ([]SeriesPoint, error) {
+	return r.series.QuerySeries(ctx, tenantID, scopeColumn, host, startMs, endMs, def)
 }
 
 // aboutAttrSQL selects the latest non-empty value of one host resource
-// attribute retained by ingest in the resource_attributes JSON column.
+// attribute retained by ingest in the resource_attributes map.
 func aboutAttrSQL(key, alias string) string {
-	expr := "coalesce(resource_attributes['" + key + "'], '')"
+	expr := "resource_attributes['" + key + "']"
 	return "anyLastIf(" + expr + ", " + expr + " != '') AS " + alias
 }
 
@@ -93,7 +60,7 @@ func (r *Repository) QueryHostMeta(ctx context.Context, tenantID int64, host str
 	args := chargs.RangeArgs(tenantID, startMs, endMs)
 	args = append(args,
 		clickhouse.Named("host", host),
-		clickhouse.Named("systemMetricNames", allSeriesMetricNames),
+		clickhouse.Named("systemMetricNames", catalog.MetricNames()),
 	)
 	var row hostMetaRow
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "hostdetail.QueryHostMeta", &row, query, args...)

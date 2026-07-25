@@ -8,7 +8,7 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
 	"github.com/optikklabs/query/internal/shared/chargs"
-	"github.com/optikklabs/query/internal/shared/seriesattr"
+	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
 type Repository struct {
@@ -24,21 +24,13 @@ func (r *Repository) GetOpsBySystem(ctx context.Context, tenantID, startMs, endM
 	filterWhere, filterArgs := filter.BuildMetricsClauses(f)
 
 	query := `
-			WITH series AS (
-			    SELECT fingerprint, ` + seriesattr.DBSystem + ` AS db_system
-			    FROM optikk.metrics_series
-			    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-			    WHERE ` + seriesattr.DBSpanPred + filterWhere + `
-			    GROUP BY fingerprint, db_system
-			)
-			SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + `                   AS time_bucket,
-			       series.db_system                                                    AS group_by,
-		       sum(m.hist_count) / @bucketGrainSec                                 AS ops_per_sec
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp   BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
+		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS time_bucket,
+		       db_system                                        AS group_by,
+		       sum(request_count) / @bucketGrainSec             AS ops_per_sec
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		WHERE ` + spanstats.DBSpanPred + filterWhere + `
 		GROUP BY time_bucket, group_by
 		ORDER BY time_bucket, group_by`
 

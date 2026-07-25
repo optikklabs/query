@@ -8,10 +8,10 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/metrics"
-	"github.com/optikklabs/query/internal/shared/seriesattr"
+	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-// Repository reads spanmetrics (traces.span.metrics.duration) for per-host RED.
+// Repository reads the span_stats rollup for per-host RED.
 
 // Query limits and defaults for node aggregates.
 const (
@@ -19,18 +19,6 @@ const (
 	MaxServices    = 100
 	DefaultUnknown = "unknown"
 )
-
-const hostSeriesCTE = `
-		WITH series AS (
-		    SELECT fingerprint,
-		           host,
-		           pod,
-		           service,
-		           ` + seriesattr.StatusCode + ` AS status_code
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    GROUP BY fingerprint, host, pod, service, status_code
-		)`
 
 type Repository struct {
 	db clickhouse.Conn
@@ -41,20 +29,18 @@ func NewRepository(db clickhouse.Conn) *Repository {
 }
 
 func (r *Repository) QueryInfrastructureNodes(ctx context.Context, tenantID int64, startMs, endMs int64) ([]NodeAggregateRow, error) {
-	query := hostSeriesCTE + `
+	query := `
 		SELECT
-		    if(series.host != '', series.host, @defaultUnknown)                   AS host,
-		    uniqIf(series.pod, series.pod != '')                                  AS pod_count,
-		    sum(m.hist_count)                                                     AS request_count,
-		    sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)               AS error_count,
-		    sum(m.hist_sum)                                                       AS duration_ms_sum,
-		    toFloat32(quantilesPrometheusHistogramMerge(0.95)(m.latency_state)[1]) AS p95_latency_ms,
-		    max(m.timestamp)                                                      AS last_seen
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp   BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
+		    if(host != '', host, @defaultUnknown)                    AS host,
+		    uniqIf(pod, pod != '')                                   AS pod_count,
+		    sum(request_count)                                       AS request_count,
+		    sumIf(request_count, ` + spanstats.ErrorPred + `)        AS error_count,
+		    sum(duration_ms_sum)                                     AS duration_ms_sum,
+		    toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms,
+		    max(timestamp)                                           AS last_seen
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
 		GROUP BY host
 		ORDER BY request_count DESC
 		LIMIT @maxNodes`
@@ -96,20 +82,18 @@ func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, tenantI
 }
 
 func (r *Repository) QueryInfrastructureNodeServices(ctx context.Context, tenantID int64, host string, startMs, endMs int64) ([]NodeServiceAggregateRow, error) {
-	query := hostSeriesCTE + `
+	query := `
 		SELECT
-		    series.service                                                       AS service,
-		    sum(m.hist_count)                                                     AS request_count,
-		    sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)               AS error_count,
-		    sum(m.hist_sum)                                                       AS duration_ms_sum,
-		    toFloat32(quantilesPrometheusHistogramMerge(0.95)(m.latency_state)[1]) AS p95_latency_ms,
-		    uniqIf(series.pod, series.pod != '')                                 AS pod_count
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp   BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
-		WHERE if(series.host != '', series.host, @defaultUnknown) = @host
+		    service                                                  AS service,
+		    sum(request_count)                                       AS request_count,
+		    sumIf(request_count, ` + spanstats.ErrorPred + `)        AS error_count,
+		    sum(duration_ms_sum)                                     AS duration_ms_sum,
+		    toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms,
+		    uniqIf(pod, pod != '')                                   AS pod_count
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		WHERE if(host != '', host, @defaultUnknown) = @host
 		GROUP BY service
 		ORDER BY request_count DESC
 		LIMIT @maxServices`

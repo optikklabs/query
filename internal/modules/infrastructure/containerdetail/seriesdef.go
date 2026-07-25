@@ -1,40 +1,26 @@
 package containerdetail
 
-import "github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
+import (
+	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
+	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
+)
 
-// Datapoint-attribute accessors on metrics_series.attributes (JSON).
-// Keys match what the OTel kubeletstats receiver and JVM SDKs emit.
+// Datapoint-attribute accessors on metrics_series.attributes. Map lookups
+// default to the empty string. Keys match kubeletstats and JVM SDK output.
 const (
-	attrDirection     = "coalesce(attributes['direction'], '')"
-	attrInterface     = "coalesce(attributes['interface'], '')"
-	attrJVMMemoryType = "coalesce(attributes['jvm.memory.type'], '')"
+	attrDirection     = "attributes['direction']"
+	attrInterface     = "attributes['interface']"
+	attrJVMMemoryType = "attributes['jvm.memory.type']"
 )
 
 // containerLabel names series by the k8s container column, falling back to
 // the pod itself for pod-level metrics that carry no container.
 const containerLabel = "if(container = '', 'pod', container)"
 
-type aggKind int
+// catalog is the container detail page's chart groups, in display order.
+var catalog = seriesgroup.NewCatalog(seriesDefs)
 
-const (
-	// aggGauge averages datapoint values per display bucket.
-	aggGauge aggKind = iota
-	// aggRate converts counters to per-second rates per display bucket.
-	aggRate
-)
-
-// SeriesDef describes one chartable metric group on the container detail page.
-type SeriesDef struct {
-	ID          string
-	MetricNames []string
-	// LabelSQL evaluates against metrics_series rows to name each series.
-	LabelSQL string
-	Agg      aggKind
-	// Scale multiplies values after aggregation (100 for 0..1 fractions).
-	Scale float64
-}
-
-var seriesDefs = []SeriesDef{
+var seriesDefs = []seriesgroup.Def{
 	{
 		ID: "cpu",
 		MetricNames: []string{
@@ -42,7 +28,7 @@ var seriesDefs = []SeriesDef{
 			infraconsts.MetricContainerCPUUtilization,
 		},
 		LabelSQL: containerLabel,
-		Agg:      aggGauge,
+		Agg:      seriesgroup.Gauge,
 		Scale:    infraconsts.PercentageMultiplier,
 	},
 	{
@@ -54,21 +40,21 @@ var seriesDefs = []SeriesDef{
 		},
 		LabelSQL: "trim(concat(" + containerLabel + ", ' ', " +
 			"if(metric_name = '" + infraconsts.MetricK8SPodMemoryWorkingSet + "', 'working set', 'usage')))",
-		Agg:   aggGauge,
+		Agg:   seriesgroup.Gauge,
 		Scale: 1,
 	},
 	{
 		ID:          "network_io",
 		MetricNames: []string{infraconsts.MetricK8SPodNetworkIO},
 		LabelSQL:    interfaceDirectionLabel("network"),
-		Agg:         aggRate,
+		Agg:         seriesgroup.Rate,
 		Scale:       1,
 	},
 	{
 		ID:          "network_errors",
 		MetricNames: []string{infraconsts.MetricK8SPodNetworkErrors},
 		LabelSQL:    interfaceDirectionLabel("errors"),
-		Agg:         aggRate,
+		Agg:         seriesgroup.Rate,
 		Scale:       1,
 	},
 	{
@@ -80,21 +66,21 @@ var seriesDefs = []SeriesDef{
 		},
 		LabelSQL: "multiIf(metric_name = '" + infraconsts.MetricK8SPodFilesystemUsage + "', 'used', " +
 			"metric_name = '" + infraconsts.MetricK8SPodFilesystemCapacity + "', 'capacity', 'available')",
-		Agg:   aggGauge,
+		Agg:   seriesgroup.Gauge,
 		Scale: 1,
 	},
 	{
 		ID:          "restarts",
 		MetricNames: []string{infraconsts.MetricK8SContainerRestarts},
 		LabelSQL:    containerLabel,
-		Agg:         aggGauge,
+		Agg:         seriesgroup.Gauge,
 		Scale:       1,
 	},
 	{
 		ID:          "jvm_memory",
 		MetricNames: []string{infraconsts.MetricJVMMemoryUsed},
 		LabelSQL:    "if(" + attrJVMMemoryType + " = '', 'memory', " + attrJVMMemoryType + ")",
-		Agg:         aggGauge,
+		Agg:         seriesgroup.Gauge,
 		Scale:       1,
 	},
 }
@@ -104,47 +90,4 @@ var seriesDefs = []SeriesDef{
 func interfaceDirectionLabel(fallback string) string {
 	expr := "trim(concat(" + attrInterface + ", ' ', " + attrDirection + "))"
 	return "if(" + expr + " = '', '" + fallback + "', " + expr + ")"
-}
-
-var seriesDefByID = func() map[string]SeriesDef {
-	m := make(map[string]SeriesDef, len(seriesDefs))
-	for _, d := range seriesDefs {
-		m[d.ID] = d
-	}
-	return m
-}()
-
-// SeriesDefFor resolves an API metric id to its definition.
-func SeriesDefFor(id string) (SeriesDef, bool) {
-	d, ok := seriesDefByID[id]
-	return d, ok
-}
-
-// allSeriesMetricNames is the union of metric names across all groups,
-// used to detect which chart groups have data for a pod.
-var allSeriesMetricNames = func() []string {
-	var names []string
-	for _, d := range seriesDefs {
-		names = append(names, d.MetricNames...)
-	}
-	return names
-}()
-
-// groupsForMetricNames maps present metric names to available group ids,
-// preserving seriesDefs order.
-func groupsForMetricNames(present []string) []string {
-	set := make(map[string]struct{}, len(present))
-	for _, n := range present {
-		set[n] = struct{}{}
-	}
-	var groups []string
-	for _, d := range seriesDefs {
-		for _, n := range d.MetricNames {
-			if _, ok := set[n]; ok {
-				groups = append(groups, d.ID)
-				break
-			}
-		}
-	}
-	return groups
 }

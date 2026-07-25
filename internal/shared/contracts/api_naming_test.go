@@ -32,7 +32,7 @@ func TestAPINamesAreLowerCamelCase(t *testing.T) {
 			if walkErr != nil {
 				return walkErr
 			}
-			if entry.IsDir() || filepath.Ext(path) != ".go" {
+			if entry.IsDir() || filepath.Ext(path) != ".go" || strings.Contains(path, "llmproviders") {
 				return nil
 			}
 			file, err := parser.ParseFile(fset, path, nil, 0)

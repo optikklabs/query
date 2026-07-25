@@ -7,7 +7,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
-	"github.com/optikklabs/query/internal/shared/seriesattr"
+	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
 // Query limits keep every scan bounded (CLAUDE.md §9).
@@ -16,7 +16,6 @@ const (
 	MaxCategories = 64
 	MaxAccounts   = 50
 	MaxResources  = 50
-	spanMetric    = "traces.span.metrics.duration"
 	restartMetric = "k8s.container.restarts"
 )
 
@@ -46,25 +45,8 @@ const invSeries = `
 	    GROUP BY fingerprint, provider, account, region, platform, k8s_node, pod, host, service
 	)`
 
-// redSeries carries the spanmetrics dimensions + status_code for RED/health.
-// The CTE is named `series` because seriesattr.StatusErrorPred references that
-// alias (shared with the infrastructure/nodes module).
-const redSeries = `
-	WITH series AS (
-	    SELECT fingerprint,
-	           attributes['cloud.provider']                                            AS provider,
-	           attributes['cloud.platform']                                            AS platform,
-	           if(attributes['cloud.region'] != '',
-	              attributes['cloud.region'], attributes['aws.region'])           AS region,
-	           attributes['k8s.node.name']                                             AS k8s_node,
-	           pod, host, service,
-	           ` + entityExpr + `                                                           AS entity,
-	           ` + seriesattr.StatusCode + `                                                AS status_code
-	    FROM optikk.metrics_series
-	    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = '` + spanMetric + `'
-	    WHERE attributes['cloud.provider'] != ''
-	    GROUP BY fingerprint, provider, platform, region, k8s_node, pod, host, service, status_code
-	)`
+// span_stats carries the cloud dims as real columns, so RED/health reads it
+// directly with the shared entity resolution expression.
 
 type Repository struct {
 	db clickhouse.Conn
@@ -115,16 +97,15 @@ func (r *Repository) QueryProviderCategories(ctx context.Context, tenantID, star
 // QueryProviderHealth returns per-provider, per-entity RED aggregates so the
 // service can classify entity health (same source as the nodes module).
 func (r *Repository) QueryProviderHealth(ctx context.Context, tenantID, startMs, endMs int64) ([]HealthRow, error) {
-	query := redSeries + `
-		SELECT series.provider                                          AS provider,
-		       series.entity                                            AS entity,
-		       sum(m.hist_count)                                        AS request_count,
-		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)  AS error_count
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id = @tenantID
-		     AND m.timestamp BETWEEN @start AND @end
-		     AND m.metric_name = '` + spanMetric + `'
+	query := `
+		SELECT cloud_provider                                    AS provider,
+		       ` + entityExpr + `                                AS entity,
+		       sum(request_count)                                AS request_count,
+		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND cloud_provider != ''
 		GROUP BY provider, entity`
 	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
 	var rows []HealthRow
@@ -201,20 +182,18 @@ func (r *Repository) QueryPlatformServices(ctx context.Context, tenantID int64, 
 // QueryProviderResources returns the top entities needing attention for one
 // provider, sorted by error volume then request volume.
 func (r *Repository) QueryProviderResources(ctx context.Context, tenantID int64, provider string, startMs, endMs int64) ([]ResourceRow, error) {
-	query := redSeries + `
-		SELECT series.entity                                           AS entity,
-		       any(series.service)                                     AS service,
-		       any(series.region)                                      AS region,
-		       any(series.platform)                                    AS platform,
-		       sum(m.hist_count)                                       AS request_count,
-		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `) AS error_count,
-		       sum(m.hist_sum)                                         AS duration_ms_sum
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id = @tenantID
-		     AND m.timestamp BETWEEN @start AND @end
-		     AND m.metric_name = '` + spanMetric + `'
-		WHERE series.provider = @provider
+	query := `
+		SELECT ` + entityExpr + `                                AS entity,
+		       any(service)                                      AS service,
+		       any(cloud_region)                                 AS region,
+		       any(cloud_platform)                               AS platform,
+		       sum(request_count)                                AS request_count,
+		       sumIf(request_count, ` + spanstats.ErrorPred + `) AS error_count,
+		       sum(duration_ms_sum)                              AS duration_ms_sum
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND cloud_provider = @provider
 		GROUP BY entity
 		ORDER BY error_count DESC, request_count DESC
 		LIMIT @maxResources`

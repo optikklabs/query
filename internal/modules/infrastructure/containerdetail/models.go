@@ -1,13 +1,13 @@
 package containerdetail
 
-import "time"
+import (
+	"time"
+
+	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
+)
 
 // SeriesPoint is one display-grain bucket of one named series.
-type SeriesPoint struct {
-	TimeBucket time.Time `json:"timeBucket" ch:"time_bucket"`
-	Series     string    `json:"series"      ch:"series"`
-	Value      float64   `json:"value"       ch:"value"`
-}
+type SeriesPoint = seriesgroup.Point
 
 // PodOverview is the container detail header payload: identity metadata plus
 // range RED aggregates from span metrics. RequestCount 0 means the pod's

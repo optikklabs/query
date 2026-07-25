@@ -8,7 +8,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
-func TestBuildREDClausesPrunesMetricsSeriesIndexBuckets(t *testing.T) {
+func TestBuildREDClausesNoServiceFilter(t *testing.T) {
 	start := time.Date(2026, time.July, 16, 7, 25, 0, 0, time.UTC)
 	end := start.Add(30 * time.Minute)
 	where, args := BuildREDClauses(REDFilters{
@@ -17,17 +17,16 @@ func TestBuildREDClausesPrunesMetricsSeriesIndexBuckets(t *testing.T) {
 		EndMs:    end.UnixMilli(),
 	})
 
-	if !strings.Contains(where, "toStartOfInterval(s.timestamp, INTERVAL 6 HOUR)") {
-		t.Fatalf("series clause does not constrain the indexed time bucket: %q", where)
+	if where != "" {
+		t.Fatalf("fleet-wide clause should be empty, got %q", where)
 	}
 
 	named := namedArgs(args)
-	wantBucket := time.Date(2026, time.July, 16, 6, 0, 0, 0, time.UTC)
-	if got := named["seriesBucketStart"]; got != wantBucket {
-		t.Fatalf("seriesBucketStart = %v, want %v", got, wantBucket)
+	if got := named["tenantID"]; got != uint32(1) {
+		t.Fatalf("tenantID = %v, want 1", got)
 	}
-	if got := named["seriesBucketEnd"]; got != wantBucket {
-		t.Fatalf("seriesBucketEnd = %v, want %v", got, wantBucket)
+	if got, ok := named["start"].(time.Time); !ok || !got.Equal(start) {
+		t.Fatalf("start = %v, want %v", named["start"], start)
 	}
 }
 
@@ -39,7 +38,7 @@ func TestBuildREDClausesKeepsServiceFilter(t *testing.T) {
 		Services: []string{"checkout"},
 	})
 
-	if !strings.Contains(where, "s.service = @serviceName") {
+	if !strings.Contains(where, "service = @serviceName") {
 		t.Fatalf("service filter missing from clause: %q", where)
 	}
 
@@ -47,11 +46,21 @@ func TestBuildREDClausesKeepsServiceFilter(t *testing.T) {
 	if got := named["serviceName"]; got != "checkout" {
 		t.Fatalf("serviceName = %v, want checkout", got)
 	}
-	if got, want := named["seriesBucketStart"], time.Date(2026, time.July, 16, 0, 0, 0, 0, time.UTC); got != want {
-		t.Fatalf("seriesBucketStart = %v, want %v", got, want)
+}
+
+func TestBuildREDClausesMultiServiceFilter(t *testing.T) {
+	where, args := BuildREDClauses(REDFilters{
+		TenantID: 2,
+		StartMs:  time.Date(2026, time.July, 16, 5, 50, 0, 0, time.UTC).UnixMilli(),
+		EndMs:    time.Date(2026, time.July, 16, 6, 20, 0, 0, time.UTC).UnixMilli(),
+		Services: []string{"checkout", "cart"},
+	})
+
+	if !strings.Contains(where, "service IN @services") {
+		t.Fatalf("multi-service filter missing from clause: %q", where)
 	}
-	if got, want := named["seriesBucketEnd"], time.Date(2026, time.July, 16, 6, 0, 0, 0, time.UTC); got != want {
-		t.Fatalf("seriesBucketEnd = %v, want %v", got, want)
+	if _, ok := namedArgs(args)["services"]; !ok {
+		t.Fatalf("services arg missing")
 	}
 }
 

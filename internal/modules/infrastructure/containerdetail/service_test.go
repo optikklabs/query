@@ -34,7 +34,7 @@ func TestFoldREDNoTraffic(t *testing.T) {
 }
 
 func TestGroupsForMetricNames(t *testing.T) {
-	groups := groupsForMetricNames([]string{
+	groups := catalog.GroupsFor([]string{
 		infraconsts.MetricK8SPodCPUUtilization,
 		infraconsts.MetricJVMMemoryUsed,
 		"unrelated.metric",
@@ -51,7 +51,7 @@ func TestGroupsForMetricNames(t *testing.T) {
 }
 
 func TestSeriesDefForUnknown(t *testing.T) {
-	if _, ok := SeriesDefFor("nope"); ok {
+	if _, ok := catalog.Def("nope"); ok {
 		t.Fatal("unknown metric id must not resolve")
 	}
 }

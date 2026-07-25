@@ -76,7 +76,7 @@ func TestValidateWidget_RejectsBadLayout(t *testing.T) {
 func builderWidget() CreateWidgetRequest {
 	return CreateWidgetRequest{
 		PanelType: "metrics-timeseries",
-		Spec:      json.RawMessage(`{"panelType":"metrics-timeseries","query":{"kind":"metrics","step":"5m","queries":[{"id":"a","aggregation":"avg","metricName":"traces.span.metrics.duration","where":[{"key":"service","operator":"eq","value":"checkout"}],"groupBy":["region"]}]}}`),
+		Spec:      json.RawMessage(`{"panelType":"metrics-timeseries","query":{"kind":"metrics","step":"5m","queries":[{"id":"a","aggregation":"avg","metricName":"system.cpu.utilization","where":[{"key":"service","operator":"eq","value":"checkout"}],"groupBy":["region"]}]}}`),
 		Layout:    json.RawMessage(`{"x":0,"y":0,"w":6,"h":4}`),
 	}
 }

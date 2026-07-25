@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
+	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
 )
 
 type Service struct {
@@ -17,7 +18,7 @@ func NewService(repo *Repository) *Service {
 }
 
 func (s *Service) GetSeries(ctx context.Context, tenantID int64, host, metricID string, startMs, endMs int64) ([]SeriesPoint, bool, error) {
-	def, ok := SeriesDefFor(metricID)
+	def, ok := catalog.Def(metricID)
 	if !ok {
 		return nil, false, nil
 	}
@@ -48,9 +49,9 @@ func (s *Service) GetOverview(ctx context.Context, tenantID int64, host string, 
 
 	out := HostOverview{
 		Host:             host,
-		Environments:     emptyIfNil(meta.Environments),
-		Namespaces:       emptyIfNil(meta.Namespaces),
-		AvailableMetrics: emptyIfNil(groupsForMetricNames(meta.MetricNames)),
+		Environments:     seriesgroup.EmptyIfNil(meta.Environments),
+		Namespaces:       seriesgroup.EmptyIfNil(meta.Namespaces),
+		AvailableMetrics: seriesgroup.EmptyIfNil(catalog.GroupsFor(meta.MetricNames)),
 	}
 	if !meta.LastSeen.IsZero() {
 		out.LastSeen = meta.LastSeen.UTC().Format(time.RFC3339)
@@ -141,10 +142,3 @@ func toPercent(v float64) float64 {
 }
 
 func ptr(v float64) *float64 { return &v }
-
-func emptyIfNil(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
-}

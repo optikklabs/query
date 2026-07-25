@@ -1,13 +1,13 @@
 package hostdetail
 
-import "time"
+import (
+	"time"
+
+	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
+)
 
 // SeriesPoint is one display-grain bucket of one named series.
-type SeriesPoint struct {
-	TimeBucket time.Time `json:"timeBucket" ch:"time_bucket"`
-	Series     string    `json:"series"      ch:"series"`
-	Value      float64   `json:"value"       ch:"value"`
-}
+type SeriesPoint = seriesgroup.Point
 
 // HostOverview is the host detail header payload: identity metadata plus
 // range-averaged KPI values. Nil KPI fields mean the host does not report

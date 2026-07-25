@@ -86,6 +86,19 @@ func MetricsHistRollup(windowMs int64) string {
 	return MetricsRollup(windowMs)
 }
 
+// SpanStatsRollup picks the span_stats tier whose grain matches the display
+// window, mirroring MetricsRollup's ladder.
+func SpanStatsRollup(windowMs int64) string {
+	switch grainSec := int64(displayGrain(windowMs).Seconds()); {
+	case grainSec < 300:
+		return "optikk.span_stats_1m"
+	case grainSec < 3600:
+		return "optikk.span_stats_5m"
+	default:
+		return "optikk.span_stats_1h"
+	}
+}
+
 func WithBucketGrainSec(args []any, startMs, endMs int64) []any {
 	sec := int64(displayGrain(endMs - startMs).Seconds())
 	if sec <= 0 {

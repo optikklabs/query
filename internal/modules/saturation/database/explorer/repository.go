@@ -9,7 +9,14 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
 	"github.com/optikklabs/query/internal/shared/chargs"
-	"github.com/optikklabs/query/internal/shared/seriesattr"
+	"github.com/optikklabs/query/internal/shared/spanstats"
+)
+
+// db.sql.connection.open carries its system as a datapoint attribute, so the
+// connection query resolves it from metrics_series (not the span_stats column).
+const (
+	seriesDBSystem = "attributes['db.system']"
+	seriesDBSpan   = seriesDBSystem + " != ''"
 )
 
 type Repository struct {
@@ -37,26 +44,16 @@ type connRawRow struct {
 func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startMs, endMs int64) ([]systemSummaryRawDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	query := `
-		WITH series AS (
-		    SELECT fingerprint,
-		           ` + seriesattr.DBSystem + ` AS db_system,
-		           ` + seriesattr.StatusCode + ` AS status_code
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE ` + seriesattr.DBSpanPred + `
-		    GROUP BY fingerprint, db_system, status_code
-		)
-		SELECT series.db_system                                                AS db_system,
-		       sum(m.hist_count)                                               AS query_count,
-		       sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `)         AS error_count,
-		       sum(m.hist_sum) / nullIf(sum(m.hist_count), 0)                  AS avg_latency_ms,
-		       toFloat32(quantilesPrometheusHistogramMerge(0.95)(m.latency_state)[1]) AS p95_ms,
-		       max(m.timestamp)                                                AS last_seen
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp   BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
+		SELECT db_system                                                AS db_system,
+		       sum(request_count)                                       AS query_count,
+		       sumIf(request_count, ` + spanstats.ErrorPred + `)        AS error_count,
+		       sum(duration_ms_sum) / nullIf(sum(request_count), 0)     AS avg_latency_ms,
+		       toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_ms,
+		       max(timestamp)                                           AS last_seen
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		WHERE ` + spanstats.DBSpanPred + `
 		GROUP BY db_system
 		ORDER BY query_count DESC`
 
@@ -87,10 +84,10 @@ func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, tenantID,
 func activeConnectionsQuery(rollupTable string) string {
 	return `
 		WITH series AS (
-		    SELECT fingerprint, ` + seriesattr.DBSystem + ` AS db_system
+		    SELECT fingerprint, ` + seriesDBSystem + ` AS db_system
 		    FROM optikk.metrics_series
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = @metricName
-		    WHERE ` + seriesattr.DBSpanPred + `
+		    WHERE ` + seriesDBSpan + `
 		    GROUP BY fingerprint, db_system
 		), latest AS (
 		    SELECT series.db_system AS db_system,

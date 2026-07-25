@@ -9,7 +9,7 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/shared/chargs"
-	"github.com/optikklabs/query/internal/shared/seriesattr"
+	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
 const defaultUnknownHost = "unknown"
@@ -70,28 +70,17 @@ func (r *Repository) QueryHostSpans(
 	ctx context.Context, tenantID, startMs, endMs int64, serviceName string,
 ) ([]hostSpansRow, error) {
 	query := `
-		WITH series AS (
-		    SELECT fingerprint,
-		           host,
-		           environment,
-		           ` + seriesattr.StatusCode + ` AS status_code
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = 'traces.span.metrics.duration'
-		    WHERE service = @serviceName
-		    GROUP BY fingerprint, host, environment, status_code
-		)
 		SELECT
-		    if(series.host != '', series.host, @unknownHost)        AS host,
-		    any(series.environment)                                 AS zone,
-		    sum(m.hist_count)                                        AS request_count,
-		    sumIf(m.hist_count, ` + seriesattr.StatusErrorPred + `) AS error_count,
-		    toFloat32(quantilePrometheusHistogramMerge(0.99)(m.latency_state)) AS p99_ms,
-		    max(m.timestamp)                                        AS last_seen
-		FROM ` + timebucket.MetricsHistRollup(endMs-startMs) + ` AS m
-		INNER JOIN series ON m.fingerprint = series.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.timestamp   BETWEEN @start AND @end
-		     AND m.metric_name = 'traces.span.metrics.duration'
+		    if(host != '', host, @unknownHost)                       AS host,
+		    any(environment)                                         AS zone,
+		    sum(request_count)                                       AS request_count,
+		    sumIf(request_count, ` + spanstats.ErrorPred + `)        AS error_count,
+		    toFloat32(quantileTDigestMerge(0.99)(latency_state))     AS p99_ms,
+		    max(timestamp)                                           AS last_seen
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND service = @serviceName
 		GROUP BY host
 		ORDER BY request_count DESC
 		LIMIT 200`
