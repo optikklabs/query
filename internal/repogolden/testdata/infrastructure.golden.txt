@@ -1,0 +1,152 @@
+=== cpu.QueryCPUUtilizationAgg
+  [0] Select: SELECT metric_name AS metric_name, if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count)) AS value FROM optikk.metrics_5m PREWHERE tenant_id = @tenantID AND metric_name IN @metricNames AND timestamp BETWEEN @start AND @end GROUP BY metric_name
+      @end = time.Time 2026-01-02T08:06:40Z
+      @metricNames = []string []string{"system.cpu.utilization", "system.cpu.usage", "process.cpu.usage"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== cpu.QueryCPUUtilizationByInstance
+  [0] Select: WITH fps AS ( SELECT fingerprint, host, pod, container, service FROM optikk.metrics_series AS mr PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE mr.service != '' GROUP BY fingerprint, host, pod, container, service ) SELECT r.host AS host, r.pod AS pod, r.container AS container, r.service AS service, m.metric_name AS metric_name, if(sum(m.val_count) = 0, 0, sum(m.val_sum) / sum(m.val_count)) AS value FROM optikk.metrics_5m AS m INNER JOIN fps AS r ON m.fingerprint = r.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name IN @metricNames AND m.timestamp BETWEEN @start AND @end GROUP BY host, pod, container, service, metric_name ORDER BY service, pod LIMIT 500
+      @end = time.Time 2026-01-02T08:06:40Z
+      @metricNames = []string []string{"system.cpu.utilization", "system.cpu.usage", "process.cpu.usage"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== memory.QueryMemoryUtilizationAgg
+  [0] Select: SELECT metric_name AS metric_name, sum(val_sum) / sum(val_count) AS value FROM optikk.metrics_5m PREWHERE tenant_id = @tenantID AND metric_name IN @metricNames AND timestamp BETWEEN @start AND @end GROUP BY metric_name
+      @end = time.Time 2026-01-02T08:06:40Z
+      @metricNames = []string []string{"system.memory.utilization", "system.memory.usage", "jvm.memory.used", "jvm.memory.max"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== memory.QueryMemoryUtilizationForInstance
+  [0] Select: WITH fps AS ( SELECT fingerprint FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE host = @host AND service = @serviceName AND pod = @pod ) SELECT metric_name AS metric_name, sum(val_sum) / sum(val_count) AS value FROM optikk.metrics_5m PREWHERE tenant_id = @tenantID AND metric_name IN @metricNames AND timestamp BETWEEN @start AND @end WHERE fingerprint IN fps GROUP BY metric_name
+      @end = time.Time 2026-01-02T08:06:40Z
+      @host = string "node-a"
+      @metricNames = []string []string{"system.memory.utilization", "system.memory.usage", "jvm.memory.used", "jvm.memory.max"}
+      @pod = string "checkout-7d9f"
+      @serviceName = string "checkout"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== hosts.QueryHostUtilization
+  [0] Select: WITH fps AS ( SELECT fingerprint, host FROM optikk.metrics_series AS mr PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE mr.host != '' AND NOT (metric_name = @cpuUtil AND attributes['state'] != 'idle') AND NOT (metric_name = @memUtil AND attributes['state'] != 'used') GROUP BY fingerprint, host ) SELECT r.host AS host, m.metric_name AS metric_name, if(m.metric_name = @cpuUtil, 1 - sum(m.val_sum) / sum(m.val_count), sum(m.val_sum) / sum(m.val_count)) AS value FROM optikk.metrics_5m AS m INNER JOIN fps AS r ON m.fingerprint = r.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name IN @metricNames AND m.timestamp BETWEEN @start AND @end GROUP BY host, metric_name ORDER BY host, metric_name LIMIT 500
+      @cpuUtil = string "system.cpu.utilization"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @memUtil = string "system.memory.utilization"
+      @metricNames = []string []string{"system.cpu.utilization", "system.cpu.usage", "process.cpu.usage", "system.memory.utilization", "jvm.memory.used", "jvm.memory.max", "system.disk.utilization", "disk.free", "disk.total"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== hosts.QueryHostSpans
+  [0] Select: SELECT if(host != '', host, @unknownHost) AS host, any(environment) AS zone, sum(request_count) AS request_total, sumIf(request_count, (status_code_string = 'ERROR')) AS error_total, toFloat32(quantileTDigestMerge(0.99)(latency_state)) AS p99_ms, max(timestamp) AS last_seen FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service = @serviceName GROUP BY host ORDER BY request_total DESC LIMIT 200
+      @end = time.Time 2026-01-02T08:06:40Z
+      @serviceName = string "checkout"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+      @unknownHost = string "unknown"
+
+=== fleet.QueryFleetPods
+  [0] Select: SELECT pod AS pod, if(host != '', host, @defaultUnknown) AS host, groupUniqArray(service) AS services, sum(request_count) AS request_total, sumIf(request_count, (status_code_string = 'ERROR')) AS error_total, sum(duration_ms_sum) AS duration_ms_total, toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms, max(timestamp) AS last_seen FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE pod != '' AND (@hostFilter = '' OR host = @hostFilter) GROUP BY pod, host ORDER BY request_total DESC LIMIT @maxFleetPods
+      @defaultUnknown = string "unknown"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @hostFilter = string ""
+      @maxFleetPods = uint64 0xc8
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== fleet.QueryFleetPods/host
+  [0] Select: SELECT pod AS pod, if(host != '', host, @defaultUnknown) AS host, groupUniqArray(service) AS services, sum(request_count) AS request_total, sumIf(request_count, (status_code_string = 'ERROR')) AS error_total, sum(duration_ms_sum) AS duration_ms_total, toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms, max(timestamp) AS last_seen FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE pod != '' AND (@hostFilter = '' OR host = @hostFilter) GROUP BY pod, host ORDER BY request_total DESC LIMIT @maxFleetPods
+      @defaultUnknown = string "unknown"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @hostFilter = string "node-a"
+      @maxFleetPods = uint64 0xc8
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== nodes.QueryInfrastructureNodes
+  [0] Select: SELECT if(host != '', host, @defaultUnknown) AS host, uniqIf(pod, pod != '') AS pod_count, sum(request_count) AS request_total, sumIf(request_count, (status_code_string = 'ERROR')) AS error_total, sum(duration_ms_sum) AS duration_ms_total, toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms, max(timestamp) AS last_seen FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end GROUP BY host ORDER BY request_total DESC LIMIT @maxNodes
+      @defaultUnknown = string "unknown"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @maxNodes = uint64 0xc8
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== nodes.QueryInfrastructureNodeSummary
+  [0] Select: SELECT if(host != '', host, @defaultUnknown) AS host, uniqIf(pod, pod != '') AS pod_count, sum(request_count) AS request_total, sumIf(request_count, (status_code_string = 'ERROR')) AS error_total, sum(duration_ms_sum) AS duration_ms_total, toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms, max(timestamp) AS last_seen FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end GROUP BY host ORDER BY request_total DESC LIMIT @maxNodes
+      @defaultUnknown = string "unknown"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @maxNodes = uint64 0xc8
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== nodes.QueryInfrastructureNodeServices
+  [0] Select: SELECT service AS service, sum(request_count) AS request_total, sumIf(request_count, (status_code_string = 'ERROR')) AS error_total, sum(duration_ms_sum) AS duration_ms_total, toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms, uniqIf(pod, pod != '') AS pod_count FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE if(host != '', host, @defaultUnknown) = @host GROUP BY service ORDER BY request_total DESC LIMIT @maxServices
+      @defaultUnknown = string "unknown"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @host = string "node-a"
+      @maxServices = uint64 0x64
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== hostdetail.QueryHostMeta
+  [0] QueryRow: SELECT max(timestamp) AS last_seen, groupUniqArrayIf(environment, environment != '') AS environments, groupUniqArrayIf(k8s_namespace, k8s_namespace != '') AS namespaces, groupUniqArrayIf(metric_name, metric_name IN @systemMetricNames) AS metric_names, anyLastIf(resource_attributes['os.type'], resource_attributes['os.type'] != '') AS os_type, anyLastIf(resource_attributes['os.description'], resource_attributes['os.description'] != '') AS os_description, anyLastIf(resource_attributes['host.arch'], resource_attributes['host.arch'] != '') AS host_arch, anyLastIf(resource_attributes['host.id'], resource_attributes['host.id'] != '') AS host_id, anyLastIf(resource_attributes['cloud.provider'], resource_attributes['cloud.provider'] != '') AS cloud_provider, anyLastIf(resource_attributes['cloud.platform'], resource_attributes['cloud.platform'] != '') AS cloud_platform, anyLastIf(resource_attributes['cloud.region'], resource_attributes['cloud.region'] != '') AS cloud_region, anyLastIf(resource_attributes['cloud.availability_zone'], resource_attributes['cloud.availability_zone'] != '') AS cloud_zone, anyLastIf(resource_attributes['k8s.node.name'], resource_attributes['k8s.node.name'] != '') AS k8s_node_name FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE host = @host
+      @end = time.Time 2026-01-02T08:06:40Z
+      @host = string "node-a"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @systemMetricNames = []string []string{"system.cpu.utilization", "system.cpu.load_average.1m", "system.cpu.load_average.5m", "system.cpu.load_average.15m", "system.memory.usage", "system.disk.io", "system.filesystem.utilization", "system.network.io", "system.network.errors", "system.network.dropped"}
+      @tenantID = uint32 0x7
+
+=== hostdetail.QueryKPIs
+  [0] Select: WITH fps AS ( SELECT fingerprint, metric_name AS mname, attributes['state'] AS mstate, attributes['mountpoint'] AS mmount FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE host = @host GROUP BY fingerprint, mname, mstate, mmount ) SELECT fps.mname AS metric_name, fps.mstate AS state, fps.mmount AS mount, if(sum(m.val_count) = 0, 0, sum(m.val_sum) / sum(m.val_count)) AS value FROM optikk.metrics_5m AS m INNER JOIN fps ON m.fingerprint = fps.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name IN @metricNames AND m.timestamp BETWEEN @start AND @end GROUP BY metric_name, state, mount
+      @end = time.Time 2026-01-02T08:06:40Z
+      @host = string "node-a"
+      @metricNames = []string []string{"system.cpu.utilization", "system.memory.utilization", "system.filesystem.utilization", "system.cpu.load_average.1m", "system.cpu.load_average.5m", "system.cpu.load_average.15m", "system.process.count"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== hostdetail.QuerySeries/gauge
+  [0] Select: WITH fps AS ( SELECT fingerprint, any(temporality) AS temporality, if(attributes['state'] = '', 'cpu', attributes['state']) AS label FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE host = @scopeVal GROUP BY fingerprint, label ) SELECT toStartOfInterval(timestamp, INTERVAL 300 SECOND) AS time_bucket, fps.label AS series, if(sum(m.val_count) = 0, 0, sum(m.val_sum) / sum(m.val_count)) AS value FROM optikk.metrics_5m AS m INNER JOIN fps ON m.fingerprint = fps.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name IN @metricNames AND m.timestamp BETWEEN @start AND @end GROUP BY time_bucket, series ORDER BY time_bucket ASC, series ASC LIMIT @maxRows
+      @bucketGrainSec = int64 300
+      @end = time.Time 2026-01-02T08:06:40Z
+      @maxRows = uint64 0x2710
+      @metricNames = []string []string{"system.cpu.utilization"}
+      @scopeVal = string "node-a"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== hostdetail.QuerySeries/rate
+  [0] Select: WITH fps AS ( SELECT fingerprint, any(temporality) AS temporality, trim(concat(attributes['device'], ' ', attributes['direction'])) AS label FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE host = @scopeVal GROUP BY fingerprint, label ) SELECT toStartOfInterval(timestamp, INTERVAL 300 SECOND) AS time_bucket, fps.label AS series, sum(if(fps.temporality = 'Delta', m.val_sum, greatest(m.val_max - m.val_min, 0))) / @bucketGrainSec AS value FROM optikk.metrics_5m AS m INNER JOIN fps ON m.fingerprint = fps.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name IN @metricNames AND m.timestamp BETWEEN @start AND @end GROUP BY time_bucket, series ORDER BY time_bucket ASC, series ASC LIMIT @maxRows
+      @bucketGrainSec = int64 300
+      @end = time.Time 2026-01-02T08:06:40Z
+      @maxRows = uint64 0x2710
+      @metricNames = []string []string{"system.network.io"}
+      @scopeVal = string "node-a"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== containerdetail.QueryPodMeta
+  [0] QueryRow: SELECT max(timestamp) AS last_seen, anyLastIf(host, host != '') AS host_any, groupUniqArrayIf(container, container != '') AS containers, groupUniqArrayIf(service, service != '') AS services, groupUniqArrayIf(environment, environment != '') AS environments, groupUniqArrayIf(k8s_namespace, k8s_namespace != '') AS namespaces, groupUniqArrayIf(metric_name, metric_name IN @podMetricNames) AS metric_names FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE pod = @pod
+      @end = time.Time 2026-01-02T08:06:40Z
+      @pod = string "checkout-7d9f"
+      @podMetricNames = []string []string{"k8s.pod.cpu.utilization", "container.cpu.utilization", "k8s.pod.memory.usage", "k8s.pod.memory.working_set", "container.memory.usage", "k8s.pod.network.io", "k8s.pod.network.errors", "k8s.pod.filesystem.usage", "k8s.pod.filesystem.capacity", "k8s.pod.filesystem.available", "k8s.container.restarts", "jvm.memory.used"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== containerdetail.QueryPodRED
+  [0] QueryRow: SELECT sum(request_count) AS request_total, sumIf(request_count, (status_code_string = 'ERROR')) AS error_total, sum(duration_ms_sum) AS duration_ms_total, toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND pod = @pod
+      @end = time.Time 2026-01-02T08:06:40Z
+      @pod = string "checkout-7d9f"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== containerdetail.QuerySeries/gauge
+  [0] Select: WITH fps AS ( SELECT fingerprint, any(temporality) AS temporality, if(attributes['state'] = '', 'cpu', attributes['state']) AS label FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE pod = @scopeVal GROUP BY fingerprint, label ) SELECT toStartOfInterval(timestamp, INTERVAL 300 SECOND) AS time_bucket, fps.label AS series, if(sum(m.val_count) = 0, 0, sum(m.val_sum) / sum(m.val_count)) AS value FROM optikk.metrics_5m AS m INNER JOIN fps ON m.fingerprint = fps.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name IN @metricNames AND m.timestamp BETWEEN @start AND @end GROUP BY time_bucket, series ORDER BY time_bucket ASC, series ASC LIMIT @maxRows
+      @bucketGrainSec = int64 300
+      @end = time.Time 2026-01-02T08:06:40Z
+      @maxRows = uint64 0x2710
+      @metricNames = []string []string{"system.cpu.utilization"}
+      @scopeVal = string "checkout-7d9f"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
