@@ -1,0 +1,84 @@
+=== latency.GetLatencyBySystem
+  [0] Select: SELECT toStartOfInterval(timestamp, INTERVAL 300 SECOND) AS bucket_at, db_system AS group_by, arrayMap(x -> toFloat32(x), quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state)) AS qs FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE (db_system != '') AND db_system IN @dbSystem GROUP BY bucket_at, group_by ORDER BY bucket_at, group_by
+      @dbSystem = []string []string{"postgresql"}
+      @end = time.Time 2026-01-02T08:06:40Z
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== volume.GetOpsBySystem
+  [0] Select: SELECT toStartOfInterval(timestamp, INTERVAL 300 SECOND) AS time_bucket, db_system AS group_by, sum(request_count) / @bucketGrainSec AS ops_per_sec FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE (db_system != '') AND db_system IN @dbSystem GROUP BY time_bucket, group_by ORDER BY time_bucket, group_by
+      @bucketGrainSec = int64 300
+      @dbSystem = []string []string{"postgresql"}
+      @end = time.Time 2026-01-02T08:06:40Z
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== explorer.GetSystemSummariesRaw
+  [0] Select: SELECT db_system AS db_system, sum(request_count) AS query_count, sumIf(request_count, (status_code_string = 'ERROR')) AS error_count, sum(duration_ms_sum) / nullIf(sum(request_count), 0) AS avg_latency_ms, toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_ms, max(timestamp) AS last_seen FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end WHERE (db_system != '') GROUP BY db_system ORDER BY query_count DESC
+      @end = time.Time 2026-01-02T08:06:40Z
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== explorer.GetActiveConnectionsBySystem
+  [0] Select: WITH series AS ( SELECT fingerprint, attributes['db.system'] AS db_system FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = @metricName WHERE attributes['db.system'] != '' GROUP BY fingerprint, db_system ), latest AS ( SELECT series.db_system AS db_system, m.fingerprint AS fingerprint, argMaxMerge(m.val_last) AS latest_value FROM optikk.metrics_5m AS m INNER JOIN series ON m.fingerprint = series.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name = @metricName AND m.timestamp BETWEEN @start AND @end GROUP BY db_system, fingerprint ) SELECT db_system, toInt64(round(ifNotFinite(sum(latest_value), 0))) AS active_count FROM latest GROUP BY db_system
+      @end = time.Time 2026-01-02T08:06:40Z
+      @metricName = string "db.sql.connection.open"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== slowqueries.GetSlowQueryPatterns
+  [0] Select: SELECT query_hash, query_text, db_system, collection_name, namespace, server, qs[1] AS p50_ms, qs[2] AS p95_ms, qs[3] AS p99_ms, call_count, error_count FROM ( SELECT query_hash, any(db_statement_normalized) AS query_text, db_system, db_name AS collection_name, '' AS namespace, '' AS server, quantiles(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs, count() AS call_count, countIf(is_error) AS error_count FROM optikk.spans PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND db_system != '' AND query_hash != '' AND db_system IN @dbSystem AND db_name IN @dbCollection AND attributes['db.namespace'] IN @dbNamespace AND attributes['server.address'] IN @dbServer GROUP BY query_hash, db_system, collection_name ) ORDER BY call_count DESC LIMIT @qLimit
+      @dbCollection = []string []string{"orders"}
+      @dbNamespace = []string []string{"app"}
+      @dbServer = []string []string{"db.internal"}
+      @dbSystem = []string []string{"postgresql"}
+      @end = time.Time 2026-01-02T08:06:40Z
+      @qLimit = uint64 0x32
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== querydetail.GetSummary
+  [0] Select: SELECT any(db_statement_normalized) AS query_text, any(db_system) AS db_system_any, any(db_name) AS collection_name, any(attributes['db.operation.name']) AS operation_name, count() AS call_count, countIf(is_error) AS error_count, quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs, avg(duration_nano / 1000000.0) AS avg_ms, sum(duration_nano) / 1000000.0 AS total_time_ms, avgOrNull(toFloat64OrNull(attributes['db.response.returned_rows'])) AS avg_rows FROM optikk.spans PREWHERE tenant_id = @tenantID AND db_system != '' AND query_hash = @hash AND timestamp BETWEEN @start AND @end AND db_system IN @dbSystem AND db_name IN @dbCollection AND attributes['db.namespace'] IN @dbNamespace AND attributes['server.address'] IN @dbServer
+      @dbCollection = []string []string{"orders"}
+      @dbNamespace = []string []string{"app"}
+      @dbServer = []string []string{"db.internal"}
+      @dbSystem = []string []string{"postgresql"}
+      @end = time.Time 2026-01-02T08:06:40Z
+      @hash = string "a1b2c3"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== querydetail.GetServices
+  [0] Select: SELECT service, count() AS call_count FROM optikk.spans PREWHERE tenant_id = @tenantID AND db_system != '' AND query_hash = @hash AND timestamp BETWEEN @start AND @end AND db_system IN @dbSystem AND db_name IN @dbCollection AND attributes['db.namespace'] IN @dbNamespace AND attributes['server.address'] IN @dbServer GROUP BY service ORDER BY call_count DESC LIMIT 10
+      @dbCollection = []string []string{"orders"}
+      @dbNamespace = []string []string{"app"}
+      @dbServer = []string []string{"db.internal"}
+      @dbSystem = []string []string{"postgresql"}
+      @end = time.Time 2026-01-02T08:06:40Z
+      @hash = string "a1b2c3"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== querydetail.GetTimeseries
+  [0] Select: SELECT toStartOfInterval(timestamp, INTERVAL 300 SECOND) AS bucket_at, count() AS call_count, countIf(is_error) AS error_count, avg(duration_nano / 1000000.0) AS avg_ms, quantileTiming(0.99)(duration_nano / 1000000.0) AS p99_ms FROM optikk.spans PREWHERE tenant_id = @tenantID AND db_system != '' AND query_hash = @hash AND timestamp BETWEEN @start AND @end AND db_system IN @dbSystem AND db_name IN @dbCollection AND attributes['db.namespace'] IN @dbNamespace AND attributes['server.address'] IN @dbServer GROUP BY bucket_at ORDER BY bucket_at
+      @dbCollection = []string []string{"orders"}
+      @dbNamespace = []string []string{"app"}
+      @dbServer = []string []string{"db.internal"}
+      @dbSystem = []string []string{"postgresql"}
+      @end = time.Time 2026-01-02T08:06:40Z
+      @hash = string "a1b2c3"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== querydetail.GetExecutions
+  [0] Select: SELECT timestamp, trace_id, span_id, duration_nano / 1000000.0 AS duration_ms, is_error AS is_err, service, host, toFloat64OrNull(attributes['db.response.returned_rows']) AS row_count FROM optikk.spans PREWHERE tenant_id = @tenantID AND db_system != '' AND query_hash = @hash AND timestamp BETWEEN @start AND @end AND db_system IN @dbSystem AND db_name IN @dbCollection AND attributes['db.namespace'] IN @dbNamespace AND attributes['server.address'] IN @dbServer ORDER BY timestamp DESC LIMIT @qLimit
+      @dbCollection = []string []string{"orders"}
+      @dbNamespace = []string []string{"app"}
+      @dbServer = []string []string{"db.internal"}
+      @dbSystem = []string []string{"postgresql"}
+      @end = time.Time 2026-01-02T08:06:40Z
+      @hash = string "a1b2c3"
+      @qLimit = uint64 0x32
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
