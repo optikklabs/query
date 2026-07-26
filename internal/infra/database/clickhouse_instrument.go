@@ -9,26 +9,34 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/optikklabs/query/internal/infra/metrics"
+	types "github.com/optikklabs/query/internal/shared/contracts"
 )
 
 func SelectCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, query string, args ...any) error {
-	done := startCHOp(ctx)
-	start := time.Now()
-	err := conn.Select(ctx, dest, query, args...)
-	done(err, start, op)
-	return err
+	key := coalesceKey(types.TenantFrom(ctx).TenantID, query, args)
+	return coalesce(ctx, key, op, dest, func(runCtx context.Context, out any) error {
+		done := startCHOp(runCtx)
+		start := time.Now()
+		err := conn.Select(runCtx, out, query, args...)
+		done(err, start, op)
+		return err
+	})
 }
 
 func QueryRowCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, query string, args ...any) error {
-	done := startCHOp(ctx)
-	start := time.Now()
-	err := conn.QueryRow(ctx, query, args...).ScanStruct(dest)
-	if err != nil && isNoRows(err) {
-		done(nil, start, op)
-		return nil
-	}
-	done(err, start, op)
-	return err
+	key := coalesceKey(types.TenantFrom(ctx).TenantID, query, args)
+	return coalesce(ctx, key, op, dest, func(runCtx context.Context, out any) error {
+		done := startCHOp(runCtx)
+		start := time.Now()
+		err := conn.QueryRow(runCtx, query, args...).ScanStruct(out)
+		// Zero rows is an empty result, not a failure: leave out zero-valued.
+		if err != nil && isNoRows(err) {
+			done(nil, start, op)
+			return nil
+		}
+		done(err, start, op)
+		return err
+	})
 }
 
 // isNoRows reports whether err means "query matched zero rows".

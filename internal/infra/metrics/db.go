@@ -23,4 +23,14 @@ var (
 		Name:      "queries_total",
 		Help:      "Total DB queries executed, by engine, operation, and result (ok/err).",
 	}, []string{"system", "op", "result"})
+
+	// DBQueriesCoalesced counts reads served by joining an identical in-flight
+	// query instead of issuing their own. queries_total counts only the leader,
+	// so these two together show the fan-out actually being absorbed.
+	DBQueriesCoalesced = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "optikk",
+		Subsystem: "db",
+		Name:      "queries_coalesced_total",
+		Help:      "ClickHouse reads served by an in-flight identical query, by operation.",
+	}, []string{"op"})
 )
