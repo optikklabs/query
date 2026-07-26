@@ -76,44 +76,31 @@ func BuildClauses(f Filters) Clauses {
 		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
 	}}
 
+	// service is the one predicate needed in two places: it narrows the root
+	// scan and the inner any-span scan alike, on a single bind.
 	if len(f.Services) > 0 {
 		c.Root += ` AND service IN @services`
 		c.Resource += ` AND service IN @services`
 		c.Args = append(c.Args, clickhouse.Named("services", f.Services))
 	}
-	if len(f.Environments) > 0 {
-		c.Span += ` AND environment IN @environments`
-		c.Args = append(c.Args, clickhouse.Named("environments", f.Environments))
-	}
-	if len(f.ExcludeServices) > 0 {
-		c.Root += ` AND service NOT IN @excServices`
-		c.Args = append(c.Args, clickhouse.Named("excServices", f.ExcludeServices))
-	}
 
-	if len(f.Operations) > 0 {
-		c.Span += ` AND name IN @operations`
-		c.Args = append(c.Args, clickhouse.Named("operations", f.Operations))
-	}
-	if len(f.SpanKinds) > 0 {
-		c.Span += ` AND kind_string IN @spanKinds`
-		c.Args = append(c.Args, clickhouse.Named("spanKinds", f.SpanKinds))
-	}
-	if len(f.HTTPMethods) > 0 {
-		c.Span += ` AND http_method IN @httpMethods`
-		c.Args = append(c.Args, clickhouse.Named("httpMethods", f.HTTPMethods))
-	}
-	if len(f.HTTPStatuses) > 0 {
-		c.Span += ` AND response_status_code IN @httpStatuses`
-		c.Args = append(c.Args, clickhouse.Named("httpStatuses", f.HTTPStatuses))
-	}
-	if len(f.Statuses) > 0 {
-		c.Span += ` AND status_code_string IN @statuses`
-		c.Args = append(c.Args, clickhouse.Named("statuses", f.Statuses))
-	}
-	if len(f.PeerServices) > 0 {
-		c.Span += ` AND peer_service IN @peerServices`
-		c.Args = append(c.Args, clickhouse.Named("peerServices", f.PeerServices))
-	}
+	// Span predicates match ANY span of the trace.
+	c.Args = filterutil.AppendIn(&c.Span, c.Args,
+		filterutil.InClause{Column: "environment", Bind: "environments", Values: f.Environments},
+		filterutil.InClause{Column: "name", Bind: "operations", Values: f.Operations},
+		filterutil.InClause{Column: "kind_string", Bind: "spanKinds", Values: f.SpanKinds},
+		filterutil.InClause{Column: "http_method", Bind: "httpMethods", Values: f.HTTPMethods},
+		filterutil.InClause{Column: "response_status_code", Bind: "httpStatuses", Values: f.HTTPStatuses},
+		filterutil.InClause{Column: "status_code_string", Bind: "statuses", Values: f.Statuses},
+		filterutil.InClause{Column: "peer_service", Bind: "peerServices", Values: f.PeerServices},
+	)
+
+	// Exclusions are trace-level: they must be judged on the root span, not
+	// on "some span of the trace did not match".
+	c.Args = filterutil.AppendIn(&c.Root, c.Args,
+		filterutil.InClause{Column: "service", Bind: "excServices", Values: f.ExcludeServices, Negate: true},
+	)
+
 	if f.Search != "" {
 		// Case-insensitive substring on span name; matches any span of the
 		// trace. Legacy searchMode is accepted on the wire but ignored.
@@ -126,10 +113,10 @@ func BuildClauses(f Filters) Clauses {
 		c.Args = append(c.Args, clauseArgs...)
 	}
 
-	if len(f.ExcludeStatuses) > 0 {
-		c.Root += ` AND status_code_string NOT IN @excStatuses`
-		c.Args = append(c.Args, clickhouse.Named("excStatuses", f.ExcludeStatuses))
-	}
+	c.Args = filterutil.AppendIn(&c.Root, c.Args,
+		filterutil.InClause{Column: "status_code_string", Bind: "excStatuses",
+			Values: f.ExcludeStatuses, Negate: true},
+	)
 	if f.TraceID != "" {
 		c.Root += ` AND trace_id = @traceID`
 		c.Args = append(c.Args, clickhouse.Named("traceID", f.TraceID))

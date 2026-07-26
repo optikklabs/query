@@ -5,18 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/optikklabs/query/internal/shared/chtest"
 )
-
-func namedArgs(args []any) map[string]any {
-	m := map[string]any{}
-	for _, a := range args {
-		if nv, ok := a.(driver.NamedValue); ok {
-			m[nv.Name] = nv.Value
-		}
-	}
-	return m
-}
 
 func TestValidate(t *testing.T) {
 	t.Run("missing start", func(t *testing.T) {
@@ -87,7 +77,7 @@ func TestBuildClauses_Base(t *testing.T) {
 	if pw != wantPrewhere || w != "WHERE 1=1" {
 		t.Errorf("base clauses wrong, got pw=%q w=%q", pw, w)
 	}
-	if got := len(namedArgs(args)); got != 5 {
+	if got := len(chtest.NamedArgs(args)); got != 5 {
 		t.Errorf("got %d args, want 5 base args", got)
 	}
 }
@@ -139,7 +129,7 @@ func TestBuildClauses_SeverityCaseInsensitive(t *testing.T) {
 		!strings.Contains(w, "upper(severity_text) NOT IN @excSeverities") {
 		t.Errorf("severity clauses wrong: %q", w)
 	}
-	m := namedArgs(args)
+	m := chtest.NamedArgs(args)
 	sev := m["severities"].([]string)
 	if sev[0] != "ERROR" || sev[1] != "WARN" {
 		t.Errorf("severities not uppercased: %v", sev)
@@ -158,7 +148,7 @@ func TestBuildClauses_Search(t *testing.T) {
 		if !strings.Contains(w, "lowerUTF8(body) LIKE @search") {
 			t.Errorf("mode %q search clause wrong: %q", mode, w)
 		}
-		if got := namedArgs(args)["search"]; got != "%x%" {
+		if got := chtest.NamedArgs(args)["search"]; got != "%x%" {
 			t.Errorf("mode %q search pattern = %v, want %%x%%", mode, got)
 		}
 	}
@@ -168,7 +158,7 @@ func TestBuildClauses_Search(t *testing.T) {
 // substring, not a wildcard.
 func TestBuildClauses_SearchEscapesWildcards(t *testing.T) {
 	_, _, args := BuildClauses(Filters{StartMs: 1, EndMs: 2, Search: "50%_off"})
-	if got := namedArgs(args)["search"]; got != `%50\%\_off%` {
+	if got := chtest.NamedArgs(args)["search"]; got != `%50\%\_off%` {
 		t.Errorf("search pattern = %v, want %%50\\%%\\_off%%", got)
 	}
 }
@@ -248,7 +238,7 @@ func TestBuildClauses_AttributeOps(t *testing.T) {
 			if !strings.Contains(w, c.want) {
 				t.Errorf("got %q, want substring %q", w, c.want)
 			}
-			m := namedArgs(args)
+			m := chtest.NamedArgs(args)
 			for k, v := range c.binds {
 				if m[k] != v {
 					t.Errorf("bind %q = %v, want %v", k, m[k], v)

@@ -5,18 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/optikklabs/query/internal/shared/chtest"
 )
-
-func namedArgs(args []any) map[string]any {
-	m := map[string]any{}
-	for _, a := range args {
-		if nv, ok := a.(driver.NamedValue); ok {
-			m[nv.Name] = nv.Value
-		}
-	}
-	return m
-}
 
 func TestValidate(t *testing.T) {
 	t.Run("missing start", func(t *testing.T) {
@@ -76,7 +66,7 @@ func TestBuildClauses_Base(t *testing.T) {
 	if c.HasSpanMatch() {
 		t.Error("no filters should not require span match")
 	}
-	m := namedArgs(c.Args)
+	m := chtest.NamedArgs(c.Args)
 	for _, k := range []string{"tenantID", "start", "end"} {
 		if _, ok := m[k]; !ok {
 			t.Errorf("missing base arg %q", k)
@@ -216,7 +206,7 @@ func TestBuildClauses_AttributeOps(t *testing.T) {
 			if !strings.Contains(cl.Span, c.want) {
 				t.Errorf("got %q, want substring %q", cl.Span, c.want)
 			}
-			if m := namedArgs(cl.Args); m["akey_0"] != "k" {
+			if m := chtest.NamedArgs(cl.Args); m["akey_0"] != "k" {
 				t.Errorf("attr key bind = %v, want k", m["akey_0"])
 			}
 		})

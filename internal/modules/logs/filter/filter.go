@@ -61,43 +61,25 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket`
 	where = `WHERE 1=1`
 
-	if len(f.Services) > 0 {
-		prewhere += ` AND service IN @services`
-		args = append(args, clickhouse.Named("services", f.Services))
-	}
-	if len(f.ExcludeServices) > 0 {
-		prewhere += ` AND service NOT IN @excServices`
-		args = append(args, clickhouse.Named("excServices", f.ExcludeServices))
-	}
-	if len(f.Hosts) > 0 {
-		prewhere += ` AND host IN @hosts`
-		args = append(args, clickhouse.Named("hosts", f.Hosts))
-	}
-	if len(f.ExcludeHosts) > 0 {
-		prewhere += ` AND host NOT IN @excHosts`
-		args = append(args, clickhouse.Named("excHosts", f.ExcludeHosts))
-	}
-	if len(f.Pods) > 0 {
-		prewhere += ` AND pod IN @pods`
-		args = append(args, clickhouse.Named("pods", f.Pods))
-	}
-	if len(f.Containers) > 0 {
-		prewhere += ` AND container IN @containers`
-		args = append(args, clickhouse.Named("containers", f.Containers))
-	}
-	if len(f.Environments) > 0 {
-		prewhere += ` AND environment IN @environments`
-		args = append(args, clickhouse.Named("environments", f.Environments))
-	}
+	// Resource dimensions are all PREWHERE: they are low-cardinality columns
+	// in the sort key, so pruning on them before the body scan is the point.
+	args = filterutil.AppendIn(&prewhere, args,
+		filterutil.InClause{Column: "service", Bind: "services", Values: f.Services},
+		filterutil.InClause{Column: "service", Bind: "excServices", Values: f.ExcludeServices, Negate: true},
+		filterutil.InClause{Column: "host", Bind: "hosts", Values: f.Hosts},
+		filterutil.InClause{Column: "host", Bind: "excHosts", Values: f.ExcludeHosts, Negate: true},
+		filterutil.InClause{Column: "pod", Bind: "pods", Values: f.Pods},
+		filterutil.InClause{Column: "container", Bind: "containers", Values: f.Containers},
+		filterutil.InClause{Column: "environment", Bind: "environments", Values: f.Environments},
+	)
 
-	if len(f.Severities) > 0 {
-		where += ` AND upper(severity_text) IN @severities`
-		args = append(args, clickhouse.Named("severities", upperAll(f.Severities)))
-	}
-	if len(f.ExcludeSeverities) > 0 {
-		where += ` AND upper(severity_text) NOT IN @excSeverities`
-		args = append(args, clickhouse.Named("excSeverities", upperAll(f.ExcludeSeverities)))
-	}
+	args = filterutil.AppendIn(&where, args,
+		filterutil.InClause{Column: "upper(severity_text)", Bind: "severities",
+			Values: filterutil.UpperAll(f.Severities)},
+		filterutil.InClause{Column: "upper(severity_text)", Bind: "excSeverities",
+			Values: filterutil.UpperAll(f.ExcludeSeverities), Negate: true},
+	)
+
 	if f.TraceID != "" {
 		where += ` AND trace_id = @traceID`
 		args = append(args, clickhouse.Named("traceID", f.TraceID))
@@ -127,14 +109,6 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 func likeSubstringPattern(term string) string {
 	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.ToLower(term))
 	return "%" + esc + "%"
-}
-
-func upperAll(vs []string) []string {
-	out := make([]string, len(vs))
-	for i, v := range vs {
-		out[i] = strings.ToUpper(v)
-	}
-	return out
 }
 
 // buildAttrClause emits the WHERE predicate for one attribute filter.

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/optikklabs/query/internal/shared/chtest"
 )
 
 func TestBuildREDClausesNoServiceFilter(t *testing.T) {
@@ -21,7 +21,7 @@ func TestBuildREDClausesNoServiceFilter(t *testing.T) {
 		t.Fatalf("fleet-wide clause should be empty, got %q", where)
 	}
 
-	named := namedArgs(args)
+	named := chtest.NamedArgs(args)
 	if got := named["tenantID"]; got != uint32(1) {
 		t.Fatalf("tenantID = %v, want 1", got)
 	}
@@ -42,7 +42,7 @@ func TestBuildREDClausesKeepsServiceFilter(t *testing.T) {
 		t.Fatalf("service filter missing from clause: %q", where)
 	}
 
-	named := namedArgs(args)
+	named := chtest.NamedArgs(args)
 	if got := named["serviceName"]; got != "checkout" {
 		t.Fatalf("serviceName = %v, want checkout", got)
 	}
@@ -59,17 +59,7 @@ func TestBuildREDClausesMultiServiceFilter(t *testing.T) {
 	if !strings.Contains(where, "service IN @services") {
 		t.Fatalf("multi-service filter missing from clause: %q", where)
 	}
-	if _, ok := namedArgs(args)["services"]; !ok {
+	if _, ok := chtest.NamedArgs(args)["services"]; !ok {
 		t.Fatalf("services arg missing")
 	}
-}
-
-func namedArgs(args []any) map[string]any {
-	named := make(map[string]any)
-	for _, arg := range args {
-		if value, ok := arg.(driver.NamedValue); ok {
-			named[value.Name] = value.Value
-		}
-	}
-	return named
 }

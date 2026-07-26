@@ -5,18 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/optikklabs/query/internal/shared/chtest"
 )
-
-func namedArgs(args []any) map[string]any {
-	out := make(map[string]any, len(args))
-	for _, arg := range args {
-		if named, ok := arg.(driver.NamedValue); ok {
-			out[named.Name] = named.Value
-		}
-	}
-	return out
-}
 
 func TestParseFilters(t *testing.T) {
 	req := httptest.NewRequest("GET", "/?dbSystem=postgresql&dbSystem=mysql&collection=orders&namespace=app&server=db.internal", nil)
@@ -44,8 +34,8 @@ func TestBuildSpanClauses(t *testing.T) {
 	if !strings.Contains(where, "db_name IN @dbCollection") {
 		t.Errorf("WHERE %q does not use promoted db_name for collection filtering", where)
 	}
-	if len(namedArgs(args)) != 4 {
-		t.Fatalf("args = %#v", namedArgs(args))
+	if len(chtest.NamedArgs(args)) != 4 {
+		t.Fatalf("args = %#v", chtest.NamedArgs(args))
 	}
 }
 
@@ -64,7 +54,7 @@ func TestBuildMetricsClausesOnlyUsesProducedDimensions(t *testing.T) {
 			t.Errorf("WHERE %q contains unsupported %s filter", where, unsupported)
 		}
 	}
-	gotArgs := namedArgs(args)
+	gotArgs := chtest.NamedArgs(args)
 	if len(gotArgs) != 1 || gotArgs["dbSystem"] == nil {
 		t.Fatalf("args = %#v", gotArgs)
 	}

@@ -3,7 +3,7 @@ package filter
 import (
 	"net/http"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 // OTel semantic-convention names and canonical metric names.
@@ -33,31 +33,22 @@ func ParseFilters(r *http.Request) Filters {
 }
 
 func BuildSpanClauses(f Filters) (where string, args []any) {
-	if len(f.DBSystem) > 0 {
-		where += ` AND db_system IN @dbSystem`
-		args = append(args, clickhouse.Named("dbSystem", f.DBSystem))
-	}
-	if len(f.Collection) > 0 {
-		where += ` AND db_name IN @dbCollection`
-		args = append(args, clickhouse.Named("dbCollection", f.Collection))
-	}
-	if len(f.Namespace) > 0 {
-		where += ` AND attributes['` + AttrDBNamespace + `'] IN @dbNamespace`
-		args = append(args, clickhouse.Named("dbNamespace", f.Namespace))
-	}
-	if len(f.Server) > 0 {
-		where += ` AND attributes['` + AttrServerAddress + `'] IN @dbServer`
-		args = append(args, clickhouse.Named("dbServer", f.Server))
-	}
+	args = filterutil.AppendIn(&where, args,
+		filterutil.InClause{Column: "db_system", Bind: "dbSystem", Values: f.DBSystem},
+		filterutil.InClause{Column: "db_name", Bind: "dbCollection", Values: f.Collection},
+		filterutil.InClause{Column: `attributes['` + AttrDBNamespace + `']`,
+			Bind: "dbNamespace", Values: f.Namespace},
+		filterutil.InClause{Column: `attributes['` + AttrServerAddress + `']`,
+			Bind: "dbServer", Values: f.Server},
+	)
 	return where, args
 }
 
 // BuildMetricsClauses only filters dimensions carried by the span_stats
 // rollup. Collection, namespace, and server remain raw-span filters.
 func BuildMetricsClauses(f Filters) (where string, args []any) {
-	if len(f.DBSystem) > 0 {
-		where += " AND db_system IN @dbSystem"
-		args = append(args, clickhouse.Named("dbSystem", f.DBSystem))
-	}
+	args = filterutil.AppendIn(&where, args,
+		filterutil.InClause{Column: "db_system", Bind: "dbSystem", Values: f.DBSystem},
+	)
 	return where, args
 }
