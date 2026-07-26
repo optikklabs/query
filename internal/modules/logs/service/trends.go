@@ -1,18 +1,13 @@
-package logtrends //nolint:revive,stylecheck
+package service
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/optikklabs/query/internal/modules/logs/filter"
-	"github.com/optikklabs/query/internal/modules/logs/shared/models"
+	"github.com/optikklabs/query/internal/modules/logs/models"
+	"github.com/optikklabs/query/internal/modules/logs/repository"
 )
-
-type Service struct {
-	repo *Repository
-}
-
-func NewService(repo *Repository) *Service { return &Service{repo: repo} }
 
 // Summary powers POST /api/v1/logs/summary.
 func (s *Service) Summary(ctx context.Context, f filter.Filters) (models.Summary, error) {
@@ -31,7 +26,7 @@ func (s *Service) Trend(ctx context.Context, f filter.Filters) ([]models.TrendBu
 	return mapTrend(rows), nil
 }
 
-func mapTrend(rows []TrendRow) []models.TrendBucket {
+func mapTrend(rows []repository.TrendRow) []models.TrendBucket {
 	out := make([]models.TrendBucket, len(rows))
 	for i, r := range rows {
 		out[i] = models.TrendBucket{

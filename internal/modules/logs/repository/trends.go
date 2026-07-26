@@ -1,20 +1,13 @@
-package logtrends //nolint:revive,stylecheck
+package repository
 
 import (
 	"context"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/logs/filter"
 )
-
-type Repository struct {
-	db clickhouse.Conn
-}
-
-func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
 type SummaryRow struct {
 	Total  uint64 `ch:"total"`

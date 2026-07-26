@@ -7,13 +7,10 @@ import (
 	"testing"
 	"time"
 
-	logsexplorer "github.com/optikklabs/query/internal/modules/logs/explorer"
-	logsfacets "github.com/optikklabs/query/internal/modules/logs/facets"
 	logsfilter "github.com/optikklabs/query/internal/modules/logs/filter"
-	logsdetail "github.com/optikklabs/query/internal/modules/logs/logdetail"
-	logsmodels "github.com/optikklabs/query/internal/modules/logs/shared/models"
-	logstracelogs "github.com/optikklabs/query/internal/modules/logs/trace_logs"
-	logstrends "github.com/optikklabs/query/internal/modules/logs/trends"
+	logsmodels "github.com/optikklabs/query/internal/modules/logs/models"
+	logsrepo "github.com/optikklabs/query/internal/modules/logs/repository"
+	logsservice "github.com/optikklabs/query/internal/modules/logs/service"
 	"github.com/optikklabs/query/internal/shared/chtest"
 )
 
@@ -41,9 +38,9 @@ func logFilters() logsfilter.Filters {
 	}
 }
 
-// TestLogsRepoSQL pins the SQL of every read in the logs domain, which is
-// about to be merged into one package. Three of these modules — explorer,
-// logdetail and trace_logs — had no test at all before this.
+// TestLogsRepoSQL pins the SQL of every read in the logs domain. Three of the
+// modules it was merged from — explorer, logdetail and trace_logs — had no
+// test at all before this.
 func TestLogsRepoSQL(t *testing.T) {
 	ctx := context.Background()
 	rec := &chtest.Recorder{}
@@ -55,50 +52,47 @@ func TestLogsRepoSQL(t *testing.T) {
 		fmt.Fprintf(&b, "=== %s\n%s\n", name, rec.Render())
 	}
 
-	// getLogs is unexported, so the list query is reached through the service
-	// that owns it — which is also what pins the cursor predicate.
-	explSvc := logsexplorer.NewService(logsexplorer.NewRepository(rec))
+	repo := logsrepo.NewRepository(rec)
+
+	// The list query is reached through the service, which is also what pins
+	// the cursor predicate.
+	svc := logsservice.NewService(repo)
 	record("explorer.Query", func() {
-		req := logsexplorer.QueryRequest{StartTime: startMs, EndTime: endMs, Limit: 100}
+		req := logsmodels.QueryRequest{StartTime: startMs, EndTime: endMs, Limit: 100}
 		req.Filters = logFilters()
-		_, _ = explSvc.Query(ctx, req)
+		_, _ = svc.Query(ctx, req)
 	})
 	record("explorer.Query/cursor", func() {
-		req := logsexplorer.QueryRequest{
+		req := logsmodels.QueryRequest{
 			StartTime: startMs, EndTime: endMs, Limit: 100,
 			// A cursor the encoder produced, so the keyset predicate is exercised.
 			Cursor: encodedCursor(),
 		}
 		req.Filters = logFilters()
-		_, _ = explSvc.Query(ctx, req)
+		_, _ = svc.Query(ctx, req)
 	})
 
-	explRepo := logsexplorer.NewRepository(rec)
 	record("explorer.SuggestScalar/service", func() {
-		_, _ = explRepo.SuggestScalar(ctx, tenantID, startMs, endMs, "service_name", "ap", 10)
+		_, _ = repo.SuggestScalar(ctx, tenantID, startMs, endMs, "service_name", "ap", 10)
 	})
 	record("explorer.SuggestScalar/severity", func() {
-		_, _ = explRepo.SuggestScalar(ctx, tenantID, startMs, endMs, "severity_text", "er", 10)
+		_, _ = repo.SuggestScalar(ctx, tenantID, startMs, endMs, "severity_text", "er", 10)
 	})
 	record("explorer.SuggestAttribute", func() {
-		_, _ = explRepo.SuggestAttribute(ctx, tenantID, startMs, endMs, "@k", "v", 10)
+		_, _ = repo.SuggestAttribute(ctx, tenantID, startMs, endMs, "@k", "v", 10)
 	})
 
-	facetsRepo := logsfacets.NewRepository(rec)
-	record("facets.Compute", func() { _, _ = facetsRepo.Compute(ctx, logFilters()) })
+	record("facets.Compute", func() { _, _ = repo.Facets(ctx, logFilters()) })
 
-	trendsRepo := logstrends.NewRepository(rec)
-	record("trends.Summary", func() { _, _ = trendsRepo.Summary(ctx, logFilters()) })
-	record("trends.Trend", func() { _, _ = trendsRepo.Trend(ctx, logFilters()) })
+	record("trends.Summary", func() { _, _ = repo.Summary(ctx, logFilters()) })
+	record("trends.Trend", func() { _, _ = repo.Trend(ctx, logFilters()) })
 
-	detailRepo := logsdetail.NewRepository(rec)
 	record("logdetail.GetByID", func() {
-		_, _ = detailRepo.GetByID(ctx, tenantID, "deadbeefdeadbeef", startMs, endMs)
+		_, _ = repo.GetByID(ctx, tenantID, "deadbeefdeadbeef", startMs, endMs)
 	})
 
-	traceRepo := logstracelogs.NewRepository(rec)
 	record("trace_logs.FetchLogsByTrace", func() {
-		_, _ = traceRepo.FetchLogsByTrace(ctx, tenantID, "abc123", 500)
+		_, _ = repo.FetchLogsByTrace(ctx, tenantID, "abc123", 500)
 	})
 
 	compareGolden(t, "logs.golden.txt", b.String())

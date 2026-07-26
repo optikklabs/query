@@ -1,14 +1,16 @@
-package logtrends
+package service
 
 import (
 	"testing"
 	"time"
+
+	"github.com/optikklabs/query/internal/modules/logs/repository"
 )
 
 // mapTrend formats the bucket timestamp as UTC and copies the per-severity
 // counts through unchanged.
 func TestMapTrend(t *testing.T) {
-	rows := []TrendRow{
+	rows := []repository.TrendRow{
 		{TimeBucket: time.Date(2026, 6, 24, 9, 5, 0, 0, time.UTC), Total: 10, Error: 1, Warn: 2, Info: 6, Debug: 1},
 	}
 	out := mapTrend(rows)

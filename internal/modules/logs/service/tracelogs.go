@@ -1,16 +1,10 @@
-package trace_logs
+package service
 
 import (
 	"context"
 
-	"github.com/optikklabs/query/internal/modules/logs/shared/models"
+	"github.com/optikklabs/query/internal/modules/logs/models"
 )
-
-type Service struct {
-	repo *Repository
-}
-
-func NewService(repo *Repository) *Service { return &Service{repo: repo} }
 
 // GetByTraceID fetches every log correlated with a trace, by trace id alone.
 func (s *Service) GetByTraceID(ctx context.Context, tenantID int64, traceID string, limit int) ([]models.Log, error) {

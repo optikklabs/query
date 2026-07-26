@@ -1,16 +1,10 @@
-package logdetail
+package service
 
 import (
 	"context"
 
-	"github.com/optikklabs/query/internal/modules/logs/shared/models"
+	"github.com/optikklabs/query/internal/modules/logs/models"
 )
-
-type Service struct {
-	repo *Repository
-}
-
-func NewService(repo *Repository) *Service { return &Service{repo: repo} }
 
 // GetByID reads a single log by its deep-link id (a 16-char hex hash stored
 // directly as the row's log_id column). Returns nil on not-found.

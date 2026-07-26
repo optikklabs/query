@@ -1,4 +1,4 @@
-package logfacets //nolint:revive,stylecheck
+package repository
 
 import (
 	"context"
@@ -10,14 +10,9 @@ import (
 
 const facetTopN = 50
 
-type Repository struct {
-	db clickhouse.Conn
-}
-
-func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
-
-// dimRow is the scan target for the unified facets query.
-type dimRow struct {
+// DimRow is the scan target for the unified facets query: one (dimension,
+// value, count) triple, with all four dimensions interleaved in one result set.
+type DimRow struct {
 	Dim   string `ch:"dim"`
 	Value string `ch:"value"`
 	Count uint64 `ch:"cnt"`
@@ -52,13 +47,13 @@ func buildFacetQuery(prewhere, where string) string {
 		LIMIT @facetLimit BY dim`
 }
 
-func (r *Repository) Compute(ctx context.Context, f filter.Filters) ([]dimRow, error) {
+func (r *Repository) Facets(ctx context.Context, f filter.Filters) ([]DimRow, error) {
 	prewhere, where, args := filter.BuildClauses(f)
 	args = append(args, clickhouse.Named("facetLimit", uint64(facetTopN)))
 
 	query := buildFacetQuery(prewhere, where)
 
-	var rows []dimRow
+	var rows []DimRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "logsFacets.Compute",
 		&rows, query, args...); err != nil {
 		return nil, err

@@ -33,11 +33,7 @@ import (
 	llm_scores "github.com/optikklabs/query/internal/modules/llm/scores"
 	llm_sessions "github.com/optikklabs/query/internal/modules/llm/sessions"
 	llm_users "github.com/optikklabs/query/internal/modules/llm/users"
-	log_explorer "github.com/optikklabs/query/internal/modules/logs/explorer"
-	logfacets "github.com/optikklabs/query/internal/modules/logs/facets"
-	log_detail "github.com/optikklabs/query/internal/modules/logs/logdetail"
-	log_trace_logs "github.com/optikklabs/query/internal/modules/logs/trace_logs"
-	logtrends "github.com/optikklabs/query/internal/modules/logs/trends"
+	"github.com/optikklabs/query/internal/modules/logs"
 	metrics_explorer "github.com/optikklabs/query/internal/modules/metrics/explorer"
 	saturation_database "github.com/optikklabs/query/internal/modules/saturation/database"
 	saturation_kafka_explorer "github.com/optikklabs/query/internal/modules/saturation/kafka/explorer"
@@ -88,11 +84,7 @@ func configuredModules(
 		infrastructure_containerdetail.NewModule(nativeQuerier),
 		infrastructure_nodes.NewModule(nativeQuerier),
 		cloud.NewModule(nativeQuerier),
-		log_explorer.NewModule(nativeQuerier),
-		log_detail.NewModule(nativeQuerier),
-		logfacets.NewModule(nativeQuerier),
-		logtrends.NewModule(nativeQuerier),
-		log_trace_logs.NewModule(nativeQuerier),
+		logs.NewModule(nativeQuerier),
 		metrics_explorer.NewModule(nativeQuerier),
 		ingestion.NewModule(nativeQuerier),
 		llm.NewModule(nativeQuerier),

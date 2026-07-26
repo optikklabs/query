@@ -1,4 +1,4 @@
-package logdetail
+package repository
 
 import (
 	"context"
@@ -6,14 +6,8 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
-	"github.com/optikklabs/query/internal/modules/logs/shared/models"
+	"github.com/optikklabs/query/internal/modules/logs/models"
 )
-
-type Repository struct {
-	db clickhouse.Conn
-}
-
-func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
 // GetByID resolves a single log row by its stable log_id.
 // It queries ClickHouse by tenantID and logID using timestamp range partition pruning.

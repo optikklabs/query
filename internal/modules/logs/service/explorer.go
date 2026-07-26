@@ -1,33 +1,25 @@
-package explorer
+package service
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
-	"github.com/optikklabs/query/internal/modules/logs/shared/models"
+	"github.com/optikklabs/query/internal/modules/logs/models"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-// Service orchestrates POST /api/v1/logs/query. It owns the list path.
-type Service struct {
-	repo *Repository
-}
-
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
-}
-
-func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, error) {
+// Query powers POST /api/v1/logs/query — the keyset-paginated log list.
+func (s *Service) Query(ctx context.Context, req models.QueryRequest) (models.QueryResponse, error) {
 	limit := req.Limit
 	cur, _ := models.DecodeCursor(req.Cursor)
 
-	rows, hasMore, err := s.repo.getLogs(ctx, req.Filters, limit, cur)
+	rows, hasMore, err := s.repo.ListLogs(ctx, req.Filters, limit, cur)
 	if err != nil {
-		return QueryResponse{}, fmt.Errorf("logs.Query.list: %w", err)
+		return models.QueryResponse{}, fmt.Errorf("logs.Query.list: %w", err)
 	}
 
-	return QueryResponse{
+	return models.QueryResponse{
 		Results:  models.MapLogs(rows),
 		PageInfo: buildPageInfo(rows, hasMore, limit),
 	}, nil
@@ -35,9 +27,9 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, e
 
 // Suggest returns value suggestions for a scalar field or @attribute key,
 // mirroring the traces suggest behavior.
-func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int64) (SuggestResponse, error) {
+func (s *Service) Suggest(ctx context.Context, req models.SuggestRequest, tenantID int64) (models.SuggestResponse, error) {
 	limit := filterutil.PickLimit(req.Limit, 10, 50)
-	var rows []Suggestion
+	var rows []models.Suggestion
 	var err error
 	if strings.HasPrefix(req.Field, "@") {
 		rows, err = s.repo.SuggestAttribute(ctx, tenantID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
@@ -45,9 +37,9 @@ func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int6
 		rows, err = s.repo.SuggestScalar(ctx, tenantID, req.StartTime, req.EndTime, req.Field, req.Prefix, limit)
 	}
 	if err != nil {
-		return SuggestResponse{}, fmt.Errorf("logs.Suggest: %w", err)
+		return models.SuggestResponse{}, fmt.Errorf("logs.Suggest: %w", err)
 	}
-	return SuggestResponse{Suggestions: rows}, nil
+	return models.SuggestResponse{Suggestions: rows}, nil
 }
 
 func buildPageInfo(rows []models.LogRow, hasMore bool, limit int) models.PageInfo {

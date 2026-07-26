@@ -1,4 +1,4 @@
-package logfacets
+package repository
 
 import (
 	"strings"

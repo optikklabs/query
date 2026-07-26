@@ -13,7 +13,7 @@ import (
 )
 
 // Columns of the span_stats rollup, mirroring the DDL in the ingest repo at
-// db/clickhouse/14_span_stats.sql. Add a column here when the cascade gains one.
+// ingest/db/14_span_stats.sql. Add a column here when the cascade gains one.
 var spanStatsColumns = map[string]bool{
 	"tenant_id": true, "timestamp": true, "service": true, "environment": true,
 	"host": true, "pod": true, "span_name": true, "kind_string": true,

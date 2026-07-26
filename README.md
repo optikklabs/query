@@ -8,7 +8,7 @@ and is applied by hand (no migration-on-boot).
 The ingestion path (OTLP gRPC + Kafka) lives in the separate
 [`ingest`](https://github.com/optikklabs/ingest) repo, which owns the
 **ClickHouse** schema. This service reads those CH tables but does not manage
-them — apply ingest's `db/clickhouse` DDL by hand at least once so the tables
+them — apply ingest's `db` DDL by hand at least once so the tables
 exist.
 
 ## Schema
@@ -23,7 +23,7 @@ for f in db/mysql/*.sql; do mysql < "$f"; done
 ```
 
 The ClickHouse tables this service reads are owned by `ingest`; apply that
-repo's `db/clickhouse` DDL as described in its README.
+repo's `db` DDL as described in its README.
 
 ## Commands
 

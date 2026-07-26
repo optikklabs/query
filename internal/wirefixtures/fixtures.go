@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	logsmodels "github.com/optikklabs/query/internal/modules/logs/shared/models"
+	logsmodels "github.com/optikklabs/query/internal/modules/logs/models"
 	metricsexplorer "github.com/optikklabs/query/internal/modules/metrics/explorer"
 	dbmodels "github.com/optikklabs/query/internal/modules/saturation/database/models"
 	kafkatopology "github.com/optikklabs/query/internal/modules/saturation/kafka/topology"
