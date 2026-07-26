@@ -1,4 +1,4 @@
-package explorer
+package repository
 
 import (
 	"context"
@@ -7,15 +7,8 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/kafka/filter"
+	"github.com/optikklabs/query/internal/modules/saturation/kafka/models"
 )
-
-type Repository struct {
-	db clickhouse.Conn
-}
-
-func NewRepository(db clickhouse.Conn) *Repository {
-	return &Repository{db: db}
-}
 
 // buildFilterArgs constructs the optional dimension filter (applied in the
 // metrics_series CTE) and the bind args for queries.
@@ -62,7 +55,7 @@ var topicThroughputMetrics = []string{
 	"kafka.consumer.records_consumed_total",
 }
 
-func (r *Repository) QueryTopicThroughput(ctx context.Context, tenantID, startMs, endMs int64, topic string) ([]TopicThroughputRow, error) {
+func (r *Repository) QueryTopicThroughput(ctx context.Context, tenantID, startMs, endMs int64, topic string) ([]models.TopicThroughputRow, error) {
 	extraWhere, args := buildFilterArgs(tenantID, startMs, endMs, topicThroughputMetrics, "topic", topic)
 	query := seriesCTE(true, false, filter.AttrTopic+" != ''", extraWhere) + `
 		SELECT
@@ -83,13 +76,13 @@ func (r *Repository) QueryTopicThroughput(ctx context.Context, tenantID, startMs
 		GROUP BY topic
 		ORDER BY bytes_per_sec DESC, topic ASC
 		LIMIT 200`
-	rows := make([]TopicThroughputRow, 0)
+	rows := make([]models.TopicThroughputRow, 0)
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicThroughput", &rows, query, args...)
 }
 
 var groupPartitionMetrics = []string{"kafka.consumer_group.lag", "kafka.consumer_group.members"}
 
-func (r *Repository) QueryGroupPartitions(ctx context.Context, tenantID, startMs, endMs int64, group string) ([]GroupPartitionsRow, error) {
+func (r *Repository) QueryGroupPartitions(ctx context.Context, tenantID, startMs, endMs int64, group string) ([]models.GroupPartitionsRow, error) {
 	extraWhere, args := buildFilterArgs(tenantID, startMs, endMs, groupPartitionMetrics, "consumer_group", group)
 	query := seriesCTE(true, true, filter.AttrConsumerGroup+" != ''", extraWhere) + `
 		SELECT
@@ -105,6 +98,6 @@ func (r *Repository) QueryGroupPartitions(ctx context.Context, tenantID, startMs
 		GROUP BY consumer_group
 		ORDER BY assigned_partitions DESC, consumer_group ASC
 		LIMIT 200`
-	rows := make([]GroupPartitionsRow, 0)
+	rows := make([]models.GroupPartitionsRow, 0)
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryGroupPartitions", &rows, query, args...)
 }

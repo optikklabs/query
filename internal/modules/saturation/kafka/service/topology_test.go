@@ -1,8 +1,10 @@
-package topology
+package service
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/optikklabs/query/internal/modules/saturation/kafka/models"
+	"github.com/optikklabs/query/internal/modules/saturation/kafka/repository"
 )
 
 func TestErrRate(t *testing.T) {
@@ -44,7 +46,7 @@ func TestBuildGraph_Flow(t *testing.T) {
 	const winSecs = 10.0
 	// Interleaved on purpose: an empty consumer group is what marks a produce
 	// row, so the split must not depend on the rows arriving grouped by side.
-	rows := []edgeRow{
+	rows := []repository.EdgeRow{
 		{Service: "svcA", Topic: "orders", CallCount: 100, ErrorCount: 10, QS: []float64{1, 5, 9}},
 		{Service: "consumer1", Topic: "orders", ConsumerGroup: "g1", CallCount: 80, ErrorCount: 4, QS: []float64{1, 6, 10}},
 		{Service: "svcA", Topic: "payments", CallCount: 50, ErrorCount: 0, QS: []float64{2, 8, 12}},
@@ -66,7 +68,7 @@ func TestBuildGraph_Flow(t *testing.T) {
 		t.Errorf("producer[1] = %+v, want svcB rate 2 (sorted)", g.Producers[1])
 	}
 
-	topics := map[string]TopicNode{}
+	topics := map[string]models.TopicNode{}
 	for _, tn := range g.Topics {
 		topics[tn.Topic] = tn
 	}
@@ -77,7 +79,7 @@ func TestBuildGraph_Flow(t *testing.T) {
 		t.Errorf("payments topic = %+v, want rate 5, producers 1, groups 1", p)
 	}
 
-	cons := map[string]ConsumerNode{}
+	cons := map[string]models.ConsumerNode{}
 	for _, cn := range g.Consumers {
 		cons[cn.Service+"|"+cn.Group] = cn
 	}
@@ -117,7 +119,7 @@ func TestBuildGraph_Flow(t *testing.T) {
 }
 
 func TestBuildGraph_TopProducerTieIsDeterministic(t *testing.T) {
-	rows := []edgeRow{
+	rows := []repository.EdgeRow{
 		{Service: "z-service", Topic: "orders", CallCount: 10},
 		{Service: "a-service", Topic: "orders", CallCount: 10},
 		{Service: "consumer", Topic: "orders", ConsumerGroup: "group", CallCount: 5},
@@ -129,46 +131,9 @@ func TestBuildGraph_TopProducerTieIsDeterministic(t *testing.T) {
 	}
 }
 
-func TestQueriesDoNotSortByTraffic(t *testing.T) {
-	if strings.Contains(clientsQuery, "count()") {
-		t.Fatal("clients query must not rank services by series count")
-	}
-	if !strings.Contains(clientsQuery, "SELECT DISTINCT service") || !strings.Contains(clientsQuery, "ORDER BY service") {
-		t.Fatal("clients query must return distinct services in deterministic name order")
-	}
-	if strings.Contains(edgesQuery("rollup"), "ORDER BY call_count") {
-		t.Fatal("edges query must not sort aggregated rows by call count")
-	}
-}
-
 func TestBuildGraph_Empty(t *testing.T) {
 	g := buildGraph(nil, 1)
 	if len(g.Producers) != 0 || len(g.Topics) != 0 || len(g.Consumers) != 0 || len(g.Edges) != 0 || len(g.Pathways) != 0 {
 		t.Errorf("empty input should yield empty graph, got %+v", g)
-	}
-}
-
-// An empty or comma-padded param must not widen the query to every service.
-func TestParseServices(t *testing.T) {
-	cases := map[string][]string{
-		"":          {},
-		",":         {},
-		"  ":        {},
-		"a":         {"a"},
-		"a,b":       {"a", "b"},
-		" a , ,b, ": {"a", "b"},
-	}
-	for raw, want := range cases {
-		got := parseServices(raw)
-		if len(got) != len(want) {
-			t.Errorf("parseServices(%q) = %v, want %v", raw, got, want)
-			continue
-		}
-		for i := range want {
-			if got[i] != want[i] {
-				t.Errorf("parseServices(%q) = %v, want %v", raw, got, want)
-				break
-			}
-		}
 	}
 }

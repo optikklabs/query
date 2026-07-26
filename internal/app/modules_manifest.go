@@ -30,8 +30,7 @@ import (
 	"github.com/optikklabs/query/internal/modules/logs"
 	metrics_explorer "github.com/optikklabs/query/internal/modules/metrics/explorer"
 	saturation_database "github.com/optikklabs/query/internal/modules/saturation/database"
-	saturation_kafka_explorer "github.com/optikklabs/query/internal/modules/saturation/kafka/explorer"
-	saturation_kafka_topology "github.com/optikklabs/query/internal/modules/saturation/kafka/topology"
+	saturation_kafka "github.com/optikklabs/query/internal/modules/saturation/kafka"
 	services_errors "github.com/optikklabs/query/internal/modules/services/errors"
 	services_redfleet "github.com/optikklabs/query/internal/modules/services/redfleet"
 	services_topology "github.com/optikklabs/query/internal/modules/services/topology"
@@ -85,8 +84,7 @@ func configuredModules(
 		services_errors.NewModule(nativeQuerier),
 		services_redfleet.NewModule(nativeQuerier),
 		saturation_database.NewModule(nativeQuerier),
-		saturation_kafka_explorer.NewModule(nativeQuerier),
-		saturation_kafka_topology.NewModule(nativeQuerier),
+		saturation_kafka.NewModule(nativeQuerier),
 		services_topology.NewModule(nativeQuerier),
 		traces.NewModule(nativeQuerier),
 		traces_explorer.NewModule(nativeQuerier),

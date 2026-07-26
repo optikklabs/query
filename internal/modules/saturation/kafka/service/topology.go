@@ -1,19 +1,13 @@
-package topology
+package service
 
 import (
 	"context"
 	"sort"
 
+	"github.com/optikklabs/query/internal/modules/saturation/kafka/models"
+	"github.com/optikklabs/query/internal/modules/saturation/kafka/repository"
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
-
-type Service struct {
-	repo *Repository
-}
-
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
-}
 
 // GetClients lists the tenant's Kafka clients. It is separate from the graph so
 // the picker stays complete while the graph stays scoped.
@@ -30,13 +24,13 @@ func (s *Service) GetClients(ctx context.Context, tenantID, startMs, endMs int64
 
 // GetTopology builds the producers->topics->consumers graph for the given
 // services: their topics and the peers on the far side of them.
-func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int64, services []string) (TopologyResponse, error) {
+func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int64, services []string) (models.TopologyResponse, error) {
 	if len(services) == 0 {
 		return buildGraph(nil, 1), nil
 	}
 	rows, err := s.repo.QueryEdges(ctx, tenantID, startMs, endMs, services)
 	if err != nil {
-		return TopologyResponse{}, err
+		return models.TopologyResponse{}, err
 	}
 
 	winSecs := float64(endMs-startMs) / 1000
@@ -79,7 +73,7 @@ type nodeAgg struct {
 // buildGraph folds the edge rows into the graph. Produce rows must be applied
 // first: pathways reference each topic's top producer, which only the produce
 // pass knows.
-func buildGraph(rows []edgeRow, winSecs float64) TopologyResponse {
+func buildGraph(rows []repository.EdgeRow, winSecs float64) models.TopologyResponse {
 	producers := map[string]*nodeAgg{}
 	consumers := map[string]*nodeAgg{}
 	consumerMeta := map[string][2]string{}
@@ -90,7 +84,7 @@ func buildGraph(rows []edgeRow, winSecs float64) TopologyResponse {
 		svc   string
 		calls uint64
 	}{}
-	edges := make([]StreamEdge, 0, len(rows))
+	edges := make([]models.StreamEdge, 0, len(rows))
 
 	for _, row := range rows {
 		if row.ConsumerGroup != "" {
@@ -106,14 +100,14 @@ func buildGraph(rows []edgeRow, winSecs float64) TopologyResponse {
 				calls uint64
 			}{row.Service, row.CallCount}
 		}
-		edges = append(edges, StreamEdge{
+		edges = append(edges, models.StreamEdge{
 			Source: row.Service, Target: row.Topic, Kind: "produce",
 			RatePerSec: float64(row.CallCount) / winSecs,
 		})
 	}
 
 	consumeEdge := map[[2]string]uint64{}
-	pathways := make([]Pathway, 0, len(rows))
+	pathways := make([]models.Pathway, 0, len(rows))
 	for _, row := range rows {
 		if row.ConsumerGroup == "" {
 			continue
@@ -123,7 +117,7 @@ func buildGraph(rows []edgeRow, winSecs float64) TopologyResponse {
 		consumerMeta[key] = [2]string{row.Service, row.ConsumerGroup}
 		addSet(topicGroups, row.Topic, row.ConsumerGroup)
 		consumeEdge[[2]string{row.Topic, row.Service}] += row.CallCount
-		pathways = append(pathways, Pathway{
+		pathways = append(pathways, models.Pathway{
 			Producer: topicTop[row.Topic].svc, Topic: row.Topic,
 			Group: row.ConsumerGroup, Consumer: row.Service,
 			ProduceRatePerSec: float64(topicProduce[row.Topic]) / winSecs,
@@ -132,13 +126,13 @@ func buildGraph(rows []edgeRow, winSecs float64) TopologyResponse {
 		})
 	}
 	for k, calls := range consumeEdge {
-		edges = append(edges, StreamEdge{
+		edges = append(edges, models.StreamEdge{
 			Source: k[0], Target: k[1], Kind: "consume",
 			RatePerSec: float64(calls) / winSecs,
 		})
 	}
 
-	return TopologyResponse{
+	return models.TopologyResponse{
 		Producers: producerNodes(producers, winSecs),
 		Topics:    topicNodes(topicProduce, topicProducers, topicGroups, winSecs),
 		Consumers: consumerNodes(consumers, consumerMeta, winSecs),
@@ -167,10 +161,10 @@ func addSet(m map[string]map[string]struct{}, key, val string) {
 	m[key][val] = struct{}{}
 }
 
-func producerNodes(m map[string]*nodeAgg, winSecs float64) []ProducerNode {
-	out := make([]ProducerNode, 0, len(m))
+func producerNodes(m map[string]*nodeAgg, winSecs float64) []models.ProducerNode {
+	out := make([]models.ProducerNode, 0, len(m))
 	for svc, a := range m {
-		out = append(out, ProducerNode{
+		out = append(out, models.ProducerNode{
 			Service: svc, RatePerSec: float64(a.calls) / winSecs,
 			ErrorRate: errRate(a.errors, a.calls),
 			P50Ms:     a.latency.p50, P95Ms: a.latency.p95, P99Ms: a.latency.p99,
@@ -185,7 +179,7 @@ func producerNodes(m map[string]*nodeAgg, winSecs float64) []ProducerNode {
 	return out
 }
 
-func topicNodes(produce map[string]uint64, producers, groups map[string]map[string]struct{}, winSecs float64) []TopicNode {
+func topicNodes(produce map[string]uint64, producers, groups map[string]map[string]struct{}, winSecs float64) []models.TopicNode {
 	seen := map[string]struct{}{}
 	for t := range produce {
 		seen[t] = struct{}{}
@@ -193,9 +187,9 @@ func topicNodes(produce map[string]uint64, producers, groups map[string]map[stri
 	for t := range groups {
 		seen[t] = struct{}{}
 	}
-	out := make([]TopicNode, 0, len(seen))
+	out := make([]models.TopicNode, 0, len(seen))
 	for t := range seen {
-		out = append(out, TopicNode{
+		out = append(out, models.TopicNode{
 			Topic: t, RatePerSec: float64(produce[t]) / winSecs,
 			ProducerCount: len(producers[t]), ConsumerGroupCount: len(groups[t]),
 		})
@@ -209,10 +203,10 @@ func topicNodes(produce map[string]uint64, producers, groups map[string]map[stri
 	return out
 }
 
-func consumerNodes(m map[string]*nodeAgg, meta map[string][2]string, winSecs float64) []ConsumerNode {
-	out := make([]ConsumerNode, 0, len(m))
+func consumerNodes(m map[string]*nodeAgg, meta map[string][2]string, winSecs float64) []models.ConsumerNode {
+	out := make([]models.ConsumerNode, 0, len(m))
 	for key, a := range m {
-		out = append(out, ConsumerNode{
+		out = append(out, models.ConsumerNode{
 			Service: meta[key][0], Group: meta[key][1],
 			RatePerSec: float64(a.calls) / winSecs,
 			ErrorRate:  errRate(a.errors, a.calls),

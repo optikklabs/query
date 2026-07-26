@@ -1,15 +1,30 @@
-package topology
+package kafka
 
 import (
 	"context"
 	"net/http"
 	"strings"
 
+	"github.com/optikklabs/query/internal/modules/saturation/kafka/service"
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
 
 type Handler struct {
-	Service *Service
+	Service *service.Service
+}
+
+func (h *Handler) GetTopicThroughput(w http.ResponseWriter, r *http.Request) {
+	topic := r.URL.Query().Get("topic")
+	modulecommon.HandleRangeQuery(w, r, "Failed to query topic throughput", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetTopicThroughput(ctx, tenantID, startMs, endMs, topic)
+	})
+}
+
+func (h *Handler) GetGroupPartitions(w http.ResponseWriter, r *http.Request) {
+	group := r.URL.Query().Get("group")
+	modulecommon.HandleRangeQuery(w, r, "Failed to query group partitions", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetGroupPartitions(ctx, tenantID, startMs, endMs, group)
+	})
 }
 
 // GetClients returns the tenant's Kafka client roster for the picker.

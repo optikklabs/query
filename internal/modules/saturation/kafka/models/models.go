@@ -1,4 +1,26 @@
-package topology
+// Package models holds the Kafka saturation domain's API DTOs — the wire
+// contract shared by the handler and the service.
+//
+// The two explorer rows carry `ch` tags as well: their row shape and their
+// response shape are the same, so the repository scans straight into them.
+package models
+
+// TopicThroughputRow is one topic's consumed byte and record rates.
+type TopicThroughputRow struct {
+	Topic         string  `ch:"topic"                json:"topic"`
+	BytesPerSec   float64 `ch:"bytes_per_sec"        json:"bytesPerSec"`
+	BytesTotal    float64 `ch:"bytes_total"           json:"bytesTotal"`
+	RecordsPerSec float64 `ch:"records_per_sec"      json:"recordsPerSec"`
+	RecordsTotal  float64 `ch:"records_total"         json:"recordsTotal"`
+}
+
+// GroupPartitionsRow is one consumer group's partition and member counts.
+type GroupPartitionsRow struct {
+	ConsumerGroup      string  `ch:"consumer_group"      json:"consumerGroup"`
+	AssignedPartitions float64 `ch:"assigned_partitions" json:"assignedPartitions"`
+	TopicCount         uint64  `ch:"topic_count"         json:"topicCount"`
+	Members            float64 `ch:"members"             json:"members"`
+}
 
 // ProducerNode is a service that publishes to one or more topics.
 type ProducerNode struct {

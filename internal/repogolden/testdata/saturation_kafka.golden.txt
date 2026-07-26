@@ -1,0 +1,43 @@
+=== explorer.QueryTopicThroughput
+  [0] Select: WITH series AS ( SELECT fingerprint, attributes['messaging.destination.name'] AS topic FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE attributes['messaging.destination.name'] != '' GROUP BY fingerprint, topic ) SELECT series.topic AS topic, avg(if(metric_name = 'kafka.consumer.bytes_consumed_rate', ifNotFinite(val_sum / val_count, 0), NULL)) AS bytes_per_sec, max(if(metric_name = 'kafka.consumer.bytes_consumed_total', ifNotFinite(val_sum / val_count, 0), NULL)) AS bytes_total, avg(if(metric_name = 'kafka.consumer.records_consumed_rate', ifNotFinite(val_sum / val_count, 0), NULL)) AS records_per_sec, max(if(metric_name = 'kafka.consumer.records_consumed_total', ifNotFinite(val_sum / val_count, 0), NULL)) AS records_total FROM optikk.metrics_5m AS m INNER JOIN series ON m.fingerprint = series.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name IN @metricNames AND m.timestamp BETWEEN @start AND @end GROUP BY topic ORDER BY bytes_per_sec DESC, topic ASC LIMIT 200
+      @end = time.Time 2026-01-02T08:06:40Z
+      @metricNames = []string []string{"kafka.consumer.bytes_consumed_rate", "kafka.consumer.bytes_consumed_total", "kafka.consumer.records_consumed_rate", "kafka.consumer.records_consumed_total"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== explorer.QueryTopicThroughput/topic
+  [0] Select: WITH series AS ( SELECT fingerprint, attributes['messaging.destination.name'] AS topic FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE attributes['messaging.destination.name'] != '' AND attributes['messaging.destination.name'] = @filterVal GROUP BY fingerprint, topic ) SELECT series.topic AS topic, avg(if(metric_name = 'kafka.consumer.bytes_consumed_rate', ifNotFinite(val_sum / val_count, 0), NULL)) AS bytes_per_sec, max(if(metric_name = 'kafka.consumer.bytes_consumed_total', ifNotFinite(val_sum / val_count, 0), NULL)) AS bytes_total, avg(if(metric_name = 'kafka.consumer.records_consumed_rate', ifNotFinite(val_sum / val_count, 0), NULL)) AS records_per_sec, max(if(metric_name = 'kafka.consumer.records_consumed_total', ifNotFinite(val_sum / val_count, 0), NULL)) AS records_total FROM optikk.metrics_5m AS m INNER JOIN series ON m.fingerprint = series.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name IN @metricNames AND m.timestamp BETWEEN @start AND @end GROUP BY topic ORDER BY bytes_per_sec DESC, topic ASC LIMIT 200
+      @end = time.Time 2026-01-02T08:06:40Z
+      @filterVal = string "orders"
+      @metricNames = []string []string{"kafka.consumer.bytes_consumed_rate", "kafka.consumer.bytes_consumed_total", "kafka.consumer.records_consumed_rate", "kafka.consumer.records_consumed_total"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== explorer.QueryGroupPartitions
+  [0] Select: WITH series AS ( SELECT fingerprint, attributes['messaging.destination.name'] AS topic, attributes['messaging.consumer.group.name'] AS consumer_group FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE attributes['messaging.consumer.group.name'] != '' GROUP BY fingerprint, topic, consumer_group ) SELECT series.consumer_group AS consumer_group, toFloat64(countDistinctIf(m.fingerprint, metric_name = 'kafka.consumer_group.lag')) AS assigned_partitions, countDistinctIf(series.topic, series.topic != '' AND metric_name = 'kafka.consumer_group.lag') AS topic_count, ifNotFinite(argMaxIf(val_max, timestamp, metric_name = 'kafka.consumer_group.members'), 0) AS members FROM optikk.metrics_5m AS m INNER JOIN series ON m.fingerprint = series.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name IN @metricNames AND m.timestamp BETWEEN @start AND @end GROUP BY consumer_group ORDER BY assigned_partitions DESC, consumer_group ASC LIMIT 200
+      @end = time.Time 2026-01-02T08:06:40Z
+      @metricNames = []string []string{"kafka.consumer_group.lag", "kafka.consumer_group.members"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== explorer.QueryGroupPartitions/group
+  [0] Select: WITH series AS ( SELECT fingerprint, attributes['messaging.destination.name'] AS topic, attributes['messaging.consumer.group.name'] AS consumer_group FROM optikk.metrics_series PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames WHERE attributes['messaging.consumer.group.name'] != '' AND attributes['messaging.consumer.group.name'] = @filterVal GROUP BY fingerprint, topic, consumer_group ) SELECT series.consumer_group AS consumer_group, toFloat64(countDistinctIf(m.fingerprint, metric_name = 'kafka.consumer_group.lag')) AS assigned_partitions, countDistinctIf(series.topic, series.topic != '' AND metric_name = 'kafka.consumer_group.lag') AS topic_count, ifNotFinite(argMaxIf(val_max, timestamp, metric_name = 'kafka.consumer_group.members'), 0) AS members FROM optikk.metrics_5m AS m INNER JOIN series ON m.fingerprint = series.fingerprint PREWHERE m.tenant_id = @tenantID AND m.metric_name IN @metricNames AND m.timestamp BETWEEN @start AND @end GROUP BY consumer_group ORDER BY assigned_partitions DESC, consumer_group ASC LIMIT 200
+      @end = time.Time 2026-01-02T08:06:40Z
+      @filterVal = string "checkout-workers"
+      @metricNames = []string []string{"kafka.consumer_group.lag", "kafka.consumer_group.members"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== topology.QueryClients
+  [0] Select: SELECT DISTINCT service FROM optikk.span_stats_1h PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service != '' WHERE messaging_system = 'kafka' AND messaging_destination != '' ORDER BY service LIMIT 200
+      @end = time.Time 2026-01-02T08:06:40Z
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== topology.QueryEdges
+  [0] Select: WITH scoped_topics AS ( SELECT DISTINCT messaging_destination AS topic FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service IN @services WHERE messaging_system = 'kafka' AND messaging_destination != '' ) SELECT service AS service, messaging_destination AS topic, messaging_consumer_group AS consumer_group, sum(request_count) AS call_count, sumIf(request_count, (status_code_string = 'ERROR')) AS error_count, quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service != '' WHERE messaging_system = 'kafka' AND messaging_destination IN (SELECT topic FROM scoped_topics) GROUP BY service, topic, consumer_group LIMIT 1000
+      @end = time.Time 2026-01-02T08:06:40Z
+      @services = []string []string{"checkout", "orders"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+

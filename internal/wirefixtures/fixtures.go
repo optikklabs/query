@@ -8,7 +8,7 @@ import (
 	logsmodels "github.com/optikklabs/query/internal/modules/logs/models"
 	metricsexplorer "github.com/optikklabs/query/internal/modules/metrics/explorer"
 	dbmodels "github.com/optikklabs/query/internal/modules/saturation/database/models"
-	kafkatopology "github.com/optikklabs/query/internal/modules/saturation/kafka/topology"
+	kafkamodels "github.com/optikklabs/query/internal/modules/saturation/kafka/models"
 	redfleet "github.com/optikklabs/query/internal/modules/services/redfleet"
 	topology "github.com/optikklabs/query/internal/modules/services/topology"
 	tracesexplorer "github.com/optikklabs/query/internal/modules/traces/explorer"
@@ -103,12 +103,12 @@ func buildFixtures() map[string]any {
 		},
 		"redServiceSummary": redfleet.ServiceSummaryResponse{ServiceName: "s", RequestCount: 10, ErrorCount: 1, RPS: 1, ErrorRate: 10, P50Ms: 1, P95Ms: 2, P99Ms: 3, CPUUtilization: 4, MemoryUtilization: 5, DiskUtilization: 6},
 		"redSaturation":     []redfleet.SaturationTimeSeriesPoint{{Timestamp: now, Value: 1}, {}},
-		"kafkaTopology": kafkatopology.TopologyResponse{
-			Producers: []kafkatopology.ProducerNode{{Service: "p"}},
-			Topics:    []kafkatopology.TopicNode{{Topic: "t"}},
-			Consumers: []kafkatopology.ConsumerNode{{Service: "c", Group: "g"}},
-			Edges:     []kafkatopology.StreamEdge{{Source: "p", Target: "t", Kind: "produce"}},
-			Pathways:  []kafkatopology.Pathway{{Producer: "p", Topic: "t", Group: "g", Consumer: "c"}},
+		"kafkaTopology": kafkamodels.TopologyResponse{
+			Producers: []kafkamodels.ProducerNode{{Service: "p"}},
+			Topics:    []kafkamodels.TopicNode{{Topic: "t"}},
+			Consumers: []kafkamodels.ConsumerNode{{Service: "c", Group: "g"}},
+			Edges:     []kafkamodels.StreamEdge{{Source: "p", Target: "t", Kind: "produce"}},
+			Pathways:  []kafkamodels.Pathway{{Producer: "p", Topic: "t", Group: "g", Consumer: "c"}},
 		},
 		"querySummary":    dbmodels.QuerySummary{QueryHash: "h", Services: []dbmodels.ServiceCalls{{Service: "s", CallCount: 1}}},
 		"queryTimeseries": []dbmodels.QueryTimeseriesPoint{{TimeBucket: "t", CallCount: 1}, {}},
