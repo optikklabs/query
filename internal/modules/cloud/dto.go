@@ -15,32 +15,6 @@ type HealthCounts struct {
 	Unhealthy int64 `json:"unhealthy"`
 }
 
-// ProviderSummary powers the provider hero cards and per-provider tabs.
-type ProviderSummary struct {
-	Provider   string          `json:"provider"`
-	Accounts   int64           `json:"accounts"`
-	Regions    int64           `json:"regions"`
-	Nodes      int64           `json:"nodes"`
-	Pods       int64           `json:"pods"`
-	Resources  int64           `json:"resources"`
-	Restarts   int64           `json:"restarts"`
-	Categories []CategoryCount `json:"categories"`
-	Health     HealthCounts    `json:"health"`
-	LastSeen   string          `json:"lastSeen"`
-}
-
-// CloudOverview is the /cloud/overview response.
-type CloudOverview struct {
-	Providers      []ProviderSummary `json:"providers"`
-	TotalResources int64             `json:"totalResources"`
-	TotalAccounts  int64             `json:"totalAccounts"`
-	TotalRegions   int64             `json:"totalRegions"`
-	TotalNodes     int64             `json:"totalNodes"`
-	TotalPods      int64             `json:"totalPods"`
-	Unhealthy      int64             `json:"unhealthy"`
-	Degraded       int64             `json:"degraded"`
-}
-
 // PlatformService is one platform tile in the per-provider service grid.
 type PlatformService struct {
 	Platform string `json:"platform"`
@@ -66,12 +40,4 @@ type AttentionResource struct {
 	ErrorRate    float64 `json:"errorRate"`
 	AvgLatencyMs float64 `json:"avgLatencyMs"`
 	RequestCount int64   `json:"requestCount"`
-}
-
-// CloudProviderDetail is the /cloud/{provider} response.
-type CloudProviderDetail struct {
-	Provider  string              `json:"provider"`
-	Services  []PlatformService   `json:"services"`
-	Accounts  []AccountBreakdown  `json:"accounts"`
-	Resources []AttentionResource `json:"resources"`
 }
