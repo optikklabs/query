@@ -1,0 +1,119 @@
+=== explorer.Query
+  [0] Select: SELECT log_id, timestamp, observed_timestamp, severity_text, severity_number, severity_bucket, body, trace_id, span_id, trace_flags, service, host, pod, container, environment, attributes_string, attributes_number, attributes_bool, scope_name, scope_version FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket AND service IN @services WHERE 1=1 AND upper(severity_text) IN @severities AND trace_id = @traceID AND lowerUTF8(body) LIKE @search AND attributes_string[@akey_0] = @aval_0 ORDER BY timestamp DESC, log_id DESC LIMIT @pgLimit
+      @akey_0 = string "k"
+      @aval_0 = string "v"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @endBucket = uint32 0x69577c2c
+      @pgLimit = uint64 0x65
+      @search = string "%timeout%"
+      @services = []string []string{"api"}
+      @severities = []string []string{"ERROR"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @startBucket = uint32 0x695727cc
+      @tenantID = uint32 0x7
+      @traceID = string "abc123"
+
+=== explorer.Query/cursor
+  [0] Select: SELECT log_id, timestamp, observed_timestamp, severity_text, severity_number, severity_bucket, body, trace_id, span_id, trace_flags, service, host, pod, container, environment, attributes_string, attributes_number, attributes_bool, scope_name, scope_version FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket AND service IN @services WHERE 1=1 AND upper(severity_text) IN @severities AND trace_id = @traceID AND lowerUTF8(body) LIKE @search AND attributes_string[@akey_0] = @aval_0 AND (timestamp, log_id) < (@curTs, @curLid) ORDER BY timestamp DESC, log_id DESC LIMIT @pgLimit
+      (positional) driver.NamedDateValue driver.NamedDateValue{Name:"curTs", Value:time.Date(2026, time.January, 2, 3, 4, 5, 123456789, time.UTC), Scale:0x3}
+      @akey_0 = string "k"
+      @aval_0 = string "v"
+      @curLid = string "deadbeefdeadbeef"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @endBucket = uint32 0x69577c2c
+      @pgLimit = uint64 0x65
+      @search = string "%timeout%"
+      @services = []string []string{"api"}
+      @severities = []string []string{"ERROR"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @startBucket = uint32 0x695727cc
+      @tenantID = uint32 0x7
+      @traceID = string "abc123"
+
+=== explorer.SuggestScalar/service
+  [0] Select: SELECT service AS value, count() AS count FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket WHERE value != '' AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0) GROUP BY value ORDER BY count DESC LIMIT @limit
+      @end = time.Time 2026-01-02T08:06:40Z
+      @endBucket = uint32 0x69577c2c
+      @limit = uint64 0xa
+      @prefix = string "ap"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @startBucket = uint32 0x695727cc
+      @tenantID = uint32 0x7
+
+=== explorer.SuggestScalar/severity
+  [0] Select: SELECT upper(severity_text) AS value, count() AS count FROM optikk.logs PREWHERE tenant_id = @tenantID WHERE ts_bucket BETWEEN @startBucket AND @endBucket AND value != '' AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0) GROUP BY value ORDER BY count DESC LIMIT @limit
+      @end = time.Time 2026-01-02T08:06:40Z
+      @endBucket = uint32 0x69577c2c
+      @limit = uint64 0xa
+      @prefix = string "er"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @startBucket = uint32 0x695727cc
+      @tenantID = uint32 0x7
+
+=== explorer.SuggestAttribute
+  [0] Select: SELECT attributes_string[@attrKey] AS value, count() AS count FROM optikk.logs PREWHERE tenant_id = @tenantID WHERE ts_bucket BETWEEN @startBucket AND @endBucket AND value != '' AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0) GROUP BY value ORDER BY count DESC LIMIT @limit
+      @attrKey = string "k"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @endBucket = uint32 0x69577c2c
+      @limit = uint64 0xa
+      @prefix = string "v"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @startBucket = uint32 0x695727cc
+      @tenantID = uint32 0x7
+
+=== facets.Compute
+  [0] Select: SELECT multiIf( grouping(service) = 0, 'service', grouping(host) = 0, 'host', grouping(pod) = 0, 'pod', grouping(environment) = 0, 'environment', '' ) AS dim, multiIf( grouping(service) = 0, service, grouping(host) = 0, host, grouping(pod) = 0, pod, grouping(environment) = 0, environment, '' ) AS value, count() AS cnt FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket AND service IN @services WHERE 1=1 AND upper(severity_text) IN @severities AND trace_id = @traceID AND lowerUTF8(body) LIKE @search AND attributes_string[@akey_0] = @aval_0 GROUP BY GROUPING SETS ( (service), (host), (pod), (environment) ) HAVING value != '' ORDER BY dim, cnt DESC LIMIT @facetLimit BY dim
+      @akey_0 = string "k"
+      @aval_0 = string "v"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @endBucket = uint32 0x69577c2c
+      @facetLimit = uint64 0x32
+      @search = string "%timeout%"
+      @services = []string []string{"api"}
+      @severities = []string []string{"ERROR"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @startBucket = uint32 0x695727cc
+      @tenantID = uint32 0x7
+      @traceID = string "abc123"
+
+=== trends.Summary
+  [0] QueryRow: SELECT count() AS total, countIf(severity_bucket >= 4) AS errors, countIf(severity_bucket = 3) AS warns FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket AND service IN @services WHERE 1=1 AND upper(severity_text) IN @severities AND trace_id = @traceID AND lowerUTF8(body) LIKE @search AND attributes_string[@akey_0] = @aval_0
+      @akey_0 = string "k"
+      @aval_0 = string "v"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @endBucket = uint32 0x69577c2c
+      @search = string "%timeout%"
+      @services = []string []string{"api"}
+      @severities = []string []string{"ERROR"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @startBucket = uint32 0x695727cc
+      @tenantID = uint32 0x7
+      @traceID = string "abc123"
+
+=== trends.Trend
+  [0] Select: SELECT toStartOfInterval(timestamp, INTERVAL 300 SECOND) AS time_bucket, count() AS total, countIf(severity_bucket >= 4) AS error, countIf(severity_bucket = 3) AS warn, countIf(severity_bucket = 2) AS info, countIf(severity_bucket <= 1) AS debug FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket AND service IN @services WHERE 1=1 AND upper(severity_text) IN @severities AND trace_id = @traceID AND lowerUTF8(body) LIKE @search AND attributes_string[@akey_0] = @aval_0 GROUP BY time_bucket ORDER BY time_bucket ASC
+      @akey_0 = string "k"
+      @aval_0 = string "v"
+      @end = time.Time 2026-01-02T08:06:40Z
+      @endBucket = uint32 0x69577c2c
+      @search = string "%timeout%"
+      @services = []string []string{"api"}
+      @severities = []string []string{"ERROR"}
+      @start = time.Time 2026-01-02T02:06:40Z
+      @startBucket = uint32 0x695727cc
+      @tenantID = uint32 0x7
+      @traceID = string "abc123"
+
+=== logdetail.GetByID
+  [0] Select: SELECT log_id, timestamp, observed_timestamp, severity_text, severity_number, severity_bucket, body, trace_id, span_id, trace_flags, service, host, pod, container, environment, attributes_string, attributes_number, attributes_bool, scope_name, scope_version FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND log_id = @logID LIMIT 1
+      @end = time.Time 2026-01-02T08:06:40Z
+      @logID = string "deadbeefdeadbeef"
+      @start = time.Time 2026-01-02T02:06:40Z
+      @tenantID = uint32 0x7
+
+=== trace_logs.FetchLogsByTrace
+  [0] Select: SELECT log_id, timestamp, observed_timestamp, severity_text, severity_number, severity_bucket, body, trace_id, span_id, trace_flags, service, host, pod, container, environment, attributes_string, attributes_number, attributes_bool, scope_name, scope_version FROM optikk.logs PREWHERE tenant_id = @tenantID AND trace_id = @traceID ORDER BY timestamp ASC LIMIT @limit
+      @limit = uint64 0x1f4
+      @tenantID = uint32 0x7
+      @traceID = string "abc123"
+
