@@ -42,7 +42,6 @@ func (s *Service) GetFleetServices(ctx context.Context, f REDFilters) ([]Service
 	return overview.Services, nil
 }
 
-
 func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFilters) ([]ServicePerformancePoint, error) {
 	rows, err := s.repo.GetRequestAndErrorRateTimeSeries(ctx, f)
 	if err != nil {
@@ -170,7 +169,6 @@ func (s *Service) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]Stat
 	return points, nil
 }
 
-
 func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDFilters) ([]LatencyPercentilesPoint, error) {
 	rows, err := s.repo.GetLatencyPercentilesTimeSeries(ctx, f)
 	if err != nil {
@@ -258,7 +256,6 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters) 
 	return points, nil
 }
 
-
 func (s *Service) GetTopEndpointsCombined(
 	ctx context.Context, f REDFilters, limit int, cursorIn TopEndpointsCursor,
 ) (PaginatedEndpoints, error) {
@@ -343,7 +340,6 @@ func (s *Service) GetTopDBQueries(
 	}, nil
 }
 
-
 func (s *Service) GetOperationBaseline(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName, operationName string) (OperationBaseline, error) {
 	row, err := s.repo.GetOperationBaseline(ctx, tenantID, startMs, endMs, serviceName, operationName)
 	if err != nil {
@@ -408,7 +404,6 @@ func (s *Service) GetServiceSummary(ctx context.Context, f REDFilters) (ServiceS
 	}, nil
 }
 
-
 func (s *Service) GetServiceSaturationTimeSeries(ctx context.Context, f REDFilters) ([]SaturationTimeSeriesPoint, error) {
 	serviceName := f.SingleService()
 	metricNames := []string{
@@ -438,7 +433,7 @@ func (s *Service) GetServiceSaturationTimeSeries(ctx context.Context, f REDFilte
 		row, ok := rowMap[t.Unix()]
 		var val float64
 		if ok {
-			if normalized := normalizeUtilization(row.Value); normalized != nil {
+			if normalized := infraconsts.NormalizeUtilization(row.Value); normalized != nil {
 				val = *normalized
 			}
 		}

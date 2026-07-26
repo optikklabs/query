@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 func (s *Service) GetFleetPods(ctx context.Context, tenantID int64, startMs, endMs int64, host string) ([]models.FleetPod, error) {
@@ -14,7 +15,7 @@ func (s *Service) GetFleetPods(ctx context.Context, tenantID int64, startMs, end
 	}
 	out := make([]models.FleetPod, len(rows))
 	for i, r := range rows {
-		errorRate, avgLatency := redDerivations(r.RequestCount, r.ErrorCount, r.DurationMsSum)
+		errorRate, avgLatency := metrics.REDDerivations(r.RequestCount, r.ErrorCount, r.DurationMsSum)
 		services := r.Services
 		if services == nil {
 			services = []string{}

@@ -9,33 +9,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesdefs"
 )
 
-func TestNormalizeUtilization(t *testing.T) {
-	cases := []struct {
-		in      float64
-		wantNil bool
-		want    float64
-	}{
-		{0.5, false, 50},
-		{1.0, false, 100},
-		{75, false, 75},
-		{100.1, true, 0},
-		{-0.1, true, 0},
-		{math.NaN(), true, 0},
-	}
-	for _, c := range cases {
-		got := normalizeUtilization(c.in)
-		if c.wantNil {
-			if got != nil {
-				t.Errorf("normalizeUtilization(%v) = %v, want nil", c.in, *got)
-			}
-			continue
-		}
-		if got == nil || *got != c.want {
-			t.Errorf("normalizeUtilization(%v) = %v, want %v", c.in, got, c.want)
-		}
-	}
-}
-
 func TestAverageFloats(t *testing.T) {
 	if got := averageFloats(nil); got != nil {
 		t.Errorf("empty must be nil, got %v", *got)
@@ -46,32 +19,9 @@ func TestAverageFloats(t *testing.T) {
 	if got := averageFloats([]float64{10, 30}); got == nil || *got != 20 {
 		t.Errorf("averageFloats([10,30]) = %v, want 20", got)
 	}
-	// The filtering is what separates it from averageUnfiltered.
+	// The filtering is what separates it from infraconsts.AverageUtilization.
 	if got := averageFloats([]float64{10, math.NaN(), 30}); got == nil || *got != 20 {
 		t.Errorf("averageFloats must skip NaN, got %v", got)
-	}
-}
-
-func TestAverageUnfiltered(t *testing.T) {
-	if got := averageUnfiltered(nil); got != nil {
-		t.Errorf("empty must be nil, got %v", *got)
-	}
-	if got := averageUnfiltered([]float64{10, 30}); got == nil || *got != 20 {
-		t.Errorf("averageUnfiltered([10,30]) = %v, want 20", got)
-	}
-}
-
-// redDerivations computes error% and mean latency, guarding zero requests.
-func TestRedDerivations(t *testing.T) {
-	if er, al := redDerivations(0, 5, 100); er != 0 || al != 0 {
-		t.Errorf("zero requests = (%v,%v), want (0,0)", er, al)
-	}
-	er, al := redDerivations(4, 1, 200)
-	if er != 25 {
-		t.Errorf("errorRate = %v, want 25", er)
-	}
-	if al != 50 {
-		t.Errorf("avgLatency = %v, want 50", al)
 	}
 }
 

@@ -89,7 +89,7 @@ func (s *Service) GetProviderResources(ctx context.Context, tenantID int64, prov
 	}
 	out := make([]AttentionResource, 0, len(resources))
 	for _, r := range resources {
-		errorRate, avgLatency := redDerivations(r.RequestCount, r.ErrorCount, r.DurationMsSum)
+		errorRate, avgLatency := metrics.REDDerivations(r.RequestCount, r.ErrorCount, r.DurationMsSum)
 		out = append(out, AttentionResource{
 			Entity:       r.Entity,
 			Service:      r.Service,
@@ -131,7 +131,7 @@ func aggregateCategories(rows []CategoryRow) map[string][]CategoryCount {
 func aggregateHealth(rows []HealthRow) map[string]HealthCounts {
 	out := map[string]HealthCounts{}
 	for _, row := range rows {
-		errorRate, _ := redDerivations(row.RequestCount, row.ErrorCount, 0)
+		errorRate, _ := metrics.REDDerivations(row.RequestCount, row.ErrorCount, 0)
 		counts := out[row.Provider]
 		switch classifyHealth(errorRate) {
 		case "unhealthy":
@@ -152,15 +152,6 @@ func indexRestarts(rows []RestartRow) map[string]uint64 {
 		out[row.Provider] = row.Restarts
 	}
 	return out
-}
-
-// redDerivations mirrors the nodes module: error-rate % and avg latency.
-func redDerivations(reqCount, errCount uint64, durationMsSum float64) (errorRate, avgLatency float64) {
-	if reqCount == 0 {
-		return 0, 0
-	}
-	rc := float64(reqCount)
-	return metrics.Percentage(errCount, reqCount), durationMsSum / rc
 }
 
 func formatTime(t time.Time) string {

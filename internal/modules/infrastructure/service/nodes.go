@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 func (s *Service) GetInfrastructureNodes(ctx context.Context, tenantID int64, startMs, endMs int64) ([]models.InfrastructureNode, error) {
@@ -15,7 +16,7 @@ func (s *Service) GetInfrastructureNodes(ctx context.Context, tenantID int64, st
 	}
 	out := make([]models.InfrastructureNode, len(rows))
 	for i, r := range rows {
-		errorRate, avgLatency := redDerivations(r.RequestCount, r.ErrorCount, r.DurationMsSum)
+		errorRate, avgLatency := metrics.REDDerivations(r.RequestCount, r.ErrorCount, r.DurationMsSum)
 		out[i] = models.InfrastructureNode{
 			Host:     r.Host,
 			PodCount: int64(r.PodCount),
@@ -59,7 +60,7 @@ func (s *Service) GetInfrastructureNodeServices(ctx context.Context, tenantID in
 	}
 	out := make([]models.InfrastructureNodeService, len(rows))
 	for i, r := range rows {
-		errorRate, avgLatency := redDerivations(r.RequestCount, r.ErrorCount, r.DurationMsSum)
+		errorRate, avgLatency := metrics.REDDerivations(r.RequestCount, r.ErrorCount, r.DurationMsSum)
 		out[i] = models.InfrastructureNodeService{
 			ServiceName:  r.Service,
 			RequestCount: int64(r.RequestCount),

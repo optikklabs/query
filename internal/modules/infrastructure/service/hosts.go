@@ -143,14 +143,14 @@ func foldCPU(m map[string]float64) *float64 {
 func foldMem(m map[string]float64) *float64 {
 	var values []float64
 	if v, ok := m[infraconsts.MetricSystemMemoryUtilization]; ok {
-		if nv := normalizeUtilization(v); nv != nil {
+		if nv := infraconsts.NormalizeUtilization(v); nv != nil {
 			values = append(values, *nv)
 		}
 	}
 	if max := m[infraconsts.MetricJVMMemoryMax]; max > 0 {
 		values = append(values, infraconsts.PercentageMultiplier*m[infraconsts.MetricJVMMemoryUsed]/max)
 	}
-	return averageUnfiltered(values)
+	return infraconsts.AverageUtilization(values)
 }
 
 func foldDisk(m map[string]float64) *float64 {
@@ -161,28 +161,12 @@ func averagePresent(m map[string]float64, metricNames ...string) *float64 {
 	var values []float64
 	for _, name := range metricNames {
 		if v, ok := m[name]; ok {
-			if nv := normalizeUtilization(v); nv != nil {
+			if nv := infraconsts.NormalizeUtilization(v); nv != nil {
 				values = append(values, *nv)
 			}
 		}
 	}
-	return averageUnfiltered(values)
-}
-
-// averageUnfiltered means every entry as given, unlike averageFloats which
-// drops non-finite and negative values. The host page has always used this
-// arithmetic; keeping it separate preserves that behaviour rather than
-// changing results as a side effect of merging the packages.
-func averageUnfiltered(values []float64) *float64 {
-	if len(values) == 0 {
-		return nil
-	}
-	var sum float64
-	for _, v := range values {
-		sum += v
-	}
-	avg := sum / float64(len(values))
-	return &avg
+	return infraconsts.AverageUtilization(values)
 }
 
 func valueOrZero(p *float64) float64 {

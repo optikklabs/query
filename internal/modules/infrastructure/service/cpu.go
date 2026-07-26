@@ -56,7 +56,7 @@ func foldCPUMetricRows(rows []repository.CPUMetricNameRow) *float64 {
 	}
 	var values []float64
 	add := func(v float64) {
-		if nv := normalizeUtilization(v); nv != nil {
+		if nv := infraconsts.NormalizeUtilization(v); nv != nil {
 			values = append(values, *nv)
 		}
 	}

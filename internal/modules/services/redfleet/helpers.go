@@ -1,8 +1,6 @@
 package redfleet
 
 import (
-	"math"
-
 	"github.com/optikklabs/query/internal/infra/utils"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/shared/metrics"
@@ -117,21 +115,21 @@ func extractSaturationAverages(sats []serviceMetricRow) (cpuVal, memVal, diskVal
 	for _, row := range sats {
 		switch row.MetricName {
 		case infraconsts.MetricSystemCPUUtilization, infraconsts.MetricSystemCPUUsage, infraconsts.MetricProcessCPUUsage, infraconsts.MetricJVMCPUUtilization:
-			if v := normalizeUtilization(row.Value); v != nil {
+			if v := infraconsts.NormalizeUtilization(row.Value); v != nil {
 				cpuValues = append(cpuValues, *v)
 			}
 		case infraconsts.MetricSystemMemoryUtilization:
-			if v := normalizeUtilization(row.Value); v != nil {
+			if v := infraconsts.NormalizeUtilization(row.Value); v != nil {
 				memVal = *v
 			}
 		case infraconsts.MetricSystemDiskUtilization:
-			if v := normalizeUtilization(row.Value); v != nil {
+			if v := infraconsts.NormalizeUtilization(row.Value); v != nil {
 				diskVal = *v
 			}
 		}
 	}
 
-	if cpuAvg := averageFloats(cpuValues); cpuAvg != nil {
+	if cpuAvg := infraconsts.AverageUtilization(cpuValues); cpuAvg != nil {
 		cpuVal = *cpuAvg
 	}
 
@@ -152,26 +150,4 @@ func extractREDMetrics(redRow *redMetricsRow, durationSec float64) (reqCount, er
 	p99 = utils.SanitizeFloat(float64(redRow.P99Ms))
 
 	return
-}
-
-func normalizeUtilization(v float64) *float64 {
-	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > infraconsts.PercentageThreshold*100 {
-		return nil
-	}
-	if v <= infraconsts.PercentageThreshold {
-		v = v * infraconsts.PercentageMultiplier
-	}
-	return &v
-}
-
-func averageFloats(vals []float64) *float64 {
-	if len(vals) == 0 {
-		return nil
-	}
-	sum := 0.0
-	for _, v := range vals {
-		sum += v
-	}
-	avg := sum / float64(len(vals))
-	return &avg
 }
