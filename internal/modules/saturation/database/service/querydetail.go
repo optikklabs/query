@@ -1,4 +1,4 @@
-package querydetail
+package service
 
 import (
 	"context"
@@ -7,22 +7,15 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
+	"github.com/optikklabs/query/internal/modules/saturation/database/models"
 )
 
-type Service struct {
-	repo *Repository
-}
-
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
-}
-
-func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (*QuerySummary, error) {
+func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (*models.QuerySummary, error) {
 	raw, err := s.repo.GetSummary(ctx, tenantID, startMs, endMs, hash, f)
 	if err != nil || raw == nil {
 		return nil, err
 	}
-	out := &QuerySummary{
+	out := &models.QuerySummary{
 		QueryHash:      hash,
 		QueryText:      raw.QueryText,
 		DbSystem:       raw.DbSystem,
@@ -31,7 +24,7 @@ func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64
 		CallCount:      int64(raw.CallCount),
 		ErrorCount:     int64(raw.ErrorCount),
 		AvgRows:        raw.AvgRows,
-		Services:       []ServiceCalls{},
+		Services:       []models.ServiceCalls{},
 	}
 	if raw.CallCount == 0 {
 		return out, nil
@@ -48,7 +41,7 @@ func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64
 		return nil, err
 	}
 	for _, sv := range services {
-		out.Services = append(out.Services, ServiceCalls{Service: sv.Service, CallCount: int64(sv.CallCount)})
+		out.Services = append(out.Services, models.ServiceCalls{Service: sv.Service, CallCount: int64(sv.CallCount)})
 	}
 	return out, nil
 }
@@ -64,15 +57,15 @@ func operationName(attr, queryText string) string {
 	return ""
 }
 
-func (s *Service) GetTimeseries(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) ([]QueryTimeseriesPoint, error) {
+func (s *Service) GetTimeseries(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) ([]models.QueryTimeseriesPoint, error) {
 	rows, err := s.repo.GetTimeseries(ctx, tenantID, startMs, endMs, hash, f)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]QueryTimeseriesPoint, len(rows))
+	out := make([]models.QueryTimeseriesPoint, len(rows))
 	for i, r := range rows {
 		avg, p99 := r.AvgMs, float64(r.P99Ms)
-		out[i] = QueryTimeseriesPoint{
+		out[i] = models.QueryTimeseriesPoint{
 			TimeBucket: timebucket.FormatDisplayBucket(r.BucketAt),
 			CallCount:  int64(r.CallCount),
 			ErrorCount: int64(r.ErrorCount),
@@ -83,14 +76,14 @@ func (s *Service) GetTimeseries(ctx context.Context, tenantID, startMs, endMs in
 	return out, nil
 }
 
-func (s *Service) GetExecutions(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters, limit int) ([]QueryExecution, error) {
+func (s *Service) GetExecutions(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters, limit int) ([]models.QueryExecution, error) {
 	rows, err := s.repo.GetExecutions(ctx, tenantID, startMs, endMs, hash, f, limit)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]QueryExecution, len(rows))
+	out := make([]models.QueryExecution, len(rows))
 	for i, r := range rows {
-		out[i] = QueryExecution{
+		out[i] = models.QueryExecution{
 			Timestamp:  r.Timestamp.UTC().Format(time.RFC3339Nano),
 			TraceID:    r.TraceID,
 			SpanID:     r.SpanID,

@@ -7,8 +7,7 @@ import (
 
 	logsmodels "github.com/optikklabs/query/internal/modules/logs/shared/models"
 	metricsexplorer "github.com/optikklabs/query/internal/modules/metrics/explorer"
-	dbquerydetail "github.com/optikklabs/query/internal/modules/saturation/database/querydetail"
-	dbslowqueries "github.com/optikklabs/query/internal/modules/saturation/database/slowqueries"
+	dbmodels "github.com/optikklabs/query/internal/modules/saturation/database/models"
 	kafkatopology "github.com/optikklabs/query/internal/modules/saturation/kafka/topology"
 	redfleet "github.com/optikklabs/query/internal/modules/services/redfleet"
 	topology "github.com/optikklabs/query/internal/modules/services/topology"
@@ -113,10 +112,10 @@ func buildFixtures() map[string]any {
 			Edges:     []kafkatopology.StreamEdge{{Source: "p", Target: "t", Kind: "produce"}},
 			Pathways:  []kafkatopology.Pathway{{Producer: "p", Topic: "t", Group: "g", Consumer: "c"}},
 		},
-		"querySummary":    dbquerydetail.QuerySummary{QueryHash: "h", Services: []dbquerydetail.ServiceCalls{{Service: "s", CallCount: 1}}},
-		"queryTimeseries": []dbquerydetail.QueryTimeseriesPoint{{TimeBucket: "t", CallCount: 1}, {}},
-		"queryExecutions": []dbquerydetail.QueryExecution{{Timestamp: "t", TraceID: "t1", SpanID: "s1", DurationMs: 1, IsError: false, Service: "s", Host: "h"}, {}},
-		"slowQueries":     []dbslowqueries.SlowQueryPattern{{QueryHash: "h", QueryText: "SELECT 1", DBSystem: "postgresql", CollectionName: "c", Namespace: "app", Server: "db.internal", CallCount: 1}, {}},
+		"querySummary":    dbmodels.QuerySummary{QueryHash: "h", Services: []dbmodels.ServiceCalls{{Service: "s", CallCount: 1}}},
+		"queryTimeseries": []dbmodels.QueryTimeseriesPoint{{TimeBucket: "t", CallCount: 1}, {}},
+		"queryExecutions": []dbmodels.QueryExecution{{Timestamp: "t", TraceID: "t1", SpanID: "s1", DurationMs: 1, IsError: false, Service: "s", Host: "h"}, {}},
+		"slowQueries":     []dbmodels.SlowQueryPattern{{QueryHash: "h", QueryText: "SELECT 1", DBSystem: "postgresql", CollectionName: "c", Namespace: "app", Server: "db.internal", CallCount: 1}, {}},
 	}
 }
 

@@ -1,4 +1,4 @@
-package explorer
+package service
 
 import (
 	"context"
@@ -7,20 +7,15 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/optikklabs/query/internal/modules/saturation/database/models"
+	"github.com/optikklabs/query/internal/modules/saturation/database/repository"
 )
 
-type Service struct {
-	repo *Repository
-}
-
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
-}
-
 // GetDatastoreSystems fetches datastore summaries and connections.
-func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, endMs int64) ([]DatastoreSystemRow, error) {
+func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, endMs int64) ([]models.DatastoreSystemRow, error) {
 	var (
-		spanRows []systemSummaryRawDTO
+		spanRows []repository.SystemSummaryRaw
 		conns    map[string]int64
 	)
 	g, gctx := errgroup.WithContext(ctx)
@@ -44,13 +39,13 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, en
 		return nil, err
 	}
 
-	rows := make([]DatastoreSystemRow, 0, len(spanRows))
+	rows := make([]models.DatastoreSystemRow, 0, len(spanRows))
 	seen := make(map[string]struct{}, len(spanRows))
 	for _, r := range spanRows {
 		queryCount := int64(r.QueryCount)
 		errorCount := int64(r.ErrorCount)
 		seen[r.DBSystem] = struct{}{}
-		rows = append(rows, DatastoreSystemRow{
+		rows = append(rows, models.DatastoreSystemRow{
 			System:            r.DBSystem,
 			Category:          datastoreCategory(r.DBSystem),
 			QueryCount:        queryCount,
@@ -66,7 +61,7 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, en
 		if _, ok := seen[system]; ok {
 			continue
 		}
-		rows = append(rows, DatastoreSystemRow{
+		rows = append(rows, models.DatastoreSystemRow{
 			System:            system,
 			Category:          datastoreCategory(system),
 			ActiveConnections: active,

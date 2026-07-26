@@ -1,4 +1,4 @@
-package querydetail
+package database
 
 import (
 	"context"
@@ -6,12 +6,37 @@ import (
 	"strings"
 
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
+	"github.com/optikklabs/query/internal/modules/saturation/database/service"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
 
 type Handler struct {
-	Service *Service
+	Service *service.Service
+}
+
+func (h *Handler) GetDatastoreSystems(w http.ResponseWriter, r *http.Request) {
+	modulecommon.HandleRangeQuery(w, r, "Failed to query datastore systems", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetDatastoreSystems(ctx, tenantID, startMs, endMs)
+	})
+}
+
+func (h *Handler) GetLatencyBySystem(w http.ResponseWriter, r *http.Request) {
+	modulecommon.HandleRangeQuery(w, r, "Failed to query latency by system", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetLatencyBySystem(ctx, tenantID, startMs, endMs, filter.ParseFilters(r))
+	})
+}
+
+func (h *Handler) GetOpsBySystem(w http.ResponseWriter, r *http.Request) {
+	modulecommon.HandleRangeQuery(w, r, "Failed to query ops by system", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetOpsBySystem(ctx, tenantID, startMs, endMs, filter.ParseFilters(r))
+	})
+}
+
+func (h *Handler) GetSlowQueryPatterns(w http.ResponseWriter, r *http.Request) {
+	modulecommon.HandleRangeQuery(w, r, "Failed to query slow query patterns", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+		return h.Service.GetSlowQueryPatterns(ctx, tenantID, startMs, endMs, filter.ParseFilters(r), modulecommon.ParsePageSize(r, "limit", service.DefaultPatternLimit))
+	})
 }
 
 // parseHash returns the required query hash param, responding 400 when absent.
@@ -50,6 +75,6 @@ func (h *Handler) GetExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	modulecommon.HandleRangeQuery(w, r, "Failed to query detail executions", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.Service.GetExecutions(ctx, tenantID, startMs, endMs, hash, filter.ParseFilters(r), modulecommon.ParsePageSize(r, "limit", defaultExecutionsLimit))
+		return h.Service.GetExecutions(ctx, tenantID, startMs, endMs, hash, filter.ParseFilters(r), modulecommon.ParsePageSize(r, "limit", service.DefaultExecutionsLimit))
 	})
 }

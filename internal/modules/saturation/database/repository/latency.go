@@ -1,10 +1,9 @@
-package latency
+package repository
 
 import (
 	"context"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
@@ -12,15 +11,7 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-type Repository struct {
-	db clickhouse.Conn
-}
-
-func NewRepository(db clickhouse.Conn) *Repository {
-	return &Repository{db: db}
-}
-
-type latencyRawDTO struct {
+type LatencyRaw struct {
 	BucketAt time.Time `ch:"bucket_at"`
 	GroupBy  string    `ch:"group_by"`
 	QS       []float32 `ch:"qs"`
@@ -29,7 +20,7 @@ type latencyRawDTO struct {
 	P99Ms    float32
 }
 
-func (r *Repository) GetLatencyBySystem(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters) ([]latencyRawDTO, error) {
+func (r *Repository) GetLatencyBySystem(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters) ([]LatencyRaw, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	filterWhere, filterArgs := filter.BuildMetricsClauses(f)
 	query := `
@@ -44,7 +35,7 @@ func (r *Repository) GetLatencyBySystem(ctx context.Context, tenantID, startMs, 
 		ORDER BY bucket_at, group_by`
 
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), filterArgs...)
-	var rows []latencyRawDTO
+	var rows []LatencyRaw
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "latency.GetLatencyBySystem", &rows, query, args...); err != nil {
 		return nil, err
 	}

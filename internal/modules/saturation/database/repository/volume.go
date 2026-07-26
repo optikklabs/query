@@ -1,9 +1,9 @@
-package volume
+package repository
 
 import (
 	"context"
+	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
@@ -11,15 +11,13 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-type Repository struct {
-	db clickhouse.Conn
+type OpsRaw struct {
+	TimeBucket time.Time `ch:"time_bucket"`
+	GroupBy    string    `ch:"group_by"`
+	OpsPerSec  float64   `ch:"ops_per_sec"`
 }
 
-func NewRepository(db clickhouse.Conn) *Repository {
-	return &Repository{db: db}
-}
-
-func (r *Repository) GetOpsBySystem(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters) ([]opsRawDTO, error) {
+func (r *Repository) GetOpsBySystem(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters) ([]OpsRaw, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	filterWhere, filterArgs := filter.BuildMetricsClauses(f)
 
@@ -36,6 +34,6 @@ func (r *Repository) GetOpsBySystem(ctx context.Context, tenantID, startMs, endM
 
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), filterArgs...)
 	args = timebucket.WithBucketGrainSec(args, startMs, endMs)
-	var rows []opsRawDTO
+	var rows []OpsRaw
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "volume.GetOpsBySystem", &rows, query, args...)
 }

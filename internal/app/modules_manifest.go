@@ -39,11 +39,7 @@ import (
 	log_trace_logs "github.com/optikklabs/query/internal/modules/logs/trace_logs"
 	logtrends "github.com/optikklabs/query/internal/modules/logs/trends"
 	metrics_explorer "github.com/optikklabs/query/internal/modules/metrics/explorer"
-	saturation_explorer "github.com/optikklabs/query/internal/modules/saturation/database/explorer"
-	saturation_database_latency "github.com/optikklabs/query/internal/modules/saturation/database/latency"
-	saturation_database_querydetail "github.com/optikklabs/query/internal/modules/saturation/database/querydetail"
-	saturation_database_slowqueries "github.com/optikklabs/query/internal/modules/saturation/database/slowqueries"
-	saturation_database_volume "github.com/optikklabs/query/internal/modules/saturation/database/volume"
+	saturation_database "github.com/optikklabs/query/internal/modules/saturation/database"
 	saturation_kafka_explorer "github.com/optikklabs/query/internal/modules/saturation/kafka/explorer"
 	saturation_kafka_topology "github.com/optikklabs/query/internal/modules/saturation/kafka/topology"
 	services_errors "github.com/optikklabs/query/internal/modules/services/errors"
@@ -110,11 +106,7 @@ func configuredModules(
 		llm_playground.NewModule(providerKeySvc, llmProviders, appConfig.ExpensiveQueryConcurrency()),
 		services_errors.NewModule(nativeQuerier),
 		services_redfleet.NewModule(nativeQuerier),
-		saturation_explorer.NewModule(nativeQuerier),
-		saturation_database_latency.NewModule(nativeQuerier),
-		saturation_database_slowqueries.NewModule(nativeQuerier),
-		saturation_database_querydetail.NewModule(nativeQuerier),
-		saturation_database_volume.NewModule(nativeQuerier),
+		saturation_database.NewModule(nativeQuerier),
 		saturation_kafka_explorer.NewModule(nativeQuerier),
 		saturation_kafka_topology.NewModule(nativeQuerier),
 		services_topology.NewModule(nativeQuerier),

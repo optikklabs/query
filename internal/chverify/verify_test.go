@@ -20,7 +20,7 @@ import (
 	"github.com/optikklabs/query/internal/modules/infrastructure/fleet"
 	"github.com/optikklabs/query/internal/modules/infrastructure/nodes"
 	dbfilter "github.com/optikklabs/query/internal/modules/saturation/database/filter"
-	"github.com/optikklabs/query/internal/modules/saturation/database/querydetail"
+	dbrepo "github.com/optikklabs/query/internal/modules/saturation/database/repository"
 	errmod "github.com/optikklabs/query/internal/modules/services/errors"
 	"github.com/optikklabs/query/internal/modules/services/redfleet"
 	"github.com/optikklabs/query/internal/modules/services/topology"
@@ -166,7 +166,7 @@ func TestInfrastructure(t *testing.T) {
 }
 
 func TestQueryDetail(t *testing.T) {
-	ctx, r := context.Background(), querydetail.NewRepository(conn(t))
+	ctx, r := context.Background(), dbrepo.NewRepository(conn(t))
 	// Unfiltered, then with the dbSystem filter that made any(db_system) fail.
 	for _, f := range []dbfilter.Filters{{}, {DBSystem: []string{dbSystem}}} {
 		run(t, "GetSummary", func() error {

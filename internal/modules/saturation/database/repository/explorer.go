@@ -1,4 +1,4 @@
-package explorer
+package repository
 
 import (
 	"context"
@@ -19,15 +19,7 @@ const (
 	seriesDBSpan   = seriesDBSystem + " != ''"
 )
 
-type Repository struct {
-	db clickhouse.Conn
-}
-
-func NewRepository(db clickhouse.Conn) *Repository {
-	return &Repository{db: db}
-}
-
-type systemSummaryRawDTO struct {
+type SystemSummaryRaw struct {
 	DBSystem     string    `ch:"db_system"`
 	QueryCount   uint64    `ch:"query_count"`
 	ErrorCount   uint64    `ch:"error_count"`
@@ -36,12 +28,12 @@ type systemSummaryRawDTO struct {
 	LastSeen     time.Time `ch:"last_seen"`
 }
 
-type connRawRow struct {
+type connRaw struct {
 	DBSystem string `ch:"db_system"`
 	Active   int64  `ch:"active_count"`
 }
 
-func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startMs, endMs int64) ([]systemSummaryRawDTO, error) {
+func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startMs, endMs int64) ([]SystemSummaryRaw, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	query := `
 		SELECT db_system                                                AS db_system,
@@ -58,7 +50,7 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startM
 		ORDER BY query_count DESC`
 
 	args := chargs.RangeArgs(tenantID, startMs, endMs)
-	var rows []systemSummaryRawDTO
+	var rows []SystemSummaryRaw
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "datastoreSystems.GetSystemSummariesRaw", &rows, query, args...)
 }
 
@@ -70,7 +62,7 @@ func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, tenantID,
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("metricName", filter.MetricDBSQLConnectionOpen),
 	)
-	var rows []connRawRow
+	var rows []connRaw
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "datastoreSystems.GetActiveConnectionsBySystem", &rows, query, args...); err != nil {
 		return nil, err
 	}

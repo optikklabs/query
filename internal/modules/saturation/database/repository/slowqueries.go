@@ -1,5 +1,4 @@
-// Package slowqueries serves the slow-query panels by querying spans.
-package slowqueries
+package repository
 
 import (
 	"context"
@@ -10,15 +9,7 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-type Repository struct {
-	db clickhouse.Conn
-}
-
-func NewRepository(db clickhouse.Conn) *Repository {
-	return &Repository{db: db}
-}
-
-type patternRawDTO struct {
+type PatternRaw struct {
 	QueryHash      string  `ch:"query_hash"`
 	QueryText      string  `ch:"query_text"`
 	DBSystem       string  `ch:"db_system"`
@@ -32,25 +23,25 @@ type patternRawDTO struct {
 	ErrorCount     uint64  `ch:"error_count"`
 }
 
-const (
-	defaultLimit = 20
-	maxLimit     = 200
-)
+// DefaultPatternLimit is the page size when the caller does not ask for one.
+const DefaultPatternLimit = 20
 
-func clampLimit(limit int) int {
+const maxPatternLimit = 200
+
+func clampPatternLimit(limit int) int {
 	if limit <= 0 {
-		return defaultLimit
+		return DefaultPatternLimit
 	}
-	return min(limit, maxLimit)
+	return min(limit, maxPatternLimit)
 }
 
-func (r *Repository) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters, limit int) ([]patternRawDTO, error) {
-	limit = clampLimit(limit)
+func (r *Repository) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters, limit int) ([]PatternRaw, error) {
+	limit = clampPatternLimit(limit)
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := slowQueryPatternsQuery(filterWhere)
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("qLimit", uint64(limit)))
 	args = append(args, filterArgs...)
-	var rows []patternRawDTO
+	var rows []PatternRaw
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "slowqueries.GetSlowQueryPatterns", &rows, query, args...)
 }
 
