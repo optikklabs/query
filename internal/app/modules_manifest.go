@@ -16,13 +16,7 @@ import (
 	billing "github.com/optikklabs/query/internal/modules/billing"
 	cloud "github.com/optikklabs/query/internal/modules/cloud"
 	dashboards "github.com/optikklabs/query/internal/modules/dashboards"
-	infrastructure_containerdetail "github.com/optikklabs/query/internal/modules/infrastructure/containerdetail"
-	infrastructure_cpu "github.com/optikklabs/query/internal/modules/infrastructure/cpu"
-	infrastructure_fleet "github.com/optikklabs/query/internal/modules/infrastructure/fleet"
-	infrastructure_hostdetail "github.com/optikklabs/query/internal/modules/infrastructure/hostdetail"
-	infrastructure_hosts "github.com/optikklabs/query/internal/modules/infrastructure/hosts"
-	infrastructure_memory "github.com/optikklabs/query/internal/modules/infrastructure/memory"
-	infrastructure_nodes "github.com/optikklabs/query/internal/modules/infrastructure/nodes"
+	"github.com/optikklabs/query/internal/modules/infrastructure"
 	ingestion "github.com/optikklabs/query/internal/modules/ingestion"
 	llm "github.com/optikklabs/query/internal/modules/llm"
 	llm_datasets "github.com/optikklabs/query/internal/modules/llm/datasets"
@@ -76,15 +70,9 @@ func configuredModules(
 	llmProviders := llmproviders.NewRegistry()
 
 	return []registry.Module{
-		infrastructure_cpu.NewModule(nativeQuerier),
-		infrastructure_memory.NewModule(nativeQuerier),
-		infrastructure_fleet.NewModule(nativeQuerier),
-		infrastructure_hosts.NewModule(nativeQuerier),
-		infrastructure_hostdetail.NewModule(nativeQuerier),
-		infrastructure_containerdetail.NewModule(nativeQuerier),
-		infrastructure_nodes.NewModule(nativeQuerier),
 		cloud.NewModule(nativeQuerier),
 		logs.NewModule(nativeQuerier),
+		infrastructure.NewModule(nativeQuerier),
 		metrics_explorer.NewModule(nativeQuerier),
 		ingestion.NewModule(nativeQuerier),
 		llm.NewModule(nativeQuerier),

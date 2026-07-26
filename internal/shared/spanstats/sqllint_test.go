@@ -99,8 +99,12 @@ func TestNoAggregateAliasShadowsASpanStatsColumn(t *testing.T) {
 	// from a local variable the extractor had not resolved.
 	for _, want := range []string{
 		"services/redfleet", "services/errors", "services/topology",
-		"cloud", "infrastructure/nodes", "infrastructure/hosts",
-		"infrastructure/fleet", "infrastructure/containerdetail",
+		"cloud",
+		// Named per file, not per package: the four infrastructure readers now
+		// share one package, and matching on the directory alone would let
+		// three of them vanish while the check still passed.
+		"infrastructure/repository/nodes.go", "infrastructure/repository/hosts.go",
+		"infrastructure/repository/fleet.go", "infrastructure/repository/containerdetail.go",
 		"alerting/shared/query", "saturation/database", "saturation/kafka",
 	} {
 		found := false

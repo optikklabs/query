@@ -16,9 +16,7 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	apmquery "github.com/optikklabs/query/internal/modules/alerting/shared/query"
 	"github.com/optikklabs/query/internal/modules/cloud"
-	"github.com/optikklabs/query/internal/modules/infrastructure/containerdetail"
-	"github.com/optikklabs/query/internal/modules/infrastructure/fleet"
-	"github.com/optikklabs/query/internal/modules/infrastructure/nodes"
+	infrarepo "github.com/optikklabs/query/internal/modules/infrastructure/repository"
 	dbfilter "github.com/optikklabs/query/internal/modules/saturation/database/filter"
 	dbrepo "github.com/optikklabs/query/internal/modules/saturation/database/repository"
 	errmod "github.com/optikklabs/query/internal/modules/services/errors"
@@ -145,7 +143,7 @@ func TestCloud(t *testing.T) {
 
 func TestInfrastructure(t *testing.T) {
 	ctx, c := context.Background(), conn(t)
-	nr := nodes.NewRepository(c)
+	nr := infrarepo.NewRepository(c)
 	run(t, "QueryInfrastructureNodes", func() error {
 		_, e := nr.QueryInfrastructureNodes(ctx, tenantID, startMs, endMs)
 		return e
@@ -158,9 +156,9 @@ func TestInfrastructure(t *testing.T) {
 		_, e := nr.QueryInfrastructureNodeServices(ctx, tenantID, "some-host", startMs, endMs)
 		return e
 	})
-	fr := fleet.NewRepository(c)
+	fr := nr
 	run(t, "QueryFleetPods", func() error { _, e := fr.QueryFleetPods(ctx, tenantID, startMs, endMs, ""); return e })
-	cd := containerdetail.NewRepository(c)
+	cd := nr
 	run(t, "QueryPodMeta", func() error { _, e := cd.QueryPodMeta(ctx, tenantID, "some-pod", startMs, endMs); return e })
 	run(t, "QueryPodRED", func() error { _, e := cd.QueryPodRED(ctx, tenantID, "some-pod", startMs, endMs); return e })
 }
