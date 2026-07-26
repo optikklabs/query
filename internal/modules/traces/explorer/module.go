@@ -6,10 +6,6 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-type Config struct {
-	Enabled bool
-}
-
 func RegisterRoutes(v1 chi.Router, h *Handler) {
 	v1.Post("/traces/query", h.Query)
 	v1.Post("/traces/facets", h.QueryFacets)

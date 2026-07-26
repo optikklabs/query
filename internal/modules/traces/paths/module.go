@@ -6,10 +6,6 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-type Config struct {
-	Enabled bool
-}
-
 func RegisterRoutes(v1 chi.Router, h *Handler) {
 	v1.Get("/traces/{traceId}/critical-path", h.GetCriticalPath)
 	v1.Get("/traces/{traceId}/error-path", h.GetErrorPath)

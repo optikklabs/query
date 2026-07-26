@@ -6,18 +6,7 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-type Config struct {
-	Enabled bool
-}
-
-func DefaultConfig() Config {
-	return Config{Enabled: true}
-}
-
-func RegisterRoutes(cfg Config, v1 chi.Router, h *Handler) {
-	if !cfg.Enabled || h == nil {
-		return
-	}
+func RegisterRoutes(v1 chi.Router, h *Handler) {
 	v1.Get("/saturation/database/slow-queries/patterns", h.GetSlowQueryPatterns)
 }
 
@@ -40,5 +29,5 @@ func (m *dbSlowModule) configure(nativeQuerier clickhouse.Conn) {
 }
 
 func (m *dbSlowModule) RegisterRoutes(group chi.Router) {
-	RegisterRoutes(DefaultConfig(), group, m.handler)
+	RegisterRoutes(group, m.handler)
 }

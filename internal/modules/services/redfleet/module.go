@@ -6,21 +6,10 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-type Config struct {
-	Enabled bool
-}
-
-func DefaultConfig() Config {
-	return Config{Enabled: true}
-}
-
 // RegisterRoutes mounts the fleet/overview RED endpoints. Paths are registered
 // flat (not via chi.Route) so all RED endpoints share /spans/red without a
 // duplicate-mount panic.
-func RegisterRoutes(cfg Config, v1 chi.Router, h *REDFleetHandler) {
-	if !cfg.Enabled || h == nil {
-		return
-	}
+func RegisterRoutes(v1 chi.Router, h *REDFleetHandler) {
 	v1.Get("/spans/red/services", h.GetFleetServices)
 	v1.Get("/spans/red/fleet-overview", h.GetFleetOverview)
 
@@ -58,5 +47,5 @@ func (m *redFleetModule) configure(nativeQuerier clickhouse.Conn) {
 }
 
 func (m *redFleetModule) RegisterRoutes(group chi.Router) {
-	RegisterRoutes(DefaultConfig(), group, m.handler)
+	RegisterRoutes(group, m.handler)
 }

@@ -6,19 +6,7 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-type Config struct {
-	Enabled bool
-}
-
-func DefaultConfig() Config {
-	return Config{Enabled: true}
-}
-
-func RegisterRoutes(cfg Config, v1 chi.Router, h *NodeHandler) {
-	if !cfg.Enabled || h == nil {
-		return
-	}
-
+func RegisterRoutes(v1 chi.Router, h *NodeHandler) {
 	v1.Get("/infrastructure/nodes", h.GetInfrastructureNodes)
 	v1.Get("/infrastructure/nodes/summary", h.GetInfrastructureNodeSummary)
 	v1.Get("/infrastructure/nodes/{host}/services", h.GetInfrastructureNodeServices)
@@ -43,5 +31,5 @@ func (m *nodesModule) configure(nativeQuerier clickhouse.Conn) {
 }
 
 func (m *nodesModule) RegisterRoutes(group chi.Router) {
-	RegisterRoutes(DefaultConfig(), group, m.handler)
+	RegisterRoutes(group, m.handler)
 }

@@ -6,19 +6,7 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-type Config struct {
-	Enabled bool
-}
-
-func DefaultConfig() Config {
-	return Config{Enabled: true}
-}
-
-func RegisterRoutes(cfg Config, v1 chi.Router, h *ErrorHandler) {
-	if !cfg.Enabled || h == nil {
-		return
-	}
-
+func RegisterRoutes(v1 chi.Router, h *ErrorHandler) {
 	v1.Get("/errors/service-error-rate", h.GetServiceErrorRate)
 	v1.Get("/errors/error-volume", h.GetErrorVolume)
 	v1.Get("/errors/groups", h.GetErrorGroups)
@@ -50,5 +38,5 @@ func (m *errorsModule) configure(nativeQuerier clickhouse.Conn) {
 }
 
 func (m *errorsModule) RegisterRoutes(group chi.Router) {
-	RegisterRoutes(DefaultConfig(), group, m.handler)
+	RegisterRoutes(group, m.handler)
 }
