@@ -1,4 +1,4 @@
-package servicemap
+package service
 
 import (
 	"context"
@@ -6,15 +6,9 @@ import (
 	"sort"
 
 	"github.com/optikklabs/query/internal/modules/services/topology"
+	"github.com/optikklabs/query/internal/modules/traces/models"
+	"github.com/optikklabs/query/internal/modules/traces/repository"
 )
-
-type Service struct {
-	repo *Repository
-}
-
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
-}
 
 // GetServiceMap builds the per-trace service map in the shared topology shape.
 func (s *Service) GetServiceMap(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (topology.TopologyResponse, error) {
@@ -26,7 +20,7 @@ func (s *Service) GetServiceMap(ctx context.Context, tenantID int64, traceID str
 	return topology.BuildGraph(nodeAggsFromSpans(rows), edgeAggsFromSpans(rows)), nil
 }
 
-func (s *Service) GetTraceErrors(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]TraceErrorGroup, error) {
+func (s *Service) GetTraceErrors(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]models.TraceErrorGroup, error) {
 	rows, err := s.repo.GetTraceErrors(ctx, tenantID, traceID, startMs, endMs)
 	if err != nil {
 		slog.ErrorContext(ctx, "servicemap: GetTraceErrors failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
@@ -35,7 +29,7 @@ func (s *Service) GetTraceErrors(ctx context.Context, tenantID int64, traceID st
 	return groupErrors(rows), nil
 }
 
-func nodeAggsFromSpans(rows []serviceMapSpanRow) []topology.NodeAgg {
+func nodeAggsFromSpans(rows []repository.ServiceMapSpanRow) []topology.NodeAgg {
 	aggMap := make(map[string]*topology.NodeAgg)
 	for i := range rows {
 		r := &rows[i]
@@ -63,8 +57,8 @@ func nodeAggsFromSpans(rows []serviceMapSpanRow) []topology.NodeAgg {
 	return out
 }
 
-func edgeAggsFromSpans(rows []serviceMapSpanRow) []topology.EdgeAgg {
-	bySpan := make(map[string]*serviceMapSpanRow, len(rows))
+func edgeAggsFromSpans(rows []repository.ServiceMapSpanRow) []topology.EdgeAgg {
+	bySpan := make(map[string]*repository.ServiceMapSpanRow, len(rows))
 	for i := range rows {
 		bySpan[rows[i].SpanID] = &rows[i]
 	}
@@ -97,17 +91,17 @@ func edgeAggsFromSpans(rows []serviceMapSpanRow) []topology.EdgeAgg {
 	return out
 }
 
-func groupErrors(rows []traceErrorRow) []TraceErrorGroup {
-	groups := make(map[string]*TraceErrorGroup)
+func groupErrors(rows []repository.TraceErrorRow) []models.TraceErrorGroup {
+	groups := make(map[string]*models.TraceErrorGroup)
 	for _, r := range rows {
 		key := errorGroupKey(r)
 		g, ok := groups[key]
 		if !ok {
-			g = &TraceErrorGroup{ExceptionType: key}
+			g = &models.TraceErrorGroup{ExceptionType: key}
 			groups[key] = g
 		}
 		g.Count++
-		g.Spans = append(g.Spans, TraceErrorSpan{
+		g.Spans = append(g.Spans, models.TraceErrorSpan{
 			SpanID:           r.SpanID,
 			ServiceName:      r.ServiceName,
 			OperationName:    r.OperationName,
@@ -117,7 +111,7 @@ func groupErrors(rows []traceErrorRow) []TraceErrorGroup {
 			DurationMs:       r.DurationMs,
 		})
 	}
-	out := make([]TraceErrorGroup, 0, len(groups))
+	out := make([]models.TraceErrorGroup, 0, len(groups))
 	for _, g := range groups {
 		out = append(out, *g)
 	}
@@ -125,7 +119,7 @@ func groupErrors(rows []traceErrorRow) []TraceErrorGroup {
 	return out
 }
 
-func errorGroupKey(r traceErrorRow) string {
+func errorGroupKey(r repository.TraceErrorRow) string {
 	if r.ExceptionType != "" {
 		return r.ExceptionType
 	}

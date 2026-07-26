@@ -1,8 +1,11 @@
-package paths
+package service
 
 import (
 	"testing"
 	"time"
+
+	"github.com/optikklabs/query/internal/modules/traces/models"
+	"github.com/optikklabs/query/internal/modules/traces/repository"
 )
 
 func TestIsRootParentSpanID(t *testing.T) {
@@ -19,7 +22,7 @@ func TestIsRootParentSpanID(t *testing.T) {
 	}
 }
 
-func spanIDs(spans []CriticalPathSpan) []string {
+func spanIDs(spans []models.CriticalPathSpan) []string {
 	out := make([]string, len(spans))
 	for i, s := range spans {
 		out[i] = s.SpanID
@@ -31,7 +34,7 @@ func spanIDs(spans []CriticalPathSpan) []string {
 // Tree: R(dur100) -> {A(dur50), B(dur70) -> C(dur50)}. R's subtree ends at 100
 // via itself, but the deepest chain is R->B->C (B outlasts A).
 func TestBuildCriticalPath_LongestChain(t *testing.T) {
-	rows := []criticalPathRow{
+	rows := []repository.CriticalPathRow{
 		{SpanID: "R", ParentSpanID: "", Timestamp: time.Unix(0, 0), DurationNano: 100, DurationMs: 0.1},
 		{SpanID: "A", ParentSpanID: "R", Timestamp: time.Unix(0, 10), DurationNano: 50},
 		{SpanID: "B", ParentSpanID: "R", Timestamp: time.Unix(0, 20), DurationNano: 70},
@@ -60,7 +63,7 @@ func TestPickBestChild_TieBreakByStart(t *testing.T) {
 }
 
 func TestBuildErrorPath_RootToLeaf(t *testing.T) {
-	rows := []errorPathRow{
+	rows := []repository.ErrorPathRow{
 		{SpanID: "e2", ParentSpanID: "e1"},
 		{SpanID: "e3", ParentSpanID: "e2"},
 		{SpanID: "e1", ParentSpanID: ""},

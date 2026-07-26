@@ -1,20 +1,15 @@
-package paths
+package service
 
 import (
 	"context"
 	"log/slog"
 	"strings"
+
+	"github.com/optikklabs/query/internal/modules/traces/models"
+	"github.com/optikklabs/query/internal/modules/traces/repository"
 )
 
-type Service struct {
-	repo *Repository
-}
-
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
-}
-
-func (s *Service) GetCriticalPath(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]CriticalPathSpan, error) {
+func (s *Service) GetCriticalPath(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]models.CriticalPathSpan, error) {
 	rows, err := s.repo.GetCriticalPath(ctx, tenantID, traceID, startMs, endMs)
 	if err != nil {
 		slog.ErrorContext(ctx, "paths: GetCriticalPath failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
@@ -23,7 +18,7 @@ func (s *Service) GetCriticalPath(ctx context.Context, tenantID int64, traceID s
 	return buildCriticalPath(rows), nil
 }
 
-func (s *Service) GetErrorPath(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]ErrorPathSpan, error) {
+func (s *Service) GetErrorPath(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]models.ErrorPathSpan, error) {
 	rows, err := s.repo.GetErrorPath(ctx, tenantID, traceID, startMs, endMs)
 	if err != nil {
 		slog.ErrorContext(ctx, "paths: GetErrorPath failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
@@ -33,7 +28,7 @@ func (s *Service) GetErrorPath(ctx context.Context, tenantID int64, traceID stri
 }
 
 // buildCriticalPath runs the longest-path graph algorithm on the raw DB rows.
-func buildCriticalPath(rows []criticalPathRow) []CriticalPathSpan {
+func buildCriticalPath(rows []repository.CriticalPathRow) []models.CriticalPathSpan {
 	nodes, roots := indexNodes(rows)
 	computeSubtreeEnds(nodes, roots)
 	bestRoot := pickBestRoot(nodes, roots)
@@ -41,13 +36,13 @@ func buildCriticalPath(rows []criticalPathRow) []CriticalPathSpan {
 }
 
 type criticalNode struct {
-	row        criticalPathRow
+	row        repository.CriticalPathRow
 	startNs    int64
 	subtreeEnd int64
 	children   []string
 }
 
-func indexNodes(rows []criticalPathRow) (map[string]*criticalNode, []string) {
+func indexNodes(rows []repository.CriticalPathRow) (map[string]*criticalNode, []string) {
 	nodes := make(map[string]*criticalNode, len(rows))
 	var roots []string
 	for _, row := range rows {
@@ -105,15 +100,15 @@ func pickBestRoot(nodes map[string]*criticalNode, roots []string) string {
 	return bestRoot
 }
 
-func walkCriticalChain(nodes map[string]*criticalNode, root string) []CriticalPathSpan {
-	var result []CriticalPathSpan
+func walkCriticalChain(nodes map[string]*criticalNode, root string) []models.CriticalPathSpan {
+	var result []models.CriticalPathSpan
 	cur := root
 	for cur != "" {
 		n, ok := nodes[cur]
 		if !ok {
 			break
 		}
-		result = append(result, CriticalPathSpan{
+		result = append(result, models.CriticalPathSpan{
 			SpanID:        n.row.SpanID,
 			OperationName: n.row.OperationName,
 			ServiceName:   n.row.ServiceName,
@@ -141,14 +136,14 @@ func pickBestChild(nodes map[string]*criticalNode, children []string) string {
 	return best
 }
 
-func buildErrorPath(rows []errorPathRow) []ErrorPathSpan {
-	spans := make(map[string]errorPathRow, len(rows))
+func buildErrorPath(rows []repository.ErrorPathRow) []models.ErrorPathSpan {
+	spans := make(map[string]repository.ErrorPathRow, len(rows))
 	for _, r := range rows {
 		spans[r.SpanID] = r
 	}
 	leafID := pickErrorLeaf(spans)
 	if leafID == "" {
-		return []ErrorPathSpan{}
+		return []models.ErrorPathSpan{}
 	}
 	chain := walkErrorChain(spans, leafID)
 	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
@@ -157,7 +152,7 @@ func buildErrorPath(rows []errorPathRow) []ErrorPathSpan {
 	return chain
 }
 
-func pickErrorLeaf(spans map[string]errorPathRow) string {
+func pickErrorLeaf(spans map[string]repository.ErrorPathRow) string {
 	childOf := make(map[string]bool, len(spans))
 	for _, s := range spans {
 		if s.ParentSpanID != "" {
@@ -172,15 +167,15 @@ func pickErrorLeaf(spans map[string]errorPathRow) string {
 	return ""
 }
 
-func walkErrorChain(spans map[string]errorPathRow, leafID string) []ErrorPathSpan {
-	var chain []ErrorPathSpan
+func walkErrorChain(spans map[string]repository.ErrorPathRow, leafID string) []models.ErrorPathSpan {
+	var chain []models.ErrorPathSpan
 	cur := leafID
 	for cur != "" {
 		s, ok := spans[cur]
 		if !ok {
 			break
 		}
-		chain = append(chain, ErrorPathSpan{
+		chain = append(chain, models.ErrorPathSpan{
 			SpanID:        s.SpanID,
 			ParentSpanID:  s.ParentSpanID,
 			OperationName: s.OperationName,

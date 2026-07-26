@@ -1,4 +1,4 @@
-package detail
+package repository
 
 import (
 	"context"
@@ -6,27 +6,72 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/modules/traces/models"
 )
 
-type Repository struct {
-	db clickhouse.Conn
+// SpanEventTuple is one entry of the spans.events nested column.
+type SpanEventTuple struct {
+	Name         string            `ch:"name"`
+	TimeUnixNano uint64            `ch:"time_unix_nano"`
+	Attributes   map[string]string `ch:"attributes"`
 }
 
-func NewRepository(db clickhouse.Conn) *Repository {
-	return &Repository{db: db}
+// SpanLinkTuple is one entry of the spans.links nested column.
+type SpanLinkTuple struct {
+	TraceID    string            `ch:"trace_id"`
+	SpanID     string            `ch:"span_id"`
+	TraceState string            `ch:"trace_state"`
+	Attributes map[string]string `ch:"attributes"`
 }
 
-// boundedTraceArgs binds the identity and time range of a trace for partition pruning.
-func boundedTraceArgs(tenantID int64, traceID string, startMs, endMs int64) []any {
-	return []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("traceID", traceID),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
-	}
+// SpanEventCombinedRow carries a span's structured events alongside its
+// exception columns, so both sources of "something happened" arrive in one
+// read and the service can reconcile them.
+type SpanEventCombinedRow struct {
+	SpanID              string           `ch:"span_id"`
+	TraceID             string           `ch:"trace_id"`
+	Timestamp           time.Time        `ch:"timestamp"`
+	Events              []SpanEventTuple `ch:"events"`
+	ExceptionType       string           `ch:"exception_type"`
+	ExceptionMessage    string           `ch:"exception_message"`
+	ExceptionStacktrace string           `ch:"exception_stacktrace"`
 }
 
-func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]spanEventCombinedRow, error) {
+// SpanAttributeRow is one span's full attribute payload.
+type SpanAttributeRow struct {
+	SpanID              string            `ch:"span_id"`
+	TraceID             string            `ch:"trace_id"`
+	OperationName       string            `ch:"operation_name"`
+	ServiceName         string            `ch:"service"`
+	Attributes          map[string]string `ch:"attributes"`
+	ExceptionType       string            `ch:"exception_type"`
+	ExceptionMessage    string            `ch:"exception_message"`
+	ExceptionStacktrace string            `ch:"exception_stacktrace"`
+	DBSystem            string            `ch:"db_system"`
+	DBName              string            `ch:"db_name"`
+	DBStatement         string            `ch:"db_statement"`
+	Links               []SpanLinkTuple   `ch:"links"`
+}
+
+// TraceSummaryRow is the whole-trace aggregate. The service folds it into
+// models.TraceSummary, which is where the derived duration is computed.
+type TraceSummaryRow struct {
+	TraceID        string    `ch:"trace_id"`
+	StartTime      time.Time `ch:"start_time"`
+	EndTime        time.Time `ch:"end_time"`
+	RootService    string    `ch:"root_service"`
+	RootOperation  string    `ch:"root_operation"`
+	RootStatus     string    `ch:"root_status"`
+	RootHTTPMethod string    `ch:"root_http_method"`
+	RootHTTPStatus string    `ch:"root_http_status"`
+	SpanCount      uint64    `ch:"span_count"`
+	ErrorCount     uint64    `ch:"error_count"`
+	HasError       bool      `ch:"trace_has_error"`
+	ServiceSet     []string  `ch:"service_set"`
+	RootMissing    bool      `ch:"root_missing"`
+}
+
+func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]SpanEventCombinedRow, error) {
 	const query = `
 		SELECT span_id, trace_id, timestamp, events,
 		       exception_type, exception_message, exception_stacktrace
@@ -35,22 +80,22 @@ func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID 
 		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
 		WHERE NOT empty(events) OR NOT empty(exception_type)`
-	var rows []spanEventCombinedRow
+	var rows []SpanEventCombinedRow
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanEvents", &rows, query,
 		boundedTraceArgs(tenantID, traceID, startMs, endMs)...,
 	)
 	return rows, err
 }
 
-func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startMs, endMs int64) (*spanAttributeRow, error) {
+func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startMs, endMs int64) (*SpanAttributeRow, error) {
 	const query = `
 		SELECT span_id, trace_id, name AS operation_name, service,
 		       attributes,
 		       exception_type,
-			   exception_message, 
+			   exception_message,
 			   exception_stacktrace,
-		       db_system, 
-			   db_name, 
+		       db_system,
+			   db_name,
 			   db_statement,
 		       links AS links
 		FROM optikk.spans
@@ -59,7 +104,7 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, trac
 		     AND trace_id = @traceID
 		     AND span_id  = @spanID
 		LIMIT 1`
-	var row spanAttributeRow
+	var row SpanAttributeRow
 	args := []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("traceID", traceID),
@@ -76,7 +121,7 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, trac
 	return &row, nil
 }
 
-func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]RelatedTrace, error) {
+func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]models.RelatedTrace, error) {
 	const query = `
 		SELECT span_id,
 		       trace_id,
@@ -103,13 +148,14 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 		clickhouse.Named("excludeTraceID", excludeTraceID),
 		clickhouse.Named("limit", limit),
 	}
-	var rows []RelatedTrace
+	var rows []models.RelatedTrace
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetRelatedTraces", &rows, query, args...)
 	return rows, err
 }
 
-// GetTraceSummary aggregates the whole trace.
-func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (*TraceSummary, error) {
+// GetTraceSummary aggregates the whole trace. A zero TraceID means no trace
+// matched, which the service reports as not-found rather than an error.
+func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (*TraceSummaryRow, error) {
 	const query = `
 		SELECT trace_id,
 		       min(timestamp)                                            AS start_time,
@@ -130,32 +176,17 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 		     AND trace_id = @traceID
 		GROUP BY trace_id
 		LIMIT 1`
-	var res traceSummaryRow
+	var res TraceSummaryRow
 	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &res, query, boundedTraceArgs(tenantID, traceID, startMs, endMs)...); err != nil {
 		return nil, err
 	}
 	if res.TraceID == "" {
 		return nil, nil
 	}
-	return &TraceSummary{
-		TraceID:        res.TraceID,
-		StartMs:        uint64(res.StartTime.UnixMilli()),
-		EndMs:          uint64(res.EndTime.UnixMilli()),
-		DurationMs:     float64(res.EndTime.Sub(res.StartTime).Nanoseconds()) / 1_000_000,
-		RootService:    res.RootService,
-		RootOperation:  res.RootOperation,
-		RootStatus:     res.RootStatus,
-		RootHTTPMethod: res.RootHTTPMethod,
-		RootHTTPStatus: res.RootHTTPStatus,
-		SpanCount:      uint32(res.SpanCount),
-		HasError:       res.HasError,
-		ErrorCount:     uint32(res.ErrorCount),
-		ServiceSet:     res.ServiceSet,
-		RootMissing:    res.RootMissing,
-	}, nil
+	return &res, nil
 }
 
-func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]SpanListItem, error) {
+func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]models.SpanListItem, error) {
 	const query = `
 		SELECT span_id,
 		       parent_span_id,
@@ -173,7 +204,7 @@ func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, trace
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC
 		LIMIT 5000`
-	var rows []SpanListItem
+	var rows []models.SpanListItem
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.ListSpansByTrace", &rows, query,
 		boundedTraceArgs(tenantID, traceID, startMs, endMs)...,
 	)

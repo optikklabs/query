@@ -1,31 +1,38 @@
-package paths
+package repository
 
 import (
 	"context"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 )
 
-type Repository struct {
-	db clickhouse.Conn
+// CriticalPathRow carries the parent link and raw nanosecond duration the
+// longest-path walk needs, which the CriticalPathSpan response does not.
+type CriticalPathRow struct {
+	SpanID        string    `ch:"span_id"`
+	ParentSpanID  string    `ch:"parent_span_id"`
+	OperationName string    `ch:"operation_name"`
+	ServiceName   string    `ch:"service"`
+	DurationMs    float64   `ch:"duration_ms"`
+	Timestamp     time.Time `ch:"timestamp"`
+	DurationNano  uint64    `ch:"duration_nano"`
 }
 
-func NewRepository(db clickhouse.Conn) *Repository {
-	return &Repository{db: db}
+// ErrorPathRow is an errored span with its parent link, used to walk the
+// failure chain back to the root.
+type ErrorPathRow struct {
+	SpanID        string    `ch:"span_id"`
+	ParentSpanID  string    `ch:"parent_span_id"`
+	OperationName string    `ch:"operation_name"`
+	ServiceName   string    `ch:"service"`
+	Status        string    `ch:"status"`
+	StatusMessage string    `ch:"status_message"`
+	StartTime     time.Time `ch:"start_time"`
+	DurationMs    float64   `ch:"duration_ms"`
 }
 
-func boundedTraceArgs(tenantID int64, traceID string, startMs, endMs int64) []any {
-	return []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("traceID", traceID),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
-	}
-}
-
-func (r *Repository) GetCriticalPath(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]criticalPathRow, error) {
+func (r *Repository) GetCriticalPath(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]CriticalPathRow, error) {
 	const query = `
 		SELECT span_id,
 		       parent_span_id,
@@ -40,14 +47,14 @@ func (r *Repository) GetCriticalPath(ctx context.Context, tenantID int64, traceI
 		     AND trace_id = @traceID
 		ORDER BY timestamp ASC
 		LIMIT 5000`
-	var rows []criticalPathRow
+	var rows []CriticalPathRow
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "paths.GetCriticalPath", &rows, query,
 		boundedTraceArgs(tenantID, traceID, startMs, endMs)...,
 	)
 	return rows, err
 }
 
-func (r *Repository) GetErrorPath(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]errorPathRow, error) {
+func (r *Repository) GetErrorPath(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]ErrorPathRow, error) {
 	const query = `
 		SELECT span_id,
 		       parent_span_id,
@@ -64,7 +71,7 @@ func (r *Repository) GetErrorPath(ctx context.Context, tenantID int64, traceID s
 		WHERE is_error = 1
 		ORDER BY timestamp ASC
 		LIMIT 1000`
-	var rows []errorPathRow
+	var rows []ErrorPathRow
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "paths.GetErrorPath", &rows, query,
 		boundedTraceArgs(tenantID, traceID, startMs, endMs)...,
 	)

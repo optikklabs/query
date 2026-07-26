@@ -11,10 +11,8 @@ import (
 	kafkatopology "github.com/optikklabs/query/internal/modules/saturation/kafka/topology"
 	redfleet "github.com/optikklabs/query/internal/modules/services/redfleet"
 	topology "github.com/optikklabs/query/internal/modules/services/topology"
-	tracesdetail "github.com/optikklabs/query/internal/modules/traces/detail"
 	tracesexplorer "github.com/optikklabs/query/internal/modules/traces/explorer"
-	tracespaths "github.com/optikklabs/query/internal/modules/traces/paths"
-	tracesservicemap "github.com/optikklabs/query/internal/modules/traces/servicemap"
+	tracesmodels "github.com/optikklabs/query/internal/modules/traces/models"
 )
 
 // fixtureTime is fixed so the encoding is byte-stable across runs; a golden
@@ -33,33 +31,33 @@ func buildFixtures() map[string]any {
 
 	return map[string]any{
 		"traceSpansEnvelope": map[string]any{
-			"spans": []tracesdetail.SpanListItem{{
+			"spans": []tracesmodels.SpanListItem{{
 				SpanID: "a1", ParentSpanID: "", TraceID: "t1",
 				ServiceName: "gateway", OperationName: "GET /x",
 				KindString: "SERVER", StatusCode: "OK",
 				HasError: false, DurationMs: 12.5, StartNs: now.UnixNano(),
 			}, {}},
 		},
-		"spanEvents": []tracesdetail.SpanEvent{{SpanID: "a1", TraceID: "t1", EventName: "e", Timestamp: now, Attributes: "{}"}, {}},
+		"spanEvents": []tracesmodels.SpanEvent{{SpanID: "a1", TraceID: "t1", EventName: "e", Timestamp: now, Attributes: "{}"}, {}},
 		// GetSpanAttributes always initialises both maps, so they are never
 		// null on the wire even when the span carries no attributes.
-		"spanAttributes": tracesdetail.SpanAttributes{
+		"spanAttributes": tracesmodels.SpanAttributes{
 			SpanID: "a1", TraceID: "t1", OperationName: "op", ServiceName: "svc",
 			AttributesString: map[string]string{},
 			ResourceAttrs:    map[string]string{},
 		},
-		"spanAttributesFull": tracesdetail.SpanAttributes{
+		"spanAttributesFull": tracesmodels.SpanAttributes{
 			SpanID: "a1", TraceID: "t1", OperationName: "op", ServiceName: "svc",
 			AttributesString: map[string]string{"k": "v"},
 			ResourceAttrs:    map[string]string{"r": "v"},
 			ExceptionType:    "E", DBSystem: "mysql",
 			Attributes: map[string]string{"a": "b"},
-			Links:      []tracesdetail.SpanLink{{TraceID: "t2", SpanID: "b1"}},
+			Links:      []tracesmodels.SpanLink{{TraceID: "t2", SpanID: "b1"}},
 		},
-		"relatedTraces": []tracesdetail.RelatedTrace{{TraceID: "t2", SpanID: "b1", OperationName: "op", ServiceName: "s", DurationMs: 1, Status: "OK", StartTime: now}, {}},
-		"criticalPath":  []tracespaths.CriticalPathSpan{{SpanID: "a1", OperationName: "op", ServiceName: "s", DurationMs: 3}, {}},
-		"errorPath":     []tracespaths.ErrorPathSpan{{SpanID: "a1", ParentSpanID: "", OperationName: "op", ServiceName: "s", Status: "ERROR", StatusMessage: "m", StartTime: now, DurationMs: 3}, {}},
-		"traceErrors":   []tracesservicemap.TraceErrorGroup{{ExceptionType: "E", Count: 1, Spans: []tracesservicemap.TraceErrorSpan{{SpanID: "a1", ServiceName: "s", OperationName: "op", StartTime: now, DurationMs: 2}, {}}}},
+		"relatedTraces": []tracesmodels.RelatedTrace{{TraceID: "t2", SpanID: "b1", OperationName: "op", ServiceName: "s", DurationMs: 1, Status: "OK", StartTime: now}, {}},
+		"criticalPath":  []tracesmodels.CriticalPathSpan{{SpanID: "a1", OperationName: "op", ServiceName: "s", DurationMs: 3}, {}},
+		"errorPath":     []tracesmodels.ErrorPathSpan{{SpanID: "a1", ParentSpanID: "", OperationName: "op", ServiceName: "s", Status: "ERROR", StatusMessage: "m", StartTime: now, DurationMs: 3}, {}},
+		"traceErrors":   []tracesmodels.TraceErrorGroup{{ExceptionType: "E", Count: 1, Spans: []tracesmodels.TraceErrorSpan{{SpanID: "a1", ServiceName: "s", OperationName: "op", StartTime: now, DurationMs: 2}, {}}}},
 		"tracesQuery":   tracesexplorer.QueryResponse{Results: []tracesexplorer.Trace{{TraceID: "t1", StartMs: 1, EndMs: 2, DurationMs: 1, RootService: "s", RootOperation: "op", SpanCount: 3, HasError: true, ErrorCount: 1}, {}}, PageInfo: tracesexplorer.PageInfo{HasMore: true, NextCursor: "c", Limit: 50}},
 		"tracesFacets":  tracesexplorer.Facets{Service: []tracesexplorer.FacetBucket{{Value: "s", Count: 2}}},
 		"tracesTrend":   []tracesexplorer.TrendBucket{{TimeBucket: "2026-07-16T10:00:00Z", Total: 5, Errors: 1}, {}},

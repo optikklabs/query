@@ -1,11 +1,15 @@
-package servicemap
+package service
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/optikklabs/query/internal/modules/traces/repository"
+)
 
 // nodeAggsFromSpans aggregates per service: counts, errors, and mean duration
 // (accumulated in P50Ms then divided by request count). Empty service skipped.
 func TestNodeAggsFromSpans(t *testing.T) {
-	rows := []serviceMapSpanRow{
+	rows := []repository.ServiceMapSpanRow{
 		{SpanID: "1", ServiceName: "a", DurationMs: 10},
 		{SpanID: "2", ServiceName: "a", DurationMs: 30, HasError: true},
 		{SpanID: "3", ServiceName: "", DurationMs: 99},
@@ -21,7 +25,7 @@ func TestNodeAggsFromSpans(t *testing.T) {
 }
 
 func TestEdgeAggsFromSpans(t *testing.T) {
-	rows := []serviceMapSpanRow{
+	rows := []repository.ServiceMapSpanRow{
 		{SpanID: "p", ParentSpanID: "", ServiceName: "a"},
 		{SpanID: "c1", ParentSpanID: "p", ServiceName: "b", DurationMs: 10, HasError: true},
 		{SpanID: "c2", ParentSpanID: "p", ServiceName: "b", DurationMs: 30},
@@ -39,12 +43,12 @@ func TestEdgeAggsFromSpans(t *testing.T) {
 
 func TestErrorGroupKey(t *testing.T) {
 	cases := []struct {
-		row  traceErrorRow
+		row  repository.TraceErrorRow
 		want string
 	}{
-		{traceErrorRow{ExceptionType: "NPE", StatusMessage: "msg"}, "NPE"},
-		{traceErrorRow{StatusMessage: "boom"}, "boom"},
-		{traceErrorRow{}, "UnknownError"},
+		{repository.TraceErrorRow{ExceptionType: "NPE", StatusMessage: "msg"}, "NPE"},
+		{repository.TraceErrorRow{StatusMessage: "boom"}, "boom"},
+		{repository.TraceErrorRow{}, "UnknownError"},
 	}
 	for _, c := range cases {
 		if got := errorGroupKey(c.row); got != c.want {
@@ -54,7 +58,7 @@ func TestErrorGroupKey(t *testing.T) {
 }
 
 func TestGroupErrors_SortedByCount(t *testing.T) {
-	rows := []traceErrorRow{
+	rows := []repository.TraceErrorRow{
 		{SpanID: "1", ExceptionType: "A"},
 		{SpanID: "2", ExceptionType: "B"},
 		{SpanID: "3", ExceptionType: "B"},

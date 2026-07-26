@@ -35,10 +35,8 @@ import (
 	services_errors "github.com/optikklabs/query/internal/modules/services/errors"
 	services_redfleet "github.com/optikklabs/query/internal/modules/services/redfleet"
 	services_topology "github.com/optikklabs/query/internal/modules/services/topology"
-	traces_detail "github.com/optikklabs/query/internal/modules/traces/detail"
+	"github.com/optikklabs/query/internal/modules/traces"
 	traces_explorer "github.com/optikklabs/query/internal/modules/traces/explorer"
-	traces_paths "github.com/optikklabs/query/internal/modules/traces/paths"
-	traces_servicemap "github.com/optikklabs/query/internal/modules/traces/servicemap"
 	user_auth "github.com/optikklabs/query/internal/modules/user/auth"
 	user_device "github.com/optikklabs/query/internal/modules/user/device"
 	user_signup "github.com/optikklabs/query/internal/modules/user/signup"
@@ -90,10 +88,8 @@ func configuredModules(
 		saturation_kafka_explorer.NewModule(nativeQuerier),
 		saturation_kafka_topology.NewModule(nativeQuerier),
 		services_topology.NewModule(nativeQuerier),
+		traces.NewModule(nativeQuerier),
 		traces_explorer.NewModule(nativeQuerier),
-		traces_detail.NewModule(nativeQuerier),
-		traces_paths.NewModule(nativeQuerier),
-		traces_servicemap.NewModule(nativeQuerier),
 
 		user_auth.NewModule(authService, infraDeps.Tokens),
 		user_device.NewModule(deviceService, infraDeps.Tokens),

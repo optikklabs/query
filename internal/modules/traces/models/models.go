@@ -1,4 +1,10 @@
-package detail
+// Package models holds the trace detail domain's API DTOs — the wire contract
+// shared by the handler and the service.
+//
+// Several of these carry `ch` tags as well as `json` ones: the repository
+// scans directly into them where the row shape and the response shape are the
+// same. Rows that need folding stay in repository/ instead.
+package models
 
 import (
 	"time"
@@ -79,4 +85,38 @@ type SpanListItem struct {
 	DurationMs    float64   `json:"durationMs"    ch:"duration_ms"`
 	Timestamp     time.Time `json:"-"              ch:"timestamp"`
 	StartNs       int64     `json:"startNs"       ch:"-"`
+}
+
+type CriticalPathSpan struct {
+	SpanID        string  `json:"spanId"        ch:"span_id"`
+	OperationName string  `json:"operationName" ch:"operation_name"`
+	ServiceName   string  `json:"serviceName"   ch:"service"`
+	DurationMs    float64 `json:"durationMs"    ch:"duration_ms"`
+}
+
+type ErrorPathSpan struct {
+	SpanID        string    `json:"spanId"        ch:"span_id"`
+	ParentSpanID  string    `json:"parentSpanId" ch:"parent_span_id"`
+	OperationName string    `json:"operationName" ch:"operation_name"`
+	ServiceName   string    `json:"serviceName"   ch:"service"`
+	Status        string    `json:"status"         ch:"status"`
+	StatusMessage string    `json:"statusMessage" ch:"status_message"`
+	StartTime     time.Time `json:"startTime"     ch:"start_time"`
+	DurationMs    float64   `json:"durationMs"    ch:"duration_ms"`
+}
+
+type TraceErrorGroup struct {
+	ExceptionType string           `json:"exceptionType"`
+	Count         int              `json:"count"`
+	Spans         []TraceErrorSpan `json:"spans"`
+}
+
+type TraceErrorSpan struct {
+	SpanID           string    `json:"spanId"`
+	ServiceName      string    `json:"serviceName"`
+	OperationName    string    `json:"operationName"`
+	ExceptionMessage string    `json:"exceptionMessage,omitempty"`
+	StatusMessage    string    `json:"statusMessage,omitempty"`
+	StartTime        time.Time `json:"startTime"`
+	DurationMs       float64   `json:"durationMs"`
 }

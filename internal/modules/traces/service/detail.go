@@ -1,4 +1,4 @@
-package detail
+package service
 
 import (
 	"context"
@@ -8,26 +8,46 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/optikklabs/query/internal/modules/traces/models"
+	"github.com/optikklabs/query/internal/modules/traces/repository"
 )
 
-type Service struct {
-	repo *Repository
-}
-
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
-}
-
-func (s *Service) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (*TraceSummary, error) {
+func (s *Service) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (*models.TraceSummary, error) {
 	row, err := s.repo.GetTraceSummary(ctx, tenantID, traceID, startMs, endMs)
 	if err != nil {
 		slog.ErrorContext(ctx, "detail: GetTraceSummary failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
 	}
-	return row, nil
+	if row == nil {
+		return nil, nil
+	}
+	out := foldTraceSummary(*row)
+	return &out, nil
 }
 
-func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]SpanEvent, error) {
+// foldTraceSummary derives the span of wall-clock time the trace covers from
+// its first and last span, which the aggregate query cannot express directly.
+func foldTraceSummary(res repository.TraceSummaryRow) models.TraceSummary {
+	return models.TraceSummary{
+		TraceID:        res.TraceID,
+		StartMs:        uint64(res.StartTime.UnixMilli()),
+		EndMs:          uint64(res.EndTime.UnixMilli()),
+		DurationMs:     float64(res.EndTime.Sub(res.StartTime).Nanoseconds()) / 1_000_000,
+		RootService:    res.RootService,
+		RootOperation:  res.RootOperation,
+		RootStatus:     res.RootStatus,
+		RootHTTPMethod: res.RootHTTPMethod,
+		RootHTTPStatus: res.RootHTTPStatus,
+		SpanCount:      uint32(res.SpanCount),
+		HasError:       res.HasError,
+		ErrorCount:     uint32(res.ErrorCount),
+		ServiceSet:     res.ServiceSet,
+		RootMissing:    res.RootMissing,
+	}
+}
+
+func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]models.SpanEvent, error) {
 	combined, err := s.repo.GetSpanEvents(ctx, tenantID, traceID, startMs, endMs)
 	if err != nil {
 		slog.ErrorContext(ctx, "detail: GetSpanEvents failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
@@ -35,7 +55,7 @@ func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID str
 	}
 	eventRows, exceptionRows := splitEventRows(combined)
 
-	events := make([]SpanEvent, 0, len(eventRows))
+	events := make([]models.SpanEvent, 0, len(eventRows))
 	seenException := make(map[string]bool, len(eventRows))
 	for _, row := range eventRows {
 		if row.Event.Name == "exception" {
@@ -49,7 +69,7 @@ func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID str
 			}
 		}
 
-		events = append(events, SpanEvent{
+		events = append(events, models.SpanEvent{
 			SpanID:     row.SpanID,
 			TraceID:    row.TraceID,
 			EventName:  row.Event.Name,
@@ -78,7 +98,7 @@ func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID str
 				attrJSON = string(b)
 			}
 		}
-		events = append(events, SpanEvent{
+		events = append(events, models.SpanEvent{
 			SpanID:     row.SpanID,
 			TraceID:    row.TraceID,
 			EventName:  "exception",
@@ -99,7 +119,7 @@ func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID str
 	return events, nil
 }
 
-func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startMs, endMs int64) (*SpanAttributes, error) {
+func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startMs, endMs int64) (*models.SpanAttributes, error) {
 	row, err := s.repo.GetSpanAttributes(ctx, tenantID, traceID, spanID, startMs, endMs)
 	if err != nil {
 		slog.ErrorContext(ctx, "detail: GetSpanAttributes failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID), slog.String("span_id", spanID))
@@ -115,9 +135,9 @@ func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID
 	}
 	resourceAttrs := map[string]string{}
 
-	outLinks := make([]SpanLink, 0, len(row.Links))
+	outLinks := make([]models.SpanLink, 0, len(row.Links))
 	for _, l := range row.Links {
-		outLinks = append(outLinks, SpanLink{
+		outLinks = append(outLinks, models.SpanLink{
 			TraceID:    l.TraceID,
 			SpanID:     l.SpanID,
 			TraceState: l.TraceState,
@@ -125,7 +145,7 @@ func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID
 		})
 	}
 
-	return &SpanAttributes{
+	return &models.SpanAttributes{
 		SpanID:                row.SpanID,
 		TraceID:               row.TraceID,
 		OperationName:         row.OperationName,
@@ -144,11 +164,11 @@ func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID
 	}, nil
 }
 
-func (s *Service) GetRelatedTraces(ctx context.Context, tenantID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]RelatedTrace, error) {
+func (s *Service) GetRelatedTraces(ctx context.Context, tenantID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]models.RelatedTrace, error) {
 	return s.repo.GetRelatedTraces(ctx, tenantID, serviceName, operationName, startMs, endMs, excludeTraceID, limit)
 }
 
-func (s *Service) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]SpanListItem, error) {
+func (s *Service) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]models.SpanListItem, error) {
 	rows, err := s.repo.ListSpansByTrace(ctx, tenantID, traceID, startMs, endMs)
 	if err != nil {
 		return nil, err
@@ -157,20 +177,31 @@ func (s *Service) ListSpansByTrace(ctx context.Context, tenantID int64, traceID 
 	return rows, nil
 }
 
-func fillStartNs(items []SpanListItem) {
+func fillStartNs(items []models.SpanListItem) {
 	for i := range items {
 		items[i].StartNs = items[i].Timestamp.UnixNano()
 	}
 }
 
+// spanEventRow is one span/event pair, fanned out from the combined row.
 type spanEventRow struct {
 	SpanID    string
 	TraceID   string
 	Timestamp time.Time
-	Event     spanEventTuple
+	Event     repository.SpanEventTuple
 }
 
-func splitEventRows(rows []spanEventCombinedRow) ([]spanEventRow, []exceptionRow) {
+// exceptionRow is a span's exception columns, kept only when typed.
+type exceptionRow struct {
+	SpanID              string
+	TraceID             string
+	Timestamp           time.Time
+	ExceptionType       string
+	ExceptionMessage    string
+	ExceptionStacktrace string
+}
+
+func splitEventRows(rows []repository.SpanEventCombinedRow) ([]spanEventRow, []exceptionRow) {
 	var events []spanEventRow
 	var exceptions []exceptionRow
 	for _, r := range rows {
