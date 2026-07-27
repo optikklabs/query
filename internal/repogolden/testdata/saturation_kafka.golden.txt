@@ -29,7 +29,7 @@
       @tenantID = uint32 0x7
 
 === topology.QueryClients
-  [0] Select: SELECT DISTINCT service FROM optikk.span_stats_1h PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service != '' WHERE messaging_system = 'kafka' AND messaging_destination != '' ORDER BY service LIMIT 200
+  [0] Select: SELECT DISTINCT service FROM optikk.span_stats_5m PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service != '' WHERE messaging_system = 'kafka' AND messaging_destination != '' ORDER BY service LIMIT 200
       @end = time.Time 2026-01-02T08:06:40Z
       @start = time.Time 2026-01-02T02:06:40Z
       @tenantID = uint32 0x7

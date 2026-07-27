@@ -10,13 +10,15 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-const clientsQuery = `
-	SELECT DISTINCT service
-	FROM optikk.span_stats_1h
-	PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service != ''
-	WHERE messaging_system = 'kafka' AND messaging_destination != ''
-	ORDER BY service
-	LIMIT 200`
+func clientsQuery(windowMs int64) string {
+	return `
+		SELECT DISTINCT service
+		FROM ` + timebucket.SpanStatsRollup(windowMs) + `
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service != ''
+		WHERE messaging_system = 'kafka' AND messaging_destination != ''
+		ORDER BY service
+		LIMIT 200`
+}
 
 // EdgeRow is one (service, topic, consumer group) aggregation. An empty
 // ConsumerGroup marks a produce row; anything else is a consume row.
@@ -32,10 +34,11 @@ type EdgeRow struct {
 // QueryClients lists Kafka services in deterministic name order. The frontend
 // uses the first result as its initial selection.
 func (r *Repository) QueryClients(ctx context.Context, tenantID, startMs, endMs int64) ([]string, error) {
+	query := clientsQuery(endMs - startMs)
 	var rows []struct {
 		Service string `ch:"service"`
 	}
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryClients", &rows, clientsQuery, chargs.RangeArgs(tenantID, startMs, endMs)...); err != nil {
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryClients", &rows, query, chargs.RollupRangeArgs(tenantID, startMs, endMs)...); err != nil {
 		return nil, err
 	}
 	clients := make([]string, len(rows))
