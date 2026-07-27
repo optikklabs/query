@@ -74,7 +74,7 @@ func (r *Repository) QueryProviderInventory(ctx context.Context, tenantID, start
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("maxProviders", uint64(MaxProviders)),
 	)
-	var rows []InventoryRow
+	rows := make([]InventoryRow, 0)
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryProviderInventory", &rows, query, args...)
 }
 
@@ -90,7 +90,7 @@ func (r *Repository) QueryProviderCategories(ctx context.Context, tenantID, star
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("maxCategories", uint64(MaxCategories)),
 	)
-	var rows []CategoryRow
+	rows := make([]CategoryRow, 0)
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryProviderCategories", &rows, query, args...)
 }
 
@@ -108,7 +108,7 @@ func (r *Repository) QueryProviderHealth(ctx context.Context, tenantID, startMs,
 		     AND cloud_provider != ''
 		GROUP BY provider, entity`
 	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
-	var rows []HealthRow
+	rows := make([]HealthRow, 0)
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryProviderHealth", &rows, query, args...)
 }
 
@@ -138,7 +138,7 @@ func (r *Repository) QueryRestarts(ctx context.Context, tenantID, startMs, endMs
 		)
 		GROUP BY provider`
 	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
-	var rows []RestartRow
+	rows := make([]RestartRow, 0)
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryRestarts", &rows, query, args...)
 }
 
@@ -158,7 +158,7 @@ func (r *Repository) QueryAccountBreakdown(ctx context.Context, tenantID int64, 
 		clickhouse.Named("provider", provider),
 		clickhouse.Named("maxAccounts", uint64(MaxAccounts)),
 	)
-	var rows []AccountRow
+	rows := make([]AccountRow, 0)
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryAccountBreakdown", &rows, query, args...)
 }
 
@@ -175,7 +175,7 @@ func (r *Repository) QueryPlatformServices(ctx context.Context, tenantID int64, 
 		clickhouse.Named("provider", provider),
 		clickhouse.Named("maxCategories", uint64(MaxCategories)),
 	)
-	var rows []CategoryRow
+	rows := make([]CategoryRow, 0)
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryPlatformServices", &rows, query, args...)
 }
 
@@ -201,6 +201,6 @@ func (r *Repository) QueryProviderResources(ctx context.Context, tenantID int64,
 		clickhouse.Named("provider", provider),
 		clickhouse.Named("maxResources", uint64(MaxResources)),
 	)
-	var rows []ResourceRow
+	rows := make([]ResourceRow, 0)
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryProviderResources", &rows, query, args...)
 }
