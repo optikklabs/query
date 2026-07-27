@@ -31,12 +31,6 @@ type rawErrorGroupRow struct {
 	SampleTraceID    string    `ch:"sample_trace_id"`
 }
 
-type rawErrorGroupSampleRow struct {
-	GroupID       string `ch:"error_group_id"`
-	StatusMessage string `ch:"status_message"`
-	SampleTraceID string `ch:"sample_trace_id"`
-}
-
 type rawErrorGroupDetailRow struct {
 	GroupID         string    `ch:"error_group_id"`
 	ServiceName     string    `ch:"service"`
@@ -70,11 +64,6 @@ type rawErrorLatestOccurrenceRow struct {
 	Environment      string    `ch:"environment"`
 	Pod              string    `ch:"pod"`
 	Host             string    `ch:"host"`
-}
-
-type rawErrorFacetRow struct {
-	Value string `ch:"value"`
-	Count uint64 `ch:"count"`
 }
 
 type rawTimeBucketCountRow struct {

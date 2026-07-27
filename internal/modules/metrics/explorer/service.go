@@ -160,7 +160,6 @@ func (s *Service) Query(ctx context.Context, tenantID int64, req FEQueryRequest)
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(4)
 	for i := range prepared {
-		i := i
 		group.Go(func() error {
 			query := &prepared[i]
 			kind, found := kinds[query.filter.MetricName]
@@ -198,4 +197,3 @@ func (s *Service) Query(ctx context.Context, tenantID int64, req FEQueryRequest)
 
 	return &FEQueryResponse{Results: results}, nil
 }
-

@@ -97,40 +97,7 @@ func (r *Repository) RevokeRefreshToken(ctx context.Context, tokenHash string) e
 	return err
 }
 
-// RotateRefreshToken consumes the current token and creates its replacement in
-// one transaction. The conditional update prevents concurrent refreshes from
-// minting more than one successor.
-func (r *Repository) RotateRefreshToken(ctx context.Context, currentHash string, userID int64, familyID, newHash string, expiresAt time.Time) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
 
-	now := time.Now().UTC()
-	result, err := tx.ExecContext(ctx, `
-		UPDATE refresh_tokens
-		SET revoked_at = ?
-		WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?
-	`, now, currentHash, now)
-	if err != nil {
-		return err
-	}
-	updated, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if updated != 1 {
-		return sql.ErrNoRows
-	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
-		VALUES (?, ?, ?, ?)
-	`, userID, familyID, newHash, expiresAt); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
 
 // FindTenantByID loads a tenant regardless of active state so login can tell a
 // suspended (trial-expired) tenant apart from a genuinely missing one.

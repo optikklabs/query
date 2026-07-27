@@ -50,7 +50,6 @@ func (s *Service) Tick(ctx context.Context, now time.Time) error {
 	sem := make(chan struct{}, s.concurrency)
 	var wg sync.WaitGroup
 	for _, m := range due {
-		m := m
 		wg.Add(1)
 		sem <- struct{}{}
 		go func() {

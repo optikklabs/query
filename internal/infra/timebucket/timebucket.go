@@ -82,10 +82,6 @@ func MetricsRollup(windowMs int64) string {
 	return RollupTableForGrain(int64(displayGrain(windowMs).Seconds()))
 }
 
-func MetricsHistRollup(windowMs int64) string {
-	return MetricsRollup(windowMs)
-}
-
 // SpanStatsRollup picks the span_stats tier whose grain matches the display
 // window, mirroring MetricsRollup's ladder.
 func SpanStatsRollup(windowMs int64) string {

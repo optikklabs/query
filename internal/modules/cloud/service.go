@@ -2,7 +2,6 @@ package cloud
 
 import (
 	"context"
-	"time"
 
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
@@ -152,11 +151,4 @@ func indexRestarts(rows []RestartRow) map[string]uint64 {
 		out[row.Provider] = row.Restarts
 	}
 	return out
-}
-
-func formatTime(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	return t.Format(time.RFC3339)
 }

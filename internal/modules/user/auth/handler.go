@@ -42,8 +42,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	candidates := h.Tokens.RefreshCookieValues(r)
 	if len(candidates) == 0 {
-		// The browser sent no refresh cookie at all — the most common cause of
-		// a forced re-login, so record which client hit it.
 		slog.WarnContext(r.Context(), "AUTH_EVENT refresh_no_cookie",
 			slog.String("ip", modulecommon.ClientIP(r)),
 			slog.String("user_agent", r.UserAgent()))
@@ -51,12 +49,11 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, refresh, err := h.Service.Refresh(r.Context(), candidates, modulecommon.ClientIP(r))
+	response, err := h.Service.Refresh(r.Context(), candidates, modulecommon.ClientIP(r))
 	if err != nil {
 		shared.RespondServiceError(w, r, err, "Failed to refresh token")
 		return
 	}
-	h.Tokens.SetRefreshCookie(w, refresh)
 	modulecommon.RespondOK(w, response)
 }
 

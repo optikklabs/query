@@ -139,12 +139,10 @@ type notUsableError struct{ reason string }
 
 func (e *notUsableError) Error() string { return "refresh token not usable: " + e.reason }
 
-// Refresh renews a session from any of the presented refresh tokens. A browser
-// may hold more than one refresh cookie of the same name (e.g. left over from a
-// cookie-path change), so we accept the first that still validates and ignore
-// stale siblings. A session is only ever ended by an explicit logout, never by
-// a stale token, so refresh can never spuriously log an active user out.
-func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP string) (LoginResponse, string, error) {
+// Refresh renews a session from any of the presented refresh tokens. The
+// refresh token itself is NOT rotated (all browser tabs share the same cookie
+// jar), so only a new access token is issued.
+func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP string) (LoginResponse, error) {
 	seen := make(map[string]struct{}, len(refreshTokens))
 	var reasons []string
 	for _, raw := range refreshTokens {
@@ -156,13 +154,13 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 		}
 		seen[raw] = struct{}{}
 
-		response, refresh, err := s.refreshOne(ctx, raw)
+		response, err := s.refreshOne(ctx, raw)
 		if err == nil {
 			slog.InfoContext(ctx, "AUTH_EVENT refresh_success",
 				slog.Int64("user_id", response.User.ID),
 				slog.Int("candidates", len(refreshTokens)),
 				slog.String("ip", clientIP))
-			return response, refresh, nil
+			return response, nil
 		}
 		// A real internal/decision error (DB down, trial expired) stops here;
 		// only an unusable candidate falls through to the next cookie.
@@ -172,7 +170,7 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 				slog.Int("candidates", len(refreshTokens)),
 				slog.String("ip", clientIP),
 				slog.Any("error", err))
-			return LoginResponse{}, "", err
+			return LoginResponse{}, err
 		}
 		reasons = append(reasons, notUsable.reason)
 	}
@@ -181,35 +179,36 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 		slog.Int("candidates", len(refreshTokens)),
 		slog.Any("reasons", reasons),
 		slog.String("ip", clientIP))
-	return LoginResponse{}, "", shared.NewUnauthorizedError("Invalid or expired refresh token", nil)
+	return LoginResponse{}, shared.NewUnauthorizedError("Invalid or expired refresh token", nil)
 }
 
 // refreshOne validates a single refresh token and, if usable, issues a new
-// access token and extends the session. It returns a notUsableError when the
-// token is unknown, revoked, or expired so the caller can try another.
-func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginResponse, string, error) {
+// access token. The refresh token itself is NOT rotated — all browser tabs
+// share the same cookie jar, so rotation causes a race where one tab's refresh
+// invalidates the token for every other tab.
+func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginResponse, error) {
 	hash := token.HashRefreshToken(refreshToken)
 	stored, err := s.repo.FindRefreshTokenByHash(ctx, hash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return LoginResponse{}, "", &notUsableError{reason: "unknown_token"}
+			return LoginResponse{}, &notUsableError{reason: "unknown_token"}
 		}
-		return LoginResponse{}, "", shared.NewInternalError("Failed to look up refresh token", err)
+		return LoginResponse{}, shared.NewInternalError("Failed to look up refresh token", err)
 	}
 
 	if stored.RevokedAt != nil {
-		return LoginResponse{}, "", &notUsableError{reason: "revoked"}
+		return LoginResponse{}, &notUsableError{reason: "revoked"}
 	}
 	if time.Now().UTC().After(stored.ExpiresAt) {
-		return LoginResponse{}, "", &notUsableError{reason: "expired"}
+		return LoginResponse{}, &notUsableError{reason: "expired"}
 	}
 
 	user, err := s.repo.FindActiveUserByID(ctx, stored.UserID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return LoginResponse{}, "", &notUsableError{reason: "user_inactive"}
+			return LoginResponse{}, &notUsableError{reason: "user_inactive"}
 		}
-		return LoginResponse{}, "", shared.NewInternalError("Failed to load user for refresh", err)
+		return LoginResponse{}, shared.NewInternalError("Failed to load user for refresh", err)
 	}
 
 	authUser := shared.AuthUser{
@@ -222,7 +221,7 @@ func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginRes
 
 	response, err := s.buildAuthContextResponse(ctx, authUser)
 	if err != nil {
-		return LoginResponse{}, "", err
+		return LoginResponse{}, err
 	}
 
 	access, err := s.tokens.SignAccess(token.AuthState{
@@ -233,22 +232,10 @@ func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginRes
 		TenantIDs:       []int64{response.Tenant.ID},
 	})
 	if err != nil {
-		return LoginResponse{}, "", shared.NewInternalError("Failed to issue access token", err)
+		return LoginResponse{}, shared.NewInternalError("Failed to issue access token", err)
 	}
 
-	raw, newHash, err := token.GenerateRefreshToken()
-	if err != nil {
-		return LoginResponse{}, "", shared.NewInternalError("Failed to rotate refresh token", err)
-	}
-	expiresAt := time.Now().UTC().Add(s.tokens.RefreshTTL())
-	if err := s.repo.RotateRefreshToken(ctx, hash, stored.UserID, stored.FamilyID, newHash, expiresAt); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return LoginResponse{}, "", &notUsableError{reason: "already_rotated"}
-		}
-		return LoginResponse{}, "", shared.NewInternalError("Failed to rotate refresh token", err)
-	}
-
-	return LoginResponse{AuthContextResponse: response, AccessToken: access}, raw, nil
+	return LoginResponse{AuthContextResponse: response, AccessToken: access}, nil
 }
 
 // IssueTokens mints a fresh session (new token family) for a user. Used by the

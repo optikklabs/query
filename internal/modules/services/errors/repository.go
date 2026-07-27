@@ -156,21 +156,6 @@ func (r *Repository) ErrorGroupRowsByService(ctx context.Context, tenantID int64
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupsByService", &rows, query, args...)
 }
 
-func (r *Repository) ErrorGroupSamples(ctx context.Context, tenantID int64, startMs, endMs int64, groupIDs []string) ([]rawErrorGroupSampleRow, error) {
-	const query = `
-		SELECT error_group_id                    AS error_group_id,
-		       anyLast(status_message)          AS status_message,
-		       anyLast(trace_id)                AS sample_trace_id
-		FROM optikk.spans
-		PREWHERE tenant_id   = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1 AND error_group_id IN @groupIDs
-		GROUP BY error_group_id`
-	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
-		clickhouse.Named("groupIDs", groupIDs),
-	)
-	var rows []rawErrorGroupSampleRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupSamples", &rows, query, args...)
-}
-
 func (r *Repository) ErrorGroupDetailRow(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*rawErrorGroupDetailRow, error) {
 	const query = `
 		SELECT error_group_id                       AS error_group_id,

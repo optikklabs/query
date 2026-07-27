@@ -17,23 +17,6 @@ func TestExpensiveQueryLimitSkipsNonTelemetryRoutes(t *testing.T) {
 	}
 }
 
-func TestIsExpensiveQuery(t *testing.T) {
-	for _, tc := range []struct {
-		path string
-		want bool
-	}{
-		{"/api/v1/traces", true},
-		{"/api/v1/metrics/query", true},
-		{"/api/v1/users", false},
-		{"/health", false},
-	} {
-		r := httptest.NewRequest(http.MethodGet, tc.path, nil)
-		if got := isExpensiveQuery(r); got != tc.want {
-			t.Errorf("isExpensiveQuery(%q) = %v, want %v", tc.path, got, tc.want)
-		}
-	}
-}
-
 func TestQueryWorkload(t *testing.T) {
 	for _, tc := range []struct {
 		path string

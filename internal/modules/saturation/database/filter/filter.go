@@ -9,7 +9,6 @@ import (
 // OTel semantic-convention names and canonical metric names.
 
 const (
-	AttrDBSystem      = "db.system"
 	AttrDBNamespace   = "db.namespace"
 	AttrServerAddress = "server.address"
 )

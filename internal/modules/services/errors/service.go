@@ -235,25 +235,6 @@ func (s *Service) fetchErrorGroups(ctx context.Context, tenantID int64, startMs,
 	return s.repo.ErrorGroupRowsByService(ctx, tenantID, startMs, endMs, serviceName, limit, cursorIn)
 }
 
-func (s *Service) fetchErrorGroupSamples(ctx context.Context, tenantID int64, startMs, endMs int64, groups []rawErrorGroupRow) (map[string]rawErrorGroupSampleRow, error) {
-	if len(groups) == 0 {
-		return map[string]rawErrorGroupSampleRow{}, nil
-	}
-	groupIDs := make([]string, len(groups))
-	for i, g := range groups {
-		groupIDs[i] = g.GroupID
-	}
-	rows, err := s.repo.ErrorGroupSamples(ctx, tenantID, startMs, endMs, groupIDs)
-	if err != nil {
-		return nil, err
-	}
-	samples := make(map[string]rawErrorGroupSampleRow, len(rows))
-	for _, row := range rows {
-		samples[row.GroupID] = row
-	}
-	return samples, nil
-}
-
 func (s *Service) GetErrorGroupDetail(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*ErrorGroupDetail, error) {
 	row, err := s.repo.ErrorGroupDetailRow(ctx, tenantID, startMs, endMs, groupID)
 	if err != nil {
@@ -420,4 +401,3 @@ func (s *Service) GetErrorHotspot(ctx context.Context, tenantID int64, startMs, 
 	}
 	return cells, nil
 }
-

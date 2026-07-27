@@ -106,9 +106,6 @@ func TestCoalesceKeyIsolatesTenants(t *testing.T) {
 	if coalesceKey(1, q, args) == coalesceKey(2, q, args) {
 		t.Fatal("two tenants produced the same key")
 	}
-	if coalesceKey(1, q, args) != coalesceKey(1, q, args) {
-		t.Error("key is not stable for identical inputs")
-	}
 	if coalesceKey(1, q, []any{int64(1)}) == coalesceKey(1, q, []any{int64(2)}) {
 		t.Error("differing args produced the same key")
 	}

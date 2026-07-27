@@ -46,10 +46,6 @@ func ExpensiveQueryLimit(max int) func(http.Handler) http.Handler {
 	}
 }
 
-func isExpensiveQuery(r *http.Request) bool {
-	return queryWorkload(r) != ""
-}
-
 const (
 	workloadDetail   = "detail"
 	workloadExplorer = "explorer"

@@ -7,10 +7,6 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 )
 
-const MessagingSystemKafka = "kafka"
-
-const MaxTopQueues = 50
-
 func MetricArgs(tenantID int64, startMs, endMs int64) []any {
 	return []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
