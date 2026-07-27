@@ -14,12 +14,8 @@ import (
 	emailinfra "github.com/optikklabs/query/internal/infra/email"
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
-	"golang.org/x/crypto/bcrypt"
 )
 
-// minPasswordLength mirrors the web client's rule; the server is the source of
-// truth so API callers (CLI) can't bypass it.
-const minPasswordLength = 8
 const verificationTTL = 24 * time.Hour
 
 // trialDuration is the free-trial window a new tenant starts with.
@@ -156,7 +152,7 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) (auth.LoginR
 }
 
 func (s *Service) prepareSignupSecrets(password string) (signupSecrets, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := shared.HashPassword(password)
 	if err != nil {
 		return signupSecrets{}, shared.NewInternalError("Failed to hash password", err)
 	}
@@ -164,7 +160,7 @@ func (s *Service) prepareSignupSecrets(password string) (signupSecrets, error) {
 	if err != nil {
 		return signupSecrets{}, shared.NewInternalError("Failed to generate api key", err)
 	}
-	secrets := signupSecrets{passwordHash: string(hash), apiKey: apiKey}
+	secrets := signupSecrets{passwordHash: hash, apiKey: apiKey}
 	if !s.verificationRequired {
 		return secrets, nil
 	}
@@ -222,7 +218,7 @@ func normalizeSignup(req SignupRequest) (normalizedSignup, error) {
 		email:         strings.TrimSpace(strings.ToLower(req.Email)),
 		name:          strings.TrimSpace(req.Name),
 		tenantName:    strings.TrimSpace(req.TenantName),
-		password:      strings.TrimSpace(req.Password),
+		password:      req.Password,
 		acceptedTerms: req.AcceptedTerms,
 	}
 	if err := validateSignup(normalized); err != nil {
@@ -239,7 +235,7 @@ func validateSignup(s normalizedSignup) error {
 		return shared.NewValidationError("Your name is required", nil)
 	case s.tenantName == "":
 		return shared.NewValidationError("An organization name is required", nil)
-	case len(s.password) < minPasswordLength:
+	case len(s.password) < shared.MinPasswordLength:
 		return shared.NewValidationError("Password must be at least 8 characters", nil)
 	case !s.acceptedTerms:
 		return shared.NewValidationError("You must accept the Terms of Service and Privacy Policy", nil)

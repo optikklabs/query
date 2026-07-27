@@ -36,9 +36,9 @@ func (r *Repository) UpdateTenantAPIKey(ctx context.Context, tenantID int64, api
 	return err
 }
 
-func (r *Repository) UpdateTenantActive(ctx context.Context, tenantID int64, active bool) error {
-	_, err := dbutil.ExecSQL(ctx, r.db, "user.UpdateTenantActive", `
-		UPDATE tenant SET active = ? WHERE id = ?
-	`, active, tenantID)
+func (r *Repository) DeactivateTenant(ctx context.Context, tenantID int64) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.DeactivateTenant", `
+		UPDATE tenant SET active = 0 WHERE id = ?
+	`, tenantID)
 	return err
 }

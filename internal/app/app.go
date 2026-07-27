@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/oklog/run"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/optikklabs/query/internal/app/registry"
 	"github.com/optikklabs/query/internal/config"
@@ -41,6 +43,7 @@ func (a *App) Start(ctx context.Context) error {
 	var g run.Group
 	runAddContextCancelActor(&g, ctx)
 	a.addHTTPServerActor(&g)
+	a.addMetricsServerActor(&g)
 
 	err := g.Run()
 	a.stopBackgroundModules()
@@ -49,6 +52,28 @@ func (a *App) Start(ctx context.Context) error {
 	}
 
 	return normalizeRunError(err)
+}
+
+func (a *App) addMetricsServerActor(g *run.Group) {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.HandlerFor(
+		prometheus.DefaultGatherer,
+		promhttp.HandlerOpts{DisableCompression: true},
+	))
+	srv := &http.Server{
+		Addr:              fmt.Sprintf(":%s", a.Config.MetricsPort()),
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	g.Add(func() error {
+		return srv.ListenAndServe()
+	}, func(error) {
+		shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutCtx)
+	})
 }
 
 func (a *App) startBackgroundModules() {

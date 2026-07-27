@@ -3,26 +3,41 @@ package middleware
 import (
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/optikklabs/query/internal/infra/metrics"
 )
 
-// ExpensiveQueryLimit bounds concurrent telemetry reads per API pod. It waits
-// for capacity so request cancellation and the normal HTTP timeout remain the
-// single source of timeout behavior.
+// ExpensiveQueryLimit isolates telemetry detail, explorer, and overview reads.
+// A broad explorer scan therefore cannot occupy capacity reserved for a trace
+// or log detail request.
 func ExpensiveQueryLimit(max int) func(http.Handler) http.Handler {
 	if max <= 0 {
 		max = 1
 	}
-	sem := make(chan struct{}, max)
+	semaphores := map[string]chan struct{}{
+		workloadDetail:   make(chan struct{}, max),
+		workloadExplorer: make(chan struct{}, max),
+		workloadOverview: make(chan struct{}, max),
+	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !isExpensiveQuery(r) {
+			workload := queryWorkload(r)
+			if workload == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
+
+			start := time.Now()
 			select {
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
+			case semaphores[workload] <- struct{}{}:
+				metrics.QueryWaitDuration.WithLabelValues(workload).Observe(time.Since(start).Seconds())
+				metrics.QueryInFlight.WithLabelValues(workload).Inc()
+				defer func() {
+					metrics.QueryInFlight.WithLabelValues(workload).Dec()
+					<-semaphores[workload]
+				}()
 			case <-r.Context().Done():
 				return
 			}
@@ -32,11 +47,62 @@ func ExpensiveQueryLimit(max int) func(http.Handler) http.Handler {
 }
 
 func isExpensiveQuery(r *http.Request) bool {
+	return queryWorkload(r) != ""
+}
+
+const (
+	workloadDetail   = "detail"
+	workloadExplorer = "explorer"
+	workloadOverview = "overview"
+)
+
+func queryWorkload(r *http.Request) string {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		return false
+		return ""
 	}
 	for _, prefix := range expensiveQueryPrefixes {
 		if strings.HasPrefix(r.URL.Path, prefix) {
+			if isDetailPath(r.URL.Path) {
+				return workloadDetail
+			}
+			if isExplorerPath(r.URL.Path) {
+				return workloadExplorer
+			}
+			return workloadOverview
+		}
+	}
+	return ""
+}
+
+func isDetailPath(path string) bool {
+	if strings.HasPrefix(path, "/api/v1/traces/") {
+		return !hasRouteSegment(path, "/api/v1/traces/", "query", "facets", "trend", "suggest")
+	}
+	if strings.HasPrefix(path, "/api/v1/logs/") &&
+		!hasRouteSegment(path, "/api/v1/logs/", "query", "facets", "suggest") {
+		return true
+	}
+	return false
+}
+
+func hasRouteSegment(path, prefix string, segments ...string) bool {
+	tail := strings.TrimPrefix(path, prefix)
+	for _, segment := range segments {
+		if tail == segment || strings.HasPrefix(tail, segment+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func isExplorerPath(path string) bool {
+	for _, prefix := range []string{
+		"/api/v1/logs",
+		"/api/v1/metrics",
+		"/api/v1/saturation",
+		"/api/v1/traces",
+	} {
+		if strings.HasPrefix(path, prefix) {
 			return true
 		}
 	}

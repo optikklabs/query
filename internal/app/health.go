@@ -9,10 +9,10 @@ import (
 const healthCacheTTL = 5 * time.Second
 
 type healthResult struct {
-	ready     bool
-	mysqlErr  string
-	chErr     string
-	expiresAt time.Time
+	ready           bool
+	mysqlReady      bool
+	clickhouseReady bool
+	expiresAt       time.Time
 }
 
 type healthCache struct {

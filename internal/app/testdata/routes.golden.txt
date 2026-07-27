@@ -118,7 +118,6 @@ GET     /api/v1/users
 GET     /health
 GET     /health/live
 GET     /health/ready
-GET     /metrics
 PATCH   /api/v1/llm/evaluators/{id}
 PATCH   /api/v1/llm/prompts/{name}/versions/{version}
 PATCH   /api/v1/users/{id}/role
@@ -164,7 +163,6 @@ POST    /api/v1/notifications/policies/
 POST    /api/v1/notifications/templates/
 POST    /api/v1/settings/api-key/revoke
 POST    /api/v1/settings/api-key/rotate
-POST    /api/v1/settings/tenant/activate
 POST    /api/v1/settings/tenant/deactivate
 POST    /api/v1/traces/facets
 POST    /api/v1/traces/query

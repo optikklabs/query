@@ -177,26 +177,21 @@ func BodyLimitMiddleware(maxBytes int64) func(http.Handler) http.Handler {
 	}
 }
 
-var publicPrefixes = []string{
-	httputil.APIV1Base + "/auth/signup",
-	httputil.APIV1Base + "/auth/login",
-	httputil.APIV1Base + "/auth/refresh",
-	httputil.APIV1Base + "/auth/logout",
-	httputil.APIV1Base + "/auth/device/code",
-	httputil.APIV1Base + "/auth/device/token",
-	httputil.APIV1Base + "/auth/verify-email",
-	httputil.APIV1Base + "/auth/forgot-password",
-	httputil.APIV1Base + "/auth/reset-password",
-	"/health",
+var publicPaths = map[string]struct{}{
+	httputil.APIV1Base + "/auth/signup":          {},
+	httputil.APIV1Base + "/auth/login":           {},
+	httputil.APIV1Base + "/auth/refresh":         {},
+	httputil.APIV1Base + "/auth/logout":          {},
+	httputil.APIV1Base + "/auth/device/code":     {},
+	httputil.APIV1Base + "/auth/device/token":    {},
+	httputil.APIV1Base + "/auth/verify-email":    {},
+	httputil.APIV1Base + "/auth/forgot-password": {},
+	httputil.APIV1Base + "/auth/reset-password":  {},
 }
 
 func isPublicRequest(path string) bool {
-	for _, p := range publicPrefixes {
-		if strings.HasPrefix(path, p) {
-			return true
-		}
-	}
-	return false
+	_, ok := publicPaths[path]
+	return ok
 }
 
 func abortUnauthorized(w http.ResponseWriter, r *http.Request) {

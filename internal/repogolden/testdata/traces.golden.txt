@@ -28,7 +28,7 @@
       @traceID = string "0af7651916cd43dd8448eb211c80319c"
 
 === detail.GetRelatedTraces
-  [0] Select: SELECT span_id, trace_id, name AS operation_name, service, duration_nano / 1000000.0 AS duration_ms, status_code_string AS status, timestamp AS start_time FROM optikk.spans PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND is_root = 1 AND service = @serviceName AND name = @operationName WHERE trace_id != @excludeTraceID ORDER BY timestamp DESC LIMIT @limit
+  [0] Select: SELECT span_id, trace_id, name AS operation_name, service, duration_nano / 1000000.0 AS duration_ms, status_code_string AS status, timestamp AS start_time FROM optikk.spans_root PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service = @serviceName AND name = @operationName WHERE trace_id != @excludeTraceID ORDER BY timestamp DESC LIMIT @limit
       @end = time.Time 2026-01-02T08:06:40Z
       @excludeTraceID = string "0af7651916cd43dd8448eb211c80319c"
       @limit = int 10

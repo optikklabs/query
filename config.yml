@@ -2,8 +2,9 @@ environment: development
 
 server:
   port: "19090"
+  metrics_port: "19091"
   allowed_origins: "http://localhost:3000,http://localhost:5173"
-  # Bounds concurrent telemetry explorer requests per query pod.
+  # Per-workload concurrency. Detail, explorer, and overview reads are isolated.
   expensive_query_concurrency: 2
 
 mysql:

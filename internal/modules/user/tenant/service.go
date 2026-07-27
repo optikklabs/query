@@ -16,7 +16,7 @@ func NewService(repo *Repository) *Service {
 }
 
 // RotateAPIKey issues a fresh key for the tenant; the previous key stops working
-// once ingest's positive cache (5m) expires. The response is the ONLY place
+// once ingest's short positive cache expires. The response is the ONLY place
 // the raw key ever appears — only its hash is stored, so a lost key cannot
 // be recovered, only rotated again.
 func (s *Service) RotateAPIKey(ctx context.Context, tenantID int64) (TenantResponse, error) {
@@ -65,19 +65,10 @@ func toTenantResponse(tenant shared.TenantRecord) TenantResponse {
 	}
 }
 
-// ActivateTenant marks the tenant as active.
-func (s *Service) ActivateTenant(ctx context.Context, tenantID int64) (TenantResponse, error) {
-	return s.setTenantActive(ctx, tenantID, true)
-}
-
 // DeactivateTenant marks the tenant as inactive. Sessions and ingest
 // expire naturally — no cascade.
 func (s *Service) DeactivateTenant(ctx context.Context, tenantID int64) (TenantResponse, error) {
-	return s.setTenantActive(ctx, tenantID, false)
-}
-
-func (s *Service) setTenantActive(ctx context.Context, tenantID int64, active bool) (TenantResponse, error) {
-	if err := s.repo.UpdateTenantActive(ctx, tenantID, active); err != nil {
+	if err := s.repo.DeactivateTenant(ctx, tenantID); err != nil {
 		return TenantResponse{}, shared.NewInternalError("Failed to update tenant status", err)
 	}
 	tenant, err := s.repo.FindTenantByID(ctx, tenantID)

@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
@@ -56,7 +57,7 @@ func toChannelResponse(row models.ChannelRow, usedBy int) ChannelResponse {
 		ID:          row.ID,
 		Type:        row.Type,
 		Name:        row.Name,
-		Config:      row.ConfigJSON,
+		Config:      publicChannelConfig(row),
 		Status:      row.Status,
 		UsedByCount: usedBy,
 		CreatedAt:   row.CreatedAt,
@@ -73,6 +74,20 @@ func toChannelResponse(row models.ChannelRow, usedBy int) ChannelResponse {
 		out.LastErrorText = row.LastErrorText.String
 	}
 	return out
+}
+
+// publicChannelConfig reports whether a credential is configured without ever
+// serializing the credential itself back to a client.
+func publicChannelConfig(row models.ChannelRow) json.RawMessage {
+	configured := false
+	if row.Type == "slack" {
+		var cfg models.SlackWebhookConfig
+		configured = json.Unmarshal(row.ConfigJSON, &cfg) == nil && strings.TrimSpace(cfg.WebhookURL) != ""
+	}
+	if configured {
+		return json.RawMessage(`{"webhookConfigured":true}`)
+	}
+	return json.RawMessage(`{"webhookConfigured":false}`)
 }
 
 func toPolicyResponse(row models.PolicyRow) PolicyResponse {

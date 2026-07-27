@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -68,28 +67,28 @@ func (s *SlackWebhook) Send(ctx context.Context, ch models.ChannelRow, p Payload
 func (s *SlackWebhook) post(ctx context.Context, url string, body []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return fmt.Errorf("slack webhook request is invalid")
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return err
+		// net/http errors include the complete request URL. Slack webhook URLs
+		// are credentials, so never propagate that error into logs or API state.
+		return fmt.Errorf("slack webhook request failed")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return &httpStatusError{Status: resp.StatusCode, Body: string(respBody)}
+		return &httpStatusError{Status: resp.StatusCode}
 	}
 	return nil
 }
 
 type httpStatusError struct {
 	Status int
-	Body   string
 }
 
 func (e *httpStatusError) Error() string {
-	return fmt.Sprintf("slack webhook returned %d: %s", e.Status, e.Body)
+	return fmt.Sprintf("slack webhook returned %d", e.Status)
 }
 
 func isRetryable(err error) bool {

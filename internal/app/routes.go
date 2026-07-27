@@ -8,8 +8,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/optikklabs/query/internal/infra/middleware"
 	"github.com/optikklabs/query/internal/shared/httputil"
@@ -21,20 +19,11 @@ func (a *App) Router() http.Handler {
 	r := chi.NewRouter()
 
 	a.setupGlobalMiddleware(r)
-	a.setupMetricsRoute(r)
-
-	// Compression applies to everything except /metrics.
-	r.Group(func(r chi.Router) {
-		r.Use(chimw.Compress(5))
-		a.setupHealthRoutes(r)
-		a.setupAPIRoutes(r)
-	})
+	r.Use(chimw.Compress(5))
+	a.setupHealthRoutes(r)
+	a.setupAPIRoutes(r)
 
 	return r
-}
-
-func (a *App) setupMetricsRoute(r chi.Router) {
-	r.Method(http.MethodGet, "/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{DisableCompression: true}))
 }
 
 func (a *App) setupGlobalMiddleware(r chi.Router) {
@@ -55,6 +44,7 @@ func (a *App) setupHealthRoutes(r chi.Router) {
 func (a *App) setupAPIRoutes(r chi.Router) {
 	r.Route(httputil.APIV1Base, func(r chi.Router) {
 		r.Use(middleware.TenantMiddleware(a.Infra.Tokens))
+		r.Use(middleware.PublicAuthRateLimit(5, 10))
 		r.Use(middleware.TenantRateLimit(100, 200)) // 100 req/s, burst 200
 		r.Use(middleware.ExpensiveQueryLimit(a.Config.ExpensiveQueryConcurrency()))
 		for _, mod := range a.Modules {
@@ -75,11 +65,11 @@ func (a *App) healthReady(w http.ResponseWriter, r *http.Request) {
 
 	if !res.ready {
 		payload := map[string]string{"status": "not_ready"}
-		if res.mysqlErr != "" {
-			payload["mysql"] = res.mysqlErr
+		if !res.mysqlReady {
+			payload["mysql"] = "error"
 		}
-		if res.chErr != "" {
-			payload["clickhouse"] = res.chErr
+		if !res.clickhouseReady {
+			payload["clickhouse"] = "error"
 		}
 		httputil.WriteJSON(w, http.StatusServiceUnavailable, payload)
 		return
@@ -90,15 +80,16 @@ func (a *App) healthReady(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) probeReady(ctx context.Context) *healthResult {
 	res := &healthResult{}
-	if err := a.Infra.DB.Ping(); err != nil {
-		res.mysqlErr = err.Error()
+	if err := a.Infra.DB.PingContext(ctx); err != nil {
+		slog.ErrorContext(ctx, "health check failed", slog.String("service", "mysql"), slog.Any("error", err))
 		return res
 	}
+	res.mysqlReady = true
 	if err := a.Infra.CH.Ping(ctx); err != nil {
-		slog.ErrorContext(ctx, "health check failed", slog.String("service", "clickhouse"), slog.String("error", err.Error()))
-		res.chErr = err.Error()
+		slog.ErrorContext(ctx, "health check failed", slog.String("service", "clickhouse"), slog.Any("error", err))
 		return res
 	}
+	res.clickhouseReady = true
 	res.ready = true
 	return res
 }

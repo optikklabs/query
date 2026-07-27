@@ -74,7 +74,7 @@ var overviewSettings = clickhouse.Settings{
 	"query_cache_ttl":                 60,
 	"query_cache_share_between_users": 0,
 	"use_query_condition_cache":       1,
-	"max_threads":                     8,
+	"max_threads":                     4,
 	"priority":                        5,
 }
 
@@ -90,7 +90,7 @@ var explorerSettings = clickhouse.Settings{
 	"query_cache_ttl":                 60,
 	"query_cache_share_between_users": 0,
 	"use_query_condition_cache":       1,
-	"max_threads":                     16,
+	"max_threads":                     4,
 	"priority":                        10,
 }
 

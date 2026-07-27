@@ -33,3 +33,24 @@ func TestIsExpensiveQuery(t *testing.T) {
 		}
 	}
 }
+
+func TestQueryWorkload(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{"/api/v1/traces/abc", workloadDetail},
+		{"/api/v1/logs/abc", workloadDetail},
+		{"/api/v1/logs/query", workloadExplorer},
+		{"/api/v1/traces", workloadExplorer},
+		{"/api/v1/traces/query", workloadExplorer},
+		{"/api/v1/traces/facets", workloadExplorer},
+		{"/api/v1/services/overview", workloadOverview},
+		{"/api/v1/users", ""},
+	} {
+		r := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		if got := queryWorkload(r); got != tc.want {
+			t.Errorf("queryWorkload(%q) = %q, want %q", tc.path, got, tc.want)
+		}
+	}
+}

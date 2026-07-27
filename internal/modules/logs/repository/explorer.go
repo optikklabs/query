@@ -31,7 +31,7 @@ func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, 
 		SELECT ` + models.LogColumns + `
 		FROM optikk.logs
 		` + prewhere + ` ` + where + `
-		ORDER BY timestamp DESC, log_id DESC
+		ORDER BY ts_bucket DESC, timestamp DESC, log_id DESC
 		LIMIT @pgLimit`
 
 	var rows []models.LogRow

@@ -18,6 +18,5 @@ func (m *module) Name() string { return "user-tenant" }
 func (m *module) RegisterRoutes(group chi.Router) {
 	group.Post("/settings/api-key/rotate", m.handler.RotateAPIKey)
 	group.Post("/settings/api-key/revoke", m.handler.RevokeAPIKey)
-	group.Post("/settings/tenant/activate", m.handler.ActivateTenant)
 	group.Post("/settings/tenant/deactivate", m.handler.DeactivateTenant)
 }

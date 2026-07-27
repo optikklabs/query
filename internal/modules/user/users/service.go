@@ -8,7 +8,6 @@ import (
 
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // repository is the tenant-scoped persistence the service depends on. Defined
@@ -45,11 +44,14 @@ func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantI
 
 	hashStr := ""
 	if req.Password != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if len(req.Password) < shared.MinPasswordLength {
+			return UserResponse{}, shared.NewValidationError("Password must be at least 8 characters", nil)
+		}
+		hash, err := shared.HashPassword(req.Password)
 		if err != nil {
 			return UserResponse{}, shared.NewInternalError("Failed to hash password", err)
 		}
-		hashStr = string(hash)
+		hashStr = hash
 	}
 
 	userID, err := s.repo.CreateUser(ctx, req.Email, hashStr, req.Name, tenantID, role, time.Now().UTC())

@@ -44,6 +44,17 @@ func (s *Service) CreateChannel(ctx context.Context, tenantID int64, req CreateC
 }
 
 func (s *Service) UpdateChannel(ctx context.Context, tenantID, id int64, req UpdateChannelRequest) (ChannelResponse, error) {
+	existing, err := s.repo.GetChannel(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ChannelResponse{}, ErrNotFound
+		}
+		return ChannelResponse{}, err
+	}
+	req, err = preserveChannelCredentials(existing, req)
+	if err != nil {
+		return ChannelResponse{}, err
+	}
 	row, err := buildChannelRow(tenantID, req)
 	if err != nil {
 		return ChannelResponse{}, err
@@ -55,6 +66,33 @@ func (s *Service) UpdateChannel(ctx context.Context, tenantID, id int64, req Upd
 		return ChannelResponse{}, err
 	}
 	return s.GetChannel(ctx, tenantID, id)
+}
+
+func preserveChannelCredentials(existing models.ChannelRow, req UpdateChannelRequest) (UpdateChannelRequest, error) {
+	if strings.TrimSpace(req.Type) != "slack" {
+		return req, nil
+	}
+
+	var next models.SlackWebhookConfig
+	if len(req.Config) > 0 {
+		if err := json.Unmarshal(req.Config, &next); err != nil {
+			return req, ErrValidation{Msg: "config must be valid JSON"}
+		}
+	}
+	if strings.TrimSpace(next.WebhookURL) != "" {
+		return req, nil
+	}
+
+	var current models.SlackWebhookConfig
+	if err := json.Unmarshal(existing.ConfigJSON, &current); err != nil || strings.TrimSpace(current.WebhookURL) == "" {
+		return req, ErrValidation{Msg: "slack channel requires config.webhookUrl"}
+	}
+	merged, err := json.Marshal(current)
+	if err != nil {
+		return req, err
+	}
+	req.Config = merged
+	return req, nil
 }
 
 func (s *Service) DeleteChannel(ctx context.Context, tenantID, id int64) error {

@@ -13,7 +13,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	contracts "github.com/optikklabs/query/internal/shared/contracts"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Service handles authentication and session issuance.
@@ -31,7 +30,13 @@ type loginAttempts struct {
 type attempt struct {
 	failures    int
 	lockedUntil time.Time
+	lastSeen    time.Time
 }
+
+const (
+	maxLoginAttemptEntries = 10_000
+	loginAttemptTTL        = 15 * time.Minute
+)
 
 func NewService(repo *Repository, tokens *token.Service, emailCfg config.EmailConfig) *Service {
 	sender := PasswordResetSender(noopPasswordResetSender{})
@@ -49,7 +54,6 @@ func NewService(repo *Repository, tokens *token.Service, emailCfg config.EmailCo
 // Login authenticates a user and issues access and refresh tokens.
 func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP string) (LoginResponse, string, error) {
 	email := strings.TrimSpace(req.Email)
-	password := strings.TrimSpace(req.Password)
 	if !s.attempts.allow(email, clientIP) {
 		return LoginResponse{}, "", shared.NewValidationError("Too many login attempts. Try again later.", nil)
 	}
@@ -60,7 +64,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP string) 
 		return LoginResponse{}, "", shared.NewValidationError("Invalid email or password", err)
 	}
 
-	if user.PasswordHash != nil && *user.PasswordHash != "" && bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(password)) != nil {
+	if !shared.PasswordIsValid(user.PasswordHash, req.Password) {
 		s.attempts.fail(email, clientIP)
 		return LoginResponse{}, "", shared.NewValidationError("Invalid email or password", nil)
 	}
@@ -79,16 +83,28 @@ func (l *loginAttempts) key(email, ip string) string { return strings.ToLower(em
 func (l *loginAttempts) allow(email, ip string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return !time.Now().Before(l.entries[l.key(email, ip)].lockedUntil)
+	k := l.key(email, ip)
+	a, ok := l.entries[k]
+	now := time.Now()
+	if ok && now.Sub(a.lastSeen) > loginAttemptTTL && !now.Before(a.lockedUntil) {
+		delete(l.entries, k)
+		return true
+	}
+	return !now.Before(a.lockedUntil)
 }
 func (l *loginAttempts) fail(email, ip string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	now := time.Now()
 	k := l.key(email, ip)
+	if _, exists := l.entries[k]; !exists && len(l.entries) >= maxLoginAttemptEntries {
+		l.evictIdleOrOldest(now)
+	}
 	a := l.entries[k]
 	a.failures++
+	a.lastSeen = now
 	if a.failures >= 5 {
-		a.lockedUntil = time.Now().Add(time.Duration(1<<min(a.failures-5, 6)) * time.Minute)
+		a.lockedUntil = now.Add(time.Duration(1<<min(a.failures-5, 6)) * time.Minute)
 	}
 	l.entries[k] = a
 }
@@ -96,6 +112,24 @@ func (l *loginAttempts) reset(email, ip string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.entries, l.key(email, ip))
+}
+
+func (l *loginAttempts) evictIdleOrOldest(now time.Time) {
+	var oldestKey string
+	var oldest time.Time
+	for key, entry := range l.entries {
+		if now.Sub(entry.lastSeen) > loginAttemptTTL && !now.Before(entry.lockedUntil) {
+			delete(l.entries, key)
+			continue
+		}
+		if oldestKey == "" || entry.lastSeen.Before(oldest) {
+			oldestKey = key
+			oldest = entry.lastSeen
+		}
+	}
+	if len(l.entries) >= maxLoginAttemptEntries && oldestKey != "" {
+		delete(l.entries, oldestKey)
+	}
 }
 
 // notUsableError marks a candidate refresh token that is simply not valid so
@@ -202,13 +236,19 @@ func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginRes
 		return LoginResponse{}, "", shared.NewInternalError("Failed to issue access token", err)
 	}
 
-	// Extend the session life instead of rotating the refresh token
+	raw, newHash, err := token.GenerateRefreshToken()
+	if err != nil {
+		return LoginResponse{}, "", shared.NewInternalError("Failed to rotate refresh token", err)
+	}
 	expiresAt := time.Now().UTC().Add(s.tokens.RefreshTTL())
-	if err := s.repo.ExtendRefreshToken(ctx, hash, expiresAt); err != nil {
-		return LoginResponse{}, "", shared.NewInternalError("Failed to extend refresh token", err)
+	if err := s.repo.RotateRefreshToken(ctx, hash, stored.UserID, stored.FamilyID, newHash, expiresAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return LoginResponse{}, "", &notUsableError{reason: "already_rotated"}
+		}
+		return LoginResponse{}, "", shared.NewInternalError("Failed to rotate refresh token", err)
 	}
 
-	return LoginResponse{AuthContextResponse: response, AccessToken: access}, refreshToken, nil
+	return LoginResponse{AuthContextResponse: response, AccessToken: access}, raw, nil
 }
 
 // IssueTokens mints a fresh session (new token family) for a user. Used by the
@@ -348,7 +388,7 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 }
 
 func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPassword string) error {
-	if len(newPassword) < 8 {
+	if len(newPassword) < shared.MinPasswordLength {
 		return shared.NewValidationError("Password must be at least 8 characters", nil)
 	}
 
@@ -378,13 +418,13 @@ func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPasswor
 		return shared.NewUnauthorizedError("Invalid or expired reset token", err)
 	}
 
-	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	newHash, err := shared.HashPassword(newPassword)
 	if err != nil {
 		return shared.NewInternalError("Failed to hash password", err)
 	}
 
-	if err := s.repo.UpdatePassword(ctx, userID, string(newHash)); err != nil {
-		return shared.NewInternalError("Failed to update password", err)
+	if err := s.repo.UpdatePasswordAndRevokeSessions(ctx, userID, newHash); err != nil {
+		return shared.NewInternalError("Failed to update password and revoke existing sessions", err)
 	}
 
 	slog.InfoContext(ctx, "AUTH_EVENT password_reset_success", slog.Int64("user_id", userID))
@@ -392,7 +432,7 @@ func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPasswor
 }
 
 func (s *Service) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
-	if len(newPassword) < 8 {
+	if len(newPassword) < shared.MinPasswordLength {
 		return shared.NewValidationError("New password must be at least 8 characters", nil)
 	}
 
@@ -401,17 +441,17 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, currentPassw
 		return shared.NewInternalError("Failed to lookup user", err)
 	}
 
-	if user.PasswordHash == nil || *user.PasswordHash == "" || bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(currentPassword)) != nil {
+	if !shared.PasswordIsValid(user.PasswordHash, currentPassword) {
 		return shared.NewValidationError("Invalid current password", nil)
 	}
 
-	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	newHash, err := shared.HashPassword(newPassword)
 	if err != nil {
 		return shared.NewInternalError("Failed to hash password", err)
 	}
 
-	if err := s.repo.UpdatePassword(ctx, userID, string(newHash)); err != nil {
-		return shared.NewInternalError("Failed to update password", err)
+	if err := s.repo.UpdatePasswordAndRevokeSessions(ctx, userID, newHash); err != nil {
+		return shared.NewInternalError("Failed to update password and revoke existing sessions", err)
 	}
 
 	slog.InfoContext(ctx, "AUTH_EVENT password_changed", slog.Int64("user_id", userID))

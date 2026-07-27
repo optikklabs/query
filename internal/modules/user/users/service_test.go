@@ -89,12 +89,22 @@ func TestCreateUserRejectsInvalidRole(t *testing.T) {
 func TestCreateUserDefaultsToMemberInCallerTenant(t *testing.T) {
 	f := newFakeRepo()
 	s := NewService(f, nil)
-	u, err := s.CreateUser(context.Background(), CreateUserRequest{Email: "a@b.com", Name: "A", Password: "pw"}, 42)
+	u, err := s.CreateUser(context.Background(), CreateUserRequest{Email: "a@b.com", Name: "A", Password: "password"}, 42)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if u.Role != shared.RoleMember || u.TenantID != 42 {
 		t.Fatalf("got role=%q tenant=%d, want member/42", u.Role, u.TenantID)
+	}
+}
+
+func TestCreateUserRejectsShortPassword(t *testing.T) {
+	s := NewService(newFakeRepo(), nil)
+	_, err := s.CreateUser(context.Background(), CreateUserRequest{
+		Email: "a@b.com", Name: "A", Password: "short",
+	}, 42)
+	if err == nil {
+		t.Fatal("expected short password to be rejected")
 	}
 }
 

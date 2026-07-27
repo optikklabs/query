@@ -53,11 +53,22 @@ func (r *Repository) FindAuthUserByID(ctx context.Context, userID int64) (shared
 	return u, err
 }
 
-func (r *Repository) UpdatePassword(ctx context.Context, userID int64, passwordHash string) error {
-	_, err := dbutil.ExecSQL(ctx, r.db, "user.UpdatePassword", `
-		UPDATE users SET password_hash = ? WHERE id = ?
-	`, passwordHash, userID)
-	return err
+func (r *Repository) UpdatePasswordAndRevokeSessions(ctx context.Context, userID int64, passwordHash string) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, passwordHash, userID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL
+	`, time.Now().UTC(), userID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *Repository) InsertRefreshToken(ctx context.Context, userID int64, familyID, tokenHash string, expiresAt time.Time) error {
@@ -86,11 +97,39 @@ func (r *Repository) RevokeRefreshToken(ctx context.Context, tokenHash string) e
 	return err
 }
 
-func (r *Repository) ExtendRefreshToken(ctx context.Context, tokenHash string, expiresAt time.Time) error {
-	_, err := dbutil.ExecSQL(ctx, r.db, "user.ExtendRefreshToken", `
-		UPDATE refresh_tokens SET expires_at = ? WHERE token_hash = ? AND revoked_at IS NULL
-	`, expiresAt, tokenHash)
-	return err
+// RotateRefreshToken consumes the current token and creates its replacement in
+// one transaction. The conditional update prevents concurrent refreshes from
+// minting more than one successor.
+func (r *Repository) RotateRefreshToken(ctx context.Context, currentHash string, userID int64, familyID, newHash string, expiresAt time.Time) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	now := time.Now().UTC()
+	result, err := tx.ExecContext(ctx, `
+		UPDATE refresh_tokens
+		SET revoked_at = ?
+		WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?
+	`, now, currentHash, now)
+	if err != nil {
+		return err
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if updated != 1 {
+		return sql.ErrNoRows
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
+		VALUES (?, ?, ?, ?)
+	`, userID, familyID, newHash, expiresAt); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // FindTenantByID loads a tenant regardless of active state so login can tell a

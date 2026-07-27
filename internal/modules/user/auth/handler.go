@@ -3,7 +3,6 @@ package auth
 import (
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/shared"
@@ -30,9 +29,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Email and password are required", nil)
 		return
 	}
-
-	req.Email = strings.TrimSpace(req.Email)
-	req.Password = strings.TrimSpace(req.Password)
 
 	response, refresh, err := h.Service.Login(r.Context(), req, modulecommon.ClientIP(r))
 	if err != nil {

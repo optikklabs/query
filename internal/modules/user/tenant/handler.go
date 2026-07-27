@@ -56,19 +56,6 @@ func (h *Handler) requireTenantAdmin(w http.ResponseWriter, r *http.Request, ten
 	return true
 }
 
-func (h *Handler) ActivateTenant(w http.ResponseWriter, r *http.Request) {
-	tenant := modulecommon.Tenant(r)
-	if !h.requireTenantAdmin(w, r, tenant.TenantID, tenant.UserRole) {
-		return
-	}
-	resp, err := h.Service.ActivateTenant(r.Context(), tenant.TenantID)
-	if err != nil {
-		shared.RespondServiceError(w, r, err, "Unable to activate tenant")
-		return
-	}
-	modulecommon.RespondOK(w, resp)
-}
-
 func (h *Handler) DeactivateTenant(w http.ResponseWriter, r *http.Request) {
 	tenant := modulecommon.Tenant(r)
 	if !h.requireTenantAdmin(w, r, tenant.TenantID, tenant.UserRole) {

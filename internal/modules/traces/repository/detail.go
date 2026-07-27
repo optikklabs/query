@@ -130,10 +130,9 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 		       duration_nano / 1000000.0  AS duration_ms,
 		       status_code_string         AS status,
 		       timestamp                  AS start_time
-		FROM optikk.spans
+		FROM optikk.spans_root
 		PREWHERE tenant_id      = @tenantID
 		     AND timestamp BETWEEN @start AND @end
-		     AND is_root = 1
 		     AND service      = @serviceName
 		     AND name         = @operationName
 		WHERE trace_id != @excludeTraceID

@@ -1,5 +1,5 @@
 === explorer.Query
-  [0] Select: SELECT log_id, timestamp, observed_timestamp, severity_text, severity_number, severity_bucket, body, trace_id, span_id, trace_flags, service, host, pod, container, environment, attributes_string, attributes_number, attributes_bool, scope_name, scope_version FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket AND service IN @services WHERE 1=1 AND upper(severity_text) IN @severities AND trace_id = @traceID AND lowerUTF8(body) LIKE @search AND attributes_string[@akey_0] = @aval_0 ORDER BY timestamp DESC, log_id DESC LIMIT @pgLimit
+  [0] Select: SELECT log_id, timestamp, observed_timestamp, severity_text, severity_number, severity_bucket, body, trace_id, span_id, trace_flags, service, host, pod, container, environment, attributes_string, attributes_number, attributes_bool, scope_name, scope_version FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket AND service IN @services WHERE 1=1 AND upper(severity_text) IN @severities AND trace_id = @traceID AND lowerUTF8(body) LIKE @search AND attributes_string[@akey_0] = @aval_0 ORDER BY ts_bucket DESC, timestamp DESC, log_id DESC LIMIT @pgLimit
       @akey_0 = string "k"
       @aval_0 = string "v"
       @end = time.Time 2026-01-02T08:06:40Z
@@ -14,7 +14,7 @@
       @traceID = string "abc123"
 
 === explorer.Query/cursor
-  [0] Select: SELECT log_id, timestamp, observed_timestamp, severity_text, severity_number, severity_bucket, body, trace_id, span_id, trace_flags, service, host, pod, container, environment, attributes_string, attributes_number, attributes_bool, scope_name, scope_version FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket AND service IN @services WHERE 1=1 AND upper(severity_text) IN @severities AND trace_id = @traceID AND lowerUTF8(body) LIKE @search AND attributes_string[@akey_0] = @aval_0 AND (timestamp, log_id) < (@curTs, @curLid) ORDER BY timestamp DESC, log_id DESC LIMIT @pgLimit
+  [0] Select: SELECT log_id, timestamp, observed_timestamp, severity_text, severity_number, severity_bucket, body, trace_id, span_id, trace_flags, service, host, pod, container, environment, attributes_string, attributes_number, attributes_bool, scope_name, scope_version FROM optikk.logs PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket AND service IN @services WHERE 1=1 AND upper(severity_text) IN @severities AND trace_id = @traceID AND lowerUTF8(body) LIKE @search AND attributes_string[@akey_0] = @aval_0 AND (timestamp, log_id) < (@curTs, @curLid) ORDER BY ts_bucket DESC, timestamp DESC, log_id DESC LIMIT @pgLimit
       (positional) driver.NamedDateValue driver.NamedDateValue{Name:"curTs", Value:time.Date(2026, time.January, 2, 3, 4, 5, 123456789, time.UTC), Scale:0x3}
       @akey_0 = string "k"
       @aval_0 = string "v"
