@@ -1,7 +1,7 @@
 package redfleet
 
 import (
-	"github.com/optikklabs/query/internal/infra/utils"
+	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
@@ -16,9 +16,9 @@ func mapFleetServices(rows []redMetricsRow) []ServiceREDMetric {
 			ServiceName:  row.ServiceName,
 			RequestCount: int64(row.TotalCount),
 			ErrorCount:   int64(row.ErrorCount),
-			AvgLatency:   utils.SanitizeFloat(float64(row.P50Ms)),
-			P95Latency:   utils.SanitizeFloat(float64(row.P95Ms)),
-			P99Latency:   utils.SanitizeFloat(float64(row.P99Ms)),
+			AvgLatency:   httputil.SanitizeFloat(float64(row.P50Ms)),
+			P95Latency:   httputil.SanitizeFloat(float64(row.P95Ms)),
+			P99Latency:   httputil.SanitizeFloat(float64(row.P99Ms)),
 		})
 	}
 	return services
@@ -49,11 +49,11 @@ func computeFleetTotals(total *redMetricsRow, serviceCount int, startMs, endMs i
 		ServiceCount:   int64(serviceCount),
 		TotalSpanCount: totalCount,
 		TotalErrors:    totalErrors,
-		TotalRPS:       utils.SanitizeFloat(float64(totalCount) / durationSec),
-		AvgErrorRate:   utils.SanitizeFloat(avgErrorRate),
-		AvgP50Ms:       utils.SanitizeFloat(float64(total.P50Ms)),
-		AvgP95Ms:       utils.SanitizeFloat(float64(total.P95Ms)),
-		AvgP99Ms:       utils.SanitizeFloat(float64(total.P99Ms)),
+		TotalRPS:       httputil.SanitizeFloat(float64(totalCount) / durationSec),
+		AvgErrorRate:   httputil.SanitizeFloat(avgErrorRate),
+		AvgP50Ms:       httputil.SanitizeFloat(float64(total.P50Ms)),
+		AvgP95Ms:       httputil.SanitizeFloat(float64(total.P95Ms)),
+		AvgP99Ms:       httputil.SanitizeFloat(float64(total.P99Ms)),
 	}
 }
 
@@ -82,9 +82,9 @@ func toTopDBQuery(row topDBQueryRow, durationSec float64) TopDBQuery {
 		ErrorRate:     errRate,
 		ErrorCount:    errs,
 		TotalCount:    total,
-		P50Ms:         utils.SanitizeFloat(float64(row.P50Ms)),
-		P95Ms:         utils.SanitizeFloat(float64(row.P95Ms)),
-		P99Ms:         utils.SanitizeFloat(float64(row.P99Ms)),
+		P50Ms:         httputil.SanitizeFloat(float64(row.P50Ms)),
+		P95Ms:         httputil.SanitizeFloat(float64(row.P95Ms)),
+		P99Ms:         httputil.SanitizeFloat(float64(row.P99Ms)),
 	}
 }
 
@@ -103,9 +103,9 @@ func toTopEndpoint(row topEndpointRow, durationSec float64) TopEndpoint {
 		ErrorRate:     errRate,
 		ErrorCount:    errs,
 		TotalCount:    total,
-		P50Ms:         utils.SanitizeFloat(float64(row.P50Ms)),
-		P95Ms:         utils.SanitizeFloat(float64(row.P95Ms)),
-		P99Ms:         utils.SanitizeFloat(float64(row.P99Ms)),
+		P50Ms:         httputil.SanitizeFloat(float64(row.P50Ms)),
+		P95Ms:         httputil.SanitizeFloat(float64(row.P95Ms)),
+		P99Ms:         httputil.SanitizeFloat(float64(row.P99Ms)),
 	}
 }
 
@@ -145,9 +145,9 @@ func extractREDMetrics(redRow *redMetricsRow, durationSec float64) (reqCount, er
 	errCount = int64(redRow.ErrorCount)
 	rps = float64(reqCount) / durationSec
 	errRate = metrics.PercentageInt(errCount, reqCount)
-	p50 = utils.SanitizeFloat(float64(redRow.P50Ms))
-	p95 = utils.SanitizeFloat(float64(redRow.P95Ms))
-	p99 = utils.SanitizeFloat(float64(redRow.P99Ms))
+	p50 = httputil.SanitizeFloat(float64(redRow.P50Ms))
+	p95 = httputil.SanitizeFloat(float64(redRow.P95Ms))
+	p99 = httputil.SanitizeFloat(float64(redRow.P99Ms))
 
 	return
 }

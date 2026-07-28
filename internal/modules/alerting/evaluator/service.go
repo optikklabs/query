@@ -188,6 +188,7 @@ func (s *Service) dispatchAll(ctx context.Context, m models.MonitorRow, cond mod
 		errText := sql.NullString{}
 		if err != nil {
 			errText = sql.NullString{Valid: true, String: err.Error()}
+			metrics.AlertingDispatchFailures.WithLabelValues(ch.Type).Inc()
 			slog.WarnContext(ctx, "alerting: dispatch failed",
 				slog.Int64("monitor_id", m.ID),
 				slog.Int64("channel_id", ch.ID),

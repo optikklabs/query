@@ -22,11 +22,4 @@ var (
 		Name:      "queries_total",
 		Help:      "Total DB queries executed, by engine, operation, and result (ok/err).",
 	}, []string{"system", "op", "result"})
-
-	DBQueriesCoalesced = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "optikk",
-		Subsystem: "db",
-		Name:      "queries_coalesced_total",
-		Help:      "ClickHouse reads served by an in-flight identical query, by operation.",
-	}, []string{"op"})
 )

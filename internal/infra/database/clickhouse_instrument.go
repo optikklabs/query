@@ -9,35 +9,28 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/optikklabs/query/internal/infra/metrics"
-	types "github.com/optikklabs/query/internal/shared/contracts"
 )
 
 func SelectCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, query string, args ...any) error {
-	key := coalesceKey(types.TenantFrom(ctx).TenantID, query, args)
-	return coalesce(ctx, key, op, dest, func(runCtx context.Context, out any) error {
-		done := startCHOp(runCtx)
-		start := time.Now()
-		err := wrapBudgetExceeded(conn.Select(runCtx, out, query, args...))
-		done(err, start, op)
-		return err
-	})
+	done := startCHOp(ctx)
+	start := time.Now()
+	err := wrapBudgetExceeded(conn.Select(ctx, dest, query, args...))
+	done(err, start, op)
+	return err
 }
 
 func QueryRowCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, query string, args ...any) error {
-	key := coalesceKey(types.TenantFrom(ctx).TenantID, query, args)
-	return coalesce(ctx, key, op, dest, func(runCtx context.Context, out any) error {
-		done := startCHOp(runCtx)
-		start := time.Now()
-		err := conn.QueryRow(runCtx, query, args...).ScanStruct(out)
+	done := startCHOp(ctx)
+	start := time.Now()
+	err := conn.QueryRow(ctx, query, args...).ScanStruct(dest)
 
-		if err != nil && isNoRows(err) {
-			done(nil, start, op)
-			return nil
-		}
-		err = wrapBudgetExceeded(err)
-		done(err, start, op)
-		return err
-	})
+	if err != nil && isNoRows(err) {
+		done(nil, start, op)
+		return nil
+	}
+	err = wrapBudgetExceeded(err)
+	done(err, start, op)
+	return err
 }
 
 func isNoRows(err error) bool {

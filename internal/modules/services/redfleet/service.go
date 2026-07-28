@@ -7,7 +7,7 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/infra/timebucket"
-	"github.com/optikklabs/query/internal/infra/utils"
+	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/shared/metrics"
 	"golang.org/x/sync/errgroup"
@@ -49,7 +49,7 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFil
 				pt.RequestCount = row.RequestCount
 				pt.ErrorCount = row.ErrorCount
 				pt.RPS = float64(row.RequestCount) / grainSec
-				pt.ErrorRate = utils.SanitizeFloat(metrics.Percentage(row.ErrorCount, row.RequestCount))
+				pt.ErrorRate = httputil.SanitizeFloat(metrics.Percentage(row.ErrorCount, row.RequestCount))
 			}
 			return pt
 		}), nil
@@ -93,7 +93,7 @@ func (s *Service) GetRequestRateTimeSeries(ctx context.Context, f REDFilters) (R
 		rps := make([]float64, len(buckets))
 		for j, t := range buckets {
 			reqCount := rowMap[key{serviceName: svc, timestamp: t.Unix()}]
-			rps[j] = utils.SanitizeFloat(float64(reqCount) / grainSec)
+			rps[j] = httputil.SanitizeFloat(float64(reqCount) / grainSec)
 		}
 		out.Series[i] = RequestRateEntry{ServiceName: svc, RPS: rps}
 	}
@@ -143,9 +143,9 @@ func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDFilt
 		func(t time.Time, row latencyPercentilesTimeseriesRow, ok bool) LatencyPercentilesPoint {
 			pt := LatencyPercentilesPoint{Timestamp: t}
 			if ok {
-				pt.P50Ms = utils.SanitizeFloat(float64(row.P50Ms))
-				pt.P95Ms = utils.SanitizeFloat(float64(row.P95Ms))
-				pt.P99Ms = utils.SanitizeFloat(float64(row.P99Ms))
+				pt.P50Ms = httputil.SanitizeFloat(float64(row.P50Ms))
+				pt.P95Ms = httputil.SanitizeFloat(float64(row.P95Ms))
+				pt.P99Ms = httputil.SanitizeFloat(float64(row.P99Ms))
 			}
 			return pt
 		}), nil
@@ -176,7 +176,7 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters) 
 		var p99 float64
 		errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
 		if len(row.QS) >= 3 {
-			p99 = utils.SanitizeFloat(row.QS[2])
+			p99 = httputil.SanitizeFloat(row.QS[2])
 		}
 		if traffic[bucket] == nil {
 			traffic[bucket] = map[string]cell{}
@@ -272,9 +272,9 @@ func (s *Service) GetOperationBaseline(ctx context.Context, tenantID int64, star
 	return OperationBaseline{
 		ServiceName:   serviceName,
 		OperationName: operationName,
-		P50Ms:         utils.SanitizeFloat(float64(row.P50Ms)),
-		P95Ms:         utils.SanitizeFloat(float64(row.P95Ms)),
-		P99Ms:         utils.SanitizeFloat(float64(row.P99Ms)),
+		P50Ms:         httputil.SanitizeFloat(float64(row.P50Ms)),
+		P95Ms:         httputil.SanitizeFloat(float64(row.P95Ms)),
+		P99Ms:         httputil.SanitizeFloat(float64(row.P99Ms)),
 		SpanCount:     int64(row.SpanCount),
 	}, nil
 }
@@ -335,14 +335,14 @@ func (s *Service) GetServiceSummary(ctx context.Context, f REDFilters) (ServiceS
 		ServiceName:       serviceName,
 		RequestCount:      reqCount,
 		ErrorCount:        errCount,
-		RPS:               utils.SanitizeFloat(rps),
-		ErrorRate:         utils.SanitizeFloat(errRate),
+		RPS:               httputil.SanitizeFloat(rps),
+		ErrorRate:         httputil.SanitizeFloat(errRate),
 		P50Ms:             p50,
 		P95Ms:             p95,
 		P99Ms:             p99,
-		CPUUtilization:    utils.SanitizeFloat(cpuVal),
-		MemoryUtilization: utils.SanitizeFloat(memVal),
-		DiskUtilization:   utils.SanitizeFloat(diskVal),
+		CPUUtilization:    httputil.SanitizeFloat(cpuVal),
+		MemoryUtilization: httputil.SanitizeFloat(memVal),
+		DiskUtilization:   httputil.SanitizeFloat(diskVal),
 	}, nil
 }
 
@@ -372,7 +372,7 @@ func (s *Service) GetServiceSaturationTimeSeries(ctx context.Context, f REDFilte
 			}
 			return SaturationTimeSeriesPoint{
 				Timestamp: t,
-				Value:     utils.SanitizeFloat(val),
+				Value:     httputil.SanitizeFloat(val),
 			}
 		}), nil
 }

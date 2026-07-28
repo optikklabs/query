@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/optikklabs/query/internal/infra/utils"
+	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
 	"github.com/optikklabs/query/internal/modules/infrastructure/repository"
@@ -82,7 +82,7 @@ func enrichWithSpans(byHost map[string]models.Host, spans []repository.HostSpans
 		errs := int64(row.ErrorCount)
 		errRate := metrics.PercentageInt(errs, total)
 		rps := float64(total) / durationSec
-		p99 := utils.SanitizeFloat(float64(row.P99Ms))
+		p99 := httputil.SanitizeFloat(float64(row.P99Ms))
 
 		h.Zone = row.Zone
 		h.RPS = &rps

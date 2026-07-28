@@ -55,11 +55,6 @@ func (s *SlackWebhook) Send(ctx context.Context, ch models.ChannelRow, p Payload
 		return err
 	}
 
-	if err := s.post(ctx, cfg.WebhookURL, raw); err == nil {
-		return nil
-	} else if !isRetryable(err) {
-		return err
-	}
 	return s.post(ctx, cfg.WebhookURL, raw)
 }
 
@@ -76,25 +71,9 @@ func (s *SlackWebhook) post(ctx context.Context, url string, body []byte) error 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return &httpStatusError{Status: resp.StatusCode}
+		return fmt.Errorf("slack webhook returned %d", resp.StatusCode)
 	}
 	return nil
-}
-
-type httpStatusError struct {
-	Status int
-}
-
-func (e *httpStatusError) Error() string {
-	return fmt.Sprintf("slack webhook returned %d", e.Status)
-}
-
-func isRetryable(err error) bool {
-	hsErr, ok := err.(*httpStatusError)
-	if !ok {
-		return false
-	}
-	return hsErr.Status >= 500
 }
 
 func buildAttachment(p Payload) slackAttachment {
