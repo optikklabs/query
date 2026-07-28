@@ -50,19 +50,20 @@ type LatencyPercentilesPoint struct {
 	P99Ms     float64   `json:"p99Ms"`
 }
 
-// EndpointRateSeries is the columnar per-route RED time series.
-// Timestamps are unix millis shared by every series entry.
+// EndpointRateSeries is the columnar per-endpoint RED time series, carrying
+// the top endpoints by volume. Timestamps are unix millis shared by every
+// series entry.
 type EndpointRateSeries struct {
 	Timestamps []int64             `json:"timestamps"`
 	Series     []EndpointRateEntry `json:"series"`
 }
 
-// Nil errorRate/p99Ms entries mean the route had no traffic in that bucket.
+// Nil errorRate/p99Ms entries mean the endpoint had no traffic in that bucket.
 type EndpointRateEntry struct {
-	HTTPRoute string     `json:"httpRoute"`
-	RPS       []float64  `json:"rps"`
-	ErrorRate []*float64 `json:"errorRate"`
-	P99Ms     []*float64 `json:"p99Ms"`
+	OperationName string     `json:"operationName"`
+	RPS           []float64  `json:"rps"`
+	ErrorRate     []*float64 `json:"errorRate"`
+	P99Ms         []*float64 `json:"p99Ms"`
 }
 
 type TopEndpoint struct {

@@ -85,12 +85,15 @@ type latencyPercentilesTimeseriesRow struct {
 }
 
 type endpointRateRow struct {
-	BucketAt     time.Time `ch:"bucket_at"`
-	HTTPRoute    string    `ch:"http_route"`
-	RequestCount uint64    `ch:"request_total"`
-	ErrorCount   uint64    `ch:"error_total"`
-	QS           []float64 `ch:"qs"`
+	BucketAt      time.Time `ch:"bucket_at"`
+	OperationName string    `ch:"operation_name"`
+	RequestCount  uint64    `ch:"request_total"`
+	ErrorCount    uint64    `ch:"error_total"`
+	QS            []float64 `ch:"qs"`
 }
+
+// A chart legend only carries a handful of lines; the tail is left out.
+const endpointSeriesLimit = 8
 
 func (r *Repository) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]statusBucketTimeseriesRow, error) {
 	where, args := BuildREDClauses(f)
@@ -137,18 +140,33 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDF
 func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters) ([]endpointRateRow, error) {
 	where, args := BuildREDClauses(f)
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
+	rollup := timebucket.SpanStatsRollup(f.EndMs - f.StartMs)
+	// Grouped by span_name like top-endpoints: http_route is empty on gRPC and
+	// on clients that never learned a route, which collapsed every series.
 	query := `
+		WITH top_operations AS (
+		    SELECT span_name
+		    FROM ` + rollup + `
+		    PREWHERE tenant_id = @tenantID
+		         AND timestamp BETWEEN @start AND @end
+		         AND span_name != ''` + where + `
+		    GROUP BY span_name
+		    ORDER BY sum(request_count) DESC, span_name ASC
+		    LIMIT @endpointLimit
+		)
 		SELECT ` + grainSQL + ` AS bucket_at,
-		       http_route       AS http_route,
+		       span_name        AS operation_name,
 		       ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `,
-		       ` + spanstats.LatencyP50P95P99.SQL() + `
-		FROM ` + timebucket.SpanStatsRollup(f.EndMs-f.StartMs) + `
+		       ` + spanstats.LatencyP99.SQL() + `
+		FROM ` + rollup + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end` + where + `
-		GROUP BY bucket_at, http_route
+		WHERE span_name IN (SELECT span_name FROM top_operations)
+		GROUP BY bucket_at, operation_name
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
+	args = append(args, clickhouse.Named("endpointLimit", endpointSeriesLimit))
 	var rows []endpointRateRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetREDByEndpointTimeSeries",
 		&rows, query, args...)

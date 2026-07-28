@@ -7,6 +7,7 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/shared/metrics"
+	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
 type Service struct {
@@ -139,34 +140,31 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters) 
 		errRate *float64
 		p99     *float64
 	}
-	routes, buckets, series := timebucket.FillGapsKeyed(f.StartMs, f.EndMs, grain, rows,
-		func(r endpointRateRow) string { return r.HTTPRoute },
+	operations, buckets, series := timebucket.FillGapsKeyed(f.StartMs, f.EndMs, grain, rows,
+		func(r endpointRateRow) string { return r.OperationName },
 		func(r endpointRateRow) time.Time { return r.BucketAt },
 		func(_ time.Time, row endpointRateRow, ok bool) cell {
 			if !ok {
 				return cell{}
 			}
 			errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
-			var p99 float64
-			if len(row.QS) >= 3 {
-				p99 = httputil.SanitizeFloat(row.QS[2])
-			}
+			p99 := httputil.SanitizeFloat(spanstats.LatencyP99.At(row.QS, spanstats.P99))
 			return cell{rps: float64(row.RequestCount) / grainSec, errRate: &errRate, p99: &p99}
 		})
 
 	out := EndpointRateSeries{
 		Timestamps: make([]int64, len(buckets)),
-		Series:     make([]EndpointRateEntry, len(routes)),
+		Series:     make([]EndpointRateEntry, len(operations)),
 	}
 	for i, bucket := range buckets {
 		out.Timestamps[i] = bucket.UnixMilli()
 	}
-	for i, route := range routes {
+	for i, operation := range operations {
 		entry := EndpointRateEntry{
-			HTTPRoute: route,
-			RPS:       make([]float64, len(buckets)),
-			ErrorRate: make([]*float64, len(buckets)),
-			P99Ms:     make([]*float64, len(buckets)),
+			OperationName: operation,
+			RPS:           make([]float64, len(buckets)),
+			ErrorRate:     make([]*float64, len(buckets)),
+			P99Ms:         make([]*float64, len(buckets)),
 		}
 		for j, c := range series[i] {
 			entry.RPS[j], entry.ErrorRate[j], entry.P99Ms[j] = c.rps, c.errRate, c.p99

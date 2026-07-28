@@ -35,7 +35,8 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		FROM optikk.span_stats_1m
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
-		     AND service = @service`
+		     AND service = @service
+		     AND ` + spanstats.InboundPred
 
 	args := apmArgs(m.TenantID, q.APM.Service, startMs, endMs)
 	var rows []apmAggRow
@@ -73,6 +74,7 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
 		     AND service = @service
+		     AND ` + spanstats.InboundPred + `
 		GROUP BY bucket
 		ORDER BY bucket`
 

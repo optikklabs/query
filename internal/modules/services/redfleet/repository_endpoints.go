@@ -84,7 +84,8 @@ func (r *Repository) GetTopEndpointsCombined(
 func (r *Repository) GetTopDBQueriesCombined(
 	ctx context.Context, f REDFilters, limit int, cursor TopEndpointsCursor,
 ) ([]topDBQueryRow, error) {
-	where, args := BuildREDClauses(f)
+	// Database calls are CLIENT spans, so this one skips the inbound filter.
+	where, args := buildServiceClauses(f)
 	var paginationFilter string
 	if !cursor.IsZero() {
 		paginationFilter = "AND (" + spanstats.RequestTotal + " < @cursorCount OR (" +
