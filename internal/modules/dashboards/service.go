@@ -9,8 +9,6 @@ import (
 	"strings"
 )
 
-// Service owns CRUD validation, JSON marshaling, and the endpoint allowlist
-// enforcement for dashboard pages and their widgets.
 type Service struct {
 	repo *Repository
 }
@@ -24,8 +22,6 @@ var ErrNotFound = errors.New("dashboard not found")
 type ErrValidation struct{ Msg string }
 
 func (e ErrValidation) Error() string { return e.Msg }
-
-// --- Pages ---
 
 func (s *Service) CreatePage(ctx context.Context, tenantID, userID int64, req CreatePageRequest) (DashboardPageResponse, error) {
 	args, err := buildPageArgs(tenantID, userID, req)
@@ -85,8 +81,6 @@ func (s *Service) ListPages(ctx context.Context, tenantID int64, q ListPagesQuer
 	}
 	return DashboardPageListResponse{Items: items, Total: total}, nil
 }
-
-// --- Widgets ---
 
 func (s *Service) ListWidgets(ctx context.Context, tenantID, pageID int64) ([]WidgetResponse, error) {
 	rows, err := s.repo.ListWidgets(ctx, pageID, tenantID)
@@ -157,8 +151,6 @@ func (s *Service) ensurePage(ctx context.Context, pageID, tenantID int64) error 
 	return nil
 }
 
-// --- Validation + serialization ---
-
 func buildPageArgs(tenantID, userID int64, req CreatePageRequest) (pageInsertArgs, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -214,8 +206,6 @@ func buildWidgetArgs(tenantID, pageID int64, req CreateWidgetRequest) (widgetIns
 	return args, nil
 }
 
-// validateWidget enforces the dashboard-safe contract: a known panel type, a
-// well-formed grid layout, and a query that targets an allowlisted endpoint.
 func validateWidget(req CreateWidgetRequest) error {
 	if !isValidPanelType(req.PanelType) {
 		return ErrValidation{Msg: fmt.Sprintf("panel_type %q is not a supported dashboard panel", req.PanelType)}
@@ -271,10 +261,6 @@ type querySpecProbe struct {
 	} `json:"query"`
 }
 
-// validateQuery accepts either a curated-endpoint widget or a metrics
-// query-builder widget. The endpoint variant stays restricted to the safe
-// allowlist; the builder variant is validated structurally — its query is
-// replayed against the tenant-scoped metrics engine, so no SQL is persisted.
 func validateQuery(spec json.RawMessage) error {
 	var probe querySpecProbe
 	if err := json.Unmarshal(spec, &probe); err != nil {

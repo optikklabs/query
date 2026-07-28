@@ -11,7 +11,6 @@ import (
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-// Handler translates HTTP requests into prompt service calls.
 type Handler struct {
 	svc *Service
 }

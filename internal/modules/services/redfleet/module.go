@@ -6,9 +6,6 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-// RegisterRoutes mounts the fleet/overview RED endpoints. Paths are registered
-// flat (not via chi.Route) so all RED endpoints share /spans/red without a
-// duplicate-mount panic.
 func RegisterRoutes(v1 chi.Router, h *REDFleetHandler) {
 	v1.Get("/spans/red/services", h.GetFleetServices)
 	v1.Get("/spans/red/fleet-overview", h.GetFleetOverview)
@@ -21,7 +18,6 @@ func RegisterRoutes(v1 chi.Router, h *REDFleetHandler) {
 	v1.Get("/spans/red/top-endpoints", h.GetTopEndpointsCombined)
 	v1.Get("/spans/red/top-db-queries", h.GetTopDBQueriesCombined)
 
-	// Flat query-param routes for service summary and saturation.
 	v1.Get("/spans/red/summary", h.GetServiceSummary)
 	v1.Get("/spans/red/saturation-timeseries", h.GetServiceSaturationTimeSeries)
 

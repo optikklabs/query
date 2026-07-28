@@ -29,7 +29,7 @@ func QueryRowCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, 
 		done := startCHOp(runCtx)
 		start := time.Now()
 		err := conn.QueryRow(runCtx, query, args...).ScanStruct(out)
-		// Zero rows is an empty result, not a failure: leave out zero-valued.
+
 		if err != nil && isNoRows(err) {
 			done(nil, start, op)
 			return nil
@@ -39,10 +39,6 @@ func QueryRowCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, 
 	})
 }
 
-// isNoRows reports whether err means "query matched zero rows".
-// clickhouse-go's QueryRow path returns exactly sql.ErrNoRows for an empty
-// result; matching anything looser (e.g. "EOF" substrings) masks dropped
-// connections as empty results.
 func isNoRows(err error) bool {
 	return errors.Is(err, sql.ErrNoRows)
 }

@@ -12,21 +12,10 @@ import (
 	"github.com/optikklabs/query/internal/infra/metrics"
 )
 
-// chGroup coalesces identical in-flight ClickHouse reads. A dashboard with a
-// dozen panels on the same range, or many viewers of one tenant's dashboard,
-// otherwise issues the same query many times over.
-//
-// This dedups only what is genuinely in flight: a caller arriving after the
-// leader finished runs its own query, so nothing is ever served stale.
 var chGroup singleflight.Group
 
-// leaderTimeout bounds a query once it is detached from the request that
-// started it. It sits above every per-budget max_execution_time so the
-// server-side limit is what actually fires.
 const leaderTimeout = 90 * time.Second
 
-// coalesceKey identifies an identical read. tenantID leads and is mandatory:
-// sharing a result across tenants is a data leak, not an optimisation.
 func coalesceKey(tenantID int64, query string, args []any) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d\x00%s", tenantID, query)
@@ -36,14 +25,6 @@ func coalesceKey(tenantID int64, query string, args []any) string {
 	return b.String()
 }
 
-// coalesce runs fetch at most once per identical in-flight key and gives every
-// caller its own copy of the result.
-//
-// Aliasing contract: the top-level result is copied per caller, so repositories
-// that mutate returned rows in place (several spread a quantiles array into
-// P50/P95/P99 columns) cannot race each other. Reference-typed fields *inside*
-// a row — maps, nested slices — stay shared and must be treated as read-only
-// once fetched.
 func coalesce(ctx context.Context, key, op string, dest any, fetch func(context.Context, any) error) error {
 	destPtr := reflect.ValueOf(dest)
 	if destPtr.Kind() != reflect.Pointer || destPtr.IsNil() {
@@ -51,14 +32,10 @@ func coalesce(ctx context.Context, key, op string, dest any, fetch func(context.
 	}
 	elemType := destPtr.Type().Elem()
 
-	// Only the leader's closure ever runs, so this stays false for followers.
-	// The channel receive below happens-after fn returns, so reading it is safe.
 	leader := false
 	result := chGroup.DoChan(key, func() (any, error) {
 		leader = true
 
-		// Detached from the originating request: the first caller in must not
-		// cancel the query for everyone queued behind it.
 		runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), leaderTimeout)
 		defer cancel()
 
@@ -84,8 +61,6 @@ func coalesce(ctx context.Context, key, op string, dest any, fetch func(context.
 	}
 }
 
-// assign copies src into dst, giving slices a fresh backing array so one
-// caller's in-place row edits never reach another's.
 func assign(dst, src reflect.Value) {
 	if src.Kind() == reflect.Slice && !src.IsNil() {
 		out := reflect.MakeSlice(src.Type(), src.Len(), src.Len())

@@ -14,9 +14,6 @@ const (
 	chDialTimeout     = 5 * time.Second
 )
 
-// OpenClickHouseConn opens the shared native-protocol pool. Pool sizing is
-// config-driven (clickhouse.max_open_conns / max_idle_conns) so operators
-// can tune per deployment without a rebuild.
 func OpenClickHouseConn(dsn string, maxOpenConns, maxIdleConns int) (clickhouse.Conn, error) {
 	opts, err := clickhouse.ParseDSN(dsn)
 	if err != nil {
@@ -44,8 +41,6 @@ func OpenClickHouseConn(dsn string, maxOpenConns, maxIdleConns int) (clickhouse.
 	return conn, nil
 }
 
-// Per-budget ClickHouse settings applied via clickhouse.Context.
-// Keeps dashboard queries prioritized over background explorer scans.
 var dashboardSettings = clickhouse.Settings{
 	"max_execution_time":              10,
 	"max_rows_to_read":                300_000_000,

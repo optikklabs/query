@@ -71,9 +71,6 @@ func (l *authRateLimiter) evictIdleOrOldest(now time.Time) {
 	}
 }
 
-// PublicAuthRateLimit protects unauthenticated auth endpoints even when the
-// service is reached without the edge proxy. Authenticated endpoints continue
-// through the tenant limiter.
 func PublicAuthRateLimit(requestsPerSecond float64, burst int) func(http.Handler) http.Handler {
 	limiter := newAuthRateLimiter(requestsPerSecond, burst)
 	return func(next http.Handler) http.Handler {

@@ -13,31 +13,24 @@ import (
 	"github.com/optikklabs/query/internal/modules/llm/providerkeys"
 )
 
-// IsProviderUnavailable reports whether the error is a missing key/encryption
-// config, so the handler can answer 503 rather than 500.
 func IsProviderUnavailable(err error) bool {
 	return errors.Is(err, providerkeys.ErrNoEncryption) || errors.Is(err, providerkeys.ErrNotFound)
 }
 
-// Hard caps keep synchronous experiment runs bounded — a background job runner
-// is a deliberate future phase.
 const (
 	maxRunItems   = 50
 	runBudget     = 5 * time.Minute
 	exactMatchKey = "exact_match"
 )
 
-// KeyResolver decrypts a tenant's provider key. Implemented by providerkeys.
 type KeyResolver interface {
 	ResolveKey(ctx context.Context, tenantID int64, provider string) (string, error)
 }
 
-// Completer performs a single provider completion. Implemented by the registry.
 type Completer interface {
 	Complete(ctx context.Context, provider, apiKey string, req llmproviders.CompletionRequest) (llmproviders.CompletionResult, error)
 }
 
-// RunExperimentRequest configures a synchronous run over a dataset.
 type RunExperimentRequest struct {
 	Name         string  `json:"name"`
 	Provider     string  `json:"provider"`
@@ -47,8 +40,6 @@ type RunExperimentRequest struct {
 	MaxTokens    int     `json:"maxTokens"`
 }
 
-// ExperimentService orchestrates a dataset run: fan out completions, score by
-// exact match, and persist per-item plus aggregate results.
 type ExperimentService struct {
 	repo      *Repository
 	keys      KeyResolver
@@ -59,7 +50,6 @@ func NewExperimentService(repo *Repository, keys KeyResolver, completer Complete
 	return &ExperimentService{repo: repo, keys: keys, completer: completer}
 }
 
-// Run executes the experiment synchronously and returns the completed run.
 func (s *ExperimentService) Run(ctx context.Context, tenantID, datasetID int64, req RunExperimentRequest) (RunDetail, error) {
 	if _, ok := map[string]struct{}{"openai": {}, "anthropic": {}, "mistral": {}}[req.Provider]; !ok {
 		return RunDetail{}, ErrValidation{Msg: "provider must be openai, anthropic or mistral"}
@@ -108,7 +98,6 @@ func (s *ExperimentService) Run(ctx context.Context, tenantID, datasetID int64, 
 	return s.getRun(ctx, tenantID, runID)
 }
 
-// execute runs each item, persists its result, and finalizes the aggregate.
 func (s *ExperimentService) execute(ctx context.Context, tenantID, runID int64, req RunExperimentRequest, apiKey string, items []itemRow) {
 	var totalCost, totalLatency, totalScore float64
 	var scored, failed int
@@ -177,8 +166,6 @@ func (s *ExperimentService) getRun(ctx context.Context, tenantID, runID int64) (
 	return detail, nil
 }
 
-// buildMessages derives the chat turns for an item. The item input may be a
-// {"messages":[...]} object, an {"input":"..."} object, or a bare JSON string.
 func buildMessages(systemPrompt string, inputJSON []byte) []llmproviders.Message {
 	var msgs []llmproviders.Message
 	if s := strings.TrimSpace(systemPrompt); s != "" {
@@ -199,9 +186,6 @@ func buildMessages(systemPrompt string, inputJSON []byte) []llmproviders.Message
 	return append(msgs, llmproviders.Message{Role: "user", Content: string(inputJSON)})
 }
 
-// exactMatch scores 1.0 when the trimmed output equals the expected text. It
-// reports has=false when no expected output is present, so unscored items don't
-// drag the average down.
 func exactMatch(expectedJSON []byte, output string) (score float64, has bool) {
 	expected := strings.TrimSpace(extractExpected(expectedJSON))
 	if expected == "" {

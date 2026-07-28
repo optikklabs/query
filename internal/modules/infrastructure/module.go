@@ -1,14 +1,3 @@
-// Package infrastructure serves the infrastructure pages: CPU and memory
-// averages, the host and node lists, the Kubernetes fleet, and the host and
-// pod detail pages.
-//
-// Layering is enforced by the package structure rather than convention:
-//
-//	infrastructure (module, handler) -> service -> repository
-//
-// with models shared by all three. A handler cannot reach a repository method
-// because it does not import that package. seriesgroup, seriesdefs and
-// infraconsts sit beside these as shared vocabulary, not as layers.
 package infrastructure
 
 import (

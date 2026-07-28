@@ -6,7 +6,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Health thresholds for node coloring. Error-rate API values are percentages.
 const (
 	unhealthyErrorRate = 5.0
 	degradedErrorRate  = 1.0

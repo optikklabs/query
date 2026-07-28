@@ -9,7 +9,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-// Query powers POST /api/v1/logs/query — the keyset-paginated log list.
 func (s *Service) Query(ctx context.Context, req models.QueryRequest) (models.QueryResponse, error) {
 	limit := req.Limit
 	cur, _ := models.DecodeCursor(req.Cursor)
@@ -25,8 +24,6 @@ func (s *Service) Query(ctx context.Context, req models.QueryRequest) (models.Qu
 	}, nil
 }
 
-// Suggest returns value suggestions for a scalar field or @attribute key,
-// mirroring the traces suggest behavior.
 func (s *Service) Suggest(ctx context.Context, req models.SuggestRequest, tenantID int64) (models.SuggestResponse, error) {
 	limit := filterutil.PickLimit(req.Limit, 10, 50)
 	var rows []models.Suggestion

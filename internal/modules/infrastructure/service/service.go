@@ -1,6 +1,3 @@
-// Package service holds the infrastructure domain's business logic: it folds
-// repository row types into the API models, normalizes utilization metrics to
-// percentages, and derives RED rates.
 package service
 
 import (
@@ -15,9 +12,6 @@ type Service struct {
 
 func NewService(repo *repository.Repository) *Service { return &Service{repo: repo} }
 
-// averageFloats means the valid entries, skipping anything non-finite or
-// negative. Nil means nothing usable was present — distinct from an average
-// of zero.
 func averageFloats(values []float64) *float64 {
 	var sum float64
 	count := 0

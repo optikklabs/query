@@ -9,7 +9,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// durationMsSQL measures wall-clock span across a group of spans in ms.
 const durationMsSQL = "dateDiff('millisecond', min(timestamp), max(timestamp + toIntervalNanosecond(duration_nano)))"
 
 type Repository struct {
@@ -43,7 +42,7 @@ func (r *Repository) TopSessions(ctx context.Context, tenantID, startMs, endMs i
 }
 
 func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int64) (overviewRow, error) {
-	// Aggregate per session first, then average across sessions.
+
 	query := `
 		SELECT count()      AS sessions,
 		       sum(turns)    AS turns,
@@ -75,7 +74,6 @@ func (r *Repository) MeanScoreBySession(ctx context.Context, tenantID, startMs, 
 		chargs.RangeArgs(tenantID, startMs, endMs)...)
 }
 
-// Detail returns each trace (turn) of a session with its root prompt/output.
 func (r *Repository) Detail(ctx context.Context, tenantID int64, sessionID string, startMs, endMs int64) ([]turnRow, error) {
 	query := `
 		SELECT trace_id,

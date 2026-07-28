@@ -14,8 +14,6 @@ import (
 	"github.com/optikklabs/query/internal/config"
 )
 
-// Module is driven solely by records from ingest's Kafka metrics topic; there
-// is intentionally no database polling loop or scheduled evaluation job.
 type Module struct {
 	repo   *Repository
 	cfg    config.AlertingKafkaConfig

@@ -15,7 +15,6 @@ import (
 	contracts "github.com/optikklabs/query/internal/shared/contracts"
 )
 
-// Service handles authentication and session issuance.
 type Service struct {
 	repo     *Repository
 	tokens   *token.Service
@@ -51,7 +50,6 @@ func NewService(repo *Repository, tokens *token.Service, emailCfg config.EmailCo
 	}
 }
 
-// Login authenticates a user and issues access and refresh tokens.
 func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP string) (LoginResponse, string, error) {
 	email := strings.TrimSpace(req.Email)
 	if !s.attempts.allow(email, clientIP) {
@@ -132,16 +130,10 @@ func (l *loginAttempts) evictIdleOrOldest(now time.Time) {
 	}
 }
 
-// notUsableError marks a candidate refresh token that is simply not valid so
-// Refresh can move on to the next one. It carries why the candidate failed so
-// a rejected refresh is diagnosable from logs. Never returned to the caller.
 type notUsableError struct{ reason string }
 
 func (e *notUsableError) Error() string { return "refresh token not usable: " + e.reason }
 
-// Refresh renews a session from any of the presented refresh tokens. The
-// refresh token itself is NOT rotated (all browser tabs share the same cookie
-// jar), so only a new access token is issued.
 func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP string) (LoginResponse, error) {
 	seen := make(map[string]struct{}, len(refreshTokens))
 	var reasons []string
@@ -162,8 +154,7 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 				slog.String("ip", clientIP))
 			return response, nil
 		}
-		// A real internal/decision error (DB down, trial expired) stops here;
-		// only an unusable candidate falls through to the next cookie.
+
 		var notUsable *notUsableError
 		if !errors.As(err, &notUsable) {
 			slog.WarnContext(ctx, "AUTH_EVENT refresh_error",
@@ -174,7 +165,7 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 		}
 		reasons = append(reasons, notUsable.reason)
 	}
-	// Every rejected refresh forces a re-login, so it must leave a trace.
+
 	slog.WarnContext(ctx, "AUTH_EVENT refresh_rejected",
 		slog.Int("candidates", len(refreshTokens)),
 		slog.Any("reasons", reasons),
@@ -182,10 +173,6 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 	return LoginResponse{}, shared.NewUnauthorizedError("Invalid or expired refresh token", nil)
 }
 
-// refreshOne validates a single refresh token and, if usable, issues a new
-// access token. The refresh token itself is NOT rotated — all browser tabs
-// share the same cookie jar, so rotation causes a race where one tab's refresh
-// invalidates the token for every other tab.
 func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginResponse, error) {
 	hash := token.HashRefreshToken(refreshToken)
 	stored, err := s.repo.FindRefreshTokenByHash(ctx, hash)
@@ -238,9 +225,6 @@ func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginRes
 	return LoginResponse{AuthContextResponse: response, AccessToken: access}, nil
 }
 
-// IssueTokens mints a fresh session (new token family) for a user. Used by the
-// onboarding (signup) and device flows to complete login after they identify the
-// user; refresh-token and tenant reads stay owned by auth.
 func (s *Service) IssueTokens(ctx context.Context, user shared.AuthUser) (LoginResponse, string, error) {
 	return s.issueTokens(ctx, user, token.NewFamilyID())
 }
@@ -275,9 +259,7 @@ func (s *Service) issueTokens(ctx context.Context, user shared.AuthUser, familyI
 }
 
 func (s *Service) Logout(ctx context.Context, tenant contracts.TenantContext, refreshTokens []string, clientIP string) shared.MessageResponse {
-	// Revoke every presented token: a browser may hold more than one refresh
-	// cookie, and logging out must invalidate the real session, not just the
-	// first cookie the browser happened to send.
+
 	for _, refreshToken := range refreshTokens {
 		if refreshToken == "" {
 			continue
@@ -296,10 +278,10 @@ func (s *Service) buildAuthContextResponse(ctx context.Context, user shared.Auth
 	tenant, err := s.tenantForUser(ctx, user.TenantID)
 	if err != nil {
 		slog.Warn("AUTH_EVENT tenant_fetch_failed", slog.Int64("user_id", user.ID), slog.String("email", user.Email), slog.Any("error", err))
-		// Propagate the typed error (e.g. TRIAL_EXPIRED) so callers can react.
+
 		return AuthContextResponse{}, err
 	}
-	// Role is a property of the user within their tenant, not of the tenant.
+
 	tenant.Role = user.Role
 
 	return AuthContextResponse{
@@ -335,7 +317,7 @@ func (s *Service) tenantForUser(ctx context.Context, tenantID int64) (AuthTenant
 	return AuthTenantSummary{
 		ID:   tenant.ID,
 		Name: tenant.Name,
-		// Role is set by the caller from the user's own role.
+
 		AccountStatus: tenant.AccountStatus,
 		TrialEndsAt:   tenant.TrialEndsAt,
 	}, nil
@@ -350,7 +332,7 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 	user, err := s.repo.FindActiveUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			// Do not leak user existence. Return success.
+
 			return nil
 		}
 		return shared.NewInternalError("Failed to lookup user", err)
@@ -379,11 +361,6 @@ func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPasswor
 		return shared.NewValidationError("Password must be at least 8 characters", nil)
 	}
 
-	// We don't have the user ID or password hash yet, but ParsePasswordReset can't be called without password hash.
-	// Wait, to parse the token using a dynamic secret, we need the user's current password hash.
-	// But how do we get the user ID to look up the password hash?
-	// We can decode the JWT *without* verifying the signature to extract the Subject (user ID).
-	// Then look up the user, get their password hash, and *then* fully parse and verify the JWT.
 	userID, err := s.tokens.ExtractSubjectWithoutVerify(tokenStr)
 	if err != nil {
 		return shared.NewUnauthorizedError("Invalid reset token", err)
@@ -399,7 +376,6 @@ func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPasswor
 		hash = *user.PasswordHash
 	}
 
-	// Fully verify the token now that we have the password hash
 	verifiedUserID, err := s.tokens.ParsePasswordReset(tokenStr, hash)
 	if err != nil || verifiedUserID != userID {
 		return shared.NewUnauthorizedError("Invalid or expired reset token", err)

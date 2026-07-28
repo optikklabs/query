@@ -27,7 +27,6 @@ func (s *Service) GetErrorPath(ctx context.Context, tenantID int64, traceID stri
 	return buildErrorPath(rows), nil
 }
 
-// buildCriticalPath runs the longest-path graph algorithm on the raw DB rows.
 func buildCriticalPath(rows []repository.CriticalPathRow) []models.CriticalPathSpan {
 	nodes, roots := indexNodes(rows)
 	computeSubtreeEnds(nodes, roots)

@@ -9,7 +9,6 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
-// EventRow is the read shape for monitor_events plus the monitor name.
 type EventRow struct {
 	models.MonitorEventRow
 	MonitorName string `db:"monitor_name"`

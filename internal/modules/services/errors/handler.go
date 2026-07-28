@@ -111,8 +111,6 @@ func (h *ErrorHandler) GetErrorGroupFacets(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// Migrated from errortracking
-
 func (h *ErrorHandler) GetErrorHotspot(w http.ResponseWriter, r *http.Request) {
 	modulecommon.HandleRangeQuery(w, r, "Failed to query error hotspot", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetErrorHotspot(ctx, tenantID, startMs, endMs)

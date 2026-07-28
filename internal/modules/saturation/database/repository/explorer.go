@@ -12,8 +12,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-// db.sql.connection.open carries its system as a datapoint attribute, so the
-// connection query resolves it from metrics_series (not the span_stats column).
 const (
 	seriesDBSystem = "attributes['db.system']"
 	seriesDBSpan   = seriesDBSystem + " != ''"
@@ -54,7 +52,6 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startM
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "datastoreSystems.GetSystemSummariesRaw", &rows, query, args...)
 }
 
-// GetActiveConnectionsBySystem returns active connections by database system.
 func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, tenantID, startMs, endMs int64) (map[string]int64, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 

@@ -1,7 +1,5 @@
 package signup
 
-// SignupRequest self-serves an account plus its first tenant. tenant_name is
-// snake_case to match the web and CLI clients that post this body.
 type SignupRequest struct {
 	Email         string `json:"email" validate:"required,email"`
 	Password      string `json:"password" validate:"required,min=8"`
@@ -10,7 +8,6 @@ type SignupRequest struct {
 	AcceptedTerms bool   `json:"acceptedTerms" validate:"eq=true"`
 }
 
-// SignupResponse is returned when email verification is required before login.
 type SignupResponse struct {
 	Message string `json:"message"`
 }

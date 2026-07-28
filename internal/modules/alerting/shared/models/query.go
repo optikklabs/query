@@ -6,8 +6,6 @@ import (
 	"errors"
 )
 
-// MonitorQuery is a discriminated union over supported monitor types.
-// Dispatches to the corresponding shared/query implementation.
 type MonitorQuery struct {
 	Metric *MetricQuery `json:"metric,omitempty"`
 	APM    *APMQuery    `json:"apm,omitempty"`

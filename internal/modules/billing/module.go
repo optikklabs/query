@@ -11,8 +11,6 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-// Module is a BackgroundRunner that suspends expired trials on an hourly tick.
-// It registers no HTTP routes, so RegisterRoutes is a no-op.
 type Module struct {
 	svc      *Service
 	stop     chan struct{}
@@ -50,7 +48,7 @@ func (m *Module) Stop() error {
 
 func (m *Module) run() {
 	defer close(m.stopped)
-	m.sweep() // run once at boot so expiries don't wait a full interval
+	m.sweep()
 	t := time.NewTicker(m.interval)
 	defer t.Stop()
 	for {

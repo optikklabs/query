@@ -2,7 +2,6 @@ package sessions
 
 import "time"
 
-// SessionsOverviewResponse is the KPI row of the Sessions tab.
 type SessionsOverviewResponse struct {
 	Sessions      uint64  `json:"sessions"`
 	AvgTurns      float64 `json:"avgTurns"`
@@ -10,7 +9,6 @@ type SessionsOverviewResponse struct {
 	AvgCost       float64 `json:"avgCost"`
 }
 
-// Session is one row of the Sessions table.
 type Session struct {
 	SessionID  string  `json:"sessionId"`
 	Service    string  `json:"service"`
@@ -33,7 +31,6 @@ type SessionsQueryResponse struct {
 	Sessions []Session `json:"sessions"`
 }
 
-// Turn is one request/response exchange within a session, linked to its trace.
 type Turn struct {
 	TraceID    string  `json:"traceId"`
 	StartMs    int64   `json:"startMs"`
@@ -50,8 +47,6 @@ type SessionDetailResponse struct {
 	UserID    string `json:"userId"`
 	Turns     []Turn `json:"turns"`
 }
-
-// --- ClickHouse row structs ---
 
 type sessionRow struct {
 	SessionID  string    `ch:"session_id"`

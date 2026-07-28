@@ -8,7 +8,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/infrastructure/repository"
 )
 
-// GetAvgCPU folds the 3-metric utilization family across the window.
 func (s *Service) GetAvgCPU(ctx context.Context, tenantID int64, startMs, endMs int64) (models.MetricValue, error) {
 	rows, err := s.repo.QueryCPUUtilizationAgg(ctx, tenantID, startMs, endMs)
 	if err != nil {

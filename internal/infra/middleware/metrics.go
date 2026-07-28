@@ -10,8 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/metrics"
 )
 
-// HTTPMetricsMiddleware populates `optikk_http_*` Prometheus metrics.
-// Route labels use chi's RoutePattern() template to bound cardinality.
 func HTTPMetricsMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

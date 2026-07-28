@@ -17,12 +17,6 @@ import (
 	tmpl "github.com/optikklabs/query/internal/modules/alerting/shared/template"
 )
 
-// Service runs the per-tick evaluation loop. It's stateless except for the
-// injected dependencies; one Service instance handles all monitors.
-//
-// Safe to run on any number of replicas: each tick atomically claims due
-// monitors via a MySQL lease (Repository.ClaimDue), so no two replicas ever
-// evaluate or notify for the same monitor concurrently.
 type Service struct {
 	repo        *Repository
 	queries     query.Registry
@@ -150,8 +144,6 @@ func buildUpdateArgs(m models.MonitorRow, state models.MonitorStateRow, d expr.D
 	return args
 }
 
-// recordEvent persists a monitor event best-effort. A failed write is logged
-// and counted rather than silently dropped, so audit-trail loss is observable.
 func (s *Service) recordEvent(ctx context.Context, m models.MonitorRow, kind string, res query.ScalarResult, cond models.Conditions, now time.Time) {
 	err := s.repo.InsertEvent(ctx, models.MonitorEventRow{
 		MonitorID: m.ID, TenantID: m.TenantID, Kind: kind,

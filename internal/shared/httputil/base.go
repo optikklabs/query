@@ -1,4 +1,3 @@
-// Package httputil contains shared HTTP handler helpers.
 package httputil
 
 import (
@@ -23,9 +22,6 @@ func Tenant(r *http.Request) types.TenantContext {
 	return types.TenantFrom(r.Context())
 }
 
-// URLParamLower reads a path parameter and lowercases it. Ingest writes trace
-// and span ids as lowercase hex, and ClickHouse string comparison is case
-// sensitive, so uppercase ids from a client would otherwise match nothing.
 func URLParamLower(r *http.Request, key string) string {
 	return strings.ToLower(chi.URLParam(r, key))
 }
@@ -152,9 +148,6 @@ func ParseRequiredRange(w http.ResponseWriter, r *http.Request) (startMs, endMs 
 	return start, end, true
 }
 
-// ParseRequiredExplicitRange requires startTime and endTime to be supplied
-// together as positive Unix millisecond values. Unlike ParseRange, it never
-// substitutes the current time for a missing end bound.
 func ParseRequiredExplicitRange(w http.ResponseWriter, r *http.Request) (startMs, endMs int64, ok bool) {
 	startRaw := r.URL.Query().Get("startTime")
 	endRaw := r.URL.Query().Get("endTime")
@@ -193,8 +186,6 @@ func ParseComparisonRange(r *http.Request, startMs, endMs int64) (cmpStart, cmpE
 	}
 }
 
-// RespondOKWithComparison writes both periods into the single response
-// envelope. comparison is omitted from the body when nil.
 func RespondOKWithComparison(w http.ResponseWriter, data, comparison any) {
 	WriteJSON(w, http.StatusOK, types.SuccessWithComparison(data, comparison))
 }

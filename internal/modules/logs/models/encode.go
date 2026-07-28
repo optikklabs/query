@@ -1,6 +1,5 @@
 package models
 
-// MapLog converts a CH scan row into the JSON wire model.
 func MapLog(d LogRow) Log {
 	return Log{
 		ID:                d.LogID,

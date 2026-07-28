@@ -11,8 +11,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// Repository owns evaluator definitions (MySQL) and their score analytics
-// (ClickHouse over optikk.llm_scores).
 type Repository struct {
 	db *sqlx.DB
 	ch clickhouse.Conn
@@ -100,15 +98,12 @@ func (r *Repository) Delete(ctx context.Context, tenantID, id int64) error {
 	return nil
 }
 
-// scoreAgg is the count/mean of one score name over the window.
 type scoreAgg struct {
 	Name  string  `ch:"name"`
 	Count int64   `ch:"cnt"`
 	Mean  float64 `ch:"mean"`
 }
 
-// ScoreAggregates returns per-score-name count/mean over the window for the
-// given names, in a single ClickHouse pass.
 func (r *Repository) ScoreAggregates(ctx context.Context, tenantID, startMs, endMs int64, names []string) (map[string]scoreAgg, error) {
 	out := map[string]scoreAgg{}
 	if len(names) == 0 {

@@ -9,8 +9,6 @@ import (
 	"net/http"
 )
 
-// anthropicClient calls the Anthropic /messages endpoint. The system prompt is
-// hoisted out of the message list into a top-level field per that API's shape.
 type anthropicClient struct {
 	http    *http.Client
 	baseURL string
@@ -18,7 +16,6 @@ type anthropicClient struct {
 
 const anthropicVersion = "2023-06-01"
 
-// anthropicMaxTokens is the required cap when a caller does not set one.
 const anthropicMaxTokens = 1024
 
 type anthropicRequest struct {
@@ -90,8 +87,6 @@ func (c *anthropicClient) Complete(ctx context.Context, apiKey string, req Compl
 	}, nil
 }
 
-// splitSystem lifts leading/any system messages into Anthropic's system field,
-// concatenating them, and returns the remaining user/assistant turns.
 func splitSystem(in []Message) (string, []Message) {
 	var system string
 	out := make([]Message, 0, len(in))

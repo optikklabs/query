@@ -19,11 +19,6 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// buildScanClauses turns the filter clauses into the WITH/PREWHERE/WHERE
-// fragments of the root-span scan. The scan runs over spans_root (root spans
-// only, so no is_root predicate is needed); span predicates run in a trace_id
-// subquery over all spans; resource dims (service) filter directly in the
-// inner spans scan PREWHERE; root predicates stay on the root-span scan.
 func buildScanClauses(c filter.Clauses) (queryPrefix, prewhere, where string) {
 	var ctes []string
 	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end`
@@ -42,8 +37,6 @@ func buildScanClauses(c filter.Clauses) (queryPrefix, prewhere, where string) {
 	return queryPrefix, prewhere, where
 }
 
-// Query builds and runs one page of the root-span index scan, returning the raw
-// root-span rows. Pagination shape (hasMore, next cursor) is derived upstream.
 func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, error) {
 	c := filter.BuildClauses(req.Filters)
 	prefix, prewhere, where := buildScanClauses(c)
@@ -58,9 +51,6 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 	}
 	args = append(args, clickhouse.Named("pgLimit", uint64(req.Limit+1)))
 
-	// Select only what the root span knows. Trace-level facts (span/error
-	// count, services, real end time) come from EnrichTraces; fabricating them
-	// here made every row report 1 span.
 	query := prefix + `SELECT
 			trace_id,
 			span_id,
@@ -80,10 +70,6 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 	return rows, nil
 }
 
-// EnrichTraces returns the trace-level aggregates for one already-paginated
-// page of trace ids. The [start,end] bound is the page's own root-span time
-// span (padded by the caller), so the primary key prunes to a couple of
-// partitions instead of bloom-probing the whole retention window.
 func (r *Repository) EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string, start, end time.Time) ([]traceAggRow, error) {
 	if len(traceIDs) == 0 {
 		return nil, nil

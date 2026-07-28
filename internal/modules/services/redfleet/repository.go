@@ -15,7 +15,6 @@ type Repository struct {
 	db clickhouse.Conn
 }
 
-// extractQS narrows the projected quantiles to this package's float32 fields.
 func extractQS(qs []float64) (p50, p95, p99 float32) {
 	a, b, c := spanstats.LatencyP50P95P99.P50P95P99(qs)
 	return float32(a), float32(b), float32(c)
@@ -70,7 +69,6 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f RED
 		&rows, query, args...)
 }
 
-// statusBucketTimeseriesRow is one (bucket, status-class) row from span_stats.
 type statusBucketTimeseriesRow struct {
 	BucketAt     time.Time `ch:"bucket_at"`
 	StatusBucket string    `ch:"http_status_bucket"`
@@ -318,9 +316,7 @@ func (r *Repository) GetOperationBaseline(ctx context.Context, tenantID int64, s
 func (r *Repository) GetServiceSaturationAggs(
 	ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, metricNames []string,
 ) ([]serviceMetricRow, error) {
-	// service_hosts maps the service to its hosts via span_stats; the outer
-	// join against metrics_series stays, since saturation metrics are genuine
-	// OTel system metrics identified by fingerprint.
+
 	query := `
 		WITH service_hosts AS (
 		    SELECT DISTINCT host

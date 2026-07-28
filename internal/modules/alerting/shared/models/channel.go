@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// ChannelRow is the raw row for optikk.notification_channels.
 type ChannelRow struct {
 	ID             int64          `db:"id"`
 	TenantID       int64          `db:"tenant_id"`

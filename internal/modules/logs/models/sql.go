@@ -1,6 +1,5 @@
 package models
 
-// LogColumns is the canonical SELECT projection that hydrates a LogRow.
 const LogColumns = `log_id, timestamp, observed_timestamp, severity_text, severity_number, severity_bucket,
 	body, trace_id, span_id, trace_flags,
 	service, host, pod, container, environment,

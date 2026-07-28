@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// DatasetSummary is a catalog row with item + run counts.
 type DatasetSummary struct {
 	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
@@ -15,14 +14,12 @@ type DatasetSummary struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
-// DatasetDetail returns the dataset with its items and recent runs.
 type DatasetDetail struct {
 	DatasetSummary
 	Items []DatasetItem `json:"items"`
 	Runs  []RunSummary  `json:"runs"`
 }
 
-// DatasetItem is a single input/expected-output test case.
 type DatasetItem struct {
 	ID             int64           `json:"id"`
 	Input          json.RawMessage `json:"input"`
@@ -31,7 +28,6 @@ type DatasetItem struct {
 	CreatedAt      time.Time       `json:"createdAt"`
 }
 
-// RunSummary is a completed/in-flight experiment run over a dataset.
 type RunSummary struct {
 	ID           int64           `json:"id"`
 	Name         string          `json:"name"`
@@ -47,13 +43,11 @@ type RunSummary struct {
 	CompletedAt  *time.Time      `json:"completedAt,omitempty"`
 }
 
-// RunDetail returns a run with its per-item results.
 type RunDetail struct {
 	RunSummary
 	Items []RunItem `json:"items"`
 }
 
-// RunItem is the model output for one dataset item within a run.
 type RunItem struct {
 	DatasetItemID int64           `json:"datasetItemId"`
 	Output        json.RawMessage `json:"output,omitempty"`
@@ -63,25 +57,20 @@ type RunItem struct {
 	Error         string          `json:"error,omitempty"`
 }
 
-// CreateDatasetRequest authors a new dataset.
 type CreateDatasetRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 }
 
-// AddItemsRequest bulk-appends test cases to a dataset.
 type AddItemsRequest struct {
 	Items []ItemInput `json:"items"`
 }
 
-// ItemInput is a single case in a bulk add.
 type ItemInput struct {
 	Input          json.RawMessage `json:"input"`
 	ExpectedOutput json.RawMessage `json:"expectedOutput,omitempty"`
 	Metadata       json.RawMessage `json:"metadata,omitempty"`
 }
-
-// --- DB row shapes ---
 
 type datasetRow struct {
 	ID          int64      `db:"id"`

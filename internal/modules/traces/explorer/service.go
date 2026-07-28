@@ -42,8 +42,6 @@ func NewService(repo TraceRepository) *Service {
 	return &Service{repo: repo}
 }
 
-// enrichSlack pads the page's root-span time span so trace-level aggregation
-// still sees spans whose clocks skew slightly past the root's window.
 const enrichSlack = 5 * time.Minute
 
 func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, error) {
@@ -67,9 +65,6 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, e
 	}, nil
 }
 
-// enrichPage aggregates trace-level facts for the page in one bounded round
-// trip. The bound is the page's own root-span span, padded by enrichSlack, so
-// the spans primary key prunes to a couple of partitions.
 func (s *Service) enrichPage(ctx context.Context, tenantID int64, rows []traceIndexRowDTO) (map[string]traceAggRow, error) {
 	if len(rows) == 0 {
 		return nil, nil
@@ -88,7 +83,6 @@ func (s *Service) enrichPage(ctx context.Context, tenantID int64, rows []traceIn
 	return aggs, nil
 }
 
-// pageBounds returns the earliest root start and latest root end on the page.
 func pageBounds(rows []traceIndexRowDTO) (start, end time.Time) {
 	start = rows[0].StartTime
 	end = rows[0].StartTime
@@ -121,9 +115,6 @@ func buildPageInfo(rows []traceIndexRowDTO, hasMore bool, limit int) PageInfo {
 	return info
 }
 
-// mapTrace merges the root span with its trace-level aggregate. The aggregate
-// is authoritative for span/error counts, services and the real end time; the
-// root row is authoritative for the entry-point fields.
 func mapTrace(d traceIndexRowDTO, agg traceAggRow, ok bool) Trace {
 	t := Trace{
 		TraceID:        d.TraceID,

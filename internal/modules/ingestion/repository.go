@@ -15,7 +15,6 @@ type Repository struct {
 
 func NewRepository(db clickhouse.Conn) *Repository { return &Repository{db: db} }
 
-// dateCountRow is one calendar day with record and byte counts.
 type dateCountRow struct {
 	Day   time.Time `ch:"d"`
 	Count uint64    `ch:"c"`
@@ -29,7 +28,6 @@ type signalDateCountRow struct {
 	Bytes  uint64    `ch:"b"`
 }
 
-// svcDateCountRow is one (service, day) bucket with record and byte counts.
 type svcDateCountRow struct {
 	Day     time.Time `ch:"d"`
 	Service string    `ch:"svc"`
@@ -47,7 +45,6 @@ type serviceUsageRow struct {
 	Bytes   uint64    `ch:"b"`
 }
 
-// svcCountRow is a per-service aggregate with a representative environment.
 type svcCountRow struct {
 	Service string `ch:"svc"`
 	Env     string `ch:"env"`
@@ -70,13 +67,10 @@ type scalarRow struct {
 	Count uint64 `ch:"c"`
 }
 
-// statsArgs binds the meter's named params plus the signal filter.
 func statsArgs(tenantID, startMs, endMs int64, signal string) []any {
 	return append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("signal", signal))
 }
 
-// dailyBySignal returns per-day record+byte counts for one signal, read from the
-// ingestion_stats meter (long-retained, so month-to-date is always complete).
 func (r *Repository) dailyBySignal(ctx context.Context, signal, op string, tenantID, startMs, endMs int64) ([]dateCountRow, error) {
 	query := `
 	SELECT toDate(bucket_hour) AS d, sum(record_count) AS c, sum(byte_count) AS b
@@ -154,7 +148,6 @@ func (r *Repository) MetricCardinality(ctx context.Context, tenantID, startMs, e
 		chargs.RangeArgs(tenantID, startMs, endMs)...)
 }
 
-// dailyBySignalService returns per-(service, day) record+byte counts for a signal.
 func (r *Repository) dailyBySignalService(ctx context.Context, signal, op string, tenantID, startMs, endMs int64) ([]svcDateCountRow, error) {
 	query := `
 	SELECT toDate(bucket_hour) AS d, service AS svc, sum(record_count) AS c, sum(byte_count) AS b
@@ -174,8 +167,6 @@ func (r *Repository) DailySpansByService(ctx context.Context, tenantID, startMs,
 	return r.dailyBySignalService(ctx, "spans", "ingestion.DailySpansByService", tenantID, startMs, endMs)
 }
 
-// serviceTotalsBySignal returns per-service record+byte counts with a
-// representative environment (now correct for every signal, not just logs).
 func (r *Repository) serviceTotalsBySignal(ctx context.Context, signal, op string, tenantID, startMs, endMs int64) ([]svcCountRow, error) {
 	query := `
 	SELECT service AS svc, any(environment) AS env, sum(record_count) AS c, sum(byte_count) AS b
@@ -195,8 +186,6 @@ func (r *Repository) ServiceSpanTotals(ctx context.Context, tenantID, startMs, e
 	return r.serviceTotalsBySignal(ctx, "spans", "ingestion.ServiceSpanTotals", tenantID, startMs, endMs)
 }
 
-// ServiceTimeseries returns active timeseries (distinct fingerprints) per
-// service. Cardinality is distinct from volume, so it stays on metrics_series.
 func (r *Repository) ServiceTimeseries(ctx context.Context, tenantID, startMs, endMs int64) ([]svcCountRow, error) {
 	query := `
 	SELECT service AS svc, '' AS env, uniq(fingerprint) AS c, toUInt64(0) AS b
@@ -208,8 +197,6 @@ func (r *Repository) ServiceTimeseries(ctx context.Context, tenantID, startMs, e
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "ingestion.ServiceTimeseries", &rows, query, chargs.RangeArgs(tenantID, startMs, endMs)...)
 }
 
-// ActiveTimeseries returns distinct metric fingerprints in the window. Sourced
-// from metrics_series (30-day TTL); over a longer month this is a lower bound.
 func (r *Repository) ActiveTimeseries(ctx context.Context, tenantID, startMs, endMs int64) (uint64, error) {
 	query := `
 	SELECT uniq(fingerprint) AS c
@@ -220,7 +207,6 @@ func (r *Repository) ActiveTimeseries(ctx context.Context, tenantID, startMs, en
 	return row.Count, err
 }
 
-// TopCardinalityMetric returns the metric name with the most distinct timeseries.
 func (r *Repository) TopCardinalityMetric(ctx context.Context, tenantID, startMs, endMs int64) (nameCountRow, error) {
 	query := `
 	SELECT metric_name AS name, uniq(fingerprint) AS c

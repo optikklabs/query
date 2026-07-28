@@ -12,8 +12,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
 )
 
-// GetHostSeries reports known=false for a metric id outside the catalog, so
-// the handler can answer 400 rather than an empty chart.
 func (s *Service) GetHostSeries(ctx context.Context, tenantID int64, host, metricID string, startMs, endMs int64) ([]models.SeriesPoint, bool, error) {
 	def, ok := seriesdefs.Host.Def(metricID)
 	if !ok {
@@ -50,8 +48,6 @@ func (s *Service) GetHostOverview(ctx context.Context, tenantID int64, host stri
 	return out, nil
 }
 
-// scaleSeries applies the group's post-aggregation scale and normalizes a nil
-// result to an empty slice so the JSON stays an array.
 func scaleSeries(rows []models.SeriesPoint, def seriesgroup.Def) []models.SeriesPoint {
 	if def.Scale != 1 {
 		for i := range rows {
@@ -64,8 +60,6 @@ func scaleSeries(rows []models.SeriesPoint, def seriesgroup.Def) []models.Series
 	return rows
 }
 
-// aboutFromMeta builds the About panel payload; nil when the host has not
-// reported any retained resource attributes yet.
 func aboutFromMeta(meta repository.HostMetaRow) *models.HostAbout {
 	about := models.HostAbout{
 		OSType:        meta.OSType,
@@ -84,7 +78,6 @@ func aboutFromMeta(meta repository.HostMetaRow) *models.HostAbout {
 	return &about
 }
 
-// foldKPIs blends per-metric/state rows into the header KPI fields.
 func foldKPIs(rows []repository.KPIRow, out *models.HostOverview) {
 	var cpuIdle, cpuPlain, memUsed, memPlain *float64
 	for _, row := range rows {
@@ -122,7 +115,7 @@ func foldKPIs(rows []repository.KPIRow, out *models.HostOverview) {
 			out.ProcessCount = ptr(v)
 		}
 	}
-	// CPU busy: prefer 1 - idle (per-state agents); fall back to plain value.
+
 	if cpuIdle != nil {
 		out.CPUPct = ptr(toPercent(1 - *cpuIdle))
 	} else if cpuPlain != nil {
@@ -135,8 +128,6 @@ func foldKPIs(rows []repository.KPIRow, out *models.HostOverview) {
 	}
 }
 
-// toPercent normalizes 0..1 fractions to percentages, passing through
-// values already expressed as percentages.
 func toPercent(v float64) float64 {
 	if v <= infraconsts.PercentageThreshold {
 		return v * infraconsts.PercentageMultiplier

@@ -26,8 +26,6 @@ func (s *Service) GetTraceSummary(ctx context.Context, tenantID int64, traceID s
 	return &out, nil
 }
 
-// foldTraceSummary derives the span of wall-clock time the trace covers from
-// its first and last span, which the aggregate query cannot express directly.
 func foldTraceSummary(res repository.TraceSummaryRow) models.TraceSummary {
 	return models.TraceSummary{
 		TraceID:        res.TraceID,
@@ -183,7 +181,6 @@ func fillStartNs(items []models.SpanListItem) {
 	}
 }
 
-// spanEventRow is one span/event pair, fanned out from the combined row.
 type spanEventRow struct {
 	SpanID    string
 	TraceID   string
@@ -191,7 +188,6 @@ type spanEventRow struct {
 	Event     repository.SpanEventTuple
 }
 
-// exceptionRow is a span's exception columns, kept only when typed.
 type exceptionRow struct {
 	SpanID              string
 	TraceID             string

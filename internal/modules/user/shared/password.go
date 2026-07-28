@@ -4,8 +4,6 @@ import "golang.org/x/crypto/bcrypt"
 
 const MinPasswordLength = 8
 
-// PasswordIsValid reports whether a stored hash exists and matches the exact
-// password supplied by the caller. Passwords are intentionally not trimmed.
 func PasswordIsValid(passwordHash *string, password string) bool {
 	if passwordHash == nil || *passwordHash == "" {
 		return false

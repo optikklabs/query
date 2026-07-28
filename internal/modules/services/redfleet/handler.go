@@ -15,10 +15,6 @@ type REDFleetHandler struct {
 	Service *Service
 }
 
-// parseREDFilters extracts REDFilters from any incoming request. It supports:
-//   - ?serviceName=X         (single service, legacy)
-//   - ?services=X&services=Y (multi-service, new)
-//   - /{serviceName} path    (chi URL param, backwards compat)
 func parseREDFilters(r *http.Request, tenantID, startMs, endMs int64) REDFilters {
 	f := REDFilters{TenantID: tenantID, StartMs: startMs, EndMs: endMs}
 	if sn := r.URL.Query().Get("serviceName"); sn != "" {
@@ -51,7 +47,6 @@ func (h *REDFleetHandler) GetRequestAndErrorRateTimeSeries(w http.ResponseWriter
 	})
 }
 
-// GetStatusTimeSeries returns status split by HTTP family over time.
 func (h *REDFleetHandler) GetStatusTimeSeries(w http.ResponseWriter, r *http.Request) {
 	modulecommon.HandleRangeQuery(w, r, "Failed to query status time series", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetStatusTimeSeries(ctx, parseREDFilters(r, tenantID, startMs, endMs))
@@ -70,8 +65,6 @@ func (h *REDFleetHandler) GetREDByEndpointTimeSeries(w http.ResponseWriter, r *h
 	})
 }
 
-// parseTopCursor decodes the opaque pagination cursor, tolerating a malformed
-// value by starting from the first page.
 func parseTopCursor(r *http.Request) TopEndpointsCursor {
 	var cur TopEndpointsCursor
 	if raw := r.URL.Query().Get("cursor"); raw != "" {
@@ -108,7 +101,6 @@ func (h *REDFleetHandler) GetServiceSummary(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// GetOperationBaseline returns windowed p50/p95/p99 for service + operation.
 func (h *REDFleetHandler) GetOperationBaseline(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)

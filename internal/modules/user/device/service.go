@@ -10,21 +10,17 @@ import (
 	"github.com/optikklabs/query/internal/modules/user/shared"
 )
 
-// RFC 8628 device-flow tuning: codes live 10m, clients poll every 5s.
 const (
 	deviceCodeTTL   = 10 * time.Minute
 	devicePollEvery = 5 * time.Second
 )
 
-// RFC 8628 §3.5 poll error codes, surfaced verbatim to the CLI.
 var (
 	ErrDeviceAuthPending = errors.New("authorization_pending")
 	ErrDeviceSlowDown    = errors.New("slow_down")
 	ErrDeviceExpired     = errors.New("expired_token")
 )
 
-// Service runs the RFC 8628 device-authorization flow, delegating session
-// issuance to auth once a device code is approved.
 type Service struct {
 	repo   *Repository
 	issuer *auth.Service
@@ -34,7 +30,6 @@ func NewService(repo *Repository, issuer *auth.Service) *Service {
 	return &Service{repo: repo, issuer: issuer}
 }
 
-// StartDeviceAuth mints a device/user code pair for the browser handoff.
 func (s *Service) StartDeviceAuth(ctx context.Context) (DeviceCodeResponse, error) {
 	deviceCode, err := shared.GenerateDeviceCode()
 	if err != nil {
@@ -56,8 +51,6 @@ func (s *Service) StartDeviceAuth(ctx context.Context) (DeviceCodeResponse, erro
 	}, nil
 }
 
-// PollDeviceToken resolves a device_code to a session once the user approves,
-// returning RFC 8628 sentinel errors while pending/expired/too-fast.
 func (s *Service) PollDeviceToken(ctx context.Context, deviceCode string) (auth.LoginResponse, string, error) {
 	record, err := s.repo.FindDeviceCode(ctx, deviceCode)
 	if err != nil {
@@ -66,7 +59,7 @@ func (s *Service) PollDeviceToken(ctx context.Context, deviceCode string) (auth.
 
 	now := time.Now().UTC()
 	if status := evaluateDeviceCode(record, now); status != nil {
-		// Record the poll only when we didn't reject it as too-fast.
+
 		if !errors.Is(status, ErrDeviceSlowDown) {
 			if err := s.repo.TouchDeviceCodePolled(ctx, deviceCode, now); err != nil {
 				slog.WarnContext(ctx, "AUTH_EVENT device_poll_touch_failed", slog.Any("error", err))
@@ -100,8 +93,6 @@ func (s *Service) PollDeviceToken(ctx context.Context, deviceCode string) (auth.
 	return response, refresh, nil
 }
 
-// evaluateDeviceCode is the pure poll state machine: nil means the code is
-// approved and ready to exchange; otherwise it returns the RFC 8628 sentinel.
 func evaluateDeviceCode(record shared.DeviceCodeRecord, now time.Time) error {
 	switch {
 	case now.After(record.ExpiresAt) || record.ConsumedAt != nil:
@@ -115,7 +106,6 @@ func evaluateDeviceCode(record shared.DeviceCodeRecord, now time.Time) error {
 	}
 }
 
-// ApproveDeviceCode binds a pending user_code to the authenticated user.
 func (s *Service) ApproveDeviceCode(ctx context.Context, userCode string, userID int64) error {
 	record, err := s.repo.FindDeviceCodeByUserCode(ctx, userCode)
 	if err != nil {

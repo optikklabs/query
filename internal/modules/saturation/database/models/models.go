@@ -1,10 +1,3 @@
-// Package models holds the API response types for the datastore saturation
-// pages. It is the wire contract: field names and JSON tags here are what the
-// frontend consumes, so changes are breaking.
-//
-// It sits in its own package because both the handler and the service need it,
-// and the handler's package imports the service — the two cannot share a
-// package without an import cycle.
 package models
 
 type DatastoreSystemRow struct {

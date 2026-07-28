@@ -14,8 +14,6 @@ func (s *Service) GetOpsBySystem(ctx context.Context, tenantID, startMs, endMs i
 	return mapOpsRate(rows), err
 }
 
-// mapOpsRate is a pure DTO translation — rates are already per-second
-// (SQL emits `sum(request_count) / @bucketGrainSec`).
 func mapOpsRate(rows []repository.OpsRaw) []models.OpsTimeSeries {
 	if rows == nil {
 		return nil

@@ -16,8 +16,6 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-// Create validates and persists a human-submitted score, denormalising the
-// trace's service/session/user from its spans.
 func (s *Service) Create(ctx context.Context, tenantID int64, req CreateScoreRequest) error {
 	if req.TraceID == "" || req.Name == "" {
 		return fmt.Errorf("%w: traceId and name are required", errInvalidScore)
@@ -86,7 +84,6 @@ func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64
 	return ScoreTimeseriesResponse{Name: name, Points: points}, nil
 }
 
-// bucketLabels name the ten 0.1-wide numeric-score bins.
 var bucketLabels = [10]string{
 	"0.0–0.1", "0.1–0.2", "0.2–0.3", "0.3–0.4", "0.4–0.5",
 	"0.5–0.6", "0.6–0.7", "0.7–0.8", "0.8–0.9", "0.9–1.0",

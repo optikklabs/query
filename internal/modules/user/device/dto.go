@@ -13,9 +13,6 @@ type DeviceTokenRequest struct {
 	DeviceCode string `json:"deviceCode" validate:"required"`
 }
 
-// DeviceTokenResponse always returns 200; the CLI switches on Status
-// (authorization_pending|slow_down|expired_token|complete). Session is set
-// only when complete.
 type DeviceTokenResponse struct {
 	Status  string              `json:"status"`
 	Session *auth.LoginResponse `json:"session,omitempty"`

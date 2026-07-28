@@ -7,7 +7,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/alerting/dispatch"
 )
 
-// Module wires channels / policies / templates / integrations endpoints.
 type Module struct {
 	handler *Handler
 }

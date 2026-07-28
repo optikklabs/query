@@ -1,5 +1,3 @@
-// Package filter defines the traces filter shape, validation, and SQL clause
-// emitter.
 package filter
 
 import (
@@ -50,21 +48,13 @@ func (f *Filters) Validate() error {
 
 var ValidateAttrs = filterutil.ValidateAttrs
 
-// Clauses splits the WHERE predicates by where they must be evaluated.
-//
-// Span predicates match ANY span of a trace (service:X means "traces that
-// touch X"), so the repository runs them in a trace_id subquery over all
-// spans. Root predicates are trace-level (duration, exclusions) and stay on
-// the root-span scan. Resource contains predicates applied directly to the
-// inner any-span spans scan PREWHERE.
 type Clauses struct {
-	Resource string // predicates appended to inner spans scan PREWHERE (service IN)
-	Span     string // predicates matchable against any span
-	Root     string // trace-level predicates, evaluated on the root span
+	Resource string
+	Span     string
+	Root     string
 	Args     []any
 }
 
-// HasSpanMatch reports whether the any-span subquery phase is needed.
 func (c Clauses) HasSpanMatch() bool {
 	return c.Span != ""
 }
@@ -76,15 +66,12 @@ func BuildClauses(f Filters) Clauses {
 		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
 	}}
 
-	// service is the one predicate needed in two places: it narrows the root
-	// scan and the inner any-span scan alike, on a single bind.
 	if len(f.Services) > 0 {
 		c.Root += ` AND service IN @services`
 		c.Resource += ` AND service IN @services`
 		c.Args = append(c.Args, clickhouse.Named("services", f.Services))
 	}
 
-	// Span predicates match ANY span of the trace.
 	c.Args = filterutil.AppendIn(&c.Span, c.Args,
 		filterutil.InClause{Column: "environment", Bind: "environments", Values: f.Environments},
 		filterutil.InClause{Column: "name", Bind: "operations", Values: f.Operations},
@@ -95,15 +82,12 @@ func BuildClauses(f Filters) Clauses {
 		filterutil.InClause{Column: "peer_service", Bind: "peerServices", Values: f.PeerServices},
 	)
 
-	// Exclusions are trace-level: they must be judged on the root span, not
-	// on "some span of the trace did not match".
 	c.Args = filterutil.AppendIn(&c.Root, c.Args,
 		filterutil.InClause{Column: "service", Bind: "excServices", Values: f.ExcludeServices, Negate: true},
 	)
 
 	if f.Search != "" {
-		// Case-insensitive substring on span name; matches any span of the
-		// trace. Legacy searchMode is accepted on the wire but ignored.
+
 		c.Span += ` AND positionCaseInsensitive(name, @search) > 0`
 		c.Args = append(c.Args, clickhouse.Named("search", f.Search))
 	}
@@ -121,7 +105,7 @@ func BuildClauses(f Filters) Clauses {
 		c.Root += ` AND trace_id = @traceID`
 		c.Args = append(c.Args, clickhouse.Named("traceID", f.TraceID))
 	}
-	// Duration means trace duration, i.e. the root span's duration.
+
 	if f.MinDurationNs > 0 {
 		c.Root += ` AND duration_nano >= @minDur`
 		c.Args = append(c.Args, clickhouse.Named("minDur", uint64(f.MinDurationNs)))
@@ -132,20 +116,16 @@ func BuildClauses(f Filters) Clauses {
 	}
 	if f.HasError != nil {
 		if *f.HasError {
-			// "has an error anywhere in the trace" — any-span predicate.
+
 			c.Span += ` AND has_error = 1`
 		} else {
-			// "root completed cleanly" — kept root-level; "no error on any
-			// span" is not expressible as an any-span predicate.
+
 			c.Root += ` AND has_error = 0`
 		}
 	}
 	return c
 }
 
-// buildAttrClause emits the predicate for one attribute filter against the
-// spans JSON attributes column. Missing paths read as NULL, so equality and
-// comparisons drop rows without the key; neq/exists guard explicitly.
 func buildAttrClause(af AttrFilter, i int) (string, []any) {
 	idx := strconv.Itoa(i)
 	k := "akey_" + idx
@@ -164,7 +144,7 @@ func buildAttrClause(af AttrFilter, i int) (string, []any) {
 		return ` AND match(attributes[@` + k + `], @` + v + `)`, strArgs
 	case "gt", "gte", "lt", "lte":
 		n, _ := strconv.ParseFloat(af.Value, 64)
-		// Note: since all Map values are Strings, numeric comparisons require casting
+
 		return ` AND toFloat64OrNull(attributes[@` + k + `]) ` + filterutil.CmpSQL(af.Op) + ` @` + v,
 			[]any{keyArg, clickhouse.Named(v, n)}
 	case "exists":
@@ -172,5 +152,5 @@ func buildAttrClause(af AttrFilter, i int) (string, []any) {
 	case "not_exists":
 		return ` AND attributes[@` + k + `] IS NULL`, []any{keyArg}
 	}
-	return "", nil // unreachable: ops are whitelisted in Validate
+	return "", nil
 }

@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	topServiceSeries = 5  // distinct bands in the "by service" chart; rest fold into "Other"
-	topServiceRows   = 12 // rows returned for the services table
+	topServiceSeries = 5
+	topServiceRows   = 12
 )
 
 type Service struct {
@@ -21,7 +21,6 @@ func NewService(repo *Repository, cfg Config) *Service { return &Service{repo: r
 
 func dateKey(t time.Time) string { return t.UTC().Format("2006-01-02") }
 
-// buildDateAxis returns a contiguous day-by-day axis from start to end (inclusive).
 func buildDateAxis(startMs, endMs int64) []string {
 	start := time.UnixMilli(startMs).UTC()
 	end := time.UnixMilli(endMs).UTC()
@@ -43,7 +42,6 @@ func axisIndex(dates []string) map[string]int {
 	return idx
 }
 
-// fillDaily projects per-day record and byte counts onto the date axis.
 func fillDaily(rows []dateCountRow, idx map[string]int, n int) (counts, bytes []uint64) {
 	counts = make([]uint64, n)
 	bytes = make([]uint64, n)
@@ -75,7 +73,6 @@ func pct(part, whole uint64) float64 {
 	return float64(part) / float64(whole) * 100
 }
 
-// Summary assembles the KPI strip, by-type breakdown and metrics-pillar facts.
 func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (SummaryResponse, error) {
 	logs, err := s.repo.DailyLogs(ctx, tenantID, startMs, endMs)
 	if err != nil {
@@ -118,7 +115,6 @@ func (s *Service) summaryFromUsage(
 	records := logsTotal + spansTotal + metricsTotal
 	bytesTotal := logsBytes + spansBytes + metricsBytes
 
-	// Daily grand totals drive the peak day.
 	peak := PeakDay{}
 	for i, d := range dates {
 		dayRecords := logsC[i] + spansC[i] + metricsC[i]
@@ -162,8 +158,6 @@ func (s *Service) summaryFromUsage(
 	}
 }
 
-// Cost estimates the tenant's bill for the period from metered usage. It reads
-// the same per-signal daily meter as Summary, then applies the configured rates.
 func (s *Service) Cost(ctx context.Context, tenantID, startMs, endMs int64) (CostResponse, error) {
 	logs, err := s.repo.DailyLogs(ctx, tenantID, startMs, endMs)
 	if err != nil {
@@ -207,7 +201,6 @@ func (s *Service) costFromUsage(
 	return estimateCost(u, s.cfg.Rates())
 }
 
-// Timeseries builds the daily stacked series, grouped by signal type or by service.
 func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64, groupBy string) (TimeseriesResponse, error) {
 	dates := buildDateAxis(startMs, endMs)
 	idx := axisIndex(dates)
@@ -250,13 +243,11 @@ func timeseriesByType(
 	}
 }
 
-// svcSeries accumulates a service's daily records and bytes on the date axis.
 type svcSeries struct {
 	counts []uint64
 	bytes  []uint64
 }
 
-// accumulateByService folds per-(service, day) rows into per-service series.
 func accumulateByService(rowSets [][]svcDateCountRow, idx map[string]int, n int) map[string]*svcSeries {
 	perService := map[string]*svcSeries{}
 	for _, rows := range rowSets {
@@ -315,7 +306,6 @@ func timeseriesByServiceRows(
 	return TimeseriesResponse{GroupBy: "service", Dates: dates, Series: series}
 }
 
-// rankByTotal returns service names ordered by descending total record volume.
 func rankByTotal(perService map[string]*svcSeries) []string {
 	names := make([]string, 0, len(perService))
 	for name := range perService {
@@ -331,8 +321,6 @@ func rankByTotal(perService map[string]*svcSeries) []string {
 	return names
 }
 
-// serviceAgg is a service's period totals for the top-services table. Records
-// and bytes are logs+spans; timeseries is metric cardinality (a separate axis).
 type serviceAgg struct {
 	env        string
 	logs       uint64
@@ -345,7 +333,6 @@ type serviceAgg struct {
 func (a *serviceAgg) records() uint64 { return a.logs + a.spans }
 func (a *serviceAgg) bytes() uint64   { return a.logsBytes + a.spansBytes }
 
-// aggregateServices folds the per-signal totals into one map keyed by service.
 func aggregateServices(logTotals, spanTotals, tsTotals []svcCountRow) map[string]*serviceAgg {
 	services := map[string]*serviceAgg{}
 	get := func(name string) *serviceAgg {
@@ -373,7 +360,6 @@ func aggregateServices(logTotals, spanTotals, tsTotals []svcCountRow) map[string
 	return services
 }
 
-// priorRecordTotals sums the prior window's records per service for the delta.
 func priorRecordTotals(priorLogs, priorSpans []svcCountRow) map[string]uint64 {
 	totals := map[string]uint64{}
 	for _, row := range priorLogs {
@@ -385,7 +371,6 @@ func priorRecordTotals(priorLogs, priorSpans []svcCountRow) map[string]uint64 {
 	return totals
 }
 
-// Services builds the top-ingesting-services table, including a prior-period delta.
 func (s *Service) Services(ctx context.Context, tenantID, startMs, endMs int64) (ServicesResponse, error) {
 	logTotals, err := s.repo.ServiceLogTotals(ctx, tenantID, startMs, endMs)
 	if err != nil {
@@ -400,7 +385,6 @@ func (s *Service) Services(ctx context.Context, tenantID, startMs, endMs int64) 
 		return ServicesResponse{}, fmt.Errorf("ingestion.Services timeseries: %w", err)
 	}
 
-	// Prior equal-length window for the delta column.
 	span := endMs - startMs
 	priorLogs, err := s.repo.ServiceLogTotals(ctx, tenantID, startMs-span, startMs)
 	if err != nil {
@@ -439,14 +423,11 @@ func servicesFromUsage(
 	return buildServicesResponse(services, priorTotals, spark, len(dates))
 }
 
-// buildServicesResponse ranks services by record volume, keeps the top rows and
-// computes each row's share, delta and sparklines.
 func buildServicesResponse(services map[string]*serviceAgg, prior map[string]uint64, spark map[string]*svcSeries, n int) ServicesResponse {
 	var grandTotal, grandBytes uint64
 	names := make([]string, 0, len(services))
 	for name, a := range services {
-		// Skip unattributable telemetry (e.g. servicegraph edge metrics carry
-		// no service.name); a blank 0-record row is not a real service.
+
 		if name == "" {
 			continue
 		}
@@ -477,7 +458,7 @@ func buildServicesResponse(services map[string]*serviceAgg, prior map[string]uin
 		if p := prior[name]; p > 0 {
 			delta = (float64(total) - float64(p)) / float64(p) * 100
 		}
-		// Zero-fill sparks so JSON is never null (nil slices marshal to null).
+
 		var spC, spB []uint64
 		if ser := spark[name]; ser != nil {
 			spC, spB = ser.counts, ser.bytes

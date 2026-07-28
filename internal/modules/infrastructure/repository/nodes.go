@@ -12,7 +12,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-// NodeAggregateRow is per-host RED from the span_stats rollup.
 type NodeAggregateRow struct {
 	Host          string    `ch:"host"`
 	PodCount      uint64    `ch:"pod_count"`
@@ -23,7 +22,6 @@ type NodeAggregateRow struct {
 	LastSeen      time.Time `ch:"last_seen"`
 }
 
-// NodeServiceAggregateRow is per-service RED within one host.
 type NodeServiceAggregateRow struct {
 	Service       string  `ch:"service"`
 	RequestCount  uint64  `ch:"request_total"`
@@ -33,8 +31,6 @@ type NodeServiceAggregateRow struct {
 	PodCount      uint64  `ch:"pod_count"`
 }
 
-// NodeSummaryRow is the fleet health rollup. It is derived in Go from the node
-// list rather than read from ClickHouse.
 type NodeSummaryRow struct {
 	HealthyNodes   uint64  `ch:"healthy_nodes"`
 	DegradedNodes  uint64  `ch:"degraded_nodes"`
@@ -67,8 +63,6 @@ func (r *Repository) QueryInfrastructureNodes(ctx context.Context, tenantID int6
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "nodes.QueryInfrastructureNodes", &rows, query, args...)
 }
 
-// QueryInfrastructureNodeSummary classifies the node list rather than issuing
-// its own query, so the summary and the list can never disagree.
 func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, tenantID int64, startMs, endMs int64) (NodeSummaryRow, error) {
 	nodeRows, err := r.QueryInfrastructureNodes(ctx, tenantID, startMs, endMs)
 	if err != nil {

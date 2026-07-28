@@ -4,8 +4,6 @@ import (
 	"time"
 )
 
-// MonitorEventResponse is the wire shape for monitor_events rows. The
-// MonitorName is denormalized for the activity feed (saves a roundtrip).
 type MonitorEventResponse struct {
 	ID          int64      `json:"id"`
 	MonitorID   int64      `json:"monitorId"`

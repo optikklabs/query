@@ -1,5 +1,3 @@
-// Package template renders notification message bodies against payload values.
-// It supports scalar mustache variables and status section blocks.
 package template
 
 import (

@@ -11,7 +11,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/user/shared"
 )
 
-// Repository holds the auth-related MySQL access (users, refresh tokens, tenants).
 type Repository struct {
 	db *sqlx.DB
 }
@@ -97,10 +96,6 @@ func (r *Repository) RevokeRefreshToken(ctx context.Context, tokenHash string) e
 	return err
 }
 
-
-
-// FindTenantByID loads a tenant regardless of active state so login can tell a
-// suspended (trial-expired) tenant apart from a genuinely missing one.
 func (r *Repository) FindTenantByID(ctx context.Context, tenantID int64) (shared.TenantRecord, error) {
 	var t shared.TenantRecord
 	err := dbutil.GetSQL(ctx, r.db, "user.FindTenantByID", &t, `

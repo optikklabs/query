@@ -1,13 +1,5 @@
 package dashboards
 
-// This file is the single backend source of truth for what a widget may
-// reference. A widget never carries raw SQL; it points at a curated, already
-// optimized GET endpoint plus query params. Anything outside these sets is
-// rejected at create/update time.
-
-// dashboardSafeEndpoints is the allowlist of time-bounded, tenant-scoped module
-// endpoints a widget query may target. All are GET endpoints that already apply
-// PREWHERE tenant_id + WHERE timestamp BETWEEN @start AND @end.
 var dashboardSafeEndpoints = map[string]struct{}{
 	"/spans/red/fleet-totals":                   {},
 	"/spans/red/apdex":                          {},
@@ -32,9 +24,6 @@ func isAllowedEndpoint(ep string) bool {
 	return ok
 }
 
-// dashboardPanelTypes mirrors web DASHBOARD_PANEL_TYPES; a widget's panel_type
-// must be one of these so the frontend always has a registered renderer. The
-// metrics-* types back the SigNoz-style query-builder widgets.
 var dashboardPanelTypes = map[string]struct{}{
 	"bar": {}, "db-systems-overview": {}, "error-rate": {},
 	"exception-type-line": {}, "gauge": {}, "heatmap": {}, "latency": {},
@@ -50,8 +39,6 @@ func isValidPanelType(t string) bool {
 	return ok
 }
 
-// metricsBuilderAggregations mirrors web MetricAggregation and the engine's
-// validAggregations (query/internal/modules/metrics/filter).
 var metricsBuilderAggregations = map[string]struct{}{
 	"avg": {}, "sum": {}, "min": {}, "max": {}, "count": {},
 	"p50": {}, "p95": {}, "p99": {}, "rate": {},
@@ -62,7 +49,6 @@ func isValidBuilderAggregation(a string) bool {
 	return ok
 }
 
-// metricsBuilderOperators mirrors web MetricFilterOperator.
 var metricsBuilderOperators = map[string]struct{}{
 	"eq": {}, "neq": {}, "in": {}, "not_in": {}, "wildcard": {},
 }
@@ -72,7 +58,6 @@ func isValidBuilderOperator(op string) bool {
 	return ok
 }
 
-// dashboardLayoutVariants mirrors web DASHBOARD_LAYOUT_VARIANTS.
 var dashboardLayoutVariants = map[string]struct{}{
 	"kpi": {}, "summary": {}, "standard-chart": {}, "wide-chart": {},
 	"ranking": {}, "summary-table": {}, "detail-table": {}, "hero": {},
@@ -84,5 +69,4 @@ func isValidLayoutVariant(v string) bool {
 	return ok
 }
 
-// maxWidgetsPerPage caps fan-out: bounds worst-case concurrent panel queries.
 const maxWidgetsPerPage = 30

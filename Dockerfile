@@ -1,12 +1,32 @@
-FROM alpine:3.20
+# ---------- Build Stage ----------
+FROM golang:1.26-alpine AS builder
+
 WORKDIR /app
 
-COPY query .
+RUN apk add --no-cache git
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
+    go build -ldflags="-s -w" -o query ./cmd/query
+
+# ---------- Runtime Stage ----------
+FROM alpine:3.20
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+COPY --from=builder /app/query .
 COPY config.yml .
 
-RUN chown -R 1000:1000 /app
-USER 1000:1000
-
-# Match default config.yml: HTTP server.port (override with -p when running).
 EXPOSE 19090 19091
+
+USER nobody
+
 ENTRYPOINT ["./query"]
+

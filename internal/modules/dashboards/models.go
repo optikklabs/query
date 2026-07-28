@@ -1,4 +1,3 @@
-// Package dashboards handles CRUD for custom dashboard pages and their widgets.
 package dashboards
 
 import (
@@ -9,8 +8,6 @@ import (
 	"unicode"
 )
 
-// DashboardPageRow is a dashboard_pages row, enriched with a derived
-// widget_count and the owner name resolved from optikk.users.
 type DashboardPageRow struct {
 	ID              int64          `db:"id"`
 	TenantID        int64          `db:"tenant_id"`
@@ -27,8 +24,6 @@ type DashboardPageRow struct {
 	OwnerName       sql.NullString `db:"owner_name"`
 }
 
-// DashboardRow is a dashboards (widget) row; its full definition lives in
-// spec_json, its grid position in layout_json.
 type DashboardRow struct {
 	ID            int64          `db:"id"`
 	PageID        int64          `db:"page_id"`
@@ -43,13 +38,11 @@ type DashboardRow struct {
 	UpdatedAt     sql.NullTime   `db:"updated_at"`
 }
 
-// Owner is the page creator, resolved for display in the catalog.
 type Owner struct {
 	Name     string `json:"name"`
 	Initials string `json:"initials"`
 }
 
-// DashboardPageResponse is the wire shape for a page in the catalog.
 type DashboardPageResponse struct {
 	ID          int64      `json:"id"`
 	Name        string     `json:"name"`
@@ -64,13 +57,11 @@ type DashboardPageResponse struct {
 	UpdatedAt   *time.Time `json:"updatedAt,omitempty"`
 }
 
-// DashboardPageListResponse is the catalog list payload.
 type DashboardPageListResponse struct {
 	Items []DashboardPageResponse `json:"items"`
 	Total int                     `json:"total"`
 }
 
-// WidgetResponse round-trips the persisted widget definition with no data loss.
 type WidgetResponse struct {
 	ID            int64           `json:"id"`
 	PageID        int64           `json:"pageId"`
@@ -84,7 +75,6 @@ type WidgetResponse struct {
 	UpdatedAt     *time.Time      `json:"updatedAt,omitempty"`
 }
 
-// DashboardPageDetailResponse is a page plus its widgets, for the detail screen.
 type DashboardPageDetailResponse struct {
 	DashboardPageResponse
 	Widgets []WidgetResponse `json:"widgets"`
@@ -145,7 +135,6 @@ func toWidgetResponse(row DashboardRow) WidgetResponse {
 	return out
 }
 
-// initials derives up to two uppercase initials from a display name.
 func initials(name string) string {
 	var out []rune
 	for _, field := range strings.Fields(name) {

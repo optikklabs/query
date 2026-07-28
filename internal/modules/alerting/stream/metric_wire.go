@@ -1,5 +1,3 @@
-// Package stream evaluates telemetry as it is consumed from Kafka. It never
-// queries ClickHouse or scans MySQL on an evaluation interval.
 package stream
 
 import (
@@ -8,10 +6,6 @@ import (
 	"math"
 )
 
-// MetricEvent is the alerting-relevant subset of ingest's MetricRow protobuf.
-// The decoder intentionally understands the published wire contract instead
-// of importing ingest/internal packages, which keeps the two services
-// independently buildable.
 type MetricEvent struct {
 	TenantID    int64
 	MetricName  string
@@ -20,9 +14,6 @@ type MetricEvent struct {
 	Value       float64
 }
 
-// decodeMetricEvent decodes fields 1, 2, 8, 9 and 10 from
-// optikk.ingest.metrics.v1.Row. Unknown fields are skipped for forward
-// compatibility. Field numbers are part of the versioned ingest protobuf.
 func decodeMetricEvent(b []byte) (MetricEvent, error) {
 	var out MetricEvent
 	for len(b) > 0 {

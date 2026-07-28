@@ -1,4 +1,3 @@
-// Package billing runs the BackgroundRunner that enforces trial lifecycle.
 package billing
 
 import (
@@ -18,8 +17,6 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: sqlx.NewDb(db, "mysql")}
 }
 
-// SuspendExpiredTrials moves trialing tenants past their deadline to suspended
-// and flips active off, cutting ingest and login. Returns rows affected.
 func (r *Repository) SuspendExpiredTrials(ctx context.Context, now time.Time) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "billing.SuspendExpiredTrials", `
 		UPDATE optikk.tenant

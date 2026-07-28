@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-// Service owns prompt validation, version lifecycle rules, and row mapping.
 type Service struct {
 	repo *Repository
 }
@@ -145,8 +144,6 @@ func (s *Service) SetVersionStatus(ctx context.Context, tenantID int64, name str
 	}
 	return s.Get(ctx, tenantID, name)
 }
-
-// --- mapping helpers ---
 
 func toSummary(row promptRow) PromptSummary {
 	sum := PromptSummary{

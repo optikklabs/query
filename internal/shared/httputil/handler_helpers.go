@@ -8,13 +8,10 @@ import (
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-// FilteredRequest is implemented by API request structs that wrap telemetry filters.
 type FilteredRequest interface {
 	BindTenant(tenantID int64) error
 }
 
-// BindFiltered decodes a JSON request, injects the tenant ID and time range, and validates.
-// This generic helper unifies the decoding and validation boilerplate across handlers.
 func BindFiltered[T FilteredRequest](w http.ResponseWriter, r *http.Request, req T) bool {
 	if err := DecodeJSON(r, req); err != nil {
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
@@ -27,7 +24,6 @@ func BindFiltered[T FilteredRequest](w http.ResponseWriter, r *http.Request, req
 	return true
 }
 
-// ValidateSuggestRequest validates the standard fields of a suggest request.
 func ValidateSuggestRequest(w http.ResponseWriter, r *http.Request, req *filterutil.SuggestRequest) bool {
 	if req.StartTime <= 0 || req.EndTime <= 0 || req.StartTime >= req.EndTime {
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required", nil)
@@ -41,7 +37,6 @@ func ValidateSuggestRequest(w http.ResponseWriter, r *http.Request, req *filteru
 	return true
 }
 
-// BindSuggestRequest unifies the JSON decoding, time validation, and scalar field checking for suggest endpoints.
 func BindSuggestRequest(w http.ResponseWriter, r *http.Request, req *filterutil.SuggestRequest, isScalar func(string) bool) bool {
 	if err := DecodeJSON(r, req); err != nil {
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)

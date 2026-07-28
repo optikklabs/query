@@ -2,7 +2,6 @@ package topology
 
 import "github.com/optikklabs/query/internal/shared/metrics"
 
-// NodeAgg is the source-agnostic per-service aggregate that feeds BuildGraph.
 type NodeAgg struct {
 	Service      string
 	RequestCount int64

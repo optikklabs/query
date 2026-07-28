@@ -18,13 +18,9 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// edgeWhere selects the span_stats rows that form graph edges: client-side
-// spans whose resolved peer is a different service. Server-side rows carry no
-// peer, so the same rollup serves both nodes and edges.
 const edgeWhere = `kind_string IN ('CLIENT', 'PRODUCER')
 		  AND peer_name != '' AND peer_name != service`
 
-// GetNodes returns per-service RED aggregates and p50/p95/p99 latency.
 func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int64, focusService string) ([]nodeAggRow, error) {
 	rollup := timebucket.SpanStatsRollup(endMs - startMs)
 	query := `
@@ -56,9 +52,6 @@ func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int6
 	return rows, nil
 }
 
-// GetEdges builds directed edges from the client side of each call: one row per
-// (service -> peer) pair with call/error counts and latency as the caller
-// observed it, so the numbers include network and queueing time.
 func (r *Repository) GetEdges(ctx context.Context, tenantID, startMs, endMs int64, focusService string) ([]edgeAggRow, error) {
 	query := `
 		SELECT service   AS source,

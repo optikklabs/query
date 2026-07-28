@@ -1,21 +1,13 @@
-// Package models holds the infrastructure domain's API DTOs — the wire
-// contract shared by the handler and the service. Repository row types are
-// deliberately not here: they stay in repository/ and terminate at the
-// service, which folds them into these shapes.
 package models
 
 import (
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
 )
 
-// MetricValue is the single-number response used by the CPU and memory
-// averages.
 type MetricValue struct {
 	Value float64 `json:"value"`
 }
 
-// CPUInstanceMetric is one instance's folded CPU utilization. A nil Value
-// means the instance reported no usable CPU metric in range.
 type CPUInstanceMetric struct {
 	Host        string   `json:"host"`
 	Pod         string   `json:"pod"`
@@ -24,7 +16,6 @@ type CPUInstanceMetric struct {
 	Value       *float64 `json:"value"`
 }
 
-// FleetPod aggregates root-span traffic by Kubernetes pod name and host.
 type FleetPod struct {
 	PodName      string   `json:"podName"`
 	Host         string   `json:"host"`
@@ -37,7 +28,6 @@ type FleetPod struct {
 	LastSeen     string   `json:"lastSeen"`
 }
 
-// HostStatus is the health classification for a host running a service.
 type HostStatus string
 
 const (
@@ -104,12 +94,8 @@ type InfrastructureNodeSummary struct {
 	TotalPods      int64 `json:"totalPods"`
 }
 
-// SeriesPoint is one display-grain bucket of one named series.
 type SeriesPoint = seriesgroup.Point
 
-// HostOverview is the host detail header payload: identity metadata plus
-// range-averaged KPI values. Nil KPI fields mean the host does not report
-// that metric in the selected range.
 type HostOverview struct {
 	Host             string     `json:"host"`
 	LastSeen         string     `json:"lastSeen,omitempty"`
@@ -126,8 +112,6 @@ type HostOverview struct {
 	About            *HostAbout `json:"about,omitempty"`
 }
 
-// HostAbout is host machine metadata from retained resource attributes.
-// Present only when the host reports at least one attribute.
 type HostAbout struct {
 	OSType        string `json:"osType,omitempty"`
 	OSDescription string `json:"osDescription,omitempty"`
@@ -140,9 +124,6 @@ type HostAbout struct {
 	K8SNodeName   string `json:"k8sNodeName,omitempty"`
 }
 
-// PodOverview is the container detail header payload: identity metadata plus
-// range RED aggregates from span metrics. RequestCount 0 means the pod's
-// services reported no traffic in the selected range.
 type PodOverview struct {
 	Pod              string   `json:"pod"`
 	Host             string   `json:"host,omitempty"`

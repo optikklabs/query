@@ -12,8 +12,6 @@ type Handler struct {
 	Service *Service
 }
 
-// ListMetricNames handles GET /metrics/names
-// Frontend expects: { "metrics": [{ "name", "type", "unit", "description" }] }
 func (h *Handler) ListMetricNames(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)

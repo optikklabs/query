@@ -1,5 +1,3 @@
-// Package filter defines the Filters shape, canonical resource-key
-// resolution, and SQL clause emission for the metrics read path.
 package filter
 
 import (

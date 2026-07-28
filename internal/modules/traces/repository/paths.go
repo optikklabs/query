@@ -7,8 +7,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 )
 
-// CriticalPathRow carries the parent link and raw nanosecond duration the
-// longest-path walk needs, which the CriticalPathSpan response does not.
 type CriticalPathRow struct {
 	SpanID        string    `ch:"span_id"`
 	ParentSpanID  string    `ch:"parent_span_id"`
@@ -19,8 +17,6 @@ type CriticalPathRow struct {
 	DurationNano  uint64    `ch:"duration_nano"`
 }
 
-// ErrorPathRow is an errored span with its parent link, used to walk the
-// failure chain back to the root.
 type ErrorPathRow struct {
 	SpanID        string    `ch:"span_id"`
 	ParentSpanID  string    `ch:"parent_span_id"`

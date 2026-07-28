@@ -8,7 +8,6 @@ import (
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-// Handler serves the tenant API-key routes.
 type Handler struct {
 	Service *Service
 }
@@ -43,7 +42,6 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, resp)
 }
 
-// requireTenantAdmin gates key management to a tenant's admins.
 func (h *Handler) requireTenantAdmin(w http.ResponseWriter, r *http.Request, tenantID int64, role string) bool {
 	if tenantID == 0 {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)

@@ -34,7 +34,6 @@ func (s *Service) ListMetricNames(ctx context.Context, tenantID, startMs, endMs 
 	return out, nil
 }
 
-
 func (s *Service) ListTagKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]TagKeyResult, error) {
 	rows, err := s.repo.ListAttributeTagKeys(ctx, tenantID, startMs, endMs, metricName)
 	if err != nil {

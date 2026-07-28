@@ -1,8 +1,5 @@
 package explorer
 
-// Internal domain models returned by repository methods.
-
-// MetricNameResult holds a metric name for autocomplete search.
 type MetricNameResult struct {
 	MetricName  string `json:"metricName"`
 	MetricType  string `json:"metricType"`

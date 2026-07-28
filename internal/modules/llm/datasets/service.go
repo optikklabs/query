@@ -10,7 +10,6 @@ import (
 
 const maxItemsPerRequest = 500
 
-// Service owns dataset validation and row mapping.
 type Service struct {
 	repo *Repository
 }
@@ -112,8 +111,6 @@ func (s *Service) GetRun(ctx context.Context, tenantID, runID int64) (RunDetail,
 	}
 	return detail, nil
 }
-
-// --- mapping ---
 
 func toSummary(row datasetRow) DatasetSummary {
 	sum := DatasetSummary{

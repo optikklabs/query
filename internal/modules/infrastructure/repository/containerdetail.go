@@ -14,8 +14,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-// PodMetaRow is a pod's identity metadata plus which pod metrics it reports
-// in range.
 type PodMetaRow struct {
 	LastSeen     time.Time `ch:"last_seen"`
 	Host         string    `ch:"host_any"`
@@ -26,7 +24,6 @@ type PodMetaRow struct {
 	MetricNames  []string  `ch:"metric_names"`
 }
 
-// PodREDRow is a pod's range RED aggregates from span metrics.
 type PodREDRow struct {
 	RequestCount  uint64  `ch:"request_total"`
 	ErrorCount    uint64  `ch:"error_total"`
@@ -34,14 +31,10 @@ type PodREDRow struct {
 	P95LatencyMs  float32 `ch:"p95_latency_ms"`
 }
 
-// QueryPodSeries returns display-grain buckets for one metric group on a pod,
-// broken down by the group's label (container/direction/interface/type).
 func (r *Repository) QueryPodSeries(ctx context.Context, tenantID int64, pod string, startMs, endMs int64, def seriesgroup.Def) ([]models.SeriesPoint, error) {
 	return r.series.QuerySeries(ctx, tenantID, podScopeColumn, pod, startMs, endMs, def)
 }
 
-// QueryPodMeta returns identity metadata and which pod metrics the pod
-// reports in range, from the narrow series-metadata table.
 func (r *Repository) QueryPodMeta(ctx context.Context, tenantID int64, pod string, startMs, endMs int64) (PodMetaRow, error) {
 	query := `
 		SELECT
@@ -64,7 +57,6 @@ func (r *Repository) QueryPodMeta(ctx context.Context, tenantID int64, pod strin
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "containerdetail.QueryPodMeta", &row, query, args...)
 }
 
-// QueryPodRED returns range RED aggregates for one pod from span metrics.
 func (r *Repository) QueryPodRED(ctx context.Context, tenantID int64, pod string, startMs, endMs int64) (PodREDRow, error) {
 	query := `
 		SELECT

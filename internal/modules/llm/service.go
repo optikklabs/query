@@ -18,7 +18,6 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-// qsAt reads one percentile; tdigest merge yields NaN when no span matched.
 func qsAt(qs []float64, i int) float64 {
 	if len(qs) > i && !math.IsNaN(qs[i]) {
 		return qs[i]
@@ -80,8 +79,6 @@ func (s *Service) Apps(ctx context.Context, tenantID, startMs, endMs int64) (App
 	return AppsResponse{Apps: apps}, nil
 }
 
-// deriveKind classifies an app by its span mix: anything driving agent spans
-// is an agent, retrieval-heavy apps are RAG, the rest are plain workflows.
 func deriveKind(a appAggRow) string {
 	switch {
 	case a.AgentSpans > 0:
@@ -93,7 +90,6 @@ func deriveKind(a appAggRow) string {
 	}
 }
 
-// Models returns the Dashboard per-model usage table.
 func (s *Service) Models(ctx context.Context, tenantID, startMs, endMs int64) (ModelsResponse, error) {
 	rows, err := s.repo.ModelUsage(ctx, tenantID, startMs, endMs)
 	if err != nil {
@@ -115,8 +111,6 @@ func (s *Service) Models(ctx context.Context, tenantID, startMs, endMs int64) (M
 	return ModelsResponse{Models: models}, nil
 }
 
-// Overview folds the two-window aggregates, trace counts and sparkline
-// buckets into the KPI payload shared by all LLM page tabs.
 func (s *Service) Overview(ctx context.Context, tenantID, startMs, endMs int64) (OverviewResponse, error) {
 	windows, err := s.repo.OverviewWindows(ctx, tenantID, startMs, endMs)
 	if err != nil {
@@ -315,7 +309,6 @@ func decodeTraceCursor(raw string) (traceCursor, bool) {
 	return cursor.Decode[traceCursor](raw)
 }
 
-// levelOf maps a trace's error state to the UI severity level.
 func levelOf(hasError bool) string {
 	if hasError {
 		return "ERROR"
@@ -323,7 +316,6 @@ func levelOf(hasError bool) string {
 	return "DEFAULT"
 }
 
-// groupScores buckets score rows by trace id for O(1) decoration.
 func groupScores(rows []traceScoreRow) map[string][]TraceScore {
 	out := make(map[string][]TraceScore)
 	for _, r := range rows {
@@ -380,7 +372,7 @@ func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID strin
 		resp.OutputTokens += r.OutputTokens
 		resp.Cost += cost
 		resp.HasError = resp.HasError || r.HasError
-		// root span carries the request identity and prompt/output text
+
 		if r.ParentSpanID == "" {
 			resp.Name = r.Name
 			resp.Service = r.Service
@@ -397,8 +389,7 @@ func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID strin
 	if scores, err := s.repo.ScoresForTraces(ctx, tenantID, startTimeMs, endTimeMs, []string{traceID}); err == nil {
 		resp.Scores = groupScores(scores)[traceID]
 	}
-	// SDKs often attach content to the chat span, not the root: fall back
-	// to the first prompt and the last completion in trace order.
+
 	for _, r := range rows {
 		if resp.Prompt != "" {
 			break

@@ -7,7 +7,6 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-// Module wires evaluator CRUD (MySQL) plus rolling score analytics (ClickHouse).
 type Module struct {
 	handler *Handler
 }

@@ -10,7 +10,6 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
-// MetricBackend evaluates metric monitors against ClickHouse raw metrics.
 type MetricBackend struct {
 	db clickhouse.Conn
 }

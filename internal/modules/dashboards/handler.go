@@ -11,7 +11,6 @@ import (
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-// Handler parses HTTP requests and delegates to the dashboards service.
 type Handler struct {
 	Service *Service
 }
@@ -19,8 +18,6 @@ type Handler struct {
 func NewHandler(service *Service) *Handler {
 	return &Handler{Service: service}
 }
-
-// --- Pages ---
 
 func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
@@ -101,8 +98,6 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 	}
 	httputil.RespondOK(w, map[string]any{"deleted": id})
 }
-
-// --- Widgets ---
 
 func (h *Handler) ListWidgets(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)

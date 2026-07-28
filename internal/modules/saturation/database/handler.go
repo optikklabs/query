@@ -39,7 +39,6 @@ func (h *Handler) GetSlowQueryPatterns(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// parseHash returns the required query hash param, responding 400 when absent.
 func parseHash(w http.ResponseWriter, r *http.Request) (string, bool) {
 	hash := strings.TrimSpace(r.URL.Query().Get("hash"))
 	if hash == "" {

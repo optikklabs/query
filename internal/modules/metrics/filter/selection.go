@@ -8,10 +8,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
-// BuildSelection returns the rollup table, a metrics_series CTE, joins, and
-// column selections. Resource and attribute filters both resolve to a
-// fingerprint set in the fps CTE; the rollup is INNER JOINed on fingerprint and
-// the query groups by the label value carried out of the CTE.
 func BuildSelection(f Filters) (fromTable, cte, joins, selectCols, groupByCols string, args []any) {
 	resourceWhere, attrWhere, args := BuildClauses(f)
 

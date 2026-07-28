@@ -1,5 +1,3 @@
-// Package dispatch sends notification payloads to notification channels.
-// Transports route payloads depending on their channel type.
 package dispatch
 
 type Payload struct {

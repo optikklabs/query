@@ -15,8 +15,6 @@ type sample struct {
 	value float64
 }
 
-// Transition is emitted only when a monitor's externally visible state or
-// notification deadline changes. Raw metric ingestion never writes MySQL.
 type Transition struct {
 	Monitor  models.MonitorRow
 	State    models.MonitorStateRow
@@ -30,9 +28,6 @@ type metricKey struct {
 	metricName string
 }
 
-// Engine owns bounded, in-process window state. Kafka partitions serialize
-// events today; the mutex also makes the domain object safe in tests and
-// future batch consumers.
 type Engine struct {
 	mu          sync.Mutex
 	monitors    map[int64]models.MonitorRow
@@ -83,7 +78,7 @@ func (e *Engine) OnMetric(event MetricEvent) []Transition {
 		}
 		cutoff := at.Add(-time.Duration(windowSeconds) * time.Second)
 		samples := append(e.windows[id], sample{at: at, value: event.Value})
-		// Fast-path: if timestamps are strictly in order, skip full slice sort.
+
 		if len(samples) > 1 && samples[len(samples)-1].at.Before(samples[len(samples)-2].at) {
 			sort.Slice(samples, func(i, j int) bool { return samples[i].at.Before(samples[j].at) })
 		}
@@ -124,10 +119,6 @@ func (e *Engine) OnMetric(event MetricEvent) []Transition {
 	return out
 }
 
-// Commit records a transition only after its durable projection succeeds. This
-// ordering is essential: advancing in-memory state before MySQL succeeds
-// would make a redelivered Kafka record look non-transitioning and lose an
-// alert after a transient database failure.
 func (e *Engine) Commit(t Transition) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

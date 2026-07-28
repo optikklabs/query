@@ -9,8 +9,6 @@ import (
 	"net/http"
 )
 
-// openAIClient calls the OpenAI-compatible /chat/completions endpoint. It also
-// serves Mistral, whose API mirrors this shape, differing only in base URL.
 type openAIClient struct {
 	http    *http.Client
 	baseURL string

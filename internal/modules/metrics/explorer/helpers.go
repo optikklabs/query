@@ -11,8 +11,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-// normalizeMetricType maps ClickHouse/OTLP metric type names to the lowercase
-// values the frontend Zod schema expects.
 func normalizeMetricType(t string) string {
 	switch strings.ToLower(t) {
 	case "gauge":
@@ -40,8 +38,6 @@ func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, en
 	return out
 }
 
-// computeValue dispatches to the right value-extraction function based on the
-// metric kind flags.
 func computeValue(row timeseriesPointDTO, agg string, bucketSec float64, cumulative, histogram bool) float64 {
 	switch {
 	case cumulative:
@@ -53,9 +49,6 @@ func computeValue(row timeseriesPointDTO, agg string, bucketSec float64, cumulat
 	}
 }
 
-// cumulativeValue extracts the value for a cumulative counter row.
-// rate scales the per-bucket increase by seconds; everything else returns the
-// increase directly.
 func cumulativeValue(row timeseriesPointDTO, agg string, bucketSec float64) float64 {
 	if agg == "rate" {
 		return row.Sum / bucketSec
@@ -63,7 +56,6 @@ func cumulativeValue(row timeseriesPointDTO, agg string, bucketSec float64) floa
 	return row.Sum
 }
 
-// histogramValue extracts the value for a histogram-type row.
 func histogramValue(row timeseriesPointDTO, agg string, bucketSec float64) float64 {
 	switch agg {
 	case "p50", "p95", "p99":
@@ -88,7 +80,6 @@ func histogramValue(row timeseriesPointDTO, agg string, bucketSec float64) float
 	}
 }
 
-// deltaValue extracts the value for a plain delta / gauge row.
 func deltaValue(row timeseriesPointDTO, agg string, bucketSec float64) float64 {
 	switch agg {
 	case "sum":
@@ -101,7 +92,7 @@ func deltaValue(row timeseriesPointDTO, agg string, bucketSec float64) float64 {
 		return float64(row.Count)
 	case "rate":
 		return row.Sum / bucketSec
-	default: // avg
+	default:
 		if row.Count > 0 {
 			return row.Sum / float64(row.Count)
 		}
@@ -109,7 +100,6 @@ func deltaValue(row timeseriesPointDTO, agg string, bucketSec float64) float64 {
 	}
 }
 
-// isPercentile returns true for percentile aggregation names (p50, p95, p99).
 func isPercentile(aggregation string) bool {
 	switch aggregation {
 	case "p50", "p95", "p99":
@@ -147,9 +137,6 @@ func convertFEQuery(tenantID, startMs, endMs int64, step string, feq FEMetricQue
 	}
 }
 
-// resolveSeriesFlags derives cumulative and histogram booleans from the raw
-// metricKindDTO returned by the repository. If kind is nil (no series found),
-// both default to false.
 func resolveSeriesFlags(kind *metricKindDTO) (cumulative, histogram bool) {
 	if kind == nil {
 		return false, false
@@ -159,8 +146,6 @@ func resolveSeriesFlags(kind *metricKindDTO) (cumulative, histogram bool) {
 	return cumulative, histogram
 }
 
-// metricTypeFrom extracts the raw OTLP metric type string ("Sum", "Gauge",
-// "Histogram", "Summary") from the DTO, returning "" if kind is nil.
 func metricTypeFrom(kind *metricKindDTO) string {
 	if kind == nil {
 		return ""
@@ -168,24 +153,18 @@ func metricTypeFrom(kind *metricKindDTO) string {
 	return kind.MetricType
 }
 
-// shouldZeroFill returns true when empty time buckets should be filled with 0
-// rather than nil. Counters and sum-typed metrics represent accumulated values
-// where absence means "no events" (= 0). Gauges represent instantaneous
-// measurements where absence means "unknown" (= nil / break in line).
 func shouldZeroFill(metricType, aggregation string, cumulative bool) bool {
 	mt := strings.ToLower(metricType)
 	switch {
 	case mt == "sum" || cumulative:
-		return true // counter/sum → 0 in gaps
+		return true
 	case aggregation == "count" || aggregation == "rate":
-		return true // count/rate on any type → 0 in gaps
+		return true
 	default:
-		return false // gauge, summary, histogram-percentile → nil
+		return false
 	}
 }
 
-// mapPointsToAxis places each aggregated point into the matching dense-axis
-// slot, returning a sparse values slice (nil = no data).
 func mapPointsToAxis(points []TimeseriesPoint, tsIndex map[int64]int, length int) []*float64 {
 	values := make([]*float64, length)
 	for _, p := range points {

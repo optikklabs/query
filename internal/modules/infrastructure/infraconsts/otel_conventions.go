@@ -1,8 +1,5 @@
 package infraconsts
 
-// OpenTelemetry Semantic Conventions for Infrastructure & Resource Metrics.
-// Reference: https://opentelemetry.io/docs/specs/semconv/system/
-
 const (
 	MetricSystemCPUUtilization = "system.cpu.utilization"
 	MetricSystemCPUUsage       = "system.cpu.usage"
@@ -21,9 +18,9 @@ const (
 	MetricDiskFree              = "disk.free"
 	MetricDiskTotal             = "disk.total"
 
-	MetricSystemNetworkIO          = "system.network.io"
-	MetricSystemNetworkErrors      = "system.network.errors"
-	MetricSystemNetworkDropped     = "system.network.dropped"
+	MetricSystemNetworkIO      = "system.network.io"
+	MetricSystemNetworkErrors  = "system.network.errors"
+	MetricSystemNetworkDropped = "system.network.dropped"
 
 	MetricK8SPodCPUUtilization      = "k8s.pod.cpu.utilization"
 	MetricK8SPodMemoryUsage         = "k8s.pod.memory.usage"
@@ -37,9 +34,9 @@ const (
 	MetricContainerCPUUtilization   = "container.cpu.utilization"
 	MetricContainerMemoryUsage      = "container.memory.usage"
 
-	MetricJVMMemoryUsed        = "jvm.memory.used"
-	MetricJVMMemoryMax         = "jvm.memory.max"
-	MetricJVMCPUUtilization    = "jvm.cpu.recent_utilization"
+	MetricJVMMemoryUsed     = "jvm.memory.used"
+	MetricJVMMemoryMax      = "jvm.memory.max"
+	MetricJVMCPUUtilization = "jvm.cpu.recent_utilization"
 
 	PercentageMultiplier = 100.0
 	PercentageThreshold  = 1.0
@@ -63,5 +60,4 @@ var (
 		MetricDiskFree,
 		MetricDiskTotal,
 	}
-
 )

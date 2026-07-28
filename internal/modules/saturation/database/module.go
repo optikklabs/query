@@ -1,12 +1,3 @@
-// Package database serves the datastore saturation pages: the systems
-// explorer, latency and ops timeseries, slow-query patterns, and query detail.
-//
-// Layering is enforced by the package structure rather than convention:
-//
-//	database (module, handler) -> service -> repository
-//
-// with models shared by all three. A handler cannot reach a repository method
-// because it does not import that package.
 package database
 
 import (

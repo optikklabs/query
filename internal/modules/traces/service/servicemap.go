@@ -10,7 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/traces/repository"
 )
 
-// GetServiceMap builds the per-trace service map in the shared topology shape.
 func (s *Service) GetServiceMap(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (topology.TopologyResponse, error) {
 	rows, err := s.repo.GetServiceMapSpans(ctx, tenantID, traceID, startMs, endMs)
 	if err != nil {

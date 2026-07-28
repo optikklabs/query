@@ -61,7 +61,6 @@ func (trl *tenantRateLimiter) cleanup() {
 	}
 }
 
-// TenantRateLimit applies a per-tenant rate limit to HTTP requests.
 func TenantRateLimit(reqsPerSec float64, burst int) func(http.Handler) http.Handler {
 	rl := newTenantRateLimiter()
 	return func(next http.Handler) http.Handler {

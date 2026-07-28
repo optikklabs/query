@@ -2,10 +2,6 @@ package explorer
 
 import "time"
 
-// ClickHouse scan DTOs match column aliases in repository queries.
-// They are separate from API models to allow independent evolution.
-
-// metricNameDTO scans the result of ListMetricNames.
 type metricNameDTO struct {
 	MetricName  string `ch:"metric_name"`
 	MetricType  string `ch:"metric_type"`

@@ -1,5 +1,3 @@
-// Package timebucket provides the source of truth for system bucket values.
-// Both writers and readers call the same helpers to align bucket values.
 package timebucket
 
 import (
@@ -82,8 +80,6 @@ func MetricsRollup(windowMs int64) string {
 	return RollupTableForGrain(int64(displayGrain(windowMs).Seconds()))
 }
 
-// SpanStatsRollup picks the span_stats tier whose grain matches the display
-// window, mirroring MetricsRollup's ladder.
 func SpanStatsRollup(windowMs int64) string {
 	switch grainSec := int64(displayGrain(windowMs).Seconds()); {
 	case grainSec < 300:
@@ -103,7 +99,6 @@ func WithBucketGrainSec(args []any, startMs, endMs int64) []any {
 	return append(args, clickhouse.Named("bucketGrainSec", sec))
 }
 
-// DenseBuckets returns an ordered slice of time.Time buckets aligned to grain.
 func DenseBuckets(startMs, endMs int64, grain time.Duration) []time.Time {
 	start := time.UnixMilli(startMs).UTC().Truncate(grain)
 	end := time.UnixMilli(endMs).UTC().Truncate(grain)
@@ -114,7 +109,6 @@ func DenseBuckets(startMs, endMs int64, grain time.Duration) []time.Time {
 	return out
 }
 
-// BuildDenseTimestamps generates an ordered slice of bucket-aligned millisecond timestamps.
 func BuildDenseTimestamps(startMs, endMs int64, bucketSec int64) []int64 {
 	flooredStart := FloorMsToBucket(startMs, bucketSec)
 	bucketMs := bucketSec * 1000
@@ -126,7 +120,6 @@ func BuildDenseTimestamps(startMs, endMs int64, bucketSec int64) []int64 {
 	return ts
 }
 
-// ZeroFillGaps replaces nil entries in values with pointers to 0.0.
 func ZeroFillGaps(values []*float64) {
 	zero := 0.0
 	for i, v := range values {

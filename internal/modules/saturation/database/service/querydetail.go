@@ -46,7 +46,6 @@ func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64
 	return out, nil
 }
 
-// operationName falls back to the first SQL token when the attr is missing.
 func operationName(attr, queryText string) string {
 	if attr != "" {
 		return attr

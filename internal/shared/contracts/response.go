@@ -5,8 +5,7 @@ import "time"
 type APIResponse struct {
 	Success bool `json:"success"`
 	Data    any  `json:"data,omitempty"`
-	// Comparison holds the same shape as Data for a previous period. Present
-	// only when the request asked for one via compareTo/compareStart.
+
 	Comparison any          `json:"comparison,omitempty"`
 	Error      *ErrorDetail `json:"error,omitempty"`
 	Pagination *PageInfo    `json:"pagination,omitempty"`

@@ -13,7 +13,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/token"
 )
 
-// Infra holds process-wide infrastructure constructed at startup.
 type Infra struct {
 	Config config.Config
 	DB     *sql.DB

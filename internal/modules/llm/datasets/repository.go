@@ -9,7 +9,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 )
 
-// Repository owns MySQL persistence for datasets, items, and experiment runs.
 type Repository struct {
 	db *sqlx.DB
 }
@@ -70,7 +69,6 @@ func (r *Repository) Delete(ctx context.Context, tenantID, id int64) error {
 	return nil
 }
 
-// AddItems bulk-inserts test cases in one transaction.
 func (r *Repository) AddItems(ctx context.Context, tenantID, datasetID int64, items []ItemInput) (int, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -130,7 +128,6 @@ func (r *Repository) ListRunItems(ctx context.Context, runID int64) ([]runItemRo
 	return rows, err
 }
 
-// DatasetExists confirms the dataset belongs to the tenant before item/run ops.
 func (r *Repository) DatasetExists(ctx context.Context, tenantID, id int64) (bool, error) {
 	var n int
 	err := dbutil.GetSQL(ctx, r.db, "datasets.Exists", &n,

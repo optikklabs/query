@@ -9,14 +9,11 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// CPUMetricNameRow is one metric of the CPU utilization family, averaged over
-// the range.
 type CPUMetricNameRow struct {
 	MetricName string  `ch:"metric_name"`
 	Value      float64 `ch:"value"`
 }
 
-// CPUInstanceMetricRow is CPUMetricNameRow broken out per instance.
 type CPUInstanceMetricRow struct {
 	Host       string  `ch:"host"`
 	Pod        string  `ch:"pod"`
@@ -42,8 +39,7 @@ func (r *Repository) QueryCPUUtilizationAgg(ctx context.Context, tenantID int64,
 }
 
 func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, tenantID int64, startMs, endMs int64) ([]CPUInstanceMetricRow, error) {
-	// Resource dims (host/pod/container/service) live in metrics_series;
-	// resolve them per fingerprint and join the scalar rollup on fingerprint.
+
 	query := `
 		WITH fps AS (
 		    SELECT fingerprint,

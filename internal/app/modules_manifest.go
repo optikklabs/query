@@ -48,17 +48,13 @@ func configuredModules(
 	appConfig registry.AppConfig,
 	infraDeps *Infra,
 ) []registry.Module {
-	// Auth owns token issuance, signup, and session lifecycle.
-	// Device flow reuses auth's IssueTokens for CLI login.
+
 	authService := user_auth.NewService(user_auth.NewRepository(infraDeps.DB), infraDeps.Tokens, infraDeps.Config.Email)
 	deviceService := user_device.NewService(user_device.NewRepository(infraDeps.DB), authService)
 	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService, infraDeps.Config.Email)
 	tenantService := user_tenant.NewService(user_tenant.NewRepository(infraDeps.DB))
 	usersService := user_users.NewService(user_users.NewRepository(infraDeps.DB), authService)
 
-	// LLM playground infra: the secretbox may be absent (no encryption key
-	// configured), in which case provider-key writes and the playground fail
-	// closed with 503 rather than being unregistered — the API stays stable.
 	box, err := secretbox.New(infraDeps.Config.LLM.KeyEncryptionKey)
 	if err != nil {
 		slog.Warn("llm: provider-key encryption disabled", slog.Any("reason", err))

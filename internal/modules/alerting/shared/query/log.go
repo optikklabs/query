@@ -11,7 +11,6 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
-// LogBackend evaluates log monitors against optikk.logs.
 type LogBackend struct {
 	db clickhouse.Conn
 }
@@ -90,9 +89,6 @@ func logArgs(tenantID int64, queryText string, startMs, endMs int64) []any {
 	}
 }
 
-// logBucketBounds expands a timestamp range to the five-minute partitions used
-// by optikk.logs. The timestamp predicate in the query keeps the final result
-// exact; these bounds only ensure ClickHouse can prune irrelevant partitions.
 func logBucketBounds(startMs, endMs int64) (time.Time, time.Time) {
 	return time.UnixMilli(timebucket.FloorMsToBucket(startMs, timebucket.BucketSeconds)),
 		time.UnixMilli(timebucket.FloorMsToBucket(endMs, timebucket.BucketSeconds))

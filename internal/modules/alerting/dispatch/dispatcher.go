@@ -7,7 +7,6 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
-// UnsupportedChannelTypeError reports a channel without a real transport.
 type UnsupportedChannelTypeError struct {
 	Type string
 }
@@ -16,7 +15,6 @@ func (e UnsupportedChannelTypeError) Error() string {
 	return fmt.Sprintf("unsupported notification channel type: %s", e.Type)
 }
 
-// Dispatcher routes alert payloads to implemented transports.
 type Dispatcher struct {
 	slack *SlackWebhook
 }

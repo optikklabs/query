@@ -18,9 +18,6 @@ type Handler struct {
 	Service *service.Service
 }
 
-// traceScope reads the trace identity and time range every read in this
-// domain is bounded by, answering 400 itself when either is missing. It
-// returns ok=false once a response has already been written.
 func traceScope(w http.ResponseWriter, r *http.Request) (tenantID int64, traceID string, startMs, endMs int64, ok bool) {
 	traceID = modulecommon.URLParamLower(r, "traceId")
 	if traceID == "" {
@@ -87,9 +84,6 @@ func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, attrs)
 }
 
-// GetRelatedTraces keeps its time range: "other recent traces like this one"
-// is genuinely a range query, not a lookup by trace identity — so unlike its
-// siblings it requires the range rather than defaulting it.
 func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	traceID := modulecommon.URLParamLower(r, "traceId")

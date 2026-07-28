@@ -13,8 +13,6 @@ import (
 
 const rollupTable = "optikk.llm_stats_1m"
 
-// latencyOps: end-to-end latency comes from the request-level spans, not
-// tool/embedding children.
 const latencyOps = "('chat', 'agent')"
 
 type Repository struct {
@@ -67,8 +65,6 @@ func (r *Repository) ModelBreakdown(ctx context.Context, tenantID, startMs, endM
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.ModelBreakdown", &rows, query, args...)
 }
 
-// ModelUsage aggregates per-model traffic for the Dashboard model table,
-// keyed on the request model with latency percentiles from chat/agent spans.
 func (r *Repository) ModelUsage(ctx context.Context, tenantID, startMs, endMs int64) ([]modelUsageRow, error) {
 	query := `
 		SELECT gen_ai_request_model AS model,
@@ -145,8 +141,6 @@ func (r *Repository) LatencyPercentiles(ctx context.Context, tenantID, startMs, 
 		chargs.RangeArgs(tenantID, startMs, endMs)...)
 }
 
-// OverviewWindows aggregates the current range and the preceding range of
-// equal length in one rollup pass; the web derives KPI deltas from the pair.
 func (r *Repository) OverviewWindows(ctx context.Context, tenantID, startMs, endMs int64) ([]overviewWindowRow, error) {
 	query := `
 		SELECT if(timestamp >= @start, 1, 0) AS is_current,
@@ -166,7 +160,6 @@ func (r *Repository) OverviewWindows(ctx context.Context, tenantID, startMs, end
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.OverviewWindows", &rows, query, args...)
 }
 
-// OverviewSeries buckets the current range for the KPI sparklines.
 func (r *Repository) OverviewSeries(ctx context.Context, tenantID, startMs, endMs int64) ([]overviewSeriesRow, error) {
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
@@ -185,8 +178,6 @@ func (r *Repository) OverviewSeries(ctx context.Context, tenantID, startMs, endM
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.OverviewSeries", &rows, query, args...)
 }
 
-// TraceCounts counts distinct gen_ai traces for the current and preceding
-// ranges. Raw-span scan, but tenant+time bounded like QueryTraces.
 func (r *Repository) TraceCounts(ctx context.Context, tenantID, startMs, endMs int64) ([]traceCountRow, error) {
 	query := `
 		SELECT if(timestamp >= @start, 1, 0) AS is_current,
@@ -201,22 +192,19 @@ func (r *Repository) TraceCounts(ctx context.Context, tenantID, startMs, endMs i
 		overviewArgs(tenantID, startMs, endMs)...)
 }
 
-// overviewArgs binds @start/@end plus @prevStart, one range-length earlier.
 func overviewArgs(tenantID, startMs, endMs int64) []any {
 	prevStartMs := startMs - (endMs - startMs)
 	return append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("prevStart", time.UnixMilli(prevStartMs)))
 }
 
-// QueryTraces lists root spans of traces containing gen_ai spans, joined
-// with per-trace token/cost totals aggregated from the gen_ai spans.
 func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, bool, error) {
 	where, args := buildTraceFilters(tenantID, req)
 	cur, _ := decodeTraceCursor(req.Cursor)
 	if cur.SpanID != "" {
 		where += ` AND (s.timestamp, s.span_id) < (@curStart, @curSpanID)`
 		args = append(args,
-			// DateNamed with ns scale; a plain time.Time arg truncates to seconds.
+
 			clickhouse.DateNamed("curStart", time.Unix(0, int64(cur.StartNs)), clickhouse.NanoSeconds),
 			clickhouse.Named("curSpanID", cur.SpanID),
 		)
@@ -304,7 +292,6 @@ func buildTraceFilters(tenantID int64, req TracesQueryRequest) (string, []any) {
 	return where, args
 }
 
-// TraceSpans fetches every span of one trace within the requested range.
 func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]traceSpanRow, error) {
 	query := `
 		SELECT span_id, parent_span_id, timestamp, duration_nano, name, service, environment,
@@ -326,8 +313,6 @@ func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID str
 	)
 }
 
-// ScoresForTraces fetches all scores attached to the given trace ids in one
-// pass; used to decorate both the trace list and the trace detail.
 func (r *Repository) ScoresForTraces(ctx context.Context, tenantID, startMs, endMs int64, traceIDs []string) ([]traceScoreRow, error) {
 	if len(traceIDs) == 0 {
 		return nil, nil

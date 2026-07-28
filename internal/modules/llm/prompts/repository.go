@@ -9,7 +9,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 )
 
-// Repository owns MySQL persistence for prompts and their versions.
 type Repository struct {
 	db *sqlx.DB
 }
@@ -37,8 +36,6 @@ type versionInsertArgs struct {
 	CreatedBy     sql.NullInt64
 }
 
-// CreatePrompt inserts the prompt and its first version atomically. The first
-// version is always v1 and starts in production so the prompt is usable.
 func (r *Repository) CreatePrompt(ctx context.Context, p promptInsertArgs, v versionInsertArgs) (int64, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -69,8 +66,6 @@ func (r *Repository) CreatePrompt(ctx context.Context, p promptInsertArgs, v ver
 	return promptID, tx.Commit()
 }
 
-// CreateVersion appends the next sequential version. When production is set it
-// demotes the current production version in the same transaction.
 func (r *Repository) CreateVersion(ctx context.Context, v versionInsertArgs) (int, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -106,8 +101,6 @@ func (r *Repository) CreateVersion(ctx context.Context, v versionInsertArgs) (in
 	return next, tx.Commit()
 }
 
-// SetVersionStatus flips a version's lifecycle. Promoting to production demotes
-// the previous production version so exactly one stays live.
 func (r *Repository) SetVersionStatus(ctx context.Context, promptID int64, version int, status string) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -136,7 +129,6 @@ func (r *Repository) SetVersionStatus(ctx context.Context, promptID int64, versi
 	return tx.Commit()
 }
 
-// demoteProduction archives any current production version of the prompt.
 func demoteProduction(ctx context.Context, tx *sqlx.Tx, promptID int64) error {
 	_, err := tx.ExecContext(ctx,
 		`UPDATE optikk.llm_prompt_versions SET status = 'archived' WHERE prompt_id = ? AND status = 'production'`,
@@ -160,7 +152,6 @@ func (r *Repository) ListVersions(ctx context.Context, promptID int64) ([]versio
 	return rows, err
 }
 
-// promptCatalogRow augments a prompt with aggregate version info for the list.
 type promptCatalogRow struct {
 	promptRow
 	VersionCount      int  `db:"version_count"`

@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-// Service owns evaluator validation, MySQL↔CH analytics join, and mapping.
 type Service struct {
 	repo *Repository
 }
@@ -26,7 +25,6 @@ func (e ErrValidation) Error() string { return e.Msg }
 var validTarget = map[string]struct{}{"traces": {}, "generations": {}}
 var validDataType = map[string]struct{}{"numeric": {}, "boolean": {}, "categorical": {}}
 
-// List returns evaluators enriched with rolling score analytics over the window.
 func (s *Service) List(ctx context.Context, tenantID, startMs, endMs int64) ([]Evaluator, error) {
 	rows, err := s.repo.List(ctx, tenantID)
 	if err != nil {
@@ -93,8 +91,6 @@ func (s *Service) get(ctx context.Context, tenantID, id int64) (Evaluator, error
 	return toEvaluator(row), nil
 }
 
-// buildArgs merges request fields onto a base (create defaults or current row),
-// so PATCH leaves unset fields unchanged while POST applies sane defaults.
 func buildArgs(tenantID int64, req UpsertRequest, base insertArgs) (insertArgs, error) {
 	base.TenantID = tenantID
 	if name := strings.TrimSpace(req.Name); name != "" {

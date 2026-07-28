@@ -1,4 +1,3 @@
-// Package filter holds SQL and OTel helpers shared by saturation/kafka.
 package filter
 
 import (

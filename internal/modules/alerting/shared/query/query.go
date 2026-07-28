@@ -1,5 +1,3 @@
-// Package query implements the query backends (metric, apm, log)
-// for monitor evaluation and timeseries generation.
 package query
 
 import (

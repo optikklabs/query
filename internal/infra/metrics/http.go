@@ -5,8 +5,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// HTTP histogram buckets span 5 ms → 60 s. Top bucket matches the server
-// WriteTimeout, so true tail latency isn't clamped by the histogram itself.
 var httpBuckets = []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60}
 
 var (

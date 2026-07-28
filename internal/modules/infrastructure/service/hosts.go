@@ -14,8 +14,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
-// GetHosts returns hosts with CPU/mem/disk utilization and saturation scores,
-// optionally narrowed and enriched with RED traffic for a service.
 func (s *Service) GetHosts(ctx context.Context, tenantID, startMs, endMs int64, serviceName string) ([]models.Host, error) {
 	util, err := s.repo.QueryHostUtilization(ctx, tenantID, startMs, endMs)
 	if err != nil {

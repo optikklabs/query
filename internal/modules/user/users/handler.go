@@ -10,7 +10,6 @@ import (
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-// Handler serves the admin user-provisioning routes.
 type Handler struct {
 	Service *Service
 }

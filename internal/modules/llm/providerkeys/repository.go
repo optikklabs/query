@@ -9,7 +9,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 )
 
-// Repository owns MySQL persistence for encrypted provider keys.
 type Repository struct {
 	db *sqlx.DB
 }
@@ -68,8 +67,6 @@ func (r *Repository) Delete(ctx context.Context, tenantID, id int64) error {
 	return nil
 }
 
-// Secret fetches the ciphertext for the tenant's key of a provider, preferring
-// the most recently created. Used only for outbound provider calls.
 func (r *Repository) Secret(ctx context.Context, tenantID int64, provider string) (secretRow, error) {
 	var row secretRow
 	err := dbutil.GetSQL(ctx, r.db, "providerkeys.Secret", &row,

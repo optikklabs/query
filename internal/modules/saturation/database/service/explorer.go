@@ -12,7 +12,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/saturation/database/repository"
 )
 
-// GetDatastoreSystems fetches datastore summaries and connections.
 func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, endMs int64) ([]models.DatastoreSystemRow, error) {
 	var (
 		spanRows []repository.SystemSummaryRaw

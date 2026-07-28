@@ -12,7 +12,6 @@ import (
 const typAccess = "access"
 const typPasswordReset = "pwd_reset"
 
-// AuthState carries the authenticated user identity embedded in tokens.
 type AuthState struct {
 	UserID          int64
 	Email           string
@@ -106,10 +105,9 @@ func (s *Service) parse(raw string, claims jwt.Claims) error {
 	return err
 }
 
-// SignPasswordReset signs a short-lived token using a dynamic secret that includes the user's current password hash.
 func (s *Service) SignPasswordReset(userID int64, passwordHash string) (string, error) {
 	now := time.Now()
-	// Short TTL for password resets (e.g. 30 mins)
+
 	ttl := 30 * time.Minute
 	claims := resetClaims{
 		Typ: typPasswordReset,
@@ -123,7 +121,6 @@ func (s *Service) SignPasswordReset(userID int64, passwordHash string) (string, 
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
 }
 
-// ParsePasswordReset parses and validates a password reset token using the dynamic secret.
 func (s *Service) ParsePasswordReset(raw string, passwordHash string) (int64, error) {
 	var claims resetClaims
 	parser := jwt.NewParser(
@@ -150,7 +147,6 @@ func (s *Service) ParsePasswordReset(raw string, passwordHash string) (int64, er
 	return userID, nil
 }
 
-// ExtractSubjectWithoutVerify extracts the subject from a JWT without verifying the signature.
 func (s *Service) ExtractSubjectWithoutVerify(raw string) (int64, error) {
 	parser := jwt.NewParser()
 	var claims resetClaims

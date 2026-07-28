@@ -1,5 +1,3 @@
-// Package notifications owns channels, policies, templates, and the static
-// integrations catalog for the alerting platform.
 package notifications
 
 import (

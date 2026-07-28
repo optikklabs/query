@@ -28,7 +28,6 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 	endMs := now.UnixMilli()
 	startMs := endMs - windowSec*1000
 
-	// Evaluation windows are short, so the 1m tier is always the right grain.
 	query := `
 		SELECT ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `,

@@ -1,6 +1,3 @@
-// Package chargs is the single home for the ClickHouse named-arg builders
-// shared by range-scoped reader repositories. Signal-specific WHERE-clause
-// builders stay in each domain's filter package.
 package chargs
 
 import (

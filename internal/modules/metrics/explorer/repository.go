@@ -21,7 +21,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 
 func (r *Repository) ListMetricNames(ctx context.Context, tenantID, startMs, endMs int64, search string) ([]metricNameDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
-	// Active metric names come from the metrics_series metadata table directly.
+
 	query := `
 		SELECT metric_name,
 		       any(metric_type) AS metric_type,

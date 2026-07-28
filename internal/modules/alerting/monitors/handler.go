@@ -11,7 +11,6 @@ import (
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-// Handler processes HTTP request parsing and delegation for monitors.
 type Handler struct {
 	Service *Service
 	Queries query.Registry

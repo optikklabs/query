@@ -8,7 +8,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 )
 
-// RunInsert holds the immutable header of a new experiment run.
 type RunInsert struct {
 	DatasetID       int64
 	TenantID        int64
@@ -20,7 +19,6 @@ type RunInsert struct {
 	ItemCount       int
 }
 
-// RunItemInsert is one persisted per-item result of a run.
 type RunItemInsert struct {
 	RunID         int64
 	TenantID      int64
@@ -32,7 +30,6 @@ type RunItemInsert struct {
 	Error         sql.NullString
 }
 
-// RunFinal captures the aggregate outcome written when a run completes.
 type RunFinal struct {
 	Status        string
 	AvgScoresJSON []byte
@@ -41,7 +38,6 @@ type RunFinal struct {
 	Error         sql.NullString
 }
 
-// CreateRun inserts a run header in 'running' status and returns its id.
 func (r *Repository) CreateRun(ctx context.Context, in RunInsert) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "datasets.CreateRun", `
 		INSERT INTO optikk.llm_experiment_runs
@@ -56,7 +52,6 @@ func (r *Repository) CreateRun(ctx context.Context, in RunInsert) (int64, error)
 	return res.LastInsertId()
 }
 
-// InsertRunItem persists a single item result.
 func (r *Repository) InsertRunItem(ctx context.Context, in RunItemInsert) error {
 	_, err := dbutil.ExecSQL(ctx, r.db, "datasets.InsertRunItem", `
 		INSERT INTO optikk.llm_experiment_run_items
@@ -67,7 +62,6 @@ func (r *Repository) InsertRunItem(ctx context.Context, in RunItemInsert) error 
 	return err
 }
 
-// FinalizeRun writes the aggregate result and stamps completion time.
 func (r *Repository) FinalizeRun(ctx context.Context, runID int64, f RunFinal) error {
 	_, err := dbutil.ExecSQL(ctx, r.db, "datasets.FinalizeRun", `
 		UPDATE optikk.llm_experiment_runs

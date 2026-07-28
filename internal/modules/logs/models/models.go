@@ -1,4 +1,3 @@
-// Package models holds shared wire and domain types for logs submodules.
 package models
 
 import (

@@ -8,9 +8,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/metrics"
 )
 
-// ExpensiveQueryLimit isolates telemetry detail, explorer, and overview reads.
-// A broad explorer scan therefore cannot occupy capacity reserved for a trace
-// or log detail request.
 func ExpensiveQueryLimit(max int) func(http.Handler) http.Handler {
 	if max <= 0 {
 		max = 1

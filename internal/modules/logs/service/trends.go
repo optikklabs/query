@@ -9,7 +9,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/logs/repository"
 )
 
-// Summary powers POST /api/v1/logs/summary.
 func (s *Service) Summary(ctx context.Context, f filter.Filters) (models.Summary, error) {
 	row, err := s.repo.Summary(ctx, f)
 	if err != nil {

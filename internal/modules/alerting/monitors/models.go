@@ -6,8 +6,6 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
-// MonitorResponse is the wire shape returned by GET / list / create / update,
-// reflecting the most recent evaluator decision.
 type MonitorResponse struct {
 	ID               int64                `json:"id"`
 	Name             string               `json:"name"`

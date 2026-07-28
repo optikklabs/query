@@ -7,8 +7,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/logs/models"
 )
 
-// Facets returns top-N values for service, host, pod, and environment facets.
-// Severity is populated from static models.SeverityLabels.
 func (s *Service) Facets(ctx context.Context, f filter.Filters) (models.Facets, error) {
 	rows, err := s.repo.Facets(ctx, f)
 	if err != nil {

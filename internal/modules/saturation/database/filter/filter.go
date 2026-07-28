@@ -6,8 +6,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-// OTel semantic-convention names and canonical metric names.
-
 const (
 	AttrDBNamespace   = "db.namespace"
 	AttrServerAddress = "server.address"
@@ -43,8 +41,6 @@ func BuildSpanClauses(f Filters) (where string, args []any) {
 	return where, args
 }
 
-// BuildMetricsClauses only filters dimensions carried by the span_stats
-// rollup. Collection, namespace, and server remain raw-span filters.
 func BuildMetricsClauses(f Filters) (where string, args []any) {
 	args = filterutil.AppendIn(&where, args,
 		filterutil.InClause{Column: "db_system", Bind: "dbSystem", Values: f.DBSystem},

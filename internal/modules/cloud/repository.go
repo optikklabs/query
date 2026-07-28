@@ -10,7 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-// Query limits keep every scan bounded (CLAUDE.md §9).
 const (
 	MaxProviders  = 8
 	MaxCategories = 64
@@ -19,14 +18,10 @@ const (
 	restartMetric = "k8s.container.restarts"
 )
 
-// A monitored entity resolves to the first non-empty of pod → node → host →
-// service, so the same telemetry row is counted once regardless of signal.
 const entityExpr = `if(pod != '', pod,
                         if(k8s_node != '', k8s_node,
                            if(host != '', host, service)))`
 
-// invSeries collapses metrics_series to one row per fingerprint with its cloud
-// dimensions, so downstream aggregates count distinct entities not time series.
 const invSeries = `
 	WITH cloud_series AS (
 	    SELECT fingerprint,
@@ -45,9 +40,6 @@ const invSeries = `
 	    GROUP BY fingerprint, provider, account, region, platform, k8s_node, pod, host, service
 	)`
 
-// span_stats carries the cloud dims as real columns, so RED/health reads it
-// directly with the shared entity resolution expression.
-
 type Repository struct {
 	db clickhouse.Conn
 }
@@ -56,7 +48,6 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// QueryProviderInventory returns one inventory aggregate per cloud provider.
 func (r *Repository) QueryProviderInventory(ctx context.Context, tenantID, startMs, endMs int64) ([]InventoryRow, error) {
 	query := invSeries + `
 		SELECT provider,
@@ -78,7 +69,6 @@ func (r *Repository) QueryProviderInventory(ctx context.Context, tenantID, start
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryProviderInventory", &rows, query, args...)
 }
 
-// QueryProviderCategories returns per-provider, per-platform entity counts.
 func (r *Repository) QueryProviderCategories(ctx context.Context, tenantID, startMs, endMs int64) ([]CategoryRow, error) {
 	query := invSeries + `
 		SELECT provider, platform, uniqCombined64(entity) AS count
@@ -94,8 +84,6 @@ func (r *Repository) QueryProviderCategories(ctx context.Context, tenantID, star
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryProviderCategories", &rows, query, args...)
 }
 
-// QueryProviderHealth returns per-provider, per-entity RED aggregates so the
-// service can classify entity health (same source as the nodes module).
 func (r *Repository) QueryProviderHealth(ctx context.Context, tenantID, startMs, endMs int64) ([]HealthRow, error) {
 	query := `
 		SELECT cloud_provider     AS provider,
@@ -112,8 +100,6 @@ func (r *Repository) QueryProviderHealth(ctx context.Context, tenantID, startMs,
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryProviderHealth", &rows, query, args...)
 }
 
-// QueryRestarts returns the summed latest container-restart count per provider.
-// Empty when the collector does not export kubeletstats k8s metrics.
 func (r *Repository) QueryRestarts(ctx context.Context, tenantID, startMs, endMs int64) ([]RestartRow, error) {
 	rollupTable := timebucket.MetricsRollup(endMs - startMs)
 	query := `
@@ -142,7 +128,6 @@ func (r *Repository) QueryRestarts(ctx context.Context, tenantID, startMs, endMs
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryRestarts", &rows, query, args...)
 }
 
-// QueryAccountBreakdown returns per-account resource counts for one provider.
 func (r *Repository) QueryAccountBreakdown(ctx context.Context, tenantID int64, provider string, startMs, endMs int64) ([]AccountRow, error) {
 	query := invSeries + `
 		SELECT account,
@@ -162,7 +147,6 @@ func (r *Repository) QueryAccountBreakdown(ctx context.Context, tenantID int64, 
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryAccountBreakdown", &rows, query, args...)
 }
 
-// QueryPlatformServices returns per-platform entity counts for one provider.
 func (r *Repository) QueryPlatformServices(ctx context.Context, tenantID int64, provider string, startMs, endMs int64) ([]CategoryRow, error) {
 	query := invSeries + `
 		SELECT provider, platform, uniq(entity) AS count
@@ -179,8 +163,6 @@ func (r *Repository) QueryPlatformServices(ctx context.Context, tenantID int64, 
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "cloud.QueryPlatformServices", &rows, query, args...)
 }
 
-// QueryProviderResources returns the top entities needing attention for one
-// provider, sorted by error volume then request volume.
 func (r *Repository) QueryProviderResources(ctx context.Context, tenantID int64, provider string, startMs, endMs int64) ([]ResourceRow, error) {
 	query := `
 		SELECT ` + entityExpr + `  AS entity,

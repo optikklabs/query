@@ -2,7 +2,6 @@ package llm
 
 import "time"
 
-// App is one LLM-emitting service with rollup aggregates for the window.
 type App struct {
 	Service        string   `json:"service"`
 	Kind           string   `json:"kind"`
@@ -59,7 +58,6 @@ type trendRow struct {
 	Count    uint64    `ch:"cnt"`
 }
 
-// TimeseriesResponse pivots rollup rows into one series per key.
 type TimeseriesResponse struct {
 	Series []Series `json:"series"`
 }
@@ -85,7 +83,6 @@ type latencyBucketRow struct {
 	QS       []float64 `ch:"qs"`
 }
 
-// ModelUsage is one row of the Dashboard "Model usage" table.
 type ModelUsage struct {
 	Model        string  `json:"model"`
 	Vendor       string  `json:"vendor"`
@@ -111,7 +108,6 @@ type modelUsageRow struct {
 	Cost         float64   `ch:"cost"`
 }
 
-// CostBreakdownResponse groups spend by service, vendor or model.
 type CostBreakdownResponse struct {
 	GroupBy string          `json:"groupBy"`
 	Rows    []CostBreakdown `json:"rows"`
@@ -192,7 +188,6 @@ type llmTraceRow struct {
 	Cost          float64   `ch:"cost"`
 }
 
-// TraceScore is one evaluation score attached to a trace.
 type TraceScore struct {
 	Name     string  `json:"name"`
 	DataType string  `json:"dataType"`
@@ -217,7 +212,6 @@ type traceCursor struct {
 	SpanID  string `json:"i"`
 }
 
-// TraceDetailResponse is the waterfall + prompt/output view of one trace.
 type TraceDetailResponse struct {
 	TraceID      string       `json:"traceId"`
 	Name         string       `json:"name"`
@@ -258,8 +252,6 @@ type LLMSpan struct {
 	Completion    string  `json:"completion,omitempty"`
 }
 
-// OverviewResponse is the single KPI source for the LLM page: exact
-// aggregates for the current and preceding window plus sparkline series.
 type OverviewResponse struct {
 	Current  OverviewWindow `json:"current"`
 	Previous OverviewWindow `json:"previous"`

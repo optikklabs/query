@@ -10,7 +10,6 @@ import (
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-// Handler serves the auth routes (login, refresh, logout, signup).
 type Handler struct {
 	Service *Service
 	Tokens  *token.Service

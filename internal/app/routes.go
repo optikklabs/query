@@ -45,7 +45,7 @@ func (a *App) setupAPIRoutes(r chi.Router) {
 	r.Route(httputil.APIV1Base, func(r chi.Router) {
 		r.Use(middleware.TenantMiddleware(a.Infra.Tokens))
 		r.Use(middleware.PublicAuthRateLimit(5, 10))
-		r.Use(middleware.TenantRateLimit(100, 200)) // 100 req/s, burst 200
+		r.Use(middleware.TenantRateLimit(100, 200))
 		r.Use(middleware.ExpensiveQueryLimit(a.Config.ExpensiveQueryConcurrency()))
 		for _, mod := range a.Modules {
 			mod.RegisterRoutes(r)

@@ -4,8 +4,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Module wires the interactive playground completion endpoint into the v1
-// router. It is only registered when a provider-call path is available.
 type Module struct {
 	handler *Handler
 }

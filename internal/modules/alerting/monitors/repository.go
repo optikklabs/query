@@ -20,7 +20,6 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: sqlx.NewDb(db, "mysql")}
 }
 
-// insertArgs bundles the column values for INSERT/UPDATE operations.
 type insertArgs struct {
 	TenantID         int64
 	Name             string

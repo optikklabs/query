@@ -9,14 +9,12 @@ import (
 	"github.com/optikklabs/query/internal/modules/traces/models"
 )
 
-// SpanEventTuple is one entry of the spans.events nested column.
 type SpanEventTuple struct {
 	Name         string            `ch:"name"`
 	TimeUnixNano uint64            `ch:"time_unix_nano"`
 	Attributes   map[string]string `ch:"attributes"`
 }
 
-// SpanLinkTuple is one entry of the spans.links nested column.
 type SpanLinkTuple struct {
 	TraceID    string            `ch:"trace_id"`
 	SpanID     string            `ch:"span_id"`
@@ -24,9 +22,6 @@ type SpanLinkTuple struct {
 	Attributes map[string]string `ch:"attributes"`
 }
 
-// SpanEventCombinedRow carries a span's structured events alongside its
-// exception columns, so both sources of "something happened" arrive in one
-// read and the service can reconcile them.
 type SpanEventCombinedRow struct {
 	SpanID              string           `ch:"span_id"`
 	TraceID             string           `ch:"trace_id"`
@@ -37,7 +32,6 @@ type SpanEventCombinedRow struct {
 	ExceptionStacktrace string           `ch:"exception_stacktrace"`
 }
 
-// SpanAttributeRow is one span's full attribute payload.
 type SpanAttributeRow struct {
 	SpanID              string            `ch:"span_id"`
 	TraceID             string            `ch:"trace_id"`
@@ -53,8 +47,6 @@ type SpanAttributeRow struct {
 	Links               []SpanLinkTuple   `ch:"links"`
 }
 
-// TraceSummaryRow is the whole-trace aggregate. The service folds it into
-// models.TraceSummary, which is where the derived duration is computed.
 type TraceSummaryRow struct {
 	TraceID        string    `ch:"trace_id"`
 	StartTime      time.Time `ch:"start_time"`
@@ -152,8 +144,6 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 	return rows, err
 }
 
-// GetTraceSummary aggregates the whole trace. A zero TraceID means no trace
-// matched, which the service reports as not-found rather than an error.
 func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (*TraceSummaryRow, error) {
 	const query = `
 		SELECT trace_id,

@@ -7,8 +7,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 )
 
-// ServiceMapSpanRow is the minimum needed to derive the per-trace graph: the
-// parent link identifies edges, the service names the nodes.
 type ServiceMapSpanRow struct {
 	SpanID       string  `ch:"span_id"`
 	ParentSpanID string  `ch:"parent_span_id"`
@@ -17,7 +15,6 @@ type ServiceMapSpanRow struct {
 	HasError     bool    `ch:"has_error"`
 }
 
-// TraceErrorRow is an errored span, grouped by exception type in the service.
 type TraceErrorRow struct {
 	SpanID           string    `ch:"span_id"`
 	ServiceName      string    `ch:"service"`

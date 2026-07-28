@@ -23,7 +23,6 @@ type PatternRaw struct {
 	ErrorCount     uint64  `ch:"error_count"`
 }
 
-// DefaultPatternLimit is the page size when the caller does not ask for one.
 const DefaultPatternLimit = 20
 
 const maxPatternLimit = 200

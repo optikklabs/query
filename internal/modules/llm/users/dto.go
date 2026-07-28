@@ -2,7 +2,6 @@ package users
 
 import "time"
 
-// UsersOverviewResponse holds the KPI row of the Users tab.
 type UsersOverviewResponse struct {
 	ActiveUsers      uint64  `json:"activeUsers"`
 	AvgCostPerUser   float64 `json:"avgCostPerUser"`
@@ -10,7 +9,6 @@ type UsersOverviewResponse struct {
 	LowScoreUsers    uint64  `json:"lowScoreUsers"`
 }
 
-// User is one row of the Users table.
 type User struct {
 	UserID     string  `json:"userId"`
 	TopService string  `json:"topService"`
@@ -30,8 +28,6 @@ type UsersQueryRequest struct {
 type UsersQueryResponse struct {
 	Users []User `json:"users"`
 }
-
-// --- ClickHouse row structs ---
 
 type userRow struct {
 	UserID     string    `ch:"user_id"`

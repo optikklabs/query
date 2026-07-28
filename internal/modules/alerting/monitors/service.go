@@ -11,7 +11,6 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
-// Service owns CRUD validation and JSON marshaling for monitors.
 type Service struct {
 	repo *Repository
 }

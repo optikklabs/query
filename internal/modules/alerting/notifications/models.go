@@ -8,7 +8,6 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
-// ChannelResponse is the wire shape returned by channels endpoints.
 type ChannelResponse struct {
 	ID             int64           `json:"id"`
 	Type           string          `json:"type"`
@@ -76,8 +75,6 @@ func toChannelResponse(row models.ChannelRow, usedBy int) ChannelResponse {
 	return out
 }
 
-// publicChannelConfig reports whether a credential is configured without ever
-// serializing the credential itself back to a client.
 func publicChannelConfig(row models.ChannelRow) json.RawMessage {
 	configured := false
 	if row.Type == "slack" {

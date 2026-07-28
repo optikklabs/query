@@ -11,8 +11,6 @@ import (
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-// Handler translates HTTP requests into dataset service calls. The experiment
-// runner is optional — nil when no provider-call path is configured.
 type Handler struct {
 	svc        *Service
 	experiment *ExperimentService

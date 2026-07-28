@@ -55,7 +55,6 @@ func (h *Handler) GetMemoryByInstance(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, resp)
 }
 
-// GetHosts retrieves the host saturation list, optionally filtered by service.
 func (h *Handler) GetHosts(w http.ResponseWriter, r *http.Request) {
 	modulecommon.HandleRangeQuery(w, r, "Failed to query hosts", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetHosts(ctx, tenantID, startMs, endMs, r.URL.Query().Get("service"))
@@ -116,10 +115,6 @@ func (h *Handler) GetPodSeries(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// respondSeries is the detail-page chart contract shared by hosts and pods: an
-// unknown metric group is a 400, not an empty series. It cannot use
-// HandleRangeQuery because that has no way to express the known/unknown
-// distinction.
 func (h *Handler) respondSeries(
 	w http.ResponseWriter, r *http.Request, failMsg string,
 	query func(ctx context.Context, tenantID, startMs, endMs int64, metricID string) (any, bool, error),

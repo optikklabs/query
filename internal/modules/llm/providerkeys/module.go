@@ -4,8 +4,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Module wires encrypted BYO provider-key CRUD into the v1 router. The service
-// is injected so the playground module can share it for key resolution.
 type Module struct {
 	handler *Handler
 }

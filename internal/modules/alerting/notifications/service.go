@@ -12,7 +12,6 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
-// Service owns business logic for the four notification sub-resources.
 type Service struct {
 	repo       *Repository
 	dispatcher *dispatch.Dispatcher

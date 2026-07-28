@@ -15,8 +15,6 @@ type SummaryRow struct {
 	Warns  uint64 `ch:"warns"`
 }
 
-// TrendRow is one display-grain bucket carrying total and per-tier counts.
-// Tier thresholds mirror the Summary query.
 type TrendRow struct {
 	TimeBucket time.Time `ch:"time_bucket"`
 	Total      uint64    `ch:"total"`

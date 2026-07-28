@@ -10,7 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/user/shared"
 )
 
-// Repository holds the device-flow MySQL access (device codes + user lookup).
 type Repository struct {
 	db *sqlx.DB
 }

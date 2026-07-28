@@ -10,8 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/saturation/kafka/models"
 )
 
-// buildFilterArgs constructs the optional dimension filter (applied in the
-// metrics_series CTE) and the bind args for queries.
 func buildFilterArgs(tenantID, startMs, endMs int64, metricNames []string, filterCol, filterVal string) (string, []any) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	args := filter.WithMetricNames(filter.MetricArgs(tenantID, startMs, endMs), metricNames)

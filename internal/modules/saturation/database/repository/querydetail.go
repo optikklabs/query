@@ -10,7 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
 )
 
-// DefaultExecutionsLimit is the page size when the caller does not ask for one.
 const DefaultExecutionsLimit = 50
 
 const maxExecutionsLimit = 200

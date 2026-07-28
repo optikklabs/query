@@ -12,15 +12,12 @@ import (
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-// ListLogs returns one page of the log list plus whether a further page exists.
-// It over-fetches by one row rather than counting, so the caller learns hasMore
-// without a second query.
 func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, cur models.Cursor) ([]models.LogRow, bool, error) {
 	prewhere, where, args := filter.BuildClauses(f)
 	if !cur.IsZero() {
 		where += ` AND (timestamp, log_id) < (@curTs, @curLid)`
 		args = append(args,
-			// DateNamed with ns scale; a plain time.Time arg truncates to seconds.
+
 			clickhouse.DateNamed("curTs", cur.Timestamp, clickhouse.NanoSeconds),
 			clickhouse.Named("curLid", cur.LogID),
 		)
@@ -46,7 +43,6 @@ func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, 
 	return rows, hasMore, nil
 }
 
-// suggestResourceColumns maps suggestable API field names to columns on logs.
 var suggestResourceColumns = map[string]string{
 	"service_name": "service",
 	"host":         "host",
@@ -55,7 +51,6 @@ var suggestResourceColumns = map[string]string{
 	"environment":  "environment",
 }
 
-// IsSuggestableScalarField reports whether the field has value suggestions.
 func IsSuggestableScalarField(field string) bool {
 	if field == "severity_text" {
 		return true

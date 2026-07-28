@@ -10,8 +10,6 @@ import (
 
 const facetTopN = 50
 
-// DimRow is the scan target for the unified facets query: one (dimension,
-// value, count) triple, with all four dimensions interleaved in one result set.
 type DimRow struct {
 	Dim   string `ch:"dim"`
 	Value string `ch:"value"`

@@ -18,8 +18,6 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: sqlx.NewDb(db, "mysql")}
 }
 
-// Channels ------------------------------------------------------------------
-
 func (r *Repository) CreateChannel(ctx context.Context, row models.ChannelRow) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.CreateChannel", `
 		INSERT INTO optikk.notification_channels

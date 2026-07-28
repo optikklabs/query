@@ -29,7 +29,6 @@ repo's `db` DDL as described in its README.
 
 - **Build**: `make build` or `go build ./cmd/query`
 - **Run**: `make run`
-- **Test**: `go test ./...`
 - **Format / Vet**: `make fmt` / `make vet`
 
 ## Local development

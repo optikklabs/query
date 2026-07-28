@@ -19,7 +19,6 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: sqlx.NewDb(db, "mysql")}
 }
 
-// pageInsertArgs bundles the column values for page INSERT/UPDATE.
 type pageInsertArgs struct {
 	TenantID        int64
 	Name            string
@@ -83,8 +82,6 @@ func (r *Repository) DeletePage(ctx context.Context, id, tenantID int64) error {
 	return nil
 }
 
-// selectPageCols resolves widget_count via a scoped subquery and the owner name
-// via a left join, so the catalog never needs a GROUP BY.
 const selectPageCols = `
   p.id, p.tenant_id, p.name, p.description, p.icon, p.icon_color,
   p.tags_json, p.is_favorite, p.created_by_user_id, p.created_at, p.updated_at,
@@ -133,7 +130,6 @@ func (r *Repository) ListPages(ctx context.Context, tenantID int64, q ListPagesQ
 	return rows, total, nil
 }
 
-// pageFilters builds the shared WHERE clause for list and count.
 func pageFilters(tenantID int64, q ListPagesQuery) ([]string, []any) {
 	where := []string{"p.tenant_id = ?"}
 	args := []any{tenantID}
@@ -151,7 +147,6 @@ func pageFilters(tenantID int64, q ListPagesQuery) ([]string, []any) {
 	return where, args
 }
 
-// widgetInsertArgs bundles the column values for widget INSERT/UPDATE.
 type widgetInsertArgs struct {
 	PageID        int64
 	TenantID      int64
@@ -250,7 +245,6 @@ func (r *Repository) DeleteWidget(ctx context.Context, id, pageID, tenantID int6
 	return nil
 }
 
-// PageExists confirms a page belongs to the tenant before widget operations.
 func (r *Repository) PageExists(ctx context.Context, pageID, tenantID int64) (bool, error) {
 	var n int
 	err := dbutil.GetSQL(ctx, r.db, "dashboards.PageExists", &n,

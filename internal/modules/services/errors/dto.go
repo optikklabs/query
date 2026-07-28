@@ -2,9 +2,6 @@ package errors
 
 import "time"
 
-// Raw ClickHouse row structs scanned directly from query results.
-// All Go-side derivations live in service.go.
-
 type rawServiceRateRow struct {
 	ServiceName   string    `ch:"service_name"`
 	BucketAt      time.Time `ch:"bucket_at"`

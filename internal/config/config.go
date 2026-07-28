@@ -22,8 +22,6 @@ type Config struct {
 	LLM         LLMConfig        `yaml:"llm"`
 }
 
-// Load reads YAML configuration with environment variable overrides.
-// If no path is provided, it defaults to "config.yml".
 func Load(path ...string) (Config, error) {
 	p := "config.yml"
 	if len(path) > 0 && path[0] != "" {
@@ -62,12 +60,8 @@ func Load(path ...string) (Config, error) {
 	return cfg, nil
 }
 
-// minJWTSecretLen guards against weak HMAC keys for HS256 access tokens.
 const minJWTSecretLen = 32
 
-// Validate rejects a config missing the secrets required to run safely.
-// The service is always deployed in production, so these checks are
-// unconditional. Each failing field is named so the startup log is actionable.
 func (c Config) Validate() error {
 	if len(c.Auth.JWTSecret) < minJWTSecretLen {
 		return fmt.Errorf("auth.jwt_secret must be at least %d bytes", minJWTSecretLen)

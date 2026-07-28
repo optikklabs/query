@@ -1,18 +1,13 @@
 package ingestion
 
-// bytesPerGB uses the decimal GB (10^9), the standard billing convention.
 const bytesPerGB = 1_000_000_000.0
 
-// Rates are the per-unit prices used to estimate a tenant's bill. Logs and
-// traces bill by ingested volume (per GB); metrics bill by DPM (data points per
-// minute), the industry-standard rate meter for time series.
 type Rates struct {
 	Currency        string
 	PerGBLogsTraces float64
 	PerDPMMetrics   float64
 }
 
-// CostLine is one billable meter: quantity in its unit at a rate and its cost.
 type CostLine struct {
 	Category string  `json:"category"`
 	Unit     string  `json:"unit"`
@@ -21,7 +16,6 @@ type CostLine struct {
 	Cost     float64 `json:"cost"`
 }
 
-// CostResponse is the tenant's estimated bill for the billing period.
 type CostResponse struct {
 	Currency    string     `json:"currency"`
 	Lines       []CostLine `json:"lines"`
@@ -30,17 +24,15 @@ type CostResponse struct {
 	DaysInMonth int        `json:"daysInMonth"`
 }
 
-// usageQuantities are the raw meter inputs the estimate is derived from.
 type usageQuantities struct {
 	logsBytes   uint64
 	spansBytes  uint64
 	metricDPs   uint64
-	windowMin   float64 // minutes of data in the period, denominator for DPM
+	windowMin   float64
 	daysElapsed int
 	daysInMonth int
 }
 
-// estimateCost turns usage quantities into a billing estimate.
 func estimateCost(u usageQuantities, r Rates) CostResponse {
 	var dpm float64
 	if u.windowMin > 0 {
@@ -68,7 +60,6 @@ func estimateCost(u usageQuantities, r Rates) CostResponse {
 
 func gigabytes(b uint64) float64 { return float64(b) / bytesPerGB }
 
-// volumeLine bills a GB-metered category.
 func volumeLine(category string, gb, rate float64) CostLine {
 	return CostLine{
 		Category: category,

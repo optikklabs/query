@@ -10,7 +10,6 @@ import (
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-// Handler shapes Gin handlers for the notifications module's HTTP routes.
 type Handler struct {
 	Service *Service
 }

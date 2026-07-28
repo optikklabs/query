@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-// AlertingConfig configures the event-driven alert evaluator. It is disabled
-// by default so existing deployments can roll it out deliberately.
 type AlertingConfig struct {
 	Kafka AlertingKafkaConfig `yaml:"kafka"`
 }
@@ -67,14 +65,10 @@ type AuthConfig struct {
 	CookieSameSite    string `yaml:"cookie_same_site"`
 }
 
-// LLMConfig holds the LLM Observability playground secrets. The encryption key
-// is a base64-encoded 32-byte key (AES-256-GCM) for tenant BYO provider keys;
-// when empty the playground and experiment endpoints refuse to serve.
 type LLMConfig struct {
 	KeyEncryptionKey string `yaml:"key_encryption_key"`
 }
 
-// EmailConfig configures transactional email delivery through Resend's HTTPS API.
 type EmailConfig struct {
 	ResendVerificationEnabled bool   `yaml:"resend_verification_enabled"`
 	ResendAPIKey              string `yaml:"resend_api_key"`

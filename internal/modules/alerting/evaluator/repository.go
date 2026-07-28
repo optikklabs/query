@@ -1,4 +1,3 @@
-// Package evaluator runs the BackgroundRunner that ticks the alerting platform.
 package evaluator
 
 import (
@@ -36,18 +35,10 @@ type UpdateStateArgs struct {
 	IncrementEvalCount bool
 }
 
-// claimLease is how long a claimed monitor stays invisible to other
-// replicas. UpdateState releases the claim early on completion; the lease
-// only matters when a replica crashes mid-evaluation.
 const claimLease = 5 * time.Minute
 
-// ClaimDue atomically claims up to limit due monitors for one evaluator
-// replica and returns them. MySQL is the only coordinator: the claim UPDATE
-// is atomic, expired leases are reclaimable, so any number of replicas can
-// run the tick loop concurrently without duplicate evaluations.
 func (r *Repository) ClaimDue(ctx context.Context, claimID string, now time.Time, limit int) ([]DueMonitor, error) {
-	// Single-table UPDATE: MySQL forbids ORDER BY/LIMIT on multi-table
-	// updates, so active-monitor filtering uses a subquery instead of a JOIN.
+
 	const claim = `
 		UPDATE optikk.monitor_state
 		   SET claimed_by = ?, claimed_until = ?
@@ -133,8 +124,6 @@ func (r dueRow) toDue() DueMonitor {
 
 func (r *Repository) UpdateState(ctx context.Context, args UpdateStateArgs) error {
 
-	// Clearing claimed_by/claimed_until releases the work claim taken by
-	// ClaimDue as soon as this monitor's evaluation completes.
 	q := `
 		UPDATE optikk.monitor_state
 		   SET status = ?, current_value = ?, last_evaluated_at = ?, next_evaluation_at = ?,

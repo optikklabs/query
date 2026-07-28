@@ -12,7 +12,6 @@ type resendEmails interface {
 	SendWithContext(context.Context, *resend.SendEmailRequest) (*resend.SendEmailResponse, error)
 }
 
-// ResendSender sends transactional email through the Resend SDK.
 type ResendSender struct {
 	emails resendEmails
 	from   string

@@ -14,8 +14,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/alerting/shared/query"
 )
 
-// Module is the BackgroundRunner. It registers no HTTP routes (only the tick
-// loop), so RegisterRoutes is a no-op. The 10s ticker drives Service.Tick.
 type Module struct {
 	svc      *Service
 	stop     chan struct{}

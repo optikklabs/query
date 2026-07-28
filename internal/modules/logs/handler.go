@@ -11,22 +11,17 @@ import (
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-// Trace-correlation page bounds. A trace's logs are unpaginated, so the cap is
-// the only thing keeping a pathological trace from streaming unbounded rows.
 const (
 	defaultTraceLogsLimit = 1000
 	maxTraceLogsLimit     = 5000
 )
 
-// maxQueryLimit bounds one page of the log list. Requests above it, and
-// requests that omit it, are clamped rather than rejected.
 const maxQueryLimit = 5000
 
 type Handler struct {
 	Service *service.Service
 }
 
-// Query powers POST /api/v1/logs/query (list + optional include blocks).
 func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	var req models.QueryRequest
 	if !modulecommon.BindFiltered(w, r, &req) {
@@ -56,7 +51,6 @@ func (h *Handler) Suggest(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, resp)
 }
 
-// Facets powers POST /api/v1/logs/facets.
 func (h *Handler) Facets(w http.ResponseWriter, r *http.Request) {
 	var req models.FacetsRequest
 	if !modulecommon.BindFiltered(w, r, &req) {
@@ -70,7 +64,6 @@ func (h *Handler) Facets(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, resp)
 }
 
-// Summary powers POST /api/v1/logs/summary — total / errors / warns counts.
 func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 	var req models.TrendsRequest
 	if !modulecommon.BindFiltered(w, r, &req) {
@@ -97,7 +90,6 @@ func (h *Handler) Trend(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, models.TrendResponse{Trend: tr})
 }
 
-// GetByTrace powers GET /api/v1/logs/trace/{traceID} — all logs for a trace.
 func (h *Handler) GetByTrace(w http.ResponseWriter, r *http.Request) {
 	traceID := modulecommon.URLParamLower(r, "traceID")
 	if traceID == "" {
@@ -119,7 +111,6 @@ func (h *Handler) GetByTrace(w http.ResponseWriter, r *http.Request) {
 	modulecommon.RespondOK(w, logs)
 }
 
-// GetByID powers GET /api/v1/logs/{id} (single-log deep link).
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {

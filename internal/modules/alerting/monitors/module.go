@@ -8,8 +8,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/alerting/shared/query"
 )
 
-// Module wires the monitors endpoints into the v1 router.
-// It supports CRUD, state actions, and per-monitor query views.
 type Module struct {
 	handler *Handler
 }

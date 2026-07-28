@@ -1,4 +1,3 @@
-// Package models holds shared row and wire types for the alerting platform.
 package models
 
 import (

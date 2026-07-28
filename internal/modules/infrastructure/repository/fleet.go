@@ -11,7 +11,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-// FleetPodAggregateRow is per-pod RED from the span_stats rollup.
 type FleetPodAggregateRow struct {
 	Pod           string    `ch:"pod"`
 	Host          string    `ch:"host"`

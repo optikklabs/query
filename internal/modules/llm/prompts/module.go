@@ -6,7 +6,6 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-// Module wires prompt + version CRUD (MySQL-backed) into the v1 router.
 type Module struct {
 	handler *Handler
 }

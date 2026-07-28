@@ -1,6 +1,5 @@
 package topology
 
-// Health classifies a service node for coloring on the frontend.
 const (
 	HealthHealthy   = "healthy"
 	HealthDegraded  = "degraded"

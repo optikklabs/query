@@ -4,7 +4,7 @@ server:
   port: "19090"
   metrics_port: "19091"
   allowed_origins: "http://localhost:3000,http://localhost:5173"
-  # Per-workload concurrency. Detail, explorer, and overview reads are isolated.
+                                                                                
   expensive_query_concurrency: 2
 
 mysql:
@@ -12,7 +12,7 @@ mysql:
   port: "13306"
   database: optikk
   user: root
-  password: "localdev" # Overridable by OPTIKK_MYSQL_PASSWORD environment variable
+  password: "localdev"                                                            
   max_open_conns: 50
   max_idle_conns: 25
 
@@ -21,14 +21,14 @@ clickhouse:
   port: "19000"
   database: optikk
   user: default
-  password: "localdev" # Overridable by OPTIKK_CLICKHOUSE_PASSWORD environment variable
+  password: "localdev"                                                                 
   secure: false
-  # Per-pod pool. Keep it small: ClickHouse is the shared bottleneck.
+                                                                     
   max_open_conns: 12
   max_idle_conns: 6
 
-# The evaluator consumes the same protobuf metrics stream produced by ingest.
-# Enable only after Kafka is reachable from the query deployment.
+                                                                             
+                                                                 
 alerting:
   kafka:
     enabled: false
@@ -38,7 +38,7 @@ alerting:
     max_poll_records: 1000
 
 auth:
-  jwt_secret: "" # Use OPTIKK_AUTH_JWT_SECRET environment variable
+  jwt_secret: ""                                                  
   access_ttl_ms: 900000
   refresh_ttl_ms: 604800000
   refresh_cookie_name: optikk_refresh
@@ -47,7 +47,7 @@ auth:
   cookie_same_site: lax
 
 email:
-  resend_verification_enabled: false # Use OPTIKK_EMAIL_RESEND_VERIFICATION_ENABLED
-  resend_api_key: "" # Use OPTIKK_EMAIL_RESEND_API_KEY
-  from: "" # Use OPTIKK_EMAIL_FROM
-  verify_base_url: "http://localhost:3000/login" # Use OPTIKK_EMAIL_VERIFY_BASE_URL
+  resend_verification_enabled: false                                               
+  resend_api_key: ""                                  
+  from: ""                        
+  verify_base_url: "http://localhost:3000/login"                                   

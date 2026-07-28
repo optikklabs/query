@@ -5,18 +5,13 @@ import (
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
 )
 
-// Datapoint-attribute accessors on metrics_series.attributes. Map lookups
-// default to the empty string. Keys match kubeletstats and JVM SDK output.
 const (
 	attrInterface     = "attributes['interface']"
 	attrJVMMemoryType = "attributes['jvm.memory.type']"
 )
 
-// containerLabel names series by the k8s container column, falling back to
-// the pod itself for pod-level metrics that carry no container.
 const containerLabel = "if(container = '', 'pod', container)"
 
-// Pod is the container detail page's chart groups, in display order.
 var Pod = seriesgroup.NewCatalog(podDefs)
 
 var podDefs = []seriesgroup.Def{
@@ -84,8 +79,6 @@ var podDefs = []seriesgroup.Def{
 	},
 }
 
-// interfaceDirectionLabel names IO series "<interface> <direction>" with a
-// fallback for datapoints missing both attributes.
 func interfaceDirectionLabel(fallback string) string {
 	expr := "trim(concat(" + attrInterface + ", ' ', " + attrDirection + "))"
 	return "if(" + expr + " = '', '" + fallback + "', " + expr + ")"

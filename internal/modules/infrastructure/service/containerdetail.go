@@ -11,8 +11,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
-// GetPodSeries reports known=false for a metric id outside the catalog, so
-// the handler can answer 400 rather than an empty chart.
 func (s *Service) GetPodSeries(ctx context.Context, tenantID int64, pod, metricID string, startMs, endMs int64) ([]models.SeriesPoint, bool, error) {
 	def, ok := seriesdefs.Pod.Def(metricID)
 	if !ok {
@@ -51,7 +49,6 @@ func (s *Service) GetPodOverview(ctx context.Context, tenantID int64, pod string
 	return out, nil
 }
 
-// foldRED derives rate/latency KPIs from raw span-metric aggregates.
 func foldRED(red repository.PodREDRow, out *models.PodOverview) {
 	out.RequestCount = int64(red.RequestCount)
 	out.ErrorCount = int64(red.ErrorCount)

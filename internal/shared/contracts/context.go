@@ -11,7 +11,6 @@ type TenantContext struct {
 
 type tenantCtxKey struct{}
 
-// WithTenant returns a context carrying the authenticated tenant.
 func WithTenant(ctx context.Context, t TenantContext) context.Context {
 	return context.WithValue(ctx, tenantCtxKey{}, t)
 }

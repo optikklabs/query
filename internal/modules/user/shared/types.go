@@ -4,13 +4,11 @@ import (
 	"time"
 )
 
-// Tenant-scoped user roles.
 const (
 	RoleAdmin  = "admin"
 	RoleMember = "member"
 )
 
-// IsValidRole reports whether role is a recognised tenant-scoped role.
 func IsValidRole(role string) bool {
 	return role == RoleAdmin || role == RoleMember
 }
@@ -56,8 +54,6 @@ type DeviceCodeRecord struct {
 	CreatedAt    time.Time  `db:"created_at"`
 }
 
-// TenantRecord never carries the raw API key: only its display prefix is
-// stored/readable, the raw key exists solely in signup/rotate responses.
 type TenantRecord struct {
 	ID            int64      `db:"id"`
 	Name          string     `db:"name"`
@@ -68,7 +64,6 @@ type TenantRecord struct {
 	CreatedAt     time.Time  `db:"created_at"`
 }
 
-// MessageResponse is a generic single-message API response.
 type MessageResponse struct {
 	Message string `json:"message"`
 }

@@ -2,18 +2,16 @@ package scores
 
 import "time"
 
-// CreateScoreRequest is a human/programmatic score submitted from the UI.
 type CreateScoreRequest struct {
 	TraceID     string   `json:"traceId"`
 	SpanID      string   `json:"spanId"`
 	Name        string   `json:"name"`
-	DataType    string   `json:"dataType"` // numeric | boolean | categorical
+	DataType    string   `json:"dataType"`
 	Value       *float64 `json:"value"`
 	StringValue string   `json:"stringValue"`
 	Comment     string   `json:"comment"`
 }
 
-// ScoreName is one distinct score name with its data type.
 type ScoreName struct {
 	Name     string `json:"name"`
 	DataType string `json:"dataType"`
@@ -23,7 +21,6 @@ type ScoreNamesResponse struct {
 	Names []ScoreName `json:"names"`
 }
 
-// ScoreSummary aggregates one score name over the window.
 type ScoreSummary struct {
 	Name     string  `json:"name"`
 	DataType string  `json:"dataType"`
@@ -45,7 +42,6 @@ type ScoreTimeseriesResponse struct {
 	Points []Point `json:"points"`
 }
 
-// DistributionBucket is one bar of a numeric score histogram.
 type DistributionBucket struct {
 	Label string `json:"label"`
 	Count uint64 `json:"count"`
@@ -55,8 +51,6 @@ type ScoreDistributionResponse struct {
 	Name    string               `json:"name"`
 	Buckets []DistributionBucket `json:"buckets"`
 }
-
-// --- ClickHouse row structs ---
 
 type nameRow struct {
 	Name     string `ch:"name"`

@@ -1,9 +1,3 @@
-// Package models holds the trace detail domain's API DTOs — the wire contract
-// shared by the handler and the service.
-//
-// Several of these carry `ch` tags as well as `json` ones: the repository
-// scans directly into them where the row shape and the response shape are the
-// same. Rows that need folding stay in repository/ instead.
 package models
 
 import (
@@ -25,8 +19,7 @@ type TraceSummary struct {
 	ErrorCount     uint32   `json:"errorCount"`
 	ServiceSet     []string `json:"serviceSet,omitempty"`
 	Truncated      bool     `json:"truncated,omitempty"`
-	// RootMissing marks a trace whose root span was never ingested. The summary
-	// then describes the earliest span rather than the true entry point.
+
 	RootMissing bool `json:"rootMissing,omitempty"`
 }
 

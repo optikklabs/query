@@ -10,10 +10,8 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// Caps series rows per request: MaxBucketPoints buckets x label cardinality.
 const maxSeriesRows = 10000
 
-// Point is one display-grain bucket of one named series.
 type Point struct {
 	TimeBucket time.Time `json:"timeBucket" ch:"time_bucket"`
 	Series     string    `json:"series"      ch:"series"`
@@ -28,15 +26,12 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// QuerySeries returns display-grain buckets for one metric group, broken down
-// by the group's label and scoped to one resource. scopeCol is a metrics_series
-// column name supplied by the calling module, never by request input.
 func (r *Repository) QuerySeries(
 	ctx context.Context, tenantID int64, scopeCol, scopeVal string, startMs, endMs int64, def Def,
 ) ([]Point, error) {
 	valueExpr := "if(sum(m.val_count) = 0, 0, sum(m.val_sum) / sum(m.val_count))"
 	if def.Agg == Rate {
-		// Counters: Delta sums directly; Cumulative uses in-bucket increase.
+
 		valueExpr = "sum(if(fps.temporality = 'Delta', m.val_sum, greatest(m.val_max - m.val_min, 0))) / @bucketGrainSec"
 	}
 

@@ -6,15 +6,10 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-// Module wires dataset, item, and experiment-run APIs into the v1 router. The
-// experiment runner is optional: when keys/completer are absent, POST runs
-// answers 503 rather than being unregistered, keeping the contract stable.
 type Module struct {
 	handler *Handler
 }
 
-// NewModule builds the read/CRUD surface. keys and completer may be nil, which
-// disables synchronous experiment execution.
 func NewModule(sqlDB *registry.SQLDB, keys KeyResolver, completer Completer) *Module {
 	repo := NewRepository(sqlDB)
 	var experiment *ExperimentService

@@ -14,8 +14,6 @@ type Repository struct{ db *sqlx.DB }
 
 func NewRepository(db *sql.DB) *Repository { return &Repository{db: sqlx.NewDb(db, "mysql")} }
 
-// LoadActive is a one-time bootstrap read. The evaluator never polls this
-// table; live config updates will be supplied by the config Kafka topic.
 func (r *Repository) LoadActive(ctx context.Context) ([]models.MonitorRow, []models.MonitorStateRow, error) {
 	const q = `
 		SELECT m.id, m.tenant_id, m.name, m.type, m.priority,
@@ -61,9 +59,6 @@ func (r bootstrapRow) state() models.MonitorStateRow {
 	return models.MonitorStateRow{MonitorID: r.StateMonitorID.Int64, Status: r.StateStatus.String, CurrentValue: r.StateCurrentValue, LastEvaluatedAt: r.StateLastEvaluatedAt, NextEvaluationAt: r.StateNextEvaluationAt.Time, TriggeredAt: r.StateTriggeredAt, LastNotifiedAt: r.StateLastNotifiedAt, EvaluationCount: r.StateEvaluationCount.Int64, AckedByUserID: r.StateAckedByUserID, AckedAt: r.StateAckedAt}
 }
 
-// PersistTransition projects a state transition to MySQL for the API/audit
-// read model. It is deliberately called only for transitions or renotifies,
-// never once per metric record.
 func (r *Repository) PersistTransition(ctx context.Context, t Transition) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {

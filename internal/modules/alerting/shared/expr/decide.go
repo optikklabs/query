@@ -1,5 +1,3 @@
-// Package expr provides the pure decide function for evaluating monitor state
-// transitions.
 package expr
 
 import (

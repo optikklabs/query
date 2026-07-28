@@ -9,8 +9,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
-// GetClients lists the tenant's Kafka clients. It is separate from the graph so
-// the picker stays complete while the graph stays scoped.
 func (s *Service) GetClients(ctx context.Context, tenantID, startMs, endMs int64) ([]string, error) {
 	clients, err := s.repo.QueryClients(ctx, tenantID, startMs, endMs)
 	if err != nil {
@@ -22,8 +20,6 @@ func (s *Service) GetClients(ctx context.Context, tenantID, startMs, endMs int64
 	return clients, nil
 }
 
-// GetTopology builds the producers->topics->consumers graph for the given
-// services: their topics and the peers on the far side of them.
 func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int64, services []string) (models.TopologyResponse, error) {
 	if len(services) == 0 {
 		return buildGraph(nil, 1), nil
@@ -70,9 +66,6 @@ type nodeAgg struct {
 	latency percentileValues
 }
 
-// buildGraph folds the edge rows into the graph. Produce rows must be applied
-// first: pathways reference each topic's top producer, which only the produce
-// pass knows.
 func buildGraph(rows []repository.EdgeRow, winSecs float64) models.TopologyResponse {
 	producers := map[string]*nodeAgg{}
 	consumers := map[string]*nodeAgg{}

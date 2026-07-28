@@ -17,8 +17,6 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-// --- Service error rate ---
-
 func (s *Service) GetServiceErrorRate(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]TimeSeriesPoint, error) {
 	var (
 		raw []rawServiceRateRow
@@ -315,7 +313,6 @@ func (s *Service) GetErrorGroupFacets(ctx context.Context, tenantID int64, start
 	}
 	return groups, nil
 }
-
 
 func (s *Service) GetErrorGroupTraces(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string, limit int, cursorIn ErrorTracesCursor) (PaginatedErrorTraces, error) {
 	raw, err := s.repo.ErrorGroupTraceRows(ctx, tenantID, startMs, endMs, groupID, limit+1, cursorIn)

@@ -19,8 +19,6 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-// GetFleetOverview queries fleet RED metrics once and returns both the
-// aggregate totals and per-service breakdowns in a single response.
 func (s *Service) GetFleetOverview(ctx context.Context, f REDFilters) (FleetOverviewResponse, error) {
 	rows, err := s.repo.GetFleetREDMetrics(ctx, f)
 	if err != nil {
@@ -33,7 +31,6 @@ func (s *Service) GetFleetOverview(ctx context.Context, f REDFilters) (FleetOver
 	}, nil
 }
 
-// GetFleetServices returns one RED row per service across the whole fleet.
 func (s *Service) GetFleetServices(ctx context.Context, f REDFilters) ([]ServiceREDMetric, error) {
 	overview, err := s.GetFleetOverview(ctx, f)
 	if err != nil {

@@ -10,8 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/user/shared"
 )
 
-// repository is the tenant-scoped persistence the service depends on. Defined
-// here (consumer side) so the service can be unit-tested with a fake.
 type repository interface {
 	CreateUser(context.Context, string, string, string, int64, string, time.Time) (int64, error)
 	FindUserByID(context.Context, int64, int64) (shared.UserRecord, error)
@@ -21,7 +19,6 @@ type repository interface {
 	DeactivateUser(context.Context, int64, int64) error
 }
 
-// Service provisions and manages users within a single tenant.
 type Service struct {
 	repo        repository
 	authService *auth.Service
@@ -31,8 +28,6 @@ func NewService(repo repository, authService *auth.Service) *Service {
 	return &Service{repo: repo, authService: authService}
 }
 
-// CreateUser adds a user to the caller's tenant. The tenant is authoritative
-// from the caller's context, never the request body.
 func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantID int64) (UserResponse, error) {
 	role := req.Role
 	if role == "" {
@@ -64,11 +59,9 @@ func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantI
 		return UserResponse{}, shared.NewInternalError("Failed to load created user", err)
 	}
 
-	// If no password was provided, generate an invite/reset link and email it to the user.
 	if req.Password == "" {
 		if err := s.authService.ForgotPassword(ctx, req.Email); err != nil {
-			// Do not block user creation if email fails, but log the error
-			// The admin can manually trigger another reset password request
+
 			_ = err
 		}
 	}
@@ -88,7 +81,6 @@ func (s *Service) buildUserResponse(user shared.UserRecord) UserResponse {
 	}
 }
 
-// ListUsers returns all active users belonging to the given tenant.
 func (s *Service) ListUsers(ctx context.Context, tenantID int64) ([]UserResponse, error) {
 	records, err := s.repo.ListUsersByTenantID(ctx, tenantID)
 	if err != nil {
@@ -101,8 +93,6 @@ func (s *Service) ListUsers(ctx context.Context, tenantID int64) ([]UserResponse
 	return responses, nil
 }
 
-// SetUserRole promotes or demotes a user within the caller's tenant. Demoting
-// the last admin is blocked so an org can never be left without one.
 func (s *Service) SetUserRole(ctx context.Context, userID, tenantID int64, role string) (UserResponse, error) {
 	if !shared.IsValidRole(role) {
 		return UserResponse{}, shared.NewValidationError("role must be 'admin' or 'member'", nil)
@@ -123,8 +113,6 @@ func (s *Service) SetUserRole(ctx context.Context, userID, tenantID int64, role 
 	return s.buildUserResponse(user), nil
 }
 
-// RemoveUser soft-deletes a user within the caller's tenant. Removing the last
-// admin is blocked.
 func (s *Service) RemoveUser(ctx context.Context, userID, tenantID int64) error {
 	user, err := s.findInTenant(ctx, userID, tenantID)
 	if err != nil {
@@ -141,8 +129,6 @@ func (s *Service) RemoveUser(ctx context.Context, userID, tenantID int64) error 
 	return nil
 }
 
-// findInTenant loads an active user, mapping a miss to a not-found error so a
-// caller cannot probe or act on users outside their tenant.
 func (s *Service) findInTenant(ctx context.Context, userID, tenantID int64) (shared.UserRecord, error) {
 	user, err := s.repo.FindUserByID(ctx, userID, tenantID)
 	if err != nil {

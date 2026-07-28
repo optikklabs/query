@@ -65,10 +65,6 @@ type TrendBucket struct {
 	Errors     uint64 `json:"errors"`
 }
 
-// Suggestion is a type alias for the shared suggestion value+count pair.
-// Kept as an alias so existing callers (e.g. wirefixtures) can still
-// reference tracesexplorer.Suggestion without changes.
 type Suggestion = filterutil.Suggestion
 
-// SuggestResponse is a type alias for the shared suggest wire response.
 type SuggestResponse = filterutil.SuggestResponse

@@ -1,7 +1,3 @@
-// Package pricing is the single source of LLM token pricing, shared by the
-// read modules (SQL cost via TokenCostSQL) and the playground (Go cost via
-// CostOf). USD per 1M tokens; cost is derived at query time so the table can
-// be re-priced without any backfill.
 package pricing
 
 import "github.com/ClickHouse/clickhouse-go/v2"
@@ -26,14 +22,12 @@ var table = map[string]modelPrice{
 	"text-embedding-3-large": {In: 0.13, Out: 0},
 }
 
-// Entry is one row of the public pricing table (for GET /llm/pricing).
 type Entry struct {
 	Model string  `json:"model"`
 	In    float64 `json:"inPer1M"`
 	Out   float64 `json:"outPer1M"`
 }
 
-// Table returns the pricing table as a serialisable slice.
 func Table() []Entry {
 	out := make([]Entry, 0, len(table))
 	for m, p := range table {
@@ -42,8 +36,6 @@ func Table() []Entry {
 	return out
 }
 
-// Args exposes the table to SQL as parallel arrays consumed by
-// transform(model, @priceModels, @priceIn/@priceOut, 0.).
 func Args() []any {
 	models := make([]string, 0, len(table))
 	in := make([]float64, 0, len(table))
@@ -60,13 +52,11 @@ func Args() []any {
 	}
 }
 
-// TokenCostSQL prices one row's tokens; column names vary per query.
 func TokenCostSQL(inCol, outCol, modelCol string) string {
 	return "(" + inCol + " * transform(" + modelCol + ", @priceModels, @priceIn, 0.) + " +
 		outCol + " * transform(" + modelCol + ", @priceModels, @priceOut, 0.)) / 1e6"
 }
 
-// CostOf prices tokens in Go for the non-SQL path (playground/experiments).
 func CostOf(model string, in, out uint64) float64 {
 	p, ok := table[model]
 	if !ok {

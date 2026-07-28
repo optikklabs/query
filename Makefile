@@ -1,4 +1,4 @@
-.PHONY: build run fmt vet test
+.PHONY: build run fmt vet
 
 DEV_JWT_SECRET ?= optikk-local-development-secret-change-before-deploy
 
@@ -13,6 +13,3 @@ fmt:
 
 vet:
 	go vet ./...
-
-test:
-	go test ./...

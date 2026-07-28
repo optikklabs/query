@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// PromptSummary is a catalog row: the prompt plus its production version number.
 type PromptSummary struct {
 	ID                int64     `json:"id"`
 	Name              string    `json:"name"`
@@ -17,13 +16,11 @@ type PromptSummary struct {
 	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
-// PromptDetail returns the prompt with its full version history.
 type PromptDetail struct {
 	PromptSummary
 	Versions []PromptVersion `json:"versions"`
 }
 
-// PromptVersion is a single immutable revision of a prompt template.
 type PromptVersion struct {
 	Version   int             `json:"version"`
 	Template  json.RawMessage `json:"template"`
@@ -33,7 +30,6 @@ type PromptVersion struct {
 	CreatedAt time.Time       `json:"createdAt"`
 }
 
-// CreatePromptRequest authors a prompt and its first (v1) version.
 type CreatePromptRequest struct {
 	Name        string          `json:"name"`
 	Type        string          `json:"type,omitempty"`
@@ -44,21 +40,17 @@ type CreatePromptRequest struct {
 	Notes       string          `json:"notes,omitempty"`
 }
 
-// CreateVersionRequest appends a new version to an existing prompt.
 type CreateVersionRequest struct {
 	Template  json.RawMessage `json:"template"`
 	Variables []string        `json:"variables,omitempty"`
 	Notes     string          `json:"notes,omitempty"`
-	// Production, when true, promotes the new version on creation.
+
 	Production bool `json:"production,omitempty"`
 }
 
-// UpdateVersionRequest changes a version's lifecycle status.
 type UpdateVersionRequest struct {
 	Status string `json:"status"`
 }
-
-// --- DB row shapes ---
 
 type promptRow struct {
 	ID          int64      `db:"id"`

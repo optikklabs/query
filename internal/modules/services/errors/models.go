@@ -40,7 +40,6 @@ type PaginatedErrorTraces struct {
 	PageInfo PageInfo          `json:"pageInfo"`
 }
 
-// ErrorLatestOccurrence is the context of a group's most recent error span.
 type ErrorLatestOccurrence struct {
 	TraceID        string    `json:"traceId"`
 	SpanID         string    `json:"spanId"`

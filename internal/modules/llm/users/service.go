@@ -2,7 +2,6 @@ package users
 
 import "context"
 
-// lowScoreThreshold flags users whose mean score suggests a poor experience.
 const lowScoreThreshold = 0.6
 
 type Service struct {

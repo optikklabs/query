@@ -20,8 +20,6 @@ func clientsQuery(windowMs int64) string {
 		LIMIT 200`
 }
 
-// EdgeRow is one (service, topic, consumer group) aggregation. An empty
-// ConsumerGroup marks a produce row; anything else is a consume row.
 type EdgeRow struct {
 	Service       string    `ch:"service"`
 	Topic         string    `ch:"topic"`
@@ -31,8 +29,6 @@ type EdgeRow struct {
 	QS            []float64 `ch:"qs"`
 }
 
-// QueryClients lists Kafka services in deterministic name order. The frontend
-// uses the first result as its initial selection.
 func (r *Repository) QueryClients(ctx context.Context, tenantID, startMs, endMs int64) ([]string, error) {
 	query := clientsQuery(endMs - startMs)
 	var rows []struct {
@@ -48,10 +44,6 @@ func (r *Repository) QueryClients(ctx context.Context, tenantID, startMs, endMs 
 	return clients, nil
 }
 
-// QueryEdges returns one row per (service, topic, consumer group) for the
-// topics the given services touch. Produce rows carry an empty group, which is
-// what separates the two sides of the graph -- so one scan of the rollup
-// answers both, rather than a near-identical query per side.
 func (r *Repository) QueryEdges(ctx context.Context, tenantID, startMs, endMs int64, services []string) ([]EdgeRow, error) {
 	query := edgesQuery(timebucket.SpanStatsRollup(endMs - startMs))
 	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs), clickhouse.Named("services", services))

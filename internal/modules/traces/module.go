@@ -1,14 +1,3 @@
-// Package traces serves the trace detail page: the trace summary and span
-// list, span events and attributes, related traces, the critical and error
-// paths, and the per-trace service map.
-//
-// Layering is enforced by the package structure rather than convention:
-//
-//	traces (module, handler) -> service -> repository
-//
-// with models shared by all three. The search/list side of traces keeps its
-// own package, traces/explorer, because it is a distinct read surface built
-// on traces/filter rather than on a single trace id.
 package traces
 
 import (

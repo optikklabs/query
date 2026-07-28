@@ -1,9 +1,3 @@
-// Package seriesdefs declares the chart-group catalogs for the resource
-// detail pages. A catalog is a definition, not a layer: the repository reads
-// it to know which metric names to scan for, and the service reads it to
-// resolve an API metric id and to list a resource's available groups. It sits
-// beside seriesgroup and infraconsts as shared infrastructure vocabulary
-// rather than inside either layer.
 package seriesdefs
 
 import (
@@ -11,10 +5,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
 )
 
-// Datapoint-attribute accessors on metrics_series.attributes. Map lookups
-// default to the empty string. Keys match what hostmetrics scrapers emit.
-// AttrState and AttrMountpoint are exported because the host KPI query groups
-// by them directly.
 const (
 	AttrState      = "attributes['state']"
 	AttrMountpoint = "attributes['mountpoint']"
@@ -23,7 +13,6 @@ const (
 	attrDirection = "attributes['direction']"
 )
 
-// Host is the host detail page's chart groups, in display order.
 var Host = seriesgroup.NewCatalog(hostDefs)
 
 var hostDefs = []seriesgroup.Def{
@@ -87,7 +76,6 @@ var hostDefs = []seriesgroup.Def{
 	},
 }
 
-// deviceDirectionLabel names IO series "<device> <direction>" with a fallback.
 func deviceDirectionLabel(fallback string) string {
 	expr := "trim(concat(" + attrDevice + ", ' ', " + attrDirection + "))"
 	return "if(" + expr + " = '', '" + fallback + "', " + expr + ")"

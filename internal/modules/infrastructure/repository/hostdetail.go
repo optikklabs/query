@@ -14,8 +14,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-// HostMetaRow is a host's identity metadata plus which system metrics it
-// reports in range.
 type HostMetaRow struct {
 	LastSeen      time.Time `ch:"last_seen"`
 	Environments  []string  `ch:"environments"`
@@ -32,7 +30,6 @@ type HostMetaRow struct {
 	K8SNodeName   string    `ch:"k8s_node_name"`
 }
 
-// KPIRow is one range-averaged value per metric/state/mountpoint.
 type KPIRow struct {
 	MetricName string  `ch:"metric_name"`
 	State      string  `ch:"state"`
@@ -40,21 +37,15 @@ type KPIRow struct {
 	Value      float64 `ch:"value"`
 }
 
-// QueryHostSeries returns display-grain buckets for one metric group on a
-// host, broken down by the group's label (state/direction/device/mountpoint).
 func (r *Repository) QueryHostSeries(ctx context.Context, tenantID int64, host string, startMs, endMs int64, def seriesgroup.Def) ([]models.SeriesPoint, error) {
 	return r.series.QuerySeries(ctx, tenantID, hostScopeColumn, host, startMs, endMs, def)
 }
 
-// aboutAttrSQL selects the latest non-empty value of one host resource
-// attribute retained by ingest in the resource_attributes map.
 func aboutAttrSQL(key, alias string) string {
 	expr := "resource_attributes['" + key + "']"
 	return "anyLastIf(" + expr + ", " + expr + " != '') AS " + alias
 }
 
-// QueryHostMeta returns identity metadata and which system metrics the host
-// reports in range, from the narrow series-metadata table.
 func (r *Repository) QueryHostMeta(ctx context.Context, tenantID int64, host string, startMs, endMs int64) (HostMetaRow, error) {
 	query := `
 		SELECT
@@ -93,8 +84,6 @@ var kpiMetricNames = []string{
 	infraconsts.MetricSystemProcessCount,
 }
 
-// QueryKPIs returns range-averaged values per metric/state/mountpoint,
-// folded into header KPIs by the service.
 func (r *Repository) QueryKPIs(ctx context.Context, tenantID int64, host string, startMs, endMs int64) ([]KPIRow, error) {
 	query := `
 		WITH fps AS (

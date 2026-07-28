@@ -9,7 +9,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// HandleRangeQuery parses tenant and required range, executes query, responds.
 func HandleRangeQuery(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -29,10 +28,6 @@ func HandleRangeQuery(
 	RespondOK(w, resp)
 }
 
-// HandleComparableRangeQuery is HandleRangeQuery for endpoints that support a
-// previous-period overlay. The comparison period runs concurrently and lands in
-// the envelope's comparison field; without compareTo the response is identical
-// to HandleRangeQuery's.
 func HandleComparableRangeQuery(
 	w http.ResponseWriter,
 	r *http.Request,

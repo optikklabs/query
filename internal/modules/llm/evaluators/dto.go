@@ -2,9 +2,6 @@ package evaluators
 
 import "time"
 
-// Evaluator is a scoring definition plus rolling analytics over its emitted
-// scores. judge_model is stored for the upcoming automated runner; scores are
-// currently ingest-side only.
 type Evaluator struct {
 	ID             int64            `json:"id"`
 	Name           string           `json:"name"`
@@ -21,14 +18,11 @@ type Evaluator struct {
 	UpdatedAt      time.Time        `json:"updatedAt"`
 }
 
-// EvaluatorMetrics are the rolling score aggregates for the evaluator window.
 type EvaluatorMetrics struct {
 	Count     int64   `json:"count"`
 	MeanValue float64 `json:"meanValue"`
 }
 
-// UpsertRequest authors or replaces an evaluator definition. For PATCH, unset
-// pointer fields are left unchanged.
 type UpsertRequest struct {
 	Name           string   `json:"name"`
 	ScoreName      string   `json:"scoreName"`

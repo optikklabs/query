@@ -1,4 +1,3 @@
-// Package monitors handles CRUD, state actions, and history for monitors.
 package monitors
 
 import (

@@ -1,7 +1,5 @@
 package cloud
 
-// Category buckets mirror the cloud landing UI. cloud.platform (OTel semconv)
-// is mapped to one of these; unknown platforms fall back to CategoryOther.
 const (
 	CategoryCompute   = "compute"
 	CategoryData      = "data"
@@ -12,11 +10,8 @@ const (
 	CategoryOther     = "other"
 )
 
-// platformCategory maps OTel `cloud.platform` values to a category bucket.
-// Only the platforms Optikk realistically observes are listed; anything else
-// resolves to CategoryOther.
 var platformCategory = map[string]string{
-	// AWS
+
 	"aws_ec2":               CategoryCompute,
 	"aws_eks":               CategoryCompute,
 	"aws_ecs":               CategoryCompute,
@@ -39,7 +34,6 @@ var platformCategory = map[string]string{
 	"aws_kinesis":           CategoryStreaming,
 	"aws_bedrock":           CategoryAI,
 
-	// GCP
 	"gcp_compute_engine":    CategoryCompute,
 	"gcp_kubernetes_engine": CategoryCompute,
 	"gcp_cloud_run":         CategoryCompute,
@@ -56,7 +50,6 @@ var platformCategory = map[string]string{
 	"gcp_dataflow":          CategoryStreaming,
 	"gcp_vertex_ai":         CategoryAI,
 
-	// Azure
 	"azure_vm":             CategoryCompute,
 	"azure_aks":            CategoryCompute,
 	"azure_functions":      CategoryCompute,
@@ -74,7 +67,6 @@ var platformCategory = map[string]string{
 	"azure_openai":         CategoryAI,
 }
 
-// CategoryFor returns the category bucket for a cloud.platform value.
 func CategoryFor(platform string) string {
 	if c, ok := platformCategory[platform]; ok {
 		return c
@@ -82,13 +74,11 @@ func CategoryFor(platform string) string {
 	return CategoryOther
 }
 
-// Health classification thresholds, matching the infrastructure/nodes module.
 const (
 	unhealthyErrorRate = 10.0
 	degradedErrorRate  = 2.0
 )
 
-// classifyHealth buckets an entity by its error-rate percentage.
 func classifyHealth(errorRate float64) string {
 	switch {
 	case errorRate > unhealthyErrorRate:

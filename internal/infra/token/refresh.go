@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// refreshTokenBytes is the entropy of an opaque refresh token.
 const refreshTokenBytes = 32
 
 func GenerateRefreshToken() (raw string, hash string, err error) {

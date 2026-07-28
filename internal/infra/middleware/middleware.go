@@ -22,10 +22,6 @@ type ctxKey int
 
 const requestIDKey ctxKey = iota
 
-// RequestID attaches a correlation id to each request so a 500 or auth denial
-// can be traced back to its log line. It reuses an inbound X-Request-Id, else
-// the trace-id from a W3C traceparent, else a fresh random id, and echoes the
-// chosen id back in the X-Request-Id response header.
 func RequestID() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,14 +39,11 @@ func RequestID() func(http.Handler) http.Handler {
 	}
 }
 
-// RequestIDFrom returns the correlation id attached by RequestID, or "".
 func RequestIDFrom(ctx context.Context) string {
 	id, _ := ctx.Value(requestIDKey).(string)
 	return id
 }
 
-// traceIDFromTraceparent extracts the trace-id from a W3C traceparent header
-// (version-traceid-spanid-flags), or "" if it is malformed.
 func traceIDFromTraceparent(tp string) string {
 	parts := strings.Split(tp, "-")
 	if len(parts) < 2 || len(parts[1]) != 32 {
@@ -77,9 +70,6 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 		origins = append(origins, origin)
 	}
 
-	// match reports whether origin is allowed and whether it matched a wildcard
-	// "*" entry. An empty allowlist denies all cross-origin requests: falling
-	// open would let any site make credentialed calls on a user's behalf.
 	match := func(origin string) (allowed, wildcard bool) {
 		if origin == "" || len(origins) == 0 {
 			return false, false
@@ -98,9 +88,6 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 		return false, false
 	}
 
-	// setOrigin writes the CORS origin/credential headers per the spec: "*" and
-	// credentials are mutually exclusive, so a wildcard match echoes "*" without
-	// credentials, while a concrete match reflects the origin with credentials.
 	setOrigin := func(headers http.Header, origin string) bool {
 		allowed, wildcard := match(origin)
 		if !allowed {
@@ -247,8 +234,6 @@ func bearerAuthState(r *http.Request, tokens *token.Service) (token.AuthState, b
 	return state, true
 }
 
-// RequireAdmin gates routes to tenant admins. It reads the role already
-// resolved by TenantMiddleware; it does not re-parse the token.
 func RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if types.TenantFrom(r.Context()).UserRole != "admin" {

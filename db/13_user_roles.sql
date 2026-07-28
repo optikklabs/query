@@ -1,11 +1,11 @@
--- Replace the platform-wide is_admin flag with a tenant-scoped role.
--- Idempotent: the migrator re-runs every file on each boot.
+                                                                     
+                                                            
 
 ALTER TABLE optikk.users
   ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'member';
 
--- Backfill role from is_admin only while that column still exists, so the
--- statement stays valid on later boots after is_admin has been dropped.
+                                                                          
+                                                                        
 SET @backfill := IF(
   EXISTS(SELECT 1 FROM information_schema.columns
          WHERE table_schema = 'optikk' AND table_name = 'users'

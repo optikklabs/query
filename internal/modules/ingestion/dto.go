@@ -1,15 +1,10 @@
 package ingestion
 
-// Config holds operator-tunable settings for the ingestion usage view.
-// The monthly commitments are the contracted ingestion budget the view compares
-// against; they have no source in the telemetry store, so they live here as
-// configurable constants (per-tenant/plan-based commitments are future work).
 type Config struct {
 	Enabled                 bool
 	MonthlyRecordCommitment uint64
 	MonthlyByteCommitment   uint64
-	// Billing rates the cost estimate applies to metered usage. Logs and traces
-	// bill per ingested GB; metrics bill per DPM (data points per minute).
+
 	PricePerGBLogsTraces float64
 	PricePerDPMMetrics   float64
 	Currency             string
@@ -19,14 +14,13 @@ func DefaultConfig() Config {
 	return Config{
 		Enabled:                 true,
 		MonthlyRecordCommitment: 5_000_000_000,
-		MonthlyByteCommitment:   50 * 1024 * 1024 * 1024 * 1024, // 50 TiB/month
-		PricePerGBLogsTraces:    0.10,                           // USD per GB, logs + traces
-		PricePerDPMMetrics:      0.008,                          // USD per DPM, metrics
+		MonthlyByteCommitment:   50 * 1024 * 1024 * 1024 * 1024,
+		PricePerGBLogsTraces:    0.10,
+		PricePerDPMMetrics:      0.008,
 		Currency:                "USD",
 	}
 }
 
-// Rates projects the billing knobs into the value the cost calculator consumes.
 func (c Config) Rates() Rates {
 	return Rates{
 		Currency:        c.Currency,
@@ -35,7 +29,6 @@ func (c Config) Rates() Rates {
 	}
 }
 
-// SignalTotals carries the period record and byte counts per telemetry signal.
 type SignalTotals struct {
 	Logs             uint64 `json:"logs"`
 	Spans            uint64 `json:"spans"`
@@ -47,7 +40,6 @@ type SignalTotals struct {
 	Bytes            uint64 `json:"bytes"`
 }
 
-// TypeShare is one telemetry type's contribution to the period total.
 type TypeShare struct {
 	Type     string  `json:"type"`
 	Label    string  `json:"label"`
@@ -68,9 +60,6 @@ type TopMetric struct {
 	Timeseries uint64 `json:"timeseries"`
 }
 
-// SummaryResponse powers the KPI strip, the by-type breakdown and the metrics
-// pillar. Record- and byte-denominated facts sit side by side so the web unit
-// toggle switches without a second round trip.
 type SummaryResponse struct {
 	Totals                 SignalTotals `json:"totals"`
 	ActiveTimeseries       uint64       `json:"activeTimeseries"`
@@ -87,8 +76,6 @@ type SummaryResponse struct {
 	ByType                 []TypeShare  `json:"byType"`
 }
 
-// TimeseriesSeries is one stacked band (a signal type or a service). Data is
-// records; ByteData is the same band denominated in bytes.
 type TimeseriesSeries struct {
 	ID       string   `json:"id"`
 	Label    string   `json:"label"`
@@ -96,14 +83,12 @@ type TimeseriesSeries struct {
 	ByteData []uint64 `json:"byteData"`
 }
 
-// TimeseriesResponse is the daily stacked series.
 type TimeseriesResponse struct {
 	GroupBy string             `json:"groupBy"`
 	Dates   []string           `json:"dates"`
 	Series  []TimeseriesSeries `json:"series"`
 }
 
-// ServiceRow is one row of the top-ingesting-services table.
 type ServiceRow struct {
 	Name       string   `json:"name"`
 	Env        string   `json:"env"`
@@ -119,7 +104,6 @@ type ServiceRow struct {
 	ByteSpark  []uint64 `json:"byteSpark"`
 }
 
-// ServicesResponse is the full top-services table payload.
 type ServicesResponse struct {
 	Services         []ServiceRow `json:"services"`
 	TotalServices    int          `json:"totalServices"`

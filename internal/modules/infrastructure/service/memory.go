@@ -30,7 +30,6 @@ func (s *Service) GetMemoryByInstance(ctx context.Context, tenantID int64, host,
 	return foldMemoryMetricRows(rows), nil
 }
 
-// foldMemoryMetricRows blends memory metrics into a utilization percentage.
 func foldMemoryMetricRows(rows []repository.MemoryMetricNameRow) *float64 {
 	by := make(map[string]float64, len(rows))
 	for _, r := range rows {

@@ -10,10 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/metrics"
 )
 
-// Parallel of the ClickHouse seam, wrapping sqlx on the MariaDB side
-// with a Prometheus histogram and error logging.
-
-// GetSQL scans a single row into dest without wrapping ErrNoRows.
 func GetSQL(ctx context.Context, db *sqlx.DB, op string, dest any, query string, args ...any) error {
 	done := startSQLOp(ctx)
 	start := time.Now()

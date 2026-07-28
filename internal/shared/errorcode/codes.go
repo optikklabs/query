@@ -1,23 +1,22 @@
 package errorcode
 
-// Request & validation errors (4xx)
 const (
-	BadRequest      = "BAD_REQUEST"
-	Validation      = "VALIDATION_ERROR"
-	Unauthorized    = "UNAUTHORIZED"
-	Forbidden       = "FORBIDDEN"
-	NotFound        = "NOT_FOUND"
-	Conflict        = "CONFLICT"
-	RateLimited     = "RATE_LIMITED"
-	TrialExpired    = "TRIAL_EXPIRED"
+	BadRequest   = "BAD_REQUEST"
+	Validation   = "VALIDATION_ERROR"
+	Unauthorized = "UNAUTHORIZED"
+	Forbidden    = "FORBIDDEN"
+	NotFound     = "NOT_FOUND"
+	Conflict     = "CONFLICT"
+	RateLimited  = "RATE_LIMITED"
+	TrialExpired = "TRIAL_EXPIRED"
 )
 
 const (
-	Internal        = "INTERNAL_ERROR"
-	QueryFailed     = "QUERY_FAILED"
-	Unavailable     = "SERVICE_UNAVAILABLE"
+	Internal    = "INTERNAL_ERROR"
+	QueryFailed = "QUERY_FAILED"
+	Unavailable = "SERVICE_UNAVAILABLE"
 )
 
 const (
-	NoData      = "NO_DATA"
+	NoData = "NO_DATA"
 )

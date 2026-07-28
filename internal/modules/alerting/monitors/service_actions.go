@@ -11,8 +11,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/alerting/shared/query"
 )
 
-// ErrNotAlerting is returned by Ack when the monitor is not currently in
-// alert or warn status.
 var ErrNotAlerting = errors.New("monitor is not currently alerting")
 
 func (s *Service) Ack(ctx context.Context, tenantID, userID, id int64) error {

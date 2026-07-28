@@ -2,7 +2,6 @@ package redfleet
 
 import "time"
 
-// FleetTotals is the fleet-wide RED rollup powering the overview hero KPIs.
 type FleetTotals struct {
 	ServiceCount   int64   `json:"serviceCount"`
 	TotalSpanCount int64   `json:"totalSpanCount"`
@@ -14,8 +13,6 @@ type FleetTotals struct {
 	AvgP99Ms       float64 `json:"avgP99Ms"`
 }
 
-// FleetOverviewResponse combines totals and per-service RED metrics in a single
-// payload so the frontend needs only one request instead of two.
 type FleetOverviewResponse struct {
 	Totals   FleetTotals        `json:"totals"`
 	Services []ServiceREDMetric `json:"services"`
@@ -101,8 +98,6 @@ type redMetricsRow struct {
 	P99Ms       float32   `ch:"p99_ms"`
 }
 
-// OperationBaseline is the windowed p50/p95/p99 for a single service+operation,
-// powering the Trace Detail Duration card's "N× slower than p50" comparison.
 type OperationBaseline struct {
 	ServiceName   string  `json:"serviceName"`
 	OperationName string  `json:"operationName"`

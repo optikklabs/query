@@ -6,8 +6,6 @@ import (
 )
 
 var (
-	// AlertingAuditWriteFailures counts best-effort monitor audit writes that
-	// failed (event history, channel-delivery marks), so the loss is observable.
 	AlertingAuditWriteFailures = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "optikk",
 		Subsystem: "alerting",

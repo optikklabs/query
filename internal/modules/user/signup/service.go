@@ -18,15 +18,10 @@ import (
 
 const verificationTTL = 24 * time.Hour
 
-// trialDuration is the free-trial window a new tenant starts with.
 const trialDuration = 7 * 24 * time.Hour
 
-// termsVersion identifies the Terms/Privacy revision a signup consents to. Bump
-// it when the published terms change so consent is attributable to a version.
 const termsVersion = "2026-07-14"
 
-// Service provisions a new account + tenant, then delegates session issuance to
-// auth. It composes tenant creation, user creation, and token minting.
 type Service struct {
 	repo                 *Repository
 	issuer               *auth.Service
@@ -92,8 +87,6 @@ type signupSecrets struct {
 	verificationExpiry time.Time
 }
 
-// Signup creates the tenant and its first admin user atomically, then issues a
-// session. Returns the response (including api_key) and the raw refresh token.
 func (s *Service) Signup(ctx context.Context, req SignupRequest) (SignupResult, error) {
 	normalized, err := normalizeSignup(req)
 	if err != nil {

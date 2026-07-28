@@ -28,7 +28,6 @@ type QueryResponse struct {
 	PageInfo PageInfo `json:"pageInfo"`
 }
 
-// traceIndexRowDTO is one root span: only what the root itself knows.
 type traceIndexRowDTO struct {
 	TraceID        string    `ch:"trace_id"`
 	SpanID         string    `ch:"span_id"`
@@ -41,7 +40,6 @@ type traceIndexRowDTO struct {
 	RootHTTPStatus string    `ch:"root_http_status"`
 }
 
-// traceAggRow is the trace-level truth aggregated across all of its spans.
 type traceAggRow struct {
 	TraceID    string    `ch:"trace_id"`
 	SpanCount  uint64    `ch:"span_count"`
@@ -71,7 +69,6 @@ type facetDimRow struct {
 	Count uint64 `ch:"cnt"`
 }
 
-// trendRow is one time bucket scanned from the trend query.
 type trendRow struct {
 	TimeBucket time.Time `ch:"time_bucket"`
 	Total      uint64    `ch:"total"`
@@ -92,8 +89,6 @@ func (r *TrendRequest) BindTenant(tenantID int64) error {
 	return r.Filters.Validate()
 }
 
-// SuggestRequest is a type alias for the shared suggest wire payload.
 type SuggestRequest = filterutil.SuggestRequest
 
-// suggestionRow is a type alias for the shared ClickHouse scan target.
 type suggestionRow = filterutil.SuggestionRow

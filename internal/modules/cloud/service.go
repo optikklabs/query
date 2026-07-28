@@ -14,7 +14,6 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-// categoryOrder fixes the display order of category buckets.
 var categoryOrder = []string{
 	CategoryCompute, CategoryData, CategoryStorage,
 	CategoryNetwork, CategoryStreaming, CategoryAI, CategoryOther,
@@ -103,7 +102,6 @@ func (s *Service) GetProviderResources(ctx context.Context, tenantID int64, prov
 	return out, nil
 }
 
-// aggregateCategories folds per-platform counts into ordered category buckets.
 func aggregateCategories(rows []CategoryRow) map[string][]CategoryCount {
 	totals := map[string]map[string]int64{}
 	for _, row := range rows {
@@ -126,7 +124,6 @@ func aggregateCategories(rows []CategoryRow) map[string][]CategoryCount {
 	return out
 }
 
-// aggregateHealth classifies each entity and counts buckets per provider.
 func aggregateHealth(rows []HealthRow) map[string]HealthCounts {
 	out := map[string]HealthCounts{}
 	for _, row := range rows {

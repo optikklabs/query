@@ -9,7 +9,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/user/shared"
 )
 
-// Repository holds the tenant MySQL access (lookup + api-key updates).
 type Repository struct {
 	db *sqlx.DB
 }

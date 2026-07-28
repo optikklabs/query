@@ -17,7 +17,7 @@ type module struct {
 func (m *module) Name() string { return "user-users" }
 
 func (m *module) RegisterRoutes(group chi.Router) {
-	// User management is restricted to tenant admins and scoped to their tenant.
+
 	group.Group(func(r chi.Router) {
 		r.Use(middleware.RequireAdmin)
 		r.Post("/users", m.handler.CreateUser)

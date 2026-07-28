@@ -17,8 +17,6 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// TopUsers ranks users by cost over the window from raw gen_ai spans. Cost is
-// priced per-model at query time so it stays re-priceable.
 func (r *Repository) TopUsers(ctx context.Context, tenantID, startMs, endMs int64, limit int) ([]userRow, error) {
 	query := `
 		SELECT llm_user_id AS user_id,
@@ -39,7 +37,6 @@ func (r *Repository) TopUsers(ctx context.Context, tenantID, startMs, endMs int6
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.users.TopUsers", &rows, query, args...)
 }
 
-// Overview aggregates active users, total traces and total cost in one pass.
 func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int64) (overviewRow, error) {
 	query := `
 		SELECT uniqCombined64(llm_user_id) AS active_users,
@@ -53,7 +50,6 @@ func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int6
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.Overview", &row, query, args...)
 }
 
-// MeanScoreByUser returns the mean numeric score per user for scored users.
 func (r *Repository) MeanScoreByUser(ctx context.Context, tenantID, startMs, endMs int64) ([]userScoreRow, error) {
 	query := `
 		SELECT user_id, avg(value) AS mean

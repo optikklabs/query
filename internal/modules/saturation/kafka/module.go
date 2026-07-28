@@ -1,13 +1,3 @@
-// Package kafka serves the Kafka saturation pages: topic throughput and
-// consumer-group partitions from the metrics rollup, and the stream topology
-// graph from span_stats.
-//
-// Layering is enforced by the package structure rather than convention:
-//
-//	kafka (module, handler) -> service -> repository
-//
-// with models shared by all three. A handler cannot reach a repository method
-// because it does not import that package.
 package kafka
 
 import (

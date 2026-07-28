@@ -20,8 +20,6 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-// scoreInsert is the row written by human/API score submissions. The trace's
-// service/session/user are denormalised from the root span at write time.
 type scoreInsert struct {
 	TenantID    int64
 	TraceID     string
@@ -37,8 +35,6 @@ type scoreInsert struct {
 	Comment     string
 }
 
-// LookupTraceContext fetches service/session/user for a trace's root span so
-// submitted scores carry the same denormalised context as ingested ones.
 func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, traceID string) (scoreInsert, error) {
 	now := time.Now()
 	start := now.Add(-30 * 24 * time.Hour)
@@ -73,7 +69,6 @@ func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, tra
 	}, nil
 }
 
-// Insert writes one score with source='human'.
 func (r *Repository) Insert(ctx context.Context, s scoreInsert) error {
 	query := `INSERT INTO ` + scoresTable + `
 		(tenant_id, timestamp, trace_id, span_id, session_id, user_id, service,
@@ -123,7 +118,6 @@ func (r *Repository) Timeseries(ctx context.Context, tenantID, startMs, endMs in
 	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "llm.scores.Timeseries", &rows, query, args...)
 }
 
-// Distribution buckets numeric scores into ten 0.1-wide bins [0,1].
 func (r *Repository) Distribution(ctx context.Context, tenantID, startMs, endMs int64, name string) ([]histRow, error) {
 	query := `
 		SELECT least(toUInt8(value * 10), 9) AS bucket, count() AS cnt

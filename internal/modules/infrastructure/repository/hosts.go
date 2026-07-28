@@ -13,14 +13,12 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-// HostMetricRow is one utilization metric for one host.
 type HostMetricRow struct {
 	Host       string  `ch:"host"`
 	MetricName string  `ch:"metric_name"`
 	Value      float64 `ch:"value"`
 }
 
-// HostSpansRow is a host's RED traffic for one service.
 type HostSpansRow struct {
 	Host         string    `ch:"host"`
 	Zone         string    `ch:"zone"`

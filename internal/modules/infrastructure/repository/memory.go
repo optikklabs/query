@@ -17,8 +17,6 @@ var memMetricNames = []string{
 	infraconsts.MetricJVMMemoryMax,
 }
 
-// MemoryMetricNameRow is one metric of the memory family, averaged over the
-// range.
 type MemoryMetricNameRow struct {
 	MetricName string  `ch:"metric_name"`
 	Value      float64 `ch:"value"`

@@ -9,8 +9,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/secretbox"
 )
 
-// Service owns provider-key validation and envelope encryption. The secretbox
-// may be nil when no encryption key is configured; writes then fail closed.
 type Service struct {
 	repo *Repository
 	box  *secretbox.Box
@@ -93,8 +91,6 @@ func (s *Service) Delete(ctx context.Context, tenantID, id int64) error {
 	return nil
 }
 
-// ResolveKey decrypts and returns the tenant's plaintext key for a provider. It
-// is the single decryption entry point; callers must not log the result.
 func (s *Service) ResolveKey(ctx context.Context, tenantID int64, provider string) (string, error) {
 	if s.box == nil {
 		return "", ErrNoEncryption

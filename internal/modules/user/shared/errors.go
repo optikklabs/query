@@ -20,7 +20,6 @@ const (
 	ServiceErrorTrialExpired ServiceErrorCode = errorcode.TrialExpired
 )
 
-// ServiceError represents an application service error.
 type ServiceError struct {
 	Code    ServiceErrorCode
 	Message string
@@ -57,7 +56,6 @@ func NewInternalError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorInternal, Message: message, Cause: cause}
 }
 
-// NewTrialExpiredError signals a suspended tenant (trial ended). Maps to 402.
 func NewTrialExpiredError(message string, cause error) error {
 	return &ServiceError{Code: ServiceErrorTrialExpired, Message: message, Cause: cause}
 }

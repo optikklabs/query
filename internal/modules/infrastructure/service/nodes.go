@@ -20,7 +20,7 @@ func (s *Service) GetInfrastructureNodes(ctx context.Context, tenantID int64, st
 		out[i] = models.InfrastructureNode{
 			Host:     r.Host,
 			PodCount: int64(r.PodCount),
-			// Container count is not derived from spans.
+
 			ContainerCount: 0,
 
 			Services:     []string{},

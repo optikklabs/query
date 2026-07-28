@@ -1,13 +1,3 @@
-// Package logs serves the logs pages: the search/list explorer with
-// suggestions, facet counts, severity trends, single-log deep links, and
-// trace correlation.
-//
-// Layering is enforced by the package structure rather than convention:
-//
-//	logs (module, handler) -> service -> repository
-//
-// with models shared by all three. A handler cannot reach a repository method
-// because it does not import that package.
 package logs
 
 import (

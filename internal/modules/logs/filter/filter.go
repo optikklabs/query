@@ -61,8 +61,6 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket`
 	where = `WHERE 1=1`
 
-	// Resource dimensions are all PREWHERE: they are low-cardinality columns
-	// in the sort key, so pruning on them before the body scan is the point.
 	args = filterutil.AppendIn(&prewhere, args,
 		filterutil.InClause{Column: "service", Bind: "services", Values: f.Services},
 		filterutil.InClause{Column: "service", Bind: "excServices", Values: f.ExcludeServices, Negate: true},
@@ -89,9 +87,7 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 		args = append(args, clickhouse.Named("spanID", f.SpanID))
 	}
 	if f.Search != "" {
-		// Case-insensitive substring: the only search semantic. The legacy
-		// searchMode field is still accepted on the wire but ignored.
-		// LIKE (not position*) so the idx_body_ngram skip index can prune.
+
 		where += ` AND lowerUTF8(body) LIKE @search`
 		args = append(args, clickhouse.Named("search", likeSubstringPattern(f.Search)))
 	}
@@ -103,18 +99,11 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 	return prewhere, where, args
 }
 
-// likeSubstringPattern turns a raw search term into a %term% LIKE pattern,
-// lowercased to match the lowerUTF8(body) column expression and with LIKE
-// metacharacters escaped so user input always means a literal substring.
 func likeSubstringPattern(term string) string {
 	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.ToLower(term))
 	return "%" + esc + "%"
 }
 
-// buildAttrClause emits the WHERE predicate for one attribute filter.
-// Values live in three typed maps; eq/neq check the string map and, when the
-// value parses as a number or bool, the matching typed map as well, so a
-// filter works regardless of how the producer typed the attribute.
 func buildAttrClause(af AttrFilter, i int) (string, []any) {
 	idx := strconv.Itoa(i)
 	k := "akey_" + idx
@@ -133,8 +122,7 @@ func buildAttrClause(af AttrFilter, i int) (string, []any) {
 		return ` AND match(attributes_string[@` + k + `], @` + v + `)`,
 			[]any{keyArg, clickhouse.Named(v, af.Value)}
 	case "gt", "gte", "lt", "lte":
-		// Validate guarantees the value parses; NULL (missing key or
-		// non-numeric string value) compares false and drops the row.
+
 		n, _ := strconv.ParseFloat(af.Value, 64)
 		expr := `coalesce(toFloat64OrNull(attributes_string[@` + k + `]),` +
 			` if(mapContains(attributes_number, @` + k + `), attributes_number[@` + k + `], NULL))`
@@ -145,11 +133,9 @@ func buildAttrClause(af AttrFilter, i int) (string, []any) {
 	case "not_exists":
 		return ` AND NOT ` + attrExistsExpr(k), []any{keyArg}
 	}
-	return "", nil // unreachable: ops are whitelisted in Validate
+	return "", nil
 }
 
-// buildAttrEqClause handles eq/neq. neq requires the key to exist so that
-// "not equals" never matches rows missing the attribute entirely.
 func buildAttrEqClause(af AttrFilter, k, v string, keyArg any, negate bool) (string, []any) {
 	op := "="
 	if negate {
