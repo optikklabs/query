@@ -50,14 +50,36 @@ func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int6
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.Overview", &row, query, args...)
 }
 
-func (r *Repository) MeanScoreByUser(ctx context.Context, tenantID, startMs, endMs int64) ([]userScoreRow, error) {
+func (r *Repository) MeanScoreByUser(ctx context.Context, tenantID, startMs, endMs int64, userIDs []string) ([]userScoreRow, error) {
 	query := `
 		SELECT user_id, avg(value) AS mean
 		FROM optikk.llm_scores
 		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
-		WHERE user_id != '' AND data_type = 'numeric'
+		WHERE user_id IN @userIDs AND data_type = 'numeric'
 		GROUP BY user_id`
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
+		clickhouse.Named("userIDs", userIDs))
 	var rows []userScoreRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.MeanScoreByUser", &rows, query,
-		chargs.RangeArgs(tenantID, startMs, endMs)...)
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.MeanScoreByUser", &rows, query, args...)
+}
+
+func (r *Repository) LowScoreUserCount(ctx context.Context, tenantID, startMs, endMs int64, threshold float64) (uint64, error) {
+	query := `
+		SELECT countIf(mean < @threshold) AS low_score
+		FROM (
+		    SELECT avg(value) AS mean
+		    FROM optikk.llm_scores
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		    WHERE user_id != '' AND data_type = 'numeric'
+		    GROUP BY user_id
+		)`
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
+		clickhouse.Named("threshold", threshold))
+	var row struct {
+		LowScore uint64 `ch:"low_score"`
+	}
+	if err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.LowScoreUserCount", &row, query, args...); err != nil {
+		return 0, err
+	}
+	return row.LowScore, nil
 }

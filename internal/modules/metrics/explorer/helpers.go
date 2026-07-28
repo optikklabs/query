@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/metrics/filter"
@@ -31,8 +30,8 @@ func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, en
 	out := make([]TimeseriesPoint, len(rows))
 	for i, row := range rows {
 		out[i] = TimeseriesPoint{
-			Timestamp: timebucket.FormatDisplayBucket(row.BucketAt),
-			Value:     computeValue(row, aggregation, bucketSec, cumulative, histogram),
+			TimestampMs: row.BucketAt.UnixMilli(),
+			Value:       computeValue(row, aggregation, bucketSec, cumulative, histogram),
 		}
 	}
 	return out
@@ -168,8 +167,7 @@ func shouldZeroFill(metricType, aggregation string, cumulative bool) bool {
 func mapPointsToAxis(points []TimeseriesPoint, tsIndex map[int64]int, length int) []*float64 {
 	values := make([]*float64, length)
 	for _, p := range points {
-		ms := parseTimestampMs(p.Timestamp)
-		if idx, ok := tsIndex[ms]; ok {
+		if idx, ok := tsIndex[p.TimestampMs]; ok {
 			v := p.Value
 			values[idx] = &v
 		}
@@ -270,14 +268,6 @@ func groupTags(keys, values []string) map[string]string {
 		}
 	}
 	return tags
-}
-
-func parseTimestampMs(ts string) int64 {
-	t, err := time.Parse("2006-01-02 15:04:05", ts)
-	if err != nil {
-		return 0
-	}
-	return t.UnixMilli()
 }
 
 type pointGroup struct {

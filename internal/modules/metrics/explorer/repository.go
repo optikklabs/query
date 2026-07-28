@@ -2,7 +2,6 @@ package explorer
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -42,31 +41,6 @@ func (r *Repository) ListMetricNames(ctx context.Context, tenantID, startMs, end
 	}
 	var rows []metricNameDTO
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListMetricNames", &rows, query, args...); err != nil {
-		return nil, err
-	}
-	return rows, nil
-}
-
-func (r *Repository) ListAttributeTagKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]tagKeyDTO, error) {
-
-	const dynamicQuery = `
-		SELECT DISTINCT arrayJoin(mapKeys(attributes)) AS tag_key
-		FROM optikk.metrics_series
-		PREWHERE tenant_id     = @tenantID
-		     AND timestamp   BETWEEN @start AND @end
-		     AND metric_name = @metricName
-		ORDER BY tag_key
-		LIMIT 200`
-
-	dynamicArgs := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
-		clickhouse.Named("metricName", metricName),
-	}
-
-	var rows []tagKeyDTO
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListTagKeys.GetDynamicKeys", &rows, dynamicQuery, dynamicArgs...); err != nil {
 		return nil, err
 	}
 	return rows, nil
@@ -129,33 +103,39 @@ func (r *Repository) ListAttributeTagValues(ctx context.Context, tenantID, start
 	return rows, nil
 }
 
-func (r *Repository) ListTagValuesForKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string, keys []string) ([]tagKeyValueDTO, error) {
+func (r *Repository) ListTagValuesAllKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]tagKeyValueDTO, error) {
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
-	if len(keys) == 0 {
-		return nil, nil
-	}
-	arms, armArgs := filter.BuildTagValueArms(keys)
-	if len(arms) == 0 {
-		return nil, nil
-	}
+
+	// One scan for every key: dynamic attribute entries and the four static
+	// resource columns folded into the same ARRAY JOIN. The final LIMIT caps
+	// the response at ~200 keys, matching the old per-key-arm limit.
+	query := `
+		SELECT kv.1    AS tag_key,
+		       kv.2    AS tag_value,
+		       count() AS count
+		FROM optikk.metrics_series
+		ARRAY JOIN arrayConcat(
+		    CAST(attributes, 'Array(Tuple(String, String))'),
+		    [('service', toString(service)), ('host', toString(host)),
+		     ('environment', toString(environment)), ('k8s_namespace', toString(k8s_namespace))]
+		) AS kv
+		PREWHERE tenant_id     = @tenantID
+		     AND timestamp   BETWEEN @start AND @end
+		     AND metric_name = @metricName
+		WHERE kv.2 != ''
+		GROUP BY tag_key, tag_value
+		ORDER BY tag_key, count DESC
+		LIMIT 100 BY tag_key
+		LIMIT 20000`
+
 	args := []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricName", metricName),
 	}
-	args = append(args, armArgs...)
-
-	query := `
-		SELECT tag_key, tag_value, sum(c) AS count
-		FROM (` + strings.Join(arms, "\n\t\t\tUNION ALL") + `
-		)
-		GROUP BY tag_key, tag_value
-		ORDER BY tag_key, count DESC
-		LIMIT 100 BY tag_key`
-
 	var rows []tagKeyValueDTO
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListTagValuesForKeys", &rows, query, args...); err != nil {
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListTagValuesAllKeys", &rows, query, args...); err != nil {
 		return nil, err
 	}
 	return rows, nil

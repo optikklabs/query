@@ -9,10 +9,6 @@ type metricNameDTO struct {
 	Description string `ch:"description"`
 }
 
-type tagKeyDTO struct {
-	TagKey string `ch:"tag_key"`
-}
-
 type tagValueDTO struct {
 	TagValue string `ch:"tag_value"`
 	Count    uint64 `ch:"count"`

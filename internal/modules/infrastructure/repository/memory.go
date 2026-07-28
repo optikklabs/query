@@ -26,7 +26,7 @@ func (r *Repository) QueryMemoryUtilizationAgg(ctx context.Context, tenantID int
 	query := `
 		SELECT
 		    metric_name AS metric_name,
-		    sum(val_sum) / sum(val_count)  AS value
+		    if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count))  AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
 		PREWHERE tenant_id        = @tenantID
 		     AND metric_name   IN @metricNames
@@ -47,7 +47,7 @@ func (r *Repository) QueryMemoryUtilizationForInstance(ctx context.Context, tena
 		)
 		SELECT
 		    metric_name AS metric_name,
-		    sum(val_sum) / sum(val_count)  AS value
+		    if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count))  AS value
 		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
 		PREWHERE tenant_id        = @tenantID
 		     AND metric_name   IN @metricNames

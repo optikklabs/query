@@ -141,6 +141,37 @@ func FillGaps[R, P any](
 	return points
 }
 
+// FillGapsKeyed groups rows by key and builds one dense series per key over
+// the grain buckets in [startMs, endMs]. Keys keep first-seen order; point
+// receives the zero row and ok=false for buckets with no matching row.
+func FillGapsKeyed[R, P any](
+	startMs, endMs int64, grain time.Duration, rows []R,
+	key func(R) string,
+	at func(R) time.Time,
+	point func(t time.Time, row R, ok bool) P,
+) (keys []string, buckets []time.Time, series [][]P) {
+	byKey := make(map[string]map[int64]R)
+	for _, r := range rows {
+		k := key(r)
+		if _, ok := byKey[k]; !ok {
+			byKey[k] = make(map[int64]R)
+			keys = append(keys, k)
+		}
+		byKey[k][at(r).UTC().Truncate(grain).Unix()] = r
+	}
+	buckets = DenseBuckets(startMs, endMs, grain)
+	series = make([][]P, len(keys))
+	for i, k := range keys {
+		points := make([]P, len(buckets))
+		for j, t := range buckets {
+			row, ok := byKey[k][t.Unix()]
+			points[j] = point(t, row, ok)
+		}
+		series[i] = points
+	}
+	return keys, buckets, series
+}
+
 func ZeroFillGaps(values []*float64) {
 	zero := 0.0
 	for i, v := range values {

@@ -7,18 +7,14 @@ type MetricNameResult struct {
 	Description string `json:"description"`
 }
 
-type TagKeyResult struct {
-	TagKey string `json:"tagKey"`
-}
-
 type TagValueResult struct {
 	TagValue string `json:"tagValue"`
 	Count    uint64 `json:"count"`
 }
 
 type TimeseriesPoint struct {
-	Timestamp string  `json:"timestamp"`
-	Value     float64 `json:"value"`
+	TimestampMs int64
+	Value       float64
 }
 
 type FEMetricNameEntry struct {

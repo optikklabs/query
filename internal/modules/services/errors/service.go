@@ -18,97 +18,71 @@ func NewService(repo *Repository) *Service {
 }
 
 func (s *Service) GetServiceErrorRate(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]TimeSeriesPoint, error) {
-	var (
-		raw []rawServiceRateRow
-		err error
-	)
-	if serviceName == "" {
-		raw, err = s.repo.ServiceErrorRateRowsAll(ctx, tenantID, startMs, endMs)
-	} else {
-		raw, err = s.repo.ServiceErrorRateRowsByService(ctx, tenantID, startMs, endMs, serviceName)
-	}
+	raw, err := s.repo.ServiceErrorRateRows(ctx, tenantID, startMs, endMs, serviceName)
 	if err != nil {
 		return nil, err
 	}
-
-	grain := timebucket.DisplayGrain(endMs - startMs)
-	bucketAt := func(r rawServiceRateRow) time.Time { return r.BucketAt }
-	point := func(svc string) func(time.Time, rawServiceRateRow, bool) TimeSeriesPoint {
-		return func(t time.Time, row rawServiceRateRow, _ bool) TimeSeriesPoint {
+	return fillServicePoints(startMs, endMs, serviceName, raw,
+		func(t time.Time, row rawServiceRateRow, _ bool) TimeSeriesPoint {
 			total, errs := int64(row.RequestCount), int64(row.ErrorCount)
 			return TimeSeriesPoint{
-				ServiceName:  svc,
 				Timestamp:    t,
 				RequestCount: total,
 				ErrorCount:   errs,
 				ErrorRate:    metrics.ComputeErrorRate(errs, total),
 				AvgLatency:   metrics.ComputeAvgLatency(row.DurationMsSum, row.RequestCount),
 			}
-		}
-	}
-
-	if serviceName == "" {
-		byService := make(map[string][]rawServiceRateRow)
-		for _, row := range raw {
-			if row.ServiceName != "" {
-				byService[row.ServiceName] = append(byService[row.ServiceName], row)
-			}
-		}
-		var points []TimeSeriesPoint
-		for svc, svcRows := range byService {
-			points = append(points, timebucket.FillGaps(startMs, endMs, grain, svcRows, bucketAt, point(svc))...)
-		}
-		return points, nil
-	}
-
-	return timebucket.FillGaps(startMs, endMs, grain, raw, bucketAt, point(serviceName)), nil
+		}), nil
 }
 
 func (s *Service) GetErrorVolume(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]TimeSeriesPoint, error) {
-	var (
-		raw []rawServiceErrorRow
-		err error
-	)
-	if serviceName == "" {
-		raw, err = s.repo.ErrorVolumeRowsAll(ctx, tenantID, startMs, endMs)
-	} else {
-		raw, err = s.repo.ErrorVolumeRowsByService(ctx, tenantID, startMs, endMs, serviceName)
-	}
+	raw, err := s.repo.ServiceErrorRateRows(ctx, tenantID, startMs, endMs, serviceName)
 	if err != nil {
 		return nil, err
 	}
+	return fillServicePoints(startMs, endMs, serviceName, raw,
+		func(t time.Time, row rawServiceRateRow, _ bool) TimeSeriesPoint {
+			return TimeSeriesPoint{Timestamp: t, ErrorCount: int64(row.ErrorCount)}
+		}), nil
+}
 
+// fillServicePoints densifies rate rows into per-service series: one series
+// for a named service, or one per non-empty service in the rows otherwise.
+func fillServicePoints(
+	startMs, endMs int64, serviceName string, raw []rawServiceRateRow,
+	point func(t time.Time, row rawServiceRateRow, ok bool) TimeSeriesPoint,
+) []TimeSeriesPoint {
 	grain := timebucket.DisplayGrain(endMs - startMs)
-	bucketAt := func(r rawServiceErrorRow) time.Time { return r.BucketAt }
-	point := func(svc string) func(time.Time, rawServiceErrorRow, bool) TimeSeriesPoint {
-		return func(t time.Time, row rawServiceErrorRow, _ bool) TimeSeriesPoint {
-			return TimeSeriesPoint{
-				ServiceName: svc,
-				Timestamp:   t,
-				ErrorCount:  int64(row.ErrorCount),
-			}
+	at := func(r rawServiceRateRow) time.Time { return r.BucketAt }
+
+	if serviceName != "" {
+		points := timebucket.FillGaps(startMs, endMs, grain, raw, at, point)
+		for i := range points {
+			points[i].ServiceName = serviceName
 		}
+		return points
 	}
 
-	if serviceName == "" {
-		byService := make(map[string][]rawServiceErrorRow)
-		for _, row := range raw {
-			if row.ServiceName != "" {
-				byService[row.ServiceName] = append(byService[row.ServiceName], row)
-			}
+	named := make([]rawServiceRateRow, 0, len(raw))
+	for _, row := range raw {
+		if row.ServiceName != "" {
+			named = append(named, row)
 		}
-		var points []TimeSeriesPoint
-		for svc, svcRows := range byService {
-			points = append(points, timebucket.FillGaps(startMs, endMs, grain, svcRows, bucketAt, point(svc))...)
-		}
-		return points, nil
 	}
-
-	return timebucket.FillGaps(startMs, endMs, grain, raw, bucketAt, point(serviceName)), nil
+	services, _, series := timebucket.FillGapsKeyed(startMs, endMs, grain, named,
+		func(r rawServiceRateRow) string { return r.ServiceName }, at, point)
+	var points []TimeSeriesPoint
+	for i, svc := range services {
+		for j := range series[i] {
+			series[i][j].ServiceName = svc
+		}
+		points = append(points, series[i]...)
+	}
+	return points
 }
 
 func (s *Service) GetErrorGroups(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, limit int, cursorIn ErrorGroupsCursor) (PaginatedErrorGroups, error) {
-	raw, err := s.fetchErrorGroups(ctx, tenantID, startMs, endMs, serviceName, limit+1, cursorIn)
+	raw, err := s.repo.ErrorGroupRows(ctx, tenantID, startMs, endMs, serviceName, limit+1, cursorIn)
 	if err != nil {
 		return PaginatedErrorGroups{}, err
 	}
@@ -131,13 +105,6 @@ func (s *Service) GetErrorGroups(ctx context.Context, tenantID int64, startMs, e
 		}
 	}
 	return PaginatedErrorGroups{Results: results, PageInfo: pageInfo}, nil
-}
-
-func (s *Service) fetchErrorGroups(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, limit int, cursorIn ErrorGroupsCursor) ([]rawErrorGroupRow, error) {
-	if serviceName == "" {
-		return s.repo.ErrorGroupRowsAll(ctx, tenantID, startMs, endMs, limit, cursorIn)
-	}
-	return s.repo.ErrorGroupRowsByService(ctx, tenantID, startMs, endMs, serviceName, limit, cursorIn)
 }
 
 func (s *Service) GetErrorGroupDetail(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*ErrorGroupDetail, error) {

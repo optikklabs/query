@@ -17,15 +17,9 @@ func (s *Service) Overview(ctx context.Context, tenantID, startMs, endMs int64) 
 	if err != nil {
 		return UsersOverviewResponse{}, err
 	}
-	scores, err := s.repo.MeanScoreByUser(ctx, tenantID, startMs, endMs)
+	lowScore, err := s.repo.LowScoreUserCount(ctx, tenantID, startMs, endMs, lowScoreThreshold)
 	if err != nil {
 		return UsersOverviewResponse{}, err
-	}
-	var lowScore uint64
-	for _, sc := range scores {
-		if sc.Mean < lowScoreThreshold {
-			lowScore++
-		}
 	}
 	resp := UsersOverviewResponse{ActiveUsers: ov.ActiveUsers, LowScoreUsers: lowScore}
 	if ov.ActiveUsers > 0 {
@@ -44,7 +38,14 @@ func (s *Service) Query(ctx context.Context, tenantID int64, req UsersQueryReque
 	if err != nil {
 		return UsersQueryResponse{}, err
 	}
-	scores, err := s.repo.MeanScoreByUser(ctx, tenantID, req.StartTime, req.EndTime)
+	if len(rows) == 0 {
+		return UsersQueryResponse{Users: []User{}}, nil
+	}
+	userIDs := make([]string, len(rows))
+	for i, r := range rows {
+		userIDs[i] = r.UserID
+	}
+	scores, err := s.repo.MeanScoreByUser(ctx, tenantID, req.StartTime, req.EndTime, userIDs)
 	if err != nil {
 		return UsersQueryResponse{}, err
 	}

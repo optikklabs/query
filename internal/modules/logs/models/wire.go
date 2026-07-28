@@ -20,7 +20,7 @@ func (r *QueryRequest) BindTenant(tenantID int64) error {
 }
 
 type QueryResponse struct {
-	Results  []Log    `json:"results"`
+	Results  []Log              `json:"results"`
 	PageInfo contracts.PageInfo `json:"pageInfo"`
 }
 

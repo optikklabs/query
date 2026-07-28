@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
 	"github.com/optikklabs/query/internal/modules/infrastructure/repository"
+	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 

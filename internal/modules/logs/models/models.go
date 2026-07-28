@@ -101,4 +101,3 @@ type TrendBucket struct {
 	Info       uint64 `json:"info"`
 	Debug      uint64 `json:"debug"`
 }
-

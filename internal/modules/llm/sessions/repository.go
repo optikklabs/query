@@ -62,16 +62,17 @@ func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int6
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "llm.sessions.Overview", &row, query, args...)
 }
 
-func (r *Repository) MeanScoreBySession(ctx context.Context, tenantID, startMs, endMs int64) ([]sessionScoreRow, error) {
+func (r *Repository) MeanScoreBySession(ctx context.Context, tenantID, startMs, endMs int64, sessionIDs []string) ([]sessionScoreRow, error) {
 	query := `
 		SELECT session_id, avg(value) AS mean
 		FROM optikk.llm_scores
 		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
-		WHERE session_id != '' AND data_type = 'numeric'
+		WHERE session_id IN @sessionIDs AND data_type = 'numeric'
 		GROUP BY session_id`
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
+		clickhouse.Named("sessionIDs", sessionIDs))
 	var rows []sessionScoreRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.sessions.MeanScoreBySession", &rows, query,
-		chargs.RangeArgs(tenantID, startMs, endMs)...)
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.sessions.MeanScoreBySession", &rows, query, args...)
 }
 
 func (r *Repository) Detail(ctx context.Context, tenantID int64, sessionID string, startMs, endMs int64) ([]turnRow, error) {

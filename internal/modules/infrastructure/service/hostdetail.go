@@ -10,6 +10,7 @@ import (
 	"github.com/optikklabs/query/internal/modules/infrastructure/repository"
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesdefs"
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
+	"golang.org/x/sync/errgroup"
 )
 
 func (s *Service) GetHostSeries(ctx context.Context, tenantID int64, host, metricID string, startMs, endMs int64) ([]models.SeriesPoint, bool, error) {
@@ -25,12 +26,22 @@ func (s *Service) GetHostSeries(ctx context.Context, tenantID int64, host, metri
 }
 
 func (s *Service) GetHostOverview(ctx context.Context, tenantID int64, host string, startMs, endMs int64) (models.HostOverview, error) {
-	meta, err := s.repo.QueryHostMeta(ctx, tenantID, host, startMs, endMs)
-	if err != nil {
-		return models.HostOverview{}, err
-	}
-	kpis, err := s.repo.QueryKPIs(ctx, tenantID, host, startMs, endMs)
-	if err != nil {
+	var (
+		meta repository.HostMetaRow
+		kpis []repository.KPIRow
+	)
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		var err error
+		meta, err = s.repo.QueryHostMeta(groupCtx, tenantID, host, startMs, endMs)
+		return err
+	})
+	group.Go(func() error {
+		var err error
+		kpis, err = s.repo.QueryKPIs(groupCtx, tenantID, host, startMs, endMs)
+		return err
+	})
+	if err := group.Wait(); err != nil {
 		return models.HostOverview{}, err
 	}
 

@@ -34,39 +34,6 @@ func (s *Service) ListMetricNames(ctx context.Context, tenantID, startMs, endMs 
 	return out, nil
 }
 
-func (s *Service) ListTagKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]TagKeyResult, error) {
-	rows, err := s.repo.ListAttributeTagKeys(ctx, tenantID, startMs, endMs, metricName)
-	if err != nil {
-		return nil, err
-	}
-
-	staticKeys := []TagKeyResult{
-		{TagKey: "service"},
-		{TagKey: "host"},
-		{TagKey: "environment"},
-		{TagKey: "k8s_namespace"},
-	}
-
-	seen := make(map[string]bool)
-	var out []TagKeyResult
-	for _, sk := range staticKeys {
-		seen[sk.TagKey] = true
-		out = append(out, sk)
-	}
-	for _, row := range rows {
-		if !seen[row.TagKey] {
-			seen[row.TagKey] = true
-			out = append(out, TagKeyResult{TagKey: row.TagKey})
-		}
-	}
-
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].TagKey < out[j].TagKey
-	})
-
-	return out, nil
-}
-
 func (s *Service) ListTagValues(ctx context.Context, tenantID, startMs, endMs int64, metricName, tagKey string) ([]TagValueResult, error) {
 	var rows []tagValueDTO
 	var err error
@@ -98,34 +65,31 @@ func (s *Service) ListTags(ctx context.Context, tenantID, startMs, endMs int64, 
 		return []FETagEntry{{Key: tagKey, Values: vals}}, nil
 	}
 
-	keys, err := s.ListTagKeys(ctx, tenantID, startMs, endMs, metricName)
+	rows, err := s.repo.ListTagValuesAllKeys(ctx, tenantID, startMs, endMs, metricName)
 	if err != nil {
 		return nil, err
 	}
 
-	keyNames := make([]string, len(keys))
-	for i, k := range keys {
-		keyNames[i] = k.TagKey
-	}
-
-	rows, err := s.repo.ListTagValuesForKeys(ctx, tenantID, startMs, endMs, metricName, keyNames)
-	if err != nil {
-		return nil, err
-	}
-
-	valuesByKey := make(map[string][]string, len(keys))
+	valuesByKey := make(map[string][]string)
 	for _, row := range rows {
 		valuesByKey[row.TagKey] = append(valuesByKey[row.TagKey], row.TagValue)
 	}
+	// Static resource keys always appear, even with no values in range.
+	for _, static := range []string{"service", "host", "environment", "k8s_namespace"} {
+		if _, ok := valuesByKey[static]; !ok {
+			valuesByKey[static] = []string{}
+		}
+	}
+
+	keys := make([]string, 0, len(valuesByKey))
+	for key := range valuesByKey {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 
 	tags := make([]FETagEntry, len(keys))
-	for i, k := range keys {
-		vals := valuesByKey[k.TagKey]
-		if vals == nil {
-
-			vals = []string{}
-		}
-		tags[i] = FETagEntry{Key: k.TagKey, Values: vals}
+	for i, key := range keys {
+		tags[i] = FETagEntry{Key: key, Values: valuesByKey[key]}
 	}
 	return tags, nil
 }

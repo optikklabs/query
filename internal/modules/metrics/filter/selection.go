@@ -4,7 +4,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
@@ -59,26 +58,6 @@ func seriesColumn(key string) string {
 		return ResourceColumn(canonical)
 	}
 	return AttrColumn(key)
-}
-
-func BuildTagValueArms(keys []string) (arms []string, args []any) {
-	for i, key := range keys {
-		label := "k" + strconv.Itoa(i)
-		args = append(args, clickhouse.Named(label, key))
-		col := seriesColumn(key)
-		if col == "" {
-			continue
-		}
-		arms = append(arms, `
-			SELECT @`+label+` AS tag_key, `+col+` AS tag_value, count() AS c
-			FROM optikk.metrics_series
-			PREWHERE tenant_id     = @tenantID
-			     AND timestamp   BETWEEN @start AND @end
-			     AND metric_name = @metricName
-			WHERE `+col+` != ''
-			GROUP BY tag_value`)
-	}
-	return arms, args
 }
 
 func BucketDurationSeconds(startMs, endMs int64, step string) int64 {

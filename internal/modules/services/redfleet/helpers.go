@@ -1,8 +1,8 @@
 package redfleet
 
 import (
-	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
+	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
@@ -54,19 +54,6 @@ func computeFleetTotals(total *redMetricsRow, serviceCount int, startMs, endMs i
 		AvgP50Ms:       httputil.SanitizeFloat(float64(total.P50Ms)),
 		AvgP95Ms:       httputil.SanitizeFloat(float64(total.P95Ms)),
 		AvgP99Ms:       httputil.SanitizeFloat(float64(total.P99Ms)),
-	}
-}
-
-func writeStatusCount(pt *StatusTimeSeriesPoint, bucket string, count float64) {
-	switch bucket {
-	case "2xx":
-		pt.Status2xx += count
-	case "4xx":
-		pt.Status4xx += count
-	case "5xx":
-		pt.Status5xx += count
-	default:
-		pt.StatusOther += count
 	}
 }
 

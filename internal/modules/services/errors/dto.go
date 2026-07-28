@@ -14,12 +14,6 @@ type rawServiceRateRow struct {
 	DurationMsSum float64   `ch:"duration_ms_total"`
 }
 
-type rawServiceErrorRow struct {
-	ServiceName string    `ch:"service_name"`
-	BucketAt    time.Time `ch:"bucket_at"`
-	ErrorCount  uint64    `ch:"error_total"`
-}
-
 type rawErrorGroupRow struct {
 	GroupID          string    `ch:"error_group_id"`
 	ServiceName      string    `ch:"service"`

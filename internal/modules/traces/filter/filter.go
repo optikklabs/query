@@ -1,7 +1,6 @@
 package filter
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -126,31 +125,24 @@ func BuildClauses(f Filters) Clauses {
 	return c
 }
 
-func buildAttrClause(af AttrFilter, i int) (string, []any) {
-	idx := strconv.Itoa(i)
-	k := "akey_" + idx
-	v := "aval_" + idx
-	keyArg := clickhouse.Named(k, af.Key)
-	strArgs := []any{keyArg, clickhouse.Named(v, af.Value)}
+// attrSQL: traces keep one nullable string attribute map; unlike logs,
+// eq/neq compare the string value only (no typed number/bool matching).
+var attrSQL = filterutil.AttrSQL{
+	StringExpr:    func(k string) string { return `attributes[@` + k + `]` },
+	NumberExpr:    func(k string) string { return `toFloat64OrNull(attributes[@` + k + `])` },
+	ExistsExpr:    func(k string) string { return `NOT (attributes[@` + k + `] IS NULL)` },
+	NotExistsExpr: func(k string) string { return `attributes[@` + k + `] IS NULL` },
+	EqExpr:        buildAttrEqClause,
+}
 
-	switch af.Op {
-	case "", "eq":
-		return ` AND attributes[@` + k + `] = @` + v, strArgs
-	case "neq":
-		return ` AND (NOT (attributes[@` + k + `] IS NULL) AND attributes[@` + k + `] != @` + v + `)`, strArgs
-	case "contains":
-		return ` AND positionCaseInsensitive(attributes[@` + k + `], @` + v + `) > 0`, strArgs
-	case "regex":
-		return ` AND match(attributes[@` + k + `], @` + v + `)`, strArgs
-	case "gt", "gte", "lt", "lte":
-		n, _ := strconv.ParseFloat(af.Value, 64)
-
-		return ` AND toFloat64OrNull(attributes[@` + k + `]) ` + filterutil.CmpSQL(af.Op) + ` @` + v,
-			[]any{keyArg, clickhouse.Named(v, n)}
-	case "exists":
-		return ` AND NOT (attributes[@` + k + `] IS NULL)`, []any{keyArg}
-	case "not_exists":
-		return ` AND attributes[@` + k + `] IS NULL`, []any{keyArg}
+func buildAttrEqClause(af AttrFilter, k, v string, keyArg any, negate bool) (string, []any) {
+	args := []any{keyArg, clickhouse.Named(v, af.Value)}
+	if negate {
+		return ` AND (NOT (attributes[@` + k + `] IS NULL) AND attributes[@` + k + `] != @` + v + `)`, args
 	}
-	return "", nil
+	return ` AND attributes[@` + k + `] = @` + v, args
+}
+
+func buildAttrClause(af AttrFilter, i int) (string, []any) {
+	return filterutil.BuildAttrClause(attrSQL, af, i)
 }

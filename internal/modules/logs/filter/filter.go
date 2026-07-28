@@ -104,36 +104,21 @@ func likeSubstringPattern(term string) string {
 	return "%" + esc + "%"
 }
 
-func buildAttrClause(af AttrFilter, i int) (string, []any) {
-	idx := strconv.Itoa(i)
-	k := "akey_" + idx
-	v := "aval_" + idx
-	keyArg := clickhouse.Named(k, af.Key)
-
-	switch af.Op {
-	case "", "eq":
-		return buildAttrEqClause(af, k, v, keyArg, false)
-	case "neq":
-		return buildAttrEqClause(af, k, v, keyArg, true)
-	case "contains":
-		return ` AND positionCaseInsensitive(attributes_string[@` + k + `], @` + v + `) > 0`,
-			[]any{keyArg, clickhouse.Named(v, af.Value)}
-	case "regex":
-		return ` AND match(attributes_string[@` + k + `], @` + v + `)`,
-			[]any{keyArg, clickhouse.Named(v, af.Value)}
-	case "gt", "gte", "lt", "lte":
-
-		n, _ := strconv.ParseFloat(af.Value, 64)
-		expr := `coalesce(toFloat64OrNull(attributes_string[@` + k + `]),` +
+// attrSQL: logs split attributes into typed string/number/bool maps;
+// unlike traces, eq/neq also match typed number/bool values.
+var attrSQL = filterutil.AttrSQL{
+	StringExpr: func(k string) string { return `attributes_string[@` + k + `]` },
+	NumberExpr: func(k string) string {
+		return `coalesce(toFloat64OrNull(attributes_string[@` + k + `]),` +
 			` if(mapContains(attributes_number, @` + k + `), attributes_number[@` + k + `], NULL))`
-		return ` AND ` + expr + ` ` + filterutil.CmpSQL(af.Op) + ` @` + v,
-			[]any{keyArg, clickhouse.Named(v, n)}
-	case "exists":
-		return ` AND ` + attrExistsExpr(k), []any{keyArg}
-	case "not_exists":
-		return ` AND NOT ` + attrExistsExpr(k), []any{keyArg}
-	}
-	return "", nil
+	},
+	ExistsExpr:    attrExistsExpr,
+	NotExistsExpr: func(k string) string { return `NOT ` + attrExistsExpr(k) },
+	EqExpr:        buildAttrEqClause,
+}
+
+func buildAttrClause(af AttrFilter, i int) (string, []any) {
+	return filterutil.BuildAttrClause(attrSQL, af, i)
 }
 
 func buildAttrEqClause(af AttrFilter, k, v string, keyArg any, negate bool) (string, []any) {
