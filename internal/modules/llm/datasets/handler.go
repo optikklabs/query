@@ -1,7 +1,6 @@
 package datasets
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -132,15 +131,9 @@ func parseID(w http.ResponseWriter, r *http.Request, key string) (int64, bool) {
 }
 
 func respondErr(w http.ResponseWriter, r *http.Request, err error) {
-	var ve ErrValidation
-	switch {
-	case errors.Is(err, ErrNotFound):
-		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "dataset not found", nil)
-	case errors.As(err, &ve):
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, ve.Msg, nil)
-	case IsProviderUnavailable(err):
+	if IsProviderUnavailable(err) {
 		httputil.RespondErrorWithCause(w, r, http.StatusServiceUnavailable, errorcode.Unavailable, "no provider key configured for this provider", nil)
-	default:
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "dataset request failed", err)
+		return
 	}
+	httputil.RespondServiceError(w, r, err, "dataset request failed")
 }

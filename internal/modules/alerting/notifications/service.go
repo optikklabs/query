@@ -10,6 +10,7 @@ import (
 
 	"github.com/optikklabs/query/internal/modules/alerting/dispatch"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 type Service struct {
@@ -22,13 +23,9 @@ func NewService(repo *Repository, dispatcher *dispatch.Dispatcher) *Service {
 }
 
 var (
-	ErrNotFound     = errors.New("notification resource not found")
-	ErrChannelInUse = errors.New("channel is in use by one or more monitors")
+	ErrNotFound     = errorcode.NotFoundError{Msg: "resource not found"}
+	ErrChannelInUse = errorcode.ConflictError{Msg: "channel is in use by one or more monitors"}
 )
-
-type ErrValidation struct{ Msg string }
-
-func (e ErrValidation) Error() string { return e.Msg }
 
 func (s *Service) CreateChannel(ctx context.Context, tenantID int64, req CreateChannelRequest) (ChannelResponse, error) {
 	row, err := buildChannelRow(tenantID, req)
@@ -75,7 +72,7 @@ func preserveChannelCredentials(existing models.ChannelRow, req UpdateChannelReq
 	var next models.SlackWebhookConfig
 	if len(req.Config) > 0 {
 		if err := json.Unmarshal(req.Config, &next); err != nil {
-			return req, ErrValidation{Msg: "config must be valid JSON"}
+			return req, errorcode.ValidationError{Msg: "config must be valid JSON"}
 		}
 	}
 	if strings.TrimSpace(next.WebhookURL) != "" {
@@ -84,7 +81,7 @@ func preserveChannelCredentials(existing models.ChannelRow, req UpdateChannelReq
 
 	var current models.SlackWebhookConfig
 	if err := json.Unmarshal(existing.ConfigJSON, &current); err != nil || strings.TrimSpace(current.WebhookURL) == "" {
-		return req, ErrValidation{Msg: "slack channel requires config.webhookUrl"}
+		return req, errorcode.ValidationError{Msg: "slack channel requires config.webhookUrl"}
 	}
 	merged, err := json.Marshal(current)
 	if err != nil {
@@ -174,11 +171,11 @@ func (s *Service) TestChannel(ctx context.Context, tenantID, id int64) (TestChan
 func buildChannelRow(tenantID int64, req CreateChannelRequest) (models.ChannelRow, error) {
 	t := strings.TrimSpace(req.Type)
 	if !models.IsValidChannelType(t) {
-		return models.ChannelRow{}, ErrValidation{Msg: "type must be one of " + strings.Join(models.ChannelTypes, ", ")}
+		return models.ChannelRow{}, errorcode.ValidationError{Msg: "type must be one of " + strings.Join(models.ChannelTypes, ", ")}
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return models.ChannelRow{}, ErrValidation{Msg: "name is required"}
+		return models.ChannelRow{}, errorcode.ValidationError{Msg: "name is required"}
 	}
 	cfg := req.Config
 	if len(cfg) == 0 {
@@ -187,7 +184,7 @@ func buildChannelRow(tenantID int64, req CreateChannelRequest) (models.ChannelRo
 	if t == "slack" {
 		var sc models.SlackWebhookConfig
 		if err := json.Unmarshal(cfg, &sc); err != nil || strings.TrimSpace(sc.WebhookURL) == "" {
-			return models.ChannelRow{}, ErrValidation{Msg: "slack channel requires config.webhookUrl"}
+			return models.ChannelRow{}, errorcode.ValidationError{Msg: "slack channel requires config.webhookUrl"}
 		}
 	}
 	return models.ChannelRow{
@@ -251,11 +248,11 @@ func (s *Service) ListPolicies(ctx context.Context, tenantID int64) ([]PolicyRes
 func buildPolicyRow(tenantID int64, req CreatePolicyRequest) (models.PolicyRow, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return models.PolicyRow{}, ErrValidation{Msg: "name is required"}
+		return models.PolicyRow{}, errorcode.ValidationError{Msg: "name is required"}
 	}
 	dsl := strings.TrimSpace(req.MatchDSL)
 	if dsl == "" {
-		return models.PolicyRow{}, ErrValidation{Msg: "matchDsl is required"}
+		return models.PolicyRow{}, errorcode.ValidationError{Msg: "matchDsl is required"}
 	}
 	actions := req.Actions
 	if len(actions) == 0 {
@@ -332,11 +329,11 @@ func (s *Service) ListTemplates(ctx context.Context, tenantID int64) ([]Template
 func buildTemplateRow(tenantID int64, req CreateTemplateRequest) (models.TemplateRow, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return models.TemplateRow{}, ErrValidation{Msg: "name is required"}
+		return models.TemplateRow{}, errorcode.ValidationError{Msg: "name is required"}
 	}
 	body := strings.TrimSpace(req.Body)
 	if body == "" {
-		return models.TemplateRow{}, ErrValidation{Msg: "body is required"}
+		return models.TemplateRow{}, errorcode.ValidationError{Msg: "body is required"}
 	}
 	desc := sql.NullString{}
 	if d := strings.TrimSpace(req.Description); d != "" {

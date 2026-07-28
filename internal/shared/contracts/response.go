@@ -8,7 +8,6 @@ type APIResponse struct {
 
 	Comparison any          `json:"comparison,omitempty"`
 	Error      *ErrorDetail `json:"error,omitempty"`
-	Pagination *PageInfo    `json:"pagination,omitempty"`
 	Timestamp  time.Time    `json:"timestamp"`
 }
 
@@ -21,13 +20,11 @@ type ErrorDetail struct {
 	FieldErrors map[string]string `json:"fieldErrors,omitempty"`
 }
 
+// PageInfo describes cursor-based pagination state for list endpoints.
 type PageInfo struct {
-	Page          int   `json:"page"`
-	Size          int   `json:"size"`
-	TotalElements int64 `json:"totalElements"`
-	TotalPages    int   `json:"totalPages"`
-	HasNext       bool  `json:"hasNext"`
-	HasPrevious   bool  `json:"hasPrevious"`
+	HasMore    bool   `json:"hasMore"`
+	NextCursor string `json:"nextCursor,omitempty"`
+	Limit      int    `json:"limit"`
 }
 
 func Success(data any) APIResponse {

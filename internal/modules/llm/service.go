@@ -2,12 +2,14 @@ package llm
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sort"
 
 	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/shared/metrics"
+	"golang.org/x/sync/errgroup"
 )
 
 type Service struct {
@@ -25,17 +27,36 @@ func qsAt(qs []float64, i int) float64 {
 	return 0
 }
 
+func wrapLLMError(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("llm %s: %w", operation, err)
+}
+
 func (s *Service) Apps(ctx context.Context, tenantID, startMs, endMs int64) (AppsResponse, error) {
-	aggs, err := s.repo.AppAggregates(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return AppsResponse{}, err
-	}
-	models, err := s.repo.ModelBreakdown(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return AppsResponse{}, err
-	}
-	trends, err := s.repo.AppTrends(ctx, tenantID, startMs, endMs)
-	if err != nil {
+	var (
+		aggs   []appAggRow
+		models []modelBreakdownRow
+		trends []trendRow
+	)
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		var err error
+		aggs, err = s.repo.AppAggregates(groupCtx, tenantID, startMs, endMs)
+		return wrapLLMError("app aggregates", err)
+	})
+	g.Go(func() error {
+		var err error
+		models, err = s.repo.ModelBreakdown(groupCtx, tenantID, startMs, endMs)
+		return wrapLLMError("model breakdown", err)
+	})
+	g.Go(func() error {
+		var err error
+		trends, err = s.repo.AppTrends(groupCtx, tenantID, startMs, endMs)
+		return wrapLLMError("app trends", err)
+	})
+	if err := g.Wait(); err != nil {
 		return AppsResponse{}, err
 	}
 
@@ -112,16 +133,28 @@ func (s *Service) Models(ctx context.Context, tenantID, startMs, endMs int64) (M
 }
 
 func (s *Service) Overview(ctx context.Context, tenantID, startMs, endMs int64) (OverviewResponse, error) {
-	windows, err := s.repo.OverviewWindows(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return OverviewResponse{}, err
-	}
-	counts, err := s.repo.TraceCounts(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return OverviewResponse{}, err
-	}
-	series, err := s.repo.OverviewSeries(ctx, tenantID, startMs, endMs)
-	if err != nil {
+	var (
+		windows []overviewWindowRow
+		counts  []traceCountRow
+		series  []overviewSeriesRow
+	)
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		var err error
+		windows, err = s.repo.OverviewWindows(groupCtx, tenantID, startMs, endMs)
+		return wrapLLMError("overview windows", err)
+	})
+	g.Go(func() error {
+		var err error
+		counts, err = s.repo.TraceCounts(groupCtx, tenantID, startMs, endMs)
+		return wrapLLMError("trace counts", err)
+	})
+	g.Go(func() error {
+		var err error
+		series, err = s.repo.OverviewSeries(groupCtx, tenantID, startMs, endMs)
+		return wrapLLMError("overview series", err)
+	})
+	if err := g.Wait(); err != nil {
 		return OverviewResponse{}, err
 	}
 
@@ -262,10 +295,13 @@ func (s *Service) CostBreakdown(ctx context.Context, tenantID, startMs, endMs in
 
 func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) (TracesQueryResponse, error) {
 	req.Limit = pickLimit(req.Limit, 50, 500)
-	rows, hasMore, err := s.repo.QueryTraces(ctx, tenantID, req)
+	rows, err := s.repo.QueryTraces(ctx, tenantID, req)
 	if err != nil {
 		return TracesQueryResponse{}, err
 	}
+	rows, info := cursor.Paginate(rows, req.Limit, func(r llmTraceRow) string {
+		return cursor.Encode(traceCursor{StartNs: uint64(r.StartTime.UnixNano()), SpanID: r.SpanID})
+	})
 	results := make([]LLMTrace, len(rows))
 	traceIDs := make([]string, len(rows))
 	for i, r := range rows {
@@ -296,11 +332,6 @@ func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQue
 		for i := range results {
 			results[i].Scores = byTrace[results[i].TraceID]
 		}
-	}
-	info := PageInfo{HasMore: hasMore, Limit: req.Limit}
-	if hasMore && len(rows) > 0 {
-		last := rows[len(rows)-1]
-		info.NextCursor = cursor.Encode(traceCursor{StartNs: uint64(last.StartTime.UnixNano()), SpanID: last.SpanID})
 	}
 	return TracesQueryResponse{Results: results, PageInfo: info}, nil
 }
@@ -350,23 +381,25 @@ func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID strin
 	for i, r := range rows {
 		cost := pricing.CostOf(r.Model, r.InputTokens, r.OutputTokens)
 		resp.Spans[i] = LLMSpan{
-			SpanID:        r.SpanID,
-			ParentSpanID:  r.ParentSpanID,
-			Name:          r.Name,
-			Service:       r.Service,
-			Operation:     r.Operation,
-			Kind:          r.Kind,
-			Vendor:        r.Vendor,
-			Model:         r.Model,
-			ResponseModel: r.ResponseModel,
-			StartMs:       r.Timestamp.UnixMilli(),
-			DurationMs:    float64(r.DurationNano) / 1e6,
-			HasError:      r.HasError,
-			InputTokens:   r.InputTokens,
-			OutputTokens:  r.OutputTokens,
-			Cost:          cost,
-			Prompt:        r.Prompt,
-			Completion:    r.Completion,
+			SpanID:              r.SpanID,
+			ParentSpanID:        r.ParentSpanID,
+			Name:                r.Name,
+			Service:             r.Service,
+			Operation:           r.Operation,
+			Kind:                r.Kind,
+			Vendor:              r.Vendor,
+			Model:               r.Model,
+			ResponseModel:       r.ResponseModel,
+			StartMs:             r.Timestamp.UnixMilli(),
+			DurationMs:          float64(r.DurationNano) / 1e6,
+			HasError:            r.HasError,
+			InputTokens:         r.InputTokens,
+			OutputTokens:        r.OutputTokens,
+			Cost:                cost,
+			Prompt:              r.Prompt,
+			Completion:          r.Completion,
+			PromptTruncated:     r.PromptTruncated != 0,
+			CompletionTruncated: r.CompletionTruncated != 0,
 		}
 		resp.InputTokens += r.InputTokens
 		resp.OutputTokens += r.OutputTokens
@@ -402,4 +435,18 @@ func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID strin
 		}
 	}
 	return resp, nil
+}
+
+// SpanIO returns the untruncated prompt/completion for a single span.
+func (s *Service) SpanIO(ctx context.Context, tenantID int64, traceID, spanID string, startTimeMs, endTimeMs int64) (SpanIOResponse, bool, error) {
+	row, found, err := s.repo.TraceSpanIO(ctx, tenantID, traceID, spanID, startTimeMs, endTimeMs)
+	if err != nil || !found {
+		return SpanIOResponse{}, found, err
+	}
+	return SpanIOResponse{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		Prompt:     row.Prompt,
+		Completion: row.Completion,
+	}, true, nil
 }

@@ -2,101 +2,35 @@ package shared
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
 
-type ServiceErrorCode string
+// UnauthorizedError marks failed authentication; HTTP maps it to 401.
+type UnauthorizedError struct{ Msg string }
 
-const (
-	ServiceErrorValidation   ServiceErrorCode = errorcode.Validation
-	ServiceErrorUnauthorized ServiceErrorCode = errorcode.Unauthorized
-	ServiceErrorNotFound     ServiceErrorCode = errorcode.NotFound
-	ServiceErrorConflict     ServiceErrorCode = errorcode.Conflict
-	ServiceErrorInternal     ServiceErrorCode = errorcode.Internal
-	ServiceErrorTrialExpired ServiceErrorCode = errorcode.TrialExpired
-)
+func (e UnauthorizedError) Error() string { return e.Msg }
 
-type ServiceError struct {
-	Code    ServiceErrorCode
-	Message string
-	Cause   error
-}
+// TrialExpiredError marks suspended tenants; HTTP maps it to 402.
+type TrialExpiredError struct{ Msg string }
 
-func (e *ServiceError) Error() string {
-	if e.Cause != nil {
-		return fmt.Sprintf("%s: %v", e.Message, e.Cause)
+func (e TrialExpiredError) Error() string { return e.Msg }
+
+// RespondServiceError maps the auth-only error kinds (401/402) and defers
+// validation/not-found/conflict/internal to the shared responder.
+func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, failMsg string) {
+	var (
+		ua UnauthorizedError
+		te TrialExpiredError
+	)
+	switch {
+	case errors.As(err, &ua):
+		modulecommon.RespondErrorWithCause(w, r, http.StatusUnauthorized, errorcode.Unauthorized, ua.Msg, nil)
+	case errors.As(err, &te):
+		modulecommon.RespondErrorWithCause(w, r, http.StatusPaymentRequired, errorcode.TrialExpired, te.Msg, nil)
+	default:
+		modulecommon.RespondServiceError(w, r, err, failMsg)
 	}
-	return e.Message
-}
-
-func (e *ServiceError) Unwrap() error {
-	return e.Cause
-}
-
-func NewValidationError(message string, cause error) error {
-	return &ServiceError{Code: ServiceErrorValidation, Message: message, Cause: cause}
-}
-
-func NewUnauthorizedError(message string, cause error) error {
-	return &ServiceError{Code: ServiceErrorUnauthorized, Message: message, Cause: cause}
-}
-
-func NewNotFoundError(message string, cause error) error {
-	return &ServiceError{Code: ServiceErrorNotFound, Message: message, Cause: cause}
-}
-func NewConflictError(message string, cause error) error {
-	return &ServiceError{Code: ServiceErrorConflict, Message: message, Cause: cause}
-}
-
-func NewInternalError(message string, cause error) error {
-	return &ServiceError{Code: ServiceErrorInternal, Message: message, Cause: cause}
-}
-
-func NewTrialExpiredError(message string, cause error) error {
-	return &ServiceError{Code: ServiceErrorTrialExpired, Message: message, Cause: cause}
-}
-
-func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fallbackMessage string) {
-	var serviceErr *ServiceError
-	if errors.As(err, &serviceErr) {
-		status := http.StatusInternalServerError
-		switch serviceErr.Code {
-		case ServiceErrorValidation:
-			status = http.StatusBadRequest
-		case ServiceErrorUnauthorized:
-			status = http.StatusUnauthorized
-		case ServiceErrorNotFound:
-			status = http.StatusNotFound
-		case ServiceErrorConflict:
-			status = http.StatusConflict
-		case ServiceErrorInternal:
-			status = http.StatusInternalServerError
-		case ServiceErrorTrialExpired:
-			status = http.StatusPaymentRequired
-		}
-
-		message := serviceErr.Message
-		if message == "" {
-			message = fallbackMessage
-		}
-		if message == "" {
-			message = "Internal error"
-		}
-
-		code := string(serviceErr.Code)
-		if code == "" {
-			code = string(ServiceErrorInternal)
-		}
-		modulecommon.RespondErrorWithCause(w, r, status, code, message, serviceErr.Cause)
-		return
-	}
-
-	if fallbackMessage == "" {
-		fallbackMessage = "Internal error"
-	}
-	modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, string(ServiceErrorInternal), fallbackMessage, err)
 }

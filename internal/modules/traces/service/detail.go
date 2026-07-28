@@ -13,19 +13,6 @@ import (
 	"github.com/optikklabs/query/internal/modules/traces/repository"
 )
 
-func (s *Service) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (*models.TraceSummary, error) {
-	row, err := s.repo.GetTraceSummary(ctx, tenantID, traceID, startMs, endMs)
-	if err != nil {
-		slog.ErrorContext(ctx, "detail: GetTraceSummary failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
-		return nil, err
-	}
-	if row == nil {
-		return nil, nil
-	}
-	out := foldTraceSummary(*row)
-	return &out, nil
-}
-
 func foldTraceSummary(res repository.TraceSummaryRow) models.TraceSummary {
 	return models.TraceSummary{
 		TraceID:        res.TraceID,
@@ -164,21 +151,6 @@ func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID
 
 func (s *Service) GetRelatedTraces(ctx context.Context, tenantID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]models.RelatedTrace, error) {
 	return s.repo.GetRelatedTraces(ctx, tenantID, serviceName, operationName, startMs, endMs, excludeTraceID, limit)
-}
-
-func (s *Service) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]models.SpanListItem, error) {
-	rows, err := s.repo.ListSpansByTrace(ctx, tenantID, traceID, startMs, endMs)
-	if err != nil {
-		return nil, err
-	}
-	fillStartNs(rows)
-	return rows, nil
-}
-
-func fillStartNs(items []models.SpanListItem) {
-	for i := range items {
-		items[i].StartNs = items[i].Timestamp.UnixNano()
-	}
 }
 
 type spanEventRow struct {

@@ -198,7 +198,7 @@ func overviewArgs(tenantID, startMs, endMs int64) []any {
 		clickhouse.Named("prevStart", time.UnixMilli(prevStartMs)))
 }
 
-func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, bool, error) {
+func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, error) {
 	where, args := buildTraceFilters(tenantID, req)
 	cur, _ := decodeTraceCursor(req.Cursor)
 	if cur.SpanID != "" {
@@ -211,6 +211,13 @@ func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req Traces
 	}
 	args = append(args, clickhouse.Named("pgLimit", uint64(req.Limit+1)))
 	args = append(args, pricing.Args()...)
+
+	// Bound the aggregation scan to the requested services (fix 3.8).
+	cteServiceFilter := ""
+	if len(req.Services) > 0 {
+		cteServiceFilter = `
+		         AND service IN @services`
+	}
 
 	query := `
 		WITH llm AS (
@@ -225,7 +232,7 @@ func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req Traces
 		    FROM optikk.spans
 		    PREWHERE tenant_id = @tenantID
 		         AND timestamp BETWEEN @start AND @end
-		         AND is_gen_ai
+		         AND is_gen_ai` + cteServiceFilter + `
 		    GROUP BY trace_id
 		)
 		SELECT s.trace_id           AS trace_id,
@@ -255,13 +262,9 @@ func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req Traces
 
 	var rows []llmTraceRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.QueryTraces", &rows, query, args...); err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	hasMore := len(rows) > req.Limit
-	if hasMore {
-		rows = rows[:req.Limit]
-	}
-	return rows, hasMore, nil
+	return rows, nil
 }
 
 func buildTraceFilters(tenantID int64, req TracesQueryRequest) (string, []any) {
@@ -292,6 +295,13 @@ func buildTraceFilters(tenantID int64, req TracesQueryRequest) (string, []any) {
 	return where, args
 }
 
+// Payload caps for trace detail: big agent traces would otherwise return
+// full prompt/completion text for every span (multi-MB responses).
+const (
+	traceSpansMaxRows   = 2000
+	traceSpanIOMaxChars = 4096
+)
+
 func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) ([]traceSpanRow, error) {
 	query := `
 		SELECT span_id, parent_span_id, timestamp, duration_nano, name, service, environment,
@@ -299,18 +309,50 @@ func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID str
 		       gen_ai_request_model, gen_ai_response_model,
 		       gen_ai_input_tokens, gen_ai_output_tokens, has_error,
 		       llm_user_id, llm_session_id, llm_release,
-		       gen_ai_prompt     AS prompt,
+		       leftUTF8(gen_ai_prompt, @ioMaxChars)              AS prompt,
+		       lengthUTF8(gen_ai_prompt) > @ioMaxChars           AS prompt_truncated,
+		       leftUTF8(gen_ai_completion, @ioMaxChars)          AS completion,
+		       lengthUTF8(gen_ai_completion) > @ioMaxChars       AS completion_truncated
+		FROM optikk.spans
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND trace_id = @traceID
+		ORDER BY timestamp ASC
+		LIMIT @maxSpans`
+	var rows []traceSpanRow
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs),
+		clickhouse.Named("traceID", traceID),
+		clickhouse.Named("ioMaxChars", uint64(traceSpanIOMaxChars)),
+		clickhouse.Named("maxSpans", uint64(traceSpansMaxRows)),
+	)
+	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.TraceSpans", &rows, query,
+		args...,
+	)
+}
+
+// TraceSpanIO fetches the untruncated prompt/completion for a single span.
+func (r *Repository) TraceSpanIO(ctx context.Context, tenantID int64, traceID, spanID string, startTimeMs, endTimeMs int64) (spanIORow, bool, error) {
+	query := `
+		SELECT gen_ai_prompt     AS prompt,
 		       gen_ai_completion AS completion
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end
 		     AND trace_id = @traceID
-		ORDER BY timestamp ASC`
-	var rows []traceSpanRow
-	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs), clickhouse.Named("traceID", traceID))
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.TraceSpans", &rows, query,
-		args...,
+		WHERE span_id = @spanID
+		LIMIT 1`
+	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs),
+		clickhouse.Named("traceID", traceID),
+		clickhouse.Named("spanID", spanID),
 	)
+	var rows []spanIORow
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.TraceSpanIO", &rows, query, args...); err != nil {
+		return spanIORow{}, false, err
+	}
+	if len(rows) == 0 {
+		return spanIORow{}, false, nil
+	}
+	return rows[0], true, nil
 }
 
 func (r *Repository) ScoresForTraces(ctx context.Context, tenantID, startMs, endMs int64, traceIDs []string) ([]traceScoreRow, error) {

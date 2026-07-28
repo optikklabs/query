@@ -12,7 +12,8 @@ import (
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, cur models.Cursor) ([]models.LogRow, bool, error) {
+// ListLogs returns up to limit rows; callers pass limit+1 to detect more.
+func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, cur models.Cursor) ([]models.LogRow, error) {
 	prewhere, where, args := filter.BuildClauses(f)
 	if !cur.IsZero() {
 		where += ` AND (timestamp, log_id) < (@curTs, @curLid)`
@@ -22,7 +23,7 @@ func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, 
 			clickhouse.Named("curLid", cur.LogID),
 		)
 	}
-	args = append(args, clickhouse.Named("pgLimit", uint64(limit+1)))
+	args = append(args, clickhouse.Named("pgLimit", uint64(limit)))
 
 	query := `
 		SELECT ` + models.LogColumns + `
@@ -33,14 +34,9 @@ func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, 
 
 	var rows []models.LogRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "logs.ListLogs", &rows, query, args...); err != nil {
-		return nil, false, err
+		return nil, err
 	}
-
-	hasMore := len(rows) > limit
-	if hasMore {
-		rows = rows[:limit]
-	}
-	return rows, hasMore, nil
+	return rows, nil
 }
 
 var suggestResourceColumns = map[string]string{

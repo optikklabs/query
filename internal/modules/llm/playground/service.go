@@ -9,6 +9,7 @@ import (
 	"github.com/optikklabs/query/internal/infra/llmproviders"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/modules/llm/providerkeys"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 type KeyResolver interface {
@@ -32,21 +33,17 @@ func NewService(keys KeyResolver, completer Completer, concurrency int) *Service
 	return &Service{keys: keys, completer: completer, sem: make(chan struct{}, concurrency)}
 }
 
-type ErrValidation struct{ Msg string }
-
-func (e ErrValidation) Error() string { return e.Msg }
-
 var validProvider = map[string]struct{}{"openai": {}, "anthropic": {}, "mistral": {}}
 
 func (s *Service) Complete(ctx context.Context, tenantID int64, req CompleteRequest) (CompleteResponse, error) {
 	if _, ok := validProvider[req.Provider]; !ok {
-		return CompleteResponse{}, ErrValidation{Msg: "provider must be openai, anthropic or mistral"}
+		return CompleteResponse{}, errorcode.ValidationError{Msg: "provider must be openai, anthropic or mistral"}
 	}
 	if strings.TrimSpace(req.Model) == "" {
-		return CompleteResponse{}, ErrValidation{Msg: "model is required"}
+		return CompleteResponse{}, errorcode.ValidationError{Msg: "model is required"}
 	}
 	if len(req.Messages) == 0 {
-		return CompleteResponse{}, ErrValidation{Msg: "messages must not be empty"}
+		return CompleteResponse{}, errorcode.ValidationError{Msg: "messages must not be empty"}
 	}
 	apiKey, err := s.keys.ResolveKey(ctx, tenantID, req.Provider)
 	if err != nil {

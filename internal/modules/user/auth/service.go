@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	contracts "github.com/optikklabs/query/internal/shared/contracts"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 type Service struct {
@@ -53,18 +55,18 @@ func NewService(repo *Repository, tokens *token.Service, emailCfg config.EmailCo
 func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP string) (LoginResponse, string, error) {
 	email := strings.TrimSpace(req.Email)
 	if !s.attempts.allow(email, clientIP) {
-		return LoginResponse{}, "", shared.NewValidationError("Too many login attempts. Try again later.", nil)
+		return LoginResponse{}, "", errorcode.ValidationError{Msg: "Too many login attempts. Try again later."}
 	}
 
 	user, err := s.repo.FindActiveUserByEmail(ctx, email)
 	if err != nil {
 		s.attempts.fail(email, clientIP)
-		return LoginResponse{}, "", shared.NewValidationError("Invalid email or password", err)
+		return LoginResponse{}, "", errorcode.ValidationError{Msg: "Invalid email or password"}
 	}
 
 	if !shared.PasswordIsValid(user.PasswordHash, req.Password) {
 		s.attempts.fail(email, clientIP)
-		return LoginResponse{}, "", shared.NewValidationError("Invalid email or password", nil)
+		return LoginResponse{}, "", errorcode.ValidationError{Msg: "Invalid email or password"}
 	}
 	s.attempts.reset(email, clientIP)
 
@@ -130,13 +132,26 @@ func (l *loginAttempts) evictIdleOrOldest(now time.Time) {
 	}
 }
 
-type notUsableError struct{ reason string }
+type notUsableError struct {
+	reason string
+	// familyID is set when a revoked family member was replayed (suspected
+	// token theft); the caller revokes the family if nothing else validates.
+	familyID string
+}
 
 func (e *notUsableError) Error() string { return "refresh token not usable: " + e.reason }
 
-func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP string) (LoginResponse, error) {
+// refreshReuseGrace tolerates replays of a just-rotated token (parallel
+// refreshes from the same browser) without treating them as theft.
+const refreshReuseGrace = 60 * time.Second
+
+// Refresh validates the cookie candidates and rotates the one that matches.
+// The returned string is the new refresh token ("" when rotation was skipped
+// inside the reuse grace window).
+func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP string) (LoginResponse, string, error) {
 	seen := make(map[string]struct{}, len(refreshTokens))
 	var reasons []string
+	reusedFamilies := make(map[string]struct{})
 	for _, raw := range refreshTokens {
 		if raw == "" {
 			continue
@@ -146,13 +161,13 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 		}
 		seen[raw] = struct{}{}
 
-		response, err := s.refreshOne(ctx, raw)
+		response, newRefresh, err := s.refreshOne(ctx, raw)
 		if err == nil {
 			slog.InfoContext(ctx, "AUTH_EVENT refresh_success",
 				slog.Int64("user_id", response.User.ID),
 				slog.Int("candidates", len(refreshTokens)),
 				slog.String("ip", clientIP))
-			return response, nil
+			return response, newRefresh, nil
 		}
 
 		var notUsable *notUsableError
@@ -161,41 +176,62 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 				slog.Int("candidates", len(refreshTokens)),
 				slog.String("ip", clientIP),
 				slog.Any("error", err))
-			return LoginResponse{}, err
+			return LoginResponse{}, "", err
+		}
+		if notUsable.familyID != "" {
+			reusedFamilies[notUsable.familyID] = struct{}{}
 		}
 		reasons = append(reasons, notUsable.reason)
+	}
+
+	// Reuse detection: a revoked token was replayed with no valid sibling
+	// alongside it; assume theft and revoke every token in its family.
+	for familyID := range reusedFamilies {
+		if err := s.repo.RevokeFamily(ctx, familyID); err != nil {
+			slog.ErrorContext(ctx, "AUTH_EVENT refresh_family_revoke_failed",
+				slog.String("family_id", familyID), slog.Any("error", err))
+		} else {
+			slog.WarnContext(ctx, "AUTH_EVENT refresh_reuse_detected",
+				slog.String("family_id", familyID), slog.String("ip", clientIP))
+		}
 	}
 
 	slog.WarnContext(ctx, "AUTH_EVENT refresh_rejected",
 		slog.Int("candidates", len(refreshTokens)),
 		slog.Any("reasons", reasons),
 		slog.String("ip", clientIP))
-	return LoginResponse{}, shared.NewUnauthorizedError("Invalid or expired refresh token", nil)
+	return LoginResponse{}, "", shared.UnauthorizedError{Msg: "Invalid or expired refresh token"}
 }
 
-func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginResponse, error) {
+func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginResponse, string, error) {
 	hash := token.HashRefreshToken(refreshToken)
 	stored, err := s.repo.FindRefreshTokenByHash(ctx, hash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return LoginResponse{}, &notUsableError{reason: "unknown_token"}
+			return LoginResponse{}, "", &notUsableError{reason: "unknown_token"}
 		}
-		return LoginResponse{}, shared.NewInternalError("Failed to look up refresh token", err)
+		return LoginResponse{}, "", fmt.Errorf("Failed to look up refresh token: %w", err)
 	}
 
-	if stored.RevokedAt != nil {
-		return LoginResponse{}, &notUsableError{reason: "revoked"}
-	}
 	if time.Now().UTC().After(stored.ExpiresAt) {
-		return LoginResponse{}, &notUsableError{reason: "expired"}
+		return LoginResponse{}, "", &notUsableError{reason: "expired"}
+	}
+	// A revoked token is a replay of a rotated credential. Inside the grace
+	// window we honor it without rotating; beyond it we flag family reuse.
+	rotate := true
+	if stored.RevokedAt != nil {
+		if time.Since(*stored.RevokedAt) > refreshReuseGrace {
+			return LoginResponse{}, "", &notUsableError{reason: "revoked", familyID: stored.FamilyID}
+		}
+		rotate = false
 	}
 
 	user, err := s.repo.FindActiveUserByID(ctx, stored.UserID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return LoginResponse{}, &notUsableError{reason: "user_inactive"}
+			return LoginResponse{}, "", &notUsableError{reason: "user_inactive"}
 		}
-		return LoginResponse{}, shared.NewInternalError("Failed to load user for refresh", err)
+		return LoginResponse{}, "", fmt.Errorf("Failed to load user for refresh: %w", err)
 	}
 
 	authUser := shared.AuthUser{
@@ -208,21 +244,28 @@ func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginRes
 
 	response, err := s.buildAuthContextResponse(ctx, authUser)
 	if err != nil {
-		return LoginResponse{}, err
+		return LoginResponse{}, "", err
 	}
 
-	access, err := s.tokens.SignAccess(token.AuthState{
-		UserID:          user.ID,
-		Email:           user.Email,
-		Role:            user.Role,
-		DefaultTenantID: response.Tenant.ID,
-		TenantIDs:       []int64{response.Tenant.ID},
-	})
+	access, err := s.signAccess(authUser, response.Tenant.ID)
 	if err != nil {
-		return LoginResponse{}, shared.NewInternalError("Failed to issue access token", err)
+		return LoginResponse{}, "", err
 	}
 
-	return LoginResponse{AuthContextResponse: response, AccessToken: access}, nil
+	var newRefresh string
+	if rotate {
+		raw, newHash, err := token.GenerateRefreshToken()
+		if err != nil {
+			return LoginResponse{}, "", fmt.Errorf("Failed to issue refresh token: %w", err)
+		}
+		expiresAt := time.Now().UTC().Add(s.tokens.RefreshTTL())
+		if err := s.repo.RotateRefreshToken(ctx, hash, user.ID, stored.FamilyID, newHash, expiresAt); err != nil {
+			return LoginResponse{}, "", fmt.Errorf("Failed to rotate refresh token: %w", err)
+		}
+		newRefresh = raw
+	}
+
+	return LoginResponse{AuthContextResponse: response, AccessToken: access}, newRefresh, nil
 }
 
 func (s *Service) IssueTokens(ctx context.Context, user shared.AuthUser) (LoginResponse, string, error) {
@@ -235,27 +278,35 @@ func (s *Service) issueTokens(ctx context.Context, user shared.AuthUser, familyI
 		return LoginResponse{}, "", err
 	}
 
-	access, err := s.tokens.SignAccess(token.AuthState{
-		UserID:          user.ID,
-		Email:           user.Email,
-		Role:            user.Role,
-		DefaultTenantID: response.Tenant.ID,
-		TenantIDs:       []int64{response.Tenant.ID},
-	})
+	access, err := s.signAccess(user, response.Tenant.ID)
 	if err != nil {
-		return LoginResponse{}, "", shared.NewInternalError("Failed to issue access token", err)
+		return LoginResponse{}, "", err
 	}
 
 	raw, hash, err := token.GenerateRefreshToken()
 	if err != nil {
-		return LoginResponse{}, "", shared.NewInternalError("Failed to issue refresh token", err)
+		return LoginResponse{}, "", fmt.Errorf("Failed to issue refresh token: %w", err)
 	}
 	expiresAt := time.Now().UTC().Add(s.tokens.RefreshTTL())
 	if err := s.repo.InsertRefreshToken(ctx, user.ID, familyID, hash, expiresAt); err != nil {
-		return LoginResponse{}, "", shared.NewInternalError("Failed to issue refresh token", err)
+		return LoginResponse{}, "", fmt.Errorf("Failed to issue refresh token: %w", err)
 	}
 
 	return LoginResponse{AuthContextResponse: response, AccessToken: access}, raw, nil
+}
+
+func (s *Service) signAccess(user shared.AuthUser, tenantID int64) (string, error) {
+	access, err := s.tokens.SignAccess(token.AuthState{
+		UserID:          user.ID,
+		Email:           user.Email,
+		Role:            user.Role,
+		DefaultTenantID: tenantID,
+		TenantIDs:       []int64{tenantID},
+	})
+	if err != nil {
+		return "", fmt.Errorf("Failed to issue access token: %w", err)
+	}
+	return access, nil
 }
 
 func (s *Service) Logout(ctx context.Context, tenant contracts.TenantContext, refreshTokens []string, clientIP string) shared.MessageResponse {
@@ -296,22 +347,21 @@ func (s *Service) buildAuthContextResponse(ctx context.Context, user shared.Auth
 
 func (s *Service) tenantForUser(ctx context.Context, tenantID int64) (AuthTenantSummary, error) {
 	if tenantID <= 0 {
-		return AuthTenantSummary{}, shared.NewValidationError("Account has no associated tenant", nil)
+		return AuthTenantSummary{}, errorcode.ValidationError{Msg: "Account has no associated tenant"}
 	}
 
 	tenant, err := s.repo.FindTenantByID(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return AuthTenantSummary{}, shared.NewValidationError("Account has no active tenant", nil)
+			return AuthTenantSummary{}, errorcode.ValidationError{Msg: "Account has no active tenant"}
 		}
 		return AuthTenantSummary{}, err
 	}
 	if !tenant.Active {
 		if tenant.AccountStatus == "suspended" {
-			return AuthTenantSummary{}, shared.NewTrialExpiredError(
-				"Your free trial has ended. Add a payment method to resume.", nil)
+			return AuthTenantSummary{}, shared.TrialExpiredError{Msg: "Your free trial has ended. Add a payment method to resume."}
 		}
-		return AuthTenantSummary{}, shared.NewValidationError("Account has no active tenant", nil)
+		return AuthTenantSummary{}, errorcode.ValidationError{Msg: "Account has no active tenant"}
 	}
 
 	return AuthTenantSummary{
@@ -326,7 +376,7 @@ func (s *Service) tenantForUser(ctx context.Context, tenantID int64) (AuthTenant
 func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" {
-		return shared.NewValidationError("Email is required", nil)
+		return errorcode.ValidationError{Msg: "Email is required"}
 	}
 
 	user, err := s.repo.FindActiveUserByEmail(ctx, email)
@@ -335,7 +385,7 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 
 			return nil
 		}
-		return shared.NewInternalError("Failed to lookup user", err)
+		return fmt.Errorf("Failed to lookup user: %w", err)
 	}
 
 	hash := ""
@@ -345,11 +395,11 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 
 	resetToken, err := s.tokens.SignPasswordReset(user.ID, hash)
 	if err != nil {
-		return shared.NewInternalError("Failed to generate reset token", err)
+		return fmt.Errorf("Failed to generate reset token: %w", err)
 	}
 
 	if err := s.sender.SendPasswordReset(ctx, user.Email, resetToken); err != nil {
-		return shared.NewInternalError("Failed to send password reset email", err)
+		return fmt.Errorf("Failed to send password reset email: %w", err)
 	}
 
 	slog.InfoContext(ctx, "AUTH_EVENT forgot_password_requested", slog.Int64("user_id", user.ID))
@@ -358,17 +408,17 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 
 func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPassword string) error {
 	if len(newPassword) < shared.MinPasswordLength {
-		return shared.NewValidationError("Password must be at least 8 characters", nil)
+		return errorcode.ValidationError{Msg: "Password must be at least 8 characters"}
 	}
 
 	userID, err := s.tokens.ExtractSubjectWithoutVerify(tokenStr)
 	if err != nil {
-		return shared.NewUnauthorizedError("Invalid reset token", err)
+		return shared.UnauthorizedError{Msg: "Invalid reset token"}
 	}
 
 	user, err := s.repo.FindAuthUserByID(ctx, userID)
 	if err != nil {
-		return shared.NewUnauthorizedError("Invalid reset token", err)
+		return shared.UnauthorizedError{Msg: "Invalid reset token"}
 	}
 
 	hash := ""
@@ -378,16 +428,16 @@ func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPasswor
 
 	verifiedUserID, err := s.tokens.ParsePasswordReset(tokenStr, hash)
 	if err != nil || verifiedUserID != userID {
-		return shared.NewUnauthorizedError("Invalid or expired reset token", err)
+		return shared.UnauthorizedError{Msg: "Invalid or expired reset token"}
 	}
 
 	newHash, err := shared.HashPassword(newPassword)
 	if err != nil {
-		return shared.NewInternalError("Failed to hash password", err)
+		return fmt.Errorf("Failed to hash password: %w", err)
 	}
 
 	if err := s.repo.UpdatePasswordAndRevokeSessions(ctx, userID, newHash); err != nil {
-		return shared.NewInternalError("Failed to update password and revoke existing sessions", err)
+		return fmt.Errorf("Failed to update password and revoke existing sessions: %w", err)
 	}
 
 	slog.InfoContext(ctx, "AUTH_EVENT password_reset_success", slog.Int64("user_id", userID))
@@ -396,25 +446,25 @@ func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPasswor
 
 func (s *Service) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
 	if len(newPassword) < shared.MinPasswordLength {
-		return shared.NewValidationError("New password must be at least 8 characters", nil)
+		return errorcode.ValidationError{Msg: "New password must be at least 8 characters"}
 	}
 
 	user, err := s.repo.FindAuthUserByID(ctx, userID)
 	if err != nil {
-		return shared.NewInternalError("Failed to lookup user", err)
+		return fmt.Errorf("Failed to lookup user: %w", err)
 	}
 
 	if !shared.PasswordIsValid(user.PasswordHash, currentPassword) {
-		return shared.NewValidationError("Invalid current password", nil)
+		return errorcode.ValidationError{Msg: "Invalid current password"}
 	}
 
 	newHash, err := shared.HashPassword(newPassword)
 	if err != nil {
-		return shared.NewInternalError("Failed to hash password", err)
+		return fmt.Errorf("Failed to hash password: %w", err)
 	}
 
 	if err := s.repo.UpdatePasswordAndRevokeSessions(ctx, userID, newHash); err != nil {
-		return shared.NewInternalError("Failed to update password and revoke existing sessions", err)
+		return fmt.Errorf("Failed to update password and revoke existing sessions: %w", err)
 	}
 
 	slog.InfoContext(ctx, "AUTH_EVENT password_changed", slog.Int64("user_id", userID))

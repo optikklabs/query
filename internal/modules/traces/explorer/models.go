@@ -22,12 +22,6 @@ type Trace struct {
 	Truncated      bool     `json:"truncated,omitempty"`
 }
 
-type PageInfo struct {
-	HasMore    bool   `json:"hasMore"`
-	NextCursor string `json:"nextCursor,omitempty"`
-	Limit      int    `json:"limit"`
-}
-
 type TraceCursor struct {
 	StartNs uint64 `json:"s"`
 	SpanID  string `json:"p"`

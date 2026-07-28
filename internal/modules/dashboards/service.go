@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 type Service struct {
@@ -17,11 +19,7 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-var ErrNotFound = errors.New("dashboard not found")
-
-type ErrValidation struct{ Msg string }
-
-func (e ErrValidation) Error() string { return e.Msg }
+var ErrNotFound = errorcode.NotFoundError{Msg: "dashboard not found"}
 
 func (s *Service) CreatePage(ctx context.Context, tenantID, userID int64, req CreatePageRequest) (DashboardPageResponse, error) {
 	args, err := buildPageArgs(tenantID, userID, req)
@@ -103,7 +101,7 @@ func (s *Service) CreateWidget(ctx context.Context, tenantID, pageID int64, req 
 		return WidgetResponse{}, err
 	}
 	if count >= maxWidgetsPerPage {
-		return WidgetResponse{}, ErrValidation{Msg: fmt.Sprintf("page already has the maximum of %d widgets", maxWidgetsPerPage)}
+		return WidgetResponse{}, errorcode.ValidationError{Msg: fmt.Sprintf("page already has the maximum of %d widgets", maxWidgetsPerPage)}
 	}
 	args, err := buildWidgetArgs(tenantID, pageID, req)
 	if err != nil {
@@ -154,7 +152,7 @@ func (s *Service) ensurePage(ctx context.Context, pageID, tenantID int64) error 
 func buildPageArgs(tenantID, userID int64, req CreatePageRequest) (pageInsertArgs, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return pageInsertArgs{}, ErrValidation{Msg: "name is required"}
+		return pageInsertArgs{}, errorcode.ValidationError{Msg: "name is required"}
 	}
 	icon := strings.TrimSpace(req.Icon)
 	if icon == "" {
@@ -208,10 +206,10 @@ func buildWidgetArgs(tenantID, pageID int64, req CreateWidgetRequest) (widgetIns
 
 func validateWidget(req CreateWidgetRequest) error {
 	if !isValidPanelType(req.PanelType) {
-		return ErrValidation{Msg: fmt.Sprintf("panel_type %q is not a supported dashboard panel", req.PanelType)}
+		return errorcode.ValidationError{Msg: fmt.Sprintf("panel_type %q is not a supported dashboard panel", req.PanelType)}
 	}
 	if lv := strings.TrimSpace(req.LayoutVariant); lv != "" && !isValidLayoutVariant(lv) {
-		return ErrValidation{Msg: fmt.Sprintf("layout_variant %q is not supported", lv)}
+		return errorcode.ValidationError{Msg: fmt.Sprintf("layout_variant %q is not supported", lv)}
 	}
 	if err := validateLayout(req.Layout); err != nil {
 		return err
@@ -229,16 +227,16 @@ type layoutProbe struct {
 func validateLayout(raw json.RawMessage) error {
 	var l layoutProbe
 	if err := json.Unmarshal(raw, &l); err != nil {
-		return ErrValidation{Msg: "layout must be a {x,y,w,h} object"}
+		return errorcode.ValidationError{Msg: "layout must be a {x,y,w,h} object"}
 	}
 	if l.X == nil || l.Y == nil || l.W == nil || l.H == nil {
-		return ErrValidation{Msg: "layout requires x, y, w and h"}
+		return errorcode.ValidationError{Msg: "layout requires x, y, w and h"}
 	}
 	if *l.W <= 0 || *l.H <= 0 {
-		return ErrValidation{Msg: "layout w and h must be positive"}
+		return errorcode.ValidationError{Msg: "layout w and h must be positive"}
 	}
 	if *l.X < 0 || *l.Y < 0 {
-		return ErrValidation{Msg: "layout x and y must not be negative"}
+		return errorcode.ValidationError{Msg: "layout x and y must not be negative"}
 	}
 	return nil
 }
@@ -264,37 +262,37 @@ type querySpecProbe struct {
 func validateQuery(spec json.RawMessage) error {
 	var probe querySpecProbe
 	if err := json.Unmarshal(spec, &probe); err != nil {
-		return ErrValidation{Msg: "spec must be a valid panel spec object"}
+		return errorcode.ValidationError{Msg: "spec must be a valid panel spec object"}
 	}
 	if probe.Query == nil {
-		return ErrValidation{Msg: "spec.query is required"}
+		return errorcode.ValidationError{Msg: "spec.query is required"}
 	}
 	if probe.Query.Kind == "metrics" {
 		return validateBuilderQuery(probe.Query.Queries)
 	}
 	if strings.TrimSpace(probe.Query.Endpoint) == "" {
-		return ErrValidation{Msg: "spec.query.endpoint is required"}
+		return errorcode.ValidationError{Msg: "spec.query.endpoint is required"}
 	}
 	if !isAllowedEndpoint(probe.Query.Endpoint) {
-		return ErrValidation{Msg: fmt.Sprintf("spec.query.endpoint %q is not a dashboard-safe endpoint", probe.Query.Endpoint)}
+		return errorcode.ValidationError{Msg: fmt.Sprintf("spec.query.endpoint %q is not a dashboard-safe endpoint", probe.Query.Endpoint)}
 	}
 	return nil
 }
 
 func validateBuilderQuery(queries []builderQueryProbe) error {
 	if len(queries) == 0 {
-		return ErrValidation{Msg: "spec.query.queries must have at least one query"}
+		return errorcode.ValidationError{Msg: "spec.query.queries must have at least one query"}
 	}
 	for _, q := range queries {
 		if strings.TrimSpace(q.MetricName) == "" {
-			return ErrValidation{Msg: "spec.query.queries[].metricName is required"}
+			return errorcode.ValidationError{Msg: "spec.query.queries[].metricName is required"}
 		}
 		if !isValidBuilderAggregation(q.Aggregation) {
-			return ErrValidation{Msg: fmt.Sprintf("aggregation %q is not supported", q.Aggregation)}
+			return errorcode.ValidationError{Msg: fmt.Sprintf("aggregation %q is not supported", q.Aggregation)}
 		}
 		for _, f := range q.Where {
 			if !isValidBuilderOperator(f.Operator) {
-				return ErrValidation{Msg: fmt.Sprintf("filter operator %q is not supported", f.Operator)}
+				return errorcode.ValidationError{Msg: fmt.Sprintf("filter operator %q is not supported", f.Operator)}
 			}
 		}
 	}

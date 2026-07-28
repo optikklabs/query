@@ -1,15 +1,13 @@
 package dashboards
 
 var dashboardSafeEndpoints = map[string]struct{}{
-	"/spans/red/fleet-totals":                   {},
-	"/spans/red/apdex":                          {},
+	"/spans/red/fleet-overview":                 {},
 	"/spans/red/request-and-error-rate":         {},
 	"/spans/red/status-timeseries":              {},
 	"/spans/red/latency-percentiles-timeseries": {},
 	"/spans/red/red-by-endpoint":                {},
 	"/spans/red/top-endpoints":                  {},
 	"/spans/red/top-db-queries":                 {},
-	"/spans/red/services":                       {},
 	"/errors/service-error-rate":                {},
 	"/errors/error-volume":                      {},
 	"/infrastructure/cpu/avg":                   {},

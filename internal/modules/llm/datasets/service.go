@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 const maxItemsPerRequest = 500
@@ -18,11 +20,7 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-var ErrNotFound = errors.New("dataset not found")
-
-type ErrValidation struct{ Msg string }
-
-func (e ErrValidation) Error() string { return e.Msg }
+var ErrNotFound = errorcode.NotFoundError{Msg: "dataset not found"}
 
 func (s *Service) List(ctx context.Context, tenantID int64) ([]DatasetSummary, error) {
 	rows, err := s.repo.List(ctx, tenantID)
@@ -62,7 +60,7 @@ func (s *Service) Get(ctx context.Context, tenantID, id int64) (DatasetDetail, e
 func (s *Service) Create(ctx context.Context, tenantID, userID int64, req CreateDatasetRequest) (DatasetDetail, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return DatasetDetail{}, ErrValidation{Msg: "name is required"}
+		return DatasetDetail{}, errorcode.ValidationError{Msg: "name is required"}
 	}
 	var desc sql.NullString
 	if d := strings.TrimSpace(req.Description); d != "" {
@@ -81,10 +79,10 @@ func (s *Service) Delete(ctx context.Context, tenantID, id int64) error {
 
 func (s *Service) AddItems(ctx context.Context, tenantID, datasetID int64, req AddItemsRequest) (int, error) {
 	if len(req.Items) == 0 {
-		return 0, ErrValidation{Msg: "items must not be empty"}
+		return 0, errorcode.ValidationError{Msg: "items must not be empty"}
 	}
 	if len(req.Items) > maxItemsPerRequest {
-		return 0, ErrValidation{Msg: "too many items in one request"}
+		return 0, errorcode.ValidationError{Msg: "too many items in one request"}
 	}
 	ok, err := s.repo.DatasetExists(ctx, tenantID, datasetID)
 	if err != nil {

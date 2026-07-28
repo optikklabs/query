@@ -1,6 +1,10 @@
 package llm
 
-import "time"
+import (
+	"time"
+
+	"github.com/optikklabs/query/internal/shared/contracts"
+)
 
 type App struct {
 	Service        string   `json:"service"`
@@ -135,14 +139,8 @@ type TracesQueryRequest struct {
 }
 
 type TracesQueryResponse struct {
-	Results  []LLMTrace `json:"results"`
-	PageInfo PageInfo   `json:"pageInfo"`
-}
-
-type PageInfo struct {
-	HasMore    bool   `json:"hasMore"`
-	NextCursor string `json:"nextCursor,omitempty"`
-	Limit      int    `json:"limit"`
+	Results  []LLMTrace         `json:"results"`
+	PageInfo contracts.PageInfo `json:"pageInfo"`
 }
 
 type LLMTrace struct {
@@ -250,6 +248,17 @@ type LLMSpan struct {
 	Cost          float64 `json:"cost"`
 	Prompt        string  `json:"prompt,omitempty"`
 	Completion    string  `json:"completion,omitempty"`
+	// True when the text was truncated server-side; fetch the full
+	// content via GET /llm/traces/{traceId}/spans/{spanId}/io.
+	PromptTruncated     bool `json:"promptTruncated,omitempty"`
+	CompletionTruncated bool `json:"completionTruncated,omitempty"`
+}
+
+type SpanIOResponse struct {
+	TraceID    string `json:"traceId"`
+	SpanID     string `json:"spanId"`
+	Prompt     string `json:"prompt"`
+	Completion string `json:"completion"`
 }
 
 type OverviewResponse struct {
@@ -310,24 +319,31 @@ type traceCountRow struct {
 }
 
 type traceSpanRow struct {
-	SpanID        string    `ch:"span_id"`
-	ParentSpanID  string    `ch:"parent_span_id"`
-	Timestamp     time.Time `ch:"timestamp"`
-	DurationNano  uint64    `ch:"duration_nano"`
-	Name          string    `ch:"name"`
-	Service       string    `ch:"service"`
-	Environment   string    `ch:"environment"`
-	Vendor        string    `ch:"gen_ai_system"`
-	Operation     string    `ch:"gen_ai_operation"`
-	Kind          string    `ch:"gen_ai_span_kind"`
-	Model         string    `ch:"gen_ai_request_model"`
-	ResponseModel string    `ch:"gen_ai_response_model"`
-	InputTokens   uint64    `ch:"gen_ai_input_tokens"`
-	OutputTokens  uint64    `ch:"gen_ai_output_tokens"`
-	HasError      bool      `ch:"has_error"`
-	UserID        string    `ch:"llm_user_id"`
-	SessionID     string    `ch:"llm_session_id"`
-	Release       string    `ch:"llm_release"`
-	Prompt        string    `ch:"prompt"`
-	Completion    string    `ch:"completion"`
+	SpanID              string    `ch:"span_id"`
+	ParentSpanID        string    `ch:"parent_span_id"`
+	Timestamp           time.Time `ch:"timestamp"`
+	DurationNano        uint64    `ch:"duration_nano"`
+	Name                string    `ch:"name"`
+	Service             string    `ch:"service"`
+	Environment         string    `ch:"environment"`
+	Vendor              string    `ch:"gen_ai_system"`
+	Operation           string    `ch:"gen_ai_operation"`
+	Kind                string    `ch:"gen_ai_span_kind"`
+	Model               string    `ch:"gen_ai_request_model"`
+	ResponseModel       string    `ch:"gen_ai_response_model"`
+	InputTokens         uint64    `ch:"gen_ai_input_tokens"`
+	OutputTokens        uint64    `ch:"gen_ai_output_tokens"`
+	HasError            bool      `ch:"has_error"`
+	UserID              string    `ch:"llm_user_id"`
+	SessionID           string    `ch:"llm_session_id"`
+	Release             string    `ch:"llm_release"`
+	Prompt              string    `ch:"prompt"`
+	Completion          string    `ch:"completion"`
+	PromptTruncated     uint8     `ch:"prompt_truncated"`
+	CompletionTruncated uint8     `ch:"completion_truncated"`
+}
+
+type spanIORow struct {
+	Prompt     string `ch:"prompt"`
+	Completion string `ch:"completion"`
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/modules/logs/models"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
@@ -13,14 +14,18 @@ func (s *Service) Query(ctx context.Context, req models.QueryRequest) (models.Qu
 	limit := req.Limit
 	cur, _ := models.DecodeCursor(req.Cursor)
 
-	rows, hasMore, err := s.repo.ListLogs(ctx, req.Filters, limit, cur)
+	rows, err := s.repo.ListLogs(ctx, req.Filters, limit+1, cur)
 	if err != nil {
 		return models.QueryResponse{}, fmt.Errorf("logs.Query.list: %w", err)
 	}
 
+	rows, pageInfo := cursor.Paginate(rows, limit, func(r models.LogRow) string {
+		return models.Cursor{Timestamp: r.Timestamp, LogID: r.LogID}.Encode()
+	})
+
 	return models.QueryResponse{
 		Results:  models.MapLogs(rows),
-		PageInfo: buildPageInfo(rows, hasMore, limit),
+		PageInfo: pageInfo,
 	}, nil
 }
 
@@ -37,16 +42,4 @@ func (s *Service) Suggest(ctx context.Context, req models.SuggestRequest, tenant
 		return models.SuggestResponse{}, fmt.Errorf("logs.Suggest: %w", err)
 	}
 	return models.SuggestResponse{Suggestions: rows}, nil
-}
-
-func buildPageInfo(rows []models.LogRow, hasMore bool, limit int) models.PageInfo {
-	info := models.PageInfo{HasMore: hasMore, Limit: limit}
-	if hasMore && len(rows) > 0 {
-		last := rows[len(rows)-1]
-		info.NextCursor = models.Cursor{
-			Timestamp: last.Timestamp,
-			LogID:     last.LogID,
-		}.Encode()
-	}
-	return info
 }

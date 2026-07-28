@@ -47,7 +47,26 @@ auth:
   cookie_same_site: lax
 
 email:
-  resend_verification_enabled: false                                               
-  resend_api_key: ""                                  
-  from: ""                        
-  verify_base_url: "http://localhost:3000/login"                                   
+  resend_verification_enabled: false
+  resend_api_key: ""
+  from: ""
+  verify_base_url: "http://localhost:3000/login"
+
+# Public OTLP endpoints shown to users (welcome page, instrumentation docs).
+# Defaults (when omitted) are the managed endpoints:
+#   public_grpc_endpoint: "ingest.optikk.in:4317"
+#   public_http_endpoint: "https://ingest.optikk.in:4318"
+# Local ingest listens on 18317 (gRPC) / 18318 (HTTP).
+ingestion:
+  public_grpc_endpoint: "localhost:18317"
+  public_http_endpoint: "http://localhost:18318"
+
+# Billing rates for the usage-cost meter (ingestion overview).
+# Defaults (when omitted):
+#   gb_price_usd: 0.10            # USD per GB of logs + traces
+#   dpm_price_usd: 0.008          # USD per metric datapoint-per-minute
+#   monthly_record_commitment: 5000000000
+billing:
+  gb_price_usd: 0.10
+  dpm_price_usd: 0.008
+  monthly_record_commitment: 5000000000

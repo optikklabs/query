@@ -63,37 +63,6 @@ type metricCardinalityRow struct {
 	Count   uint64 `ch:"c"`
 }
 
-type scalarRow struct {
-	Count uint64 `ch:"c"`
-}
-
-func statsArgs(tenantID, startMs, endMs int64, signal string) []any {
-	return append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("signal", signal))
-}
-
-func (r *Repository) dailyBySignal(ctx context.Context, signal, op string, tenantID, startMs, endMs int64) ([]dateCountRow, error) {
-	query := `
-	SELECT toDate(bucket_hour) AS d, sum(record_count) AS c, sum(byte_count) AS b
-	FROM optikk.ingestion_stats
-	PREWHERE tenant_id = @tenantID AND bucket_hour BETWEEN @start AND @end AND signal = @signal
-	GROUP BY d
-	ORDER BY d`
-	var rows []dateCountRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, op, &rows, query, statsArgs(tenantID, startMs, endMs, signal)...)
-}
-
-func (r *Repository) DailyLogs(ctx context.Context, tenantID, startMs, endMs int64) ([]dateCountRow, error) {
-	return r.dailyBySignal(ctx, "logs", "ingestion.DailyLogs", tenantID, startMs, endMs)
-}
-
-func (r *Repository) DailySpans(ctx context.Context, tenantID, startMs, endMs int64) ([]dateCountRow, error) {
-	return r.dailyBySignal(ctx, "spans", "ingestion.DailySpans", tenantID, startMs, endMs)
-}
-
-func (r *Repository) DailyMetricDatapoints(ctx context.Context, tenantID, startMs, endMs int64) ([]dateCountRow, error) {
-	return r.dailyBySignal(ctx, "metrics", "ingestion.DailyMetricDatapoints", tenantID, startMs, endMs)
-}
-
 func (r *Repository) DailySignals(ctx context.Context, tenantID, startMs, endMs int64) ([]signalDateCountRow, error) {
 	query := `
 	SELECT signal, toDate(bucket_hour) AS d,
@@ -148,44 +117,6 @@ func (r *Repository) MetricCardinality(ctx context.Context, tenantID, startMs, e
 		chargs.RangeArgs(tenantID, startMs, endMs)...)
 }
 
-func (r *Repository) dailyBySignalService(ctx context.Context, signal, op string, tenantID, startMs, endMs int64) ([]svcDateCountRow, error) {
-	query := `
-	SELECT toDate(bucket_hour) AS d, service AS svc, sum(record_count) AS c, sum(byte_count) AS b
-	FROM optikk.ingestion_stats
-	PREWHERE tenant_id = @tenantID AND bucket_hour BETWEEN @start AND @end AND signal = @signal
-	GROUP BY d, svc
-	ORDER BY d, svc`
-	var rows []svcDateCountRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, op, &rows, query, statsArgs(tenantID, startMs, endMs, signal)...)
-}
-
-func (r *Repository) DailyLogsByService(ctx context.Context, tenantID, startMs, endMs int64) ([]svcDateCountRow, error) {
-	return r.dailyBySignalService(ctx, "logs", "ingestion.DailyLogsByService", tenantID, startMs, endMs)
-}
-
-func (r *Repository) DailySpansByService(ctx context.Context, tenantID, startMs, endMs int64) ([]svcDateCountRow, error) {
-	return r.dailyBySignalService(ctx, "spans", "ingestion.DailySpansByService", tenantID, startMs, endMs)
-}
-
-func (r *Repository) serviceTotalsBySignal(ctx context.Context, signal, op string, tenantID, startMs, endMs int64) ([]svcCountRow, error) {
-	query := `
-	SELECT service AS svc, any(environment) AS env, sum(record_count) AS c, sum(byte_count) AS b
-	FROM optikk.ingestion_stats
-	PREWHERE tenant_id = @tenantID AND bucket_hour BETWEEN @start AND @end AND signal = @signal
-	GROUP BY svc
-	ORDER BY c DESC`
-	var rows []svcCountRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, op, &rows, query, statsArgs(tenantID, startMs, endMs, signal)...)
-}
-
-func (r *Repository) ServiceLogTotals(ctx context.Context, tenantID, startMs, endMs int64) ([]svcCountRow, error) {
-	return r.serviceTotalsBySignal(ctx, "logs", "ingestion.ServiceLogTotals", tenantID, startMs, endMs)
-}
-
-func (r *Repository) ServiceSpanTotals(ctx context.Context, tenantID, startMs, endMs int64) ([]svcCountRow, error) {
-	return r.serviceTotalsBySignal(ctx, "spans", "ingestion.ServiceSpanTotals", tenantID, startMs, endMs)
-}
-
 func (r *Repository) ServiceTimeseries(ctx context.Context, tenantID, startMs, endMs int64) ([]svcCountRow, error) {
 	query := `
 	SELECT service AS svc, '' AS env, uniq(fingerprint) AS c, toUInt64(0) AS b
@@ -195,27 +126,4 @@ func (r *Repository) ServiceTimeseries(ctx context.Context, tenantID, startMs, e
 	ORDER BY c DESC`
 	var rows []svcCountRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "ingestion.ServiceTimeseries", &rows, query, chargs.RangeArgs(tenantID, startMs, endMs)...)
-}
-
-func (r *Repository) ActiveTimeseries(ctx context.Context, tenantID, startMs, endMs int64) (uint64, error) {
-	query := `
-	SELECT uniq(fingerprint) AS c
-	FROM optikk.metrics_series
-	PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end`
-	var row scalarRow
-	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "ingestion.ActiveTimeseries", &row, query, chargs.RangeArgs(tenantID, startMs, endMs)...)
-	return row.Count, err
-}
-
-func (r *Repository) TopCardinalityMetric(ctx context.Context, tenantID, startMs, endMs int64) (nameCountRow, error) {
-	query := `
-	SELECT metric_name AS name, uniq(fingerprint) AS c
-	FROM optikk.metrics_series
-	PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
-	GROUP BY name
-	ORDER BY c DESC
-	LIMIT 1`
-	var row nameCountRow
-	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "ingestion.TopCardinalityMetric", &row, query, chargs.RangeArgs(tenantID, startMs, endMs)...)
-	return row, err
 }

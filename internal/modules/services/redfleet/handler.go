@@ -29,12 +29,6 @@ func parseREDFilters(r *http.Request, tenantID, startMs, endMs int64) REDFilters
 	return f
 }
 
-func (h *REDFleetHandler) GetFleetServices(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query fleet services", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.Service.GetFleetServices(ctx, parseREDFilters(r, tenantID, startMs, endMs))
-	})
-}
-
 func (h *REDFleetHandler) GetFleetOverview(w http.ResponseWriter, r *http.Request) {
 	modulecommon.HandleComparableRangeQuery(w, r, "Failed to query fleet overview", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetFleetOverview(ctx, parseREDFilters(r, tenantID, startMs, endMs))

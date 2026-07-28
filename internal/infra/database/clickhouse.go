@@ -41,75 +41,49 @@ func OpenClickHouseConn(dsn string, maxOpenConns, maxIdleConns int) (clickhouse.
 	return conn, nil
 }
 
-var dashboardSettings = clickhouse.Settings{
-	"max_execution_time":              10,
-	"max_rows_to_read":                300_000_000,
-	"max_memory_usage":                2 * 1024 * 1024 * 1024,
-	"max_result_rows":                 100_000,
-	"result_overflow_mode":            "throw",
-	"read_overflow_mode":              "throw",
-	"optimize_read_in_order":          1,
-	"use_query_cache":                 1,
-	"query_cache_ttl":                 60,
-	"query_cache_share_between_users": 0,
-	"use_query_condition_cache":       1,
-	"max_threads":                     4,
-	"priority":                        1,
+// Fallback budgets mirror the config defaults so contexts stay safe even if
+// InitQueryBudgets was never called (e.g. in tests).
+var (
+	dashboardSettings = budgetSettings(config.QueryBudget{
+		MaxExecutionTime: 10, MaxRowsToRead: 300_000_000, MaxMemoryUsage: 2 * 1024 * 1024 * 1024,
+		MaxResultRows: 100_000, MaxThreads: 4, Priority: 1,
+	})
+	overviewSettings = budgetSettings(config.QueryBudget{
+		MaxExecutionTime: 30, MaxRowsToRead: 500_000_000, MaxMemoryUsage: 4 * 1024 * 1024 * 1024,
+		MaxResultRows: 100_000, MaxThreads: 4, Priority: 5,
+	})
+	explorerSettings = budgetSettings(config.QueryBudget{
+		MaxExecutionTime: 60, MaxRowsToRead: 1_000_000_000, MaxMemoryUsage: 4 * 1024 * 1024 * 1024,
+		MaxResultRows: 100_000, MaxThreads: 4, Priority: 10,
+	})
+)
+
+// budgetSettings builds an immutable settings map for one query class;
+// the maps are shared by every query context and must never be mutated.
+func budgetSettings(b config.QueryBudget) clickhouse.Settings {
+	return clickhouse.Settings{
+		"max_execution_time":              b.MaxExecutionTime,
+		"max_rows_to_read":                b.MaxRowsToRead,
+		"max_memory_usage":                b.MaxMemoryUsage,
+		"max_result_rows":                 b.MaxResultRows,
+		"result_overflow_mode":            "throw",
+		"read_overflow_mode":              "throw",
+		"optimize_read_in_order":          1,
+		"use_query_cache":                 1,
+		"query_cache_ttl":                 60,
+		"query_cache_share_between_users": 0,
+		"use_query_condition_cache":       1,
+		"max_threads":                     b.MaxThreads,
+		"priority":                        b.Priority,
+	}
 }
 
-var overviewSettings = clickhouse.Settings{
-	"max_execution_time":              30,
-	"max_rows_to_read":                500_000_000,
-	"max_memory_usage":                4 * 1024 * 1024 * 1024,
-	"max_result_rows":                 100_000,
-	"result_overflow_mode":            "throw",
-	"read_overflow_mode":              "throw",
-	"optimize_read_in_order":          1,
-	"use_query_cache":                 1,
-	"query_cache_ttl":                 60,
-	"query_cache_share_between_users": 0,
-	"use_query_condition_cache":       1,
-	"max_threads":                     4,
-	"priority":                        5,
-}
-
-var explorerSettings = clickhouse.Settings{
-	"max_execution_time":              60,
-	"max_rows_to_read":                1_000_000_000,
-	"max_memory_usage":                4 * 1024 * 1024 * 1024,
-	"max_result_rows":                 100_000,
-	"result_overflow_mode":            "throw",
-	"read_overflow_mode":              "throw",
-	"optimize_read_in_order":          1,
-	"use_query_cache":                 1,
-	"query_cache_ttl":                 60,
-	"query_cache_share_between_users": 0,
-	"use_query_condition_cache":       1,
-	"max_threads":                     4,
-	"priority":                        10,
-}
-
+// InitQueryBudgets replaces the settings once at startup, before any
+// connection serves queries.
 func InitQueryBudgets(budgets config.QueryBudgetsConfig) {
-	dashboardSettings["max_execution_time"] = budgets.Dashboard.MaxExecutionTime
-	dashboardSettings["max_rows_to_read"] = budgets.Dashboard.MaxRowsToRead
-	dashboardSettings["max_memory_usage"] = budgets.Dashboard.MaxMemoryUsage
-	dashboardSettings["max_result_rows"] = budgets.Dashboard.MaxResultRows
-	dashboardSettings["max_threads"] = budgets.Dashboard.MaxThreads
-	dashboardSettings["priority"] = budgets.Dashboard.Priority
-
-	overviewSettings["max_execution_time"] = budgets.Overview.MaxExecutionTime
-	overviewSettings["max_rows_to_read"] = budgets.Overview.MaxRowsToRead
-	overviewSettings["max_memory_usage"] = budgets.Overview.MaxMemoryUsage
-	overviewSettings["max_result_rows"] = budgets.Overview.MaxResultRows
-	overviewSettings["max_threads"] = budgets.Overview.MaxThreads
-	overviewSettings["priority"] = budgets.Overview.Priority
-
-	explorerSettings["max_execution_time"] = budgets.Explorer.MaxExecutionTime
-	explorerSettings["max_rows_to_read"] = budgets.Explorer.MaxRowsToRead
-	explorerSettings["max_memory_usage"] = budgets.Explorer.MaxMemoryUsage
-	explorerSettings["max_result_rows"] = budgets.Explorer.MaxResultRows
-	explorerSettings["max_threads"] = budgets.Explorer.MaxThreads
-	explorerSettings["priority"] = budgets.Explorer.Priority
+	dashboardSettings = budgetSettings(budgets.Dashboard)
+	overviewSettings = budgetSettings(budgets.Overview)
+	explorerSettings = budgetSettings(budgets.Explorer)
 }
 
 func DashboardCtx(ctx context.Context) context.Context {

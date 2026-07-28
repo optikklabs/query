@@ -1,5 +1,11 @@
 package tenant
 
+type IngestionEndpointsResponse struct {
+	GRPC       string `json:"grpc"`
+	HTTP       string `json:"http"`
+	HeaderName string `json:"headerName"`
+}
+
 type TenantResponse struct {
 	ID           int64  `json:"id"`
 	Name         string `json:"name"`

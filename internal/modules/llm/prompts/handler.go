@@ -1,7 +1,6 @@
 package prompts
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -85,13 +84,5 @@ func (h *Handler) UpdateVersion(w http.ResponseWriter, r *http.Request) {
 }
 
 func respondErr(w http.ResponseWriter, r *http.Request, err error) {
-	var ve ErrValidation
-	switch {
-	case errors.Is(err, ErrNotFound):
-		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "prompt not found", nil)
-	case errors.As(err, &ve):
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, ve.Msg, nil)
-	default:
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "prompt request failed", err)
-	}
+	httputil.RespondServiceError(w, r, err, "prompt request failed")
 }

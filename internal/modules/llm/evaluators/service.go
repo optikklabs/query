@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 type Service struct {
@@ -16,11 +18,7 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-var ErrNotFound = errors.New("evaluator not found")
-
-type ErrValidation struct{ Msg string }
-
-func (e ErrValidation) Error() string { return e.Msg }
+var ErrNotFound = errorcode.NotFoundError{Msg: "evaluator not found"}
 
 var validTarget = map[string]struct{}{"traces": {}, "generations": {}}
 var validDataType = map[string]struct{}{"numeric": {}, "boolean": {}, "categorical": {}}
@@ -97,29 +95,29 @@ func buildArgs(tenantID int64, req UpsertRequest, base insertArgs) (insertArgs, 
 		base.Name = name
 	}
 	if base.Name == "" {
-		return insertArgs{}, ErrValidation{Msg: "name is required"}
+		return insertArgs{}, errorcode.ValidationError{Msg: "name is required"}
 	}
 	if sn := strings.TrimSpace(req.ScoreName); sn != "" {
 		base.ScoreName = sn
 	}
 	if base.ScoreName == "" {
-		return insertArgs{}, ErrValidation{Msg: "scoreName is required"}
+		return insertArgs{}, errorcode.ValidationError{Msg: "scoreName is required"}
 	}
 	if req.Target != "" {
 		if _, ok := validTarget[req.Target]; !ok {
-			return insertArgs{}, ErrValidation{Msg: "target must be traces or generations"}
+			return insertArgs{}, errorcode.ValidationError{Msg: "target must be traces or generations"}
 		}
 		base.Target = req.Target
 	}
 	if req.DataType != "" {
 		if _, ok := validDataType[req.DataType]; !ok {
-			return insertArgs{}, ErrValidation{Msg: "dataType must be numeric, boolean or categorical"}
+			return insertArgs{}, errorcode.ValidationError{Msg: "dataType must be numeric, boolean or categorical"}
 		}
 		base.DataType = req.DataType
 	}
 	if req.SamplingPct != nil {
 		if *req.SamplingPct < 0 || *req.SamplingPct > 100 {
-			return insertArgs{}, ErrValidation{Msg: "samplingPct must be between 0 and 100"}
+			return insertArgs{}, errorcode.ValidationError{Msg: "samplingPct must be between 0 and 100"}
 		}
 		base.SamplingPct = *req.SamplingPct
 	}

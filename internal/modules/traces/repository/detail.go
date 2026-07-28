@@ -174,28 +174,3 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 	}
 	return &res, nil
 }
-
-func (r *Repository) ListSpansByTrace(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]models.SpanListItem, error) {
-	const query = `
-		SELECT span_id,
-		       parent_span_id,
-		       trace_id,
-		       service,
-		       name,
-		       kind_string,
-		       status_code_string,
-		       is_error = 1                       AS has_error,
-		       duration_nano / 1000000.0          AS duration_ms,
-		       timestamp
-		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
-		     AND trace_id = @traceID
-		ORDER BY timestamp ASC
-		LIMIT 5000`
-	var rows []models.SpanListItem
-	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.ListSpansByTrace", &rows, query,
-		boundedTraceArgs(tenantID, traceID, startMs, endMs)...,
-	)
-	return rows, err
-}

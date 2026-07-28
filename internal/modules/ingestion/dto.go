@@ -1,7 +1,8 @@
 package ingestion
 
+import "github.com/optikklabs/query/internal/config"
+
 type Config struct {
-	Enabled                 bool
 	MonthlyRecordCommitment uint64
 	MonthlyByteCommitment   uint64
 
@@ -10,13 +11,14 @@ type Config struct {
 	Currency             string
 }
 
-func DefaultConfig() Config {
+// NewConfig builds pricing from the billing config section; rates and
+// the record commitment default via viper (billing.* keys).
+func NewConfig(billing config.BillingConfig) Config {
 	return Config{
-		Enabled:                 true,
-		MonthlyRecordCommitment: 5_000_000_000,
+		MonthlyRecordCommitment: billing.MonthlyRecordCommitment,
 		MonthlyByteCommitment:   50 * 1024 * 1024 * 1024 * 1024,
-		PricePerGBLogsTraces:    0.10,
-		PricePerDPMMetrics:      0.008,
+		PricePerGBLogsTraces:    billing.GBPriceUSD,
+		PricePerDPMMetrics:      billing.DPMPriceUSD,
 		Currency:                "USD",
 	}
 }

@@ -1,7 +1,6 @@
 package dashboards
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -183,13 +182,5 @@ func parseIDParam(w http.ResponseWriter, r *http.Request, key string) (int64, bo
 }
 
 func respondServiceError(w http.ResponseWriter, r *http.Request, err error) {
-	var ve ErrValidation
-	switch {
-	case errors.Is(err, ErrNotFound):
-		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "dashboard not found", nil)
-	case errors.As(err, &ve):
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", ve)
-	default:
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "dashboard request failed", err)
-	}
+	httputil.RespondServiceError(w, r, err, "dashboard request failed")
 }

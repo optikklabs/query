@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 type repository interface {
@@ -34,29 +36,29 @@ func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantI
 		role = shared.RoleMember
 	}
 	if !shared.IsValidRole(role) {
-		return UserResponse{}, shared.NewValidationError("role must be 'admin' or 'member'", nil)
+		return UserResponse{}, errorcode.ValidationError{Msg: "role must be 'admin' or 'member'"}
 	}
 
 	hashStr := ""
 	if req.Password != "" {
 		if len(req.Password) < shared.MinPasswordLength {
-			return UserResponse{}, shared.NewValidationError("Password must be at least 8 characters", nil)
+			return UserResponse{}, errorcode.ValidationError{Msg: "Password must be at least 8 characters"}
 		}
 		hash, err := shared.HashPassword(req.Password)
 		if err != nil {
-			return UserResponse{}, shared.NewInternalError("Failed to hash password", err)
+			return UserResponse{}, fmt.Errorf("Failed to hash password: %w", err)
 		}
 		hashStr = hash
 	}
 
 	userID, err := s.repo.CreateUser(ctx, req.Email, hashStr, req.Name, tenantID, role, time.Now().UTC())
 	if err != nil {
-		return UserResponse{}, shared.NewInternalError("Failed to create user", err)
+		return UserResponse{}, fmt.Errorf("Failed to create user: %w", err)
 	}
 
 	created, err := s.repo.FindUserByID(ctx, userID, tenantID)
 	if err != nil {
-		return UserResponse{}, shared.NewInternalError("Failed to load created user", err)
+		return UserResponse{}, fmt.Errorf("Failed to load created user: %w", err)
 	}
 
 	if req.Password == "" {
@@ -84,7 +86,7 @@ func (s *Service) buildUserResponse(user shared.UserRecord) UserResponse {
 func (s *Service) ListUsers(ctx context.Context, tenantID int64) ([]UserResponse, error) {
 	records, err := s.repo.ListUsersByTenantID(ctx, tenantID)
 	if err != nil {
-		return nil, shared.NewInternalError("Failed to list users", err)
+		return nil, fmt.Errorf("Failed to list users: %w", err)
 	}
 	responses := make([]UserResponse, 0, len(records))
 	for _, record := range records {
@@ -95,7 +97,7 @@ func (s *Service) ListUsers(ctx context.Context, tenantID int64) ([]UserResponse
 
 func (s *Service) SetUserRole(ctx context.Context, userID, tenantID int64, role string) (UserResponse, error) {
 	if !shared.IsValidRole(role) {
-		return UserResponse{}, shared.NewValidationError("role must be 'admin' or 'member'", nil)
+		return UserResponse{}, errorcode.ValidationError{Msg: "role must be 'admin' or 'member'"}
 	}
 	user, err := s.findInTenant(ctx, userID, tenantID)
 	if err != nil {
@@ -107,7 +109,7 @@ func (s *Service) SetUserRole(ctx context.Context, userID, tenantID int64, role 
 		}
 	}
 	if err := s.repo.UpdateUserRole(ctx, userID, tenantID, role); err != nil {
-		return UserResponse{}, shared.NewInternalError("Failed to update user role", err)
+		return UserResponse{}, fmt.Errorf("Failed to update user role: %w", err)
 	}
 	user.Role = role
 	return s.buildUserResponse(user), nil
@@ -124,7 +126,7 @@ func (s *Service) RemoveUser(ctx context.Context, userID, tenantID int64) error 
 		}
 	}
 	if err := s.repo.DeactivateUser(ctx, userID, tenantID); err != nil {
-		return shared.NewInternalError("Failed to remove user", err)
+		return fmt.Errorf("Failed to remove user: %w", err)
 	}
 	return nil
 }
@@ -133,9 +135,9 @@ func (s *Service) findInTenant(ctx context.Context, userID, tenantID int64) (sha
 	user, err := s.repo.FindUserByID(ctx, userID, tenantID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return shared.UserRecord{}, shared.NewNotFoundError("User not found", nil)
+			return shared.UserRecord{}, errorcode.NotFoundError{Msg: "User not found"}
 		}
-		return shared.UserRecord{}, shared.NewInternalError("Failed to load user", err)
+		return shared.UserRecord{}, fmt.Errorf("Failed to load user: %w", err)
 	}
 	return user, nil
 }
@@ -143,10 +145,10 @@ func (s *Service) findInTenant(ctx context.Context, userID, tenantID int64) (sha
 func (s *Service) guardLastAdmin(ctx context.Context, tenantID int64) error {
 	admins, err := s.repo.CountActiveAdmins(ctx, tenantID)
 	if err != nil {
-		return shared.NewInternalError("Failed to count admins", err)
+		return fmt.Errorf("Failed to count admins: %w", err)
 	}
 	if admins <= 1 {
-		return shared.NewConflictError("Cannot remove or demote the last admin of the tenant", nil)
+		return errorcode.ConflictError{Msg: "Cannot remove or demote the last admin of the tenant"}
 	}
 	return nil
 }

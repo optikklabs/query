@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
@@ -51,17 +52,16 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, e
 	if err != nil {
 		return QueryResponse{}, err
 	}
-	hasMore := len(rows) > limit
-	if hasMore {
-		rows = rows[:limit]
-	}
+	rows, pageInfo := cursor.Paginate(rows, limit, func(last traceIndexRowDTO) string {
+		return TraceCursor{StartNs: uint64(last.StartTime.UnixNano()), SpanID: last.SpanID}.Encode()
+	})
 	aggs, err := s.enrichPage(ctx, req.TenantID, rows)
 	if err != nil {
 		return QueryResponse{}, err
 	}
 	return QueryResponse{
 		Results:  mapTraces(rows, aggs),
-		PageInfo: buildPageInfo(rows, hasMore, limit),
+		PageInfo: pageInfo,
 	}, nil
 }
 
@@ -104,15 +104,6 @@ func traceIDsOf(rows []traceIndexRowDTO) []string {
 		ids[i] = r.TraceID
 	}
 	return ids
-}
-
-func buildPageInfo(rows []traceIndexRowDTO, hasMore bool, limit int) PageInfo {
-	info := PageInfo{HasMore: hasMore, Limit: limit}
-	if hasMore && len(rows) > 0 {
-		last := rows[len(rows)-1]
-		info.NextCursor = TraceCursor{StartNs: uint64(last.StartTime.UnixNano()), SpanID: last.SpanID}.Encode()
-	}
-	return info
 }
 
 func mapTrace(d traceIndexRowDTO, agg traceAggRow, ok bool) Trace {

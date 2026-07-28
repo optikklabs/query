@@ -16,6 +16,14 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{Service: service}
 }
 
+func (h *Handler) IngestionEndpoints(w http.ResponseWriter, r *http.Request) {
+	if modulecommon.Tenant(r).TenantID == 0 {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
+		return
+	}
+	modulecommon.RespondOK(w, h.Service.IngestionEndpoints())
+}
+
 func (h *Handler) RotateAPIKey(w http.ResponseWriter, r *http.Request) {
 	tenant := modulecommon.Tenant(r)
 	if !h.requireTenantAdmin(w, r, tenant.TenantID, tenant.UserRole) {

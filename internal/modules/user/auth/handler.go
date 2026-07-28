@@ -48,10 +48,13 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.Service.Refresh(r.Context(), candidates, modulecommon.ClientIP(r))
+	response, newRefresh, err := h.Service.Refresh(r.Context(), candidates, modulecommon.ClientIP(r))
 	if err != nil {
 		shared.RespondServiceError(w, r, err, "Failed to refresh token")
 		return
+	}
+	if newRefresh != "" {
+		h.Tokens.SetRefreshCookie(w, newRefresh)
 	}
 	modulecommon.RespondOK(w, response)
 }

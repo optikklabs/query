@@ -89,6 +89,37 @@ func (r *Repository) FindRefreshTokenByHash(ctx context.Context, tokenHash strin
 	return t, err
 }
 
+// RotateRefreshToken atomically revokes the presented token and stores its
+// replacement within the same family.
+func (r *Repository) RotateRefreshToken(ctx context.Context, oldHash string, userID int64, familyID, newHash string, expiresAt time.Time) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL
+	`, time.Now().UTC(), oldHash); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
+		VALUES (?, ?, ?, ?)
+	`, userID, familyID, newHash, expiresAt); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RevokeFamily revokes every live refresh token in a rotation family.
+func (r *Repository) RevokeFamily(ctx context.Context, familyID string) error {
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.RevokeRefreshFamily", `
+		UPDATE refresh_tokens SET revoked_at = ? WHERE family_id = ? AND revoked_at IS NULL
+	`, time.Now().UTC(), familyID)
+	return err
+}
+
 func (r *Repository) RevokeRefreshToken(ctx context.Context, tokenHash string) error {
 	_, err := dbutil.ExecSQL(ctx, r.db, "user.RevokeRefreshToken", `
 		UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL

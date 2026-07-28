@@ -18,28 +18,3 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 		return h.svc.Overview(ctx, tenantID, startMs, endMs)
 	})
 }
-
-func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query ingestion summary", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.svc.Summary(ctx, tenantID, startMs, endMs)
-	})
-}
-
-func (h *Handler) Cost(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query ingestion cost", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.svc.Cost(ctx, tenantID, startMs, endMs)
-	})
-}
-
-func (h *Handler) Timeseries(w http.ResponseWriter, r *http.Request) {
-	groupBy := r.URL.Query().Get("groupBy")
-	modulecommon.HandleRangeQuery(w, r, "Failed to query ingestion timeseries", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.svc.Timeseries(ctx, tenantID, startMs, endMs, groupBy)
-	})
-}
-
-func (h *Handler) Services(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query ingestion services", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.svc.Services(ctx, tenantID, startMs, endMs)
-	})
-}

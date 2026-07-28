@@ -3,11 +3,13 @@ package device
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 const (
@@ -33,15 +35,15 @@ func NewService(repo *Repository, issuer *auth.Service) *Service {
 func (s *Service) StartDeviceAuth(ctx context.Context) (DeviceCodeResponse, error) {
 	deviceCode, err := shared.GenerateDeviceCode()
 	if err != nil {
-		return DeviceCodeResponse{}, shared.NewInternalError("Failed to generate device code", err)
+		return DeviceCodeResponse{}, fmt.Errorf("Failed to generate device code: %w", err)
 	}
 	userCode, err := shared.GenerateUserCode()
 	if err != nil {
-		return DeviceCodeResponse{}, shared.NewInternalError("Failed to generate user code", err)
+		return DeviceCodeResponse{}, fmt.Errorf("Failed to generate user code: %w", err)
 	}
 	expiresAt := time.Now().UTC().Add(deviceCodeTTL)
 	if err := s.repo.InsertDeviceCode(ctx, deviceCode, userCode, expiresAt); err != nil {
-		return DeviceCodeResponse{}, shared.NewInternalError("Failed to store device code", err)
+		return DeviceCodeResponse{}, fmt.Errorf("Failed to store device code: %w", err)
 	}
 	return DeviceCodeResponse{
 		DeviceCode: deviceCode,
@@ -73,10 +75,10 @@ func (s *Service) PollDeviceToken(ctx context.Context, deviceCode string) (auth.
 
 	user, err := s.repo.FindActiveUserByID(ctx, *record.UserID)
 	if err != nil {
-		return auth.LoginResponse{}, "", shared.NewUnauthorizedError("Approved user is no longer active", err)
+		return auth.LoginResponse{}, "", shared.UnauthorizedError{Msg: "Approved user is no longer active"}
 	}
 	if err := s.repo.ConsumeDeviceCode(ctx, deviceCode, now); err != nil {
-		return auth.LoginResponse{}, "", shared.NewInternalError("Failed to consume device code", err)
+		return auth.LoginResponse{}, "", fmt.Errorf("Failed to consume device code: %w", err)
 	}
 
 	authUser := shared.AuthUser{
@@ -109,16 +111,16 @@ func evaluateDeviceCode(record shared.DeviceCodeRecord, now time.Time) error {
 func (s *Service) ApproveDeviceCode(ctx context.Context, userCode string, userID int64) error {
 	record, err := s.repo.FindDeviceCodeByUserCode(ctx, userCode)
 	if err != nil {
-		return shared.NewValidationError("Unknown or expired code", err)
+		return errorcode.ValidationError{Msg: "Unknown or expired code"}
 	}
 	if time.Now().UTC().After(record.ExpiresAt) || record.ConsumedAt != nil {
-		return shared.NewValidationError("This code has expired. Start a new login from the CLI.", nil)
+		return errorcode.ValidationError{Msg: "This code has expired. Start a new login from the CLI."}
 	}
 	if record.ApprovedAt != nil {
-		return shared.NewValidationError("This code was already approved.", nil)
+		return errorcode.ValidationError{Msg: "This code was already approved."}
 	}
 	if err := s.repo.ApproveDeviceCode(ctx, userCode, userID, time.Now().UTC()); err != nil {
-		return shared.NewInternalError("Failed to approve device code", err)
+		return fmt.Errorf("Failed to approve device code: %w", err)
 	}
 	return nil
 }

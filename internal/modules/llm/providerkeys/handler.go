@@ -55,15 +55,9 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func respondErr(w http.ResponseWriter, r *http.Request, err error) {
-	var ve ErrValidation
-	switch {
-	case errors.Is(err, ErrNotFound):
-		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "provider key not found", nil)
-	case errors.Is(err, ErrNoEncryption):
+	if errors.Is(err, ErrNoEncryption) {
 		httputil.RespondErrorWithCause(w, r, http.StatusServiceUnavailable, errorcode.Unavailable, "provider key encryption is not configured", nil)
-	case errors.As(err, &ve):
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, ve.Msg, nil)
-	default:
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "provider key request failed", err)
+		return
 	}
+	httputil.RespondServiceError(w, r, err, "provider key request failed")
 }

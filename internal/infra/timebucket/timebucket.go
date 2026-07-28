@@ -120,6 +120,27 @@ func BuildDenseTimestamps(startMs, endMs int64, bucketSec int64) []int64 {
 	return ts
 }
 
+// FillGaps builds one point per grain bucket in [startMs, endMs].
+// Rows are keyed by their truncated bucket via at; point receives the
+// zero row and ok=false for buckets that have no matching row.
+func FillGaps[R, P any](
+	startMs, endMs int64, grain time.Duration, rows []R,
+	at func(R) time.Time,
+	point func(t time.Time, row R, ok bool) P,
+) []P {
+	byBucket := make(map[int64]R, len(rows))
+	for _, r := range rows {
+		byBucket[at(r).UTC().Truncate(grain).Unix()] = r
+	}
+	buckets := DenseBuckets(startMs, endMs, grain)
+	points := make([]P, 0, len(buckets))
+	for _, t := range buckets {
+		row, ok := byBucket[t.Unix()]
+		points = append(points, point(t, row, ok))
+	}
+	return points
+}
+
 func ZeroFillGaps(values []*float64) {
 	zero := 0.0
 	for i, v := range values {

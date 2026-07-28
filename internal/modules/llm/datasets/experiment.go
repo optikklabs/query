@@ -11,6 +11,7 @@ import (
 	"github.com/optikklabs/query/internal/infra/llmproviders"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/modules/llm/providerkeys"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 func IsProviderUnavailable(err error) bool {
@@ -52,10 +53,10 @@ func NewExperimentService(repo *Repository, keys KeyResolver, completer Complete
 
 func (s *ExperimentService) Run(ctx context.Context, tenantID, datasetID int64, req RunExperimentRequest) (RunDetail, error) {
 	if _, ok := map[string]struct{}{"openai": {}, "anthropic": {}, "mistral": {}}[req.Provider]; !ok {
-		return RunDetail{}, ErrValidation{Msg: "provider must be openai, anthropic or mistral"}
+		return RunDetail{}, errorcode.ValidationError{Msg: "provider must be openai, anthropic or mistral"}
 	}
 	if strings.TrimSpace(req.Model) == "" {
-		return RunDetail{}, ErrValidation{Msg: "model is required"}
+		return RunDetail{}, errorcode.ValidationError{Msg: "model is required"}
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -73,7 +74,7 @@ func (s *ExperimentService) Run(ctx context.Context, tenantID, datasetID int64, 
 		return RunDetail{}, err
 	}
 	if len(items) == 0 {
-		return RunDetail{}, ErrValidation{Msg: "dataset has no items to run"}
+		return RunDetail{}, errorcode.ValidationError{Msg: "dataset has no items to run"}
 	}
 	if len(items) > maxRunItems {
 		items = items[:maxRunItems]

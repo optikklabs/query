@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 type Service struct {
@@ -16,11 +18,7 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-var ErrNotFound = errors.New("prompt not found")
-
-type ErrValidation struct{ Msg string }
-
-func (e ErrValidation) Error() string { return e.Msg }
+var ErrNotFound = errorcode.NotFoundError{Msg: "prompt not found"}
 
 var validVersionStatus = map[string]struct{}{
 	"draft": {}, "production": {}, "archived": {},
@@ -65,17 +63,17 @@ func (s *Service) Get(ctx context.Context, tenantID int64, name string) (PromptD
 func (s *Service) Create(ctx context.Context, tenantID, userID int64, req CreatePromptRequest) (PromptDetail, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return PromptDetail{}, ErrValidation{Msg: "name is required"}
+		return PromptDetail{}, errorcode.ValidationError{Msg: "name is required"}
 	}
 	ptype := req.Type
 	if ptype == "" {
 		ptype = "chat"
 	}
 	if ptype != "chat" && ptype != "text" {
-		return PromptDetail{}, ErrValidation{Msg: "type must be chat or text"}
+		return PromptDetail{}, errorcode.ValidationError{Msg: "type must be chat or text"}
 	}
 	if len(req.Template) == 0 {
-		return PromptDetail{}, ErrValidation{Msg: "template is required"}
+		return PromptDetail{}, errorcode.ValidationError{Msg: "template is required"}
 	}
 	p := promptInsertArgs{
 		TenantID: tenantID,
@@ -106,7 +104,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 
 func (s *Service) AddVersion(ctx context.Context, tenantID, userID int64, name string, req CreateVersionRequest) (PromptDetail, error) {
 	if len(req.Template) == 0 {
-		return PromptDetail{}, ErrValidation{Msg: "template is required"}
+		return PromptDetail{}, errorcode.ValidationError{Msg: "template is required"}
 	}
 	prompt, err := s.repo.GetPromptByName(ctx, tenantID, name)
 	if err != nil {
@@ -133,7 +131,7 @@ func (s *Service) AddVersion(ctx context.Context, tenantID, userID int64, name s
 
 func (s *Service) SetVersionStatus(ctx context.Context, tenantID int64, name string, version int, req UpdateVersionRequest) (PromptDetail, error) {
 	if _, ok := validVersionStatus[req.Status]; !ok {
-		return PromptDetail{}, ErrValidation{Msg: "status must be draft, production or archived"}
+		return PromptDetail{}, errorcode.ValidationError{Msg: "status must be draft, production or archived"}
 	}
 	prompt, err := s.repo.GetPromptByName(ctx, tenantID, name)
 	if err != nil {

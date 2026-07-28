@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/url"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	emailinfra "github.com/optikklabs/query/internal/infra/email"
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 const verificationTTL = 24 * time.Hour
@@ -108,7 +110,7 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest) (SignupResult, 
 
 	if s.verificationRequired {
 		if err := s.sender.SendVerification(ctx, normalized.email, secrets.verificationToken); err != nil {
-			return SignupResult{}, shared.NewInternalError("Failed to send verification email", err)
+			return SignupResult{}, fmt.Errorf("Failed to send verification email: %w", err)
 		}
 		slog.InfoContext(ctx, "AUTH_EVENT signup_success",
 			slog.Int64("user_id", user.ID), slog.Int64("tenant_id", user.TenantID), slog.String("email", user.Email))
@@ -128,14 +130,14 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) (auth.LoginR
 	sum := sha256.Sum256([]byte(strings.TrimSpace(rawToken)))
 	user, err := s.repo.ConsumeVerification(ctx, hex.EncodeToString(sum[:]))
 	if err != nil {
-		return auth.LoginResponse{}, "", "", shared.NewValidationError("Verification link is invalid or expired", err)
+		return auth.LoginResponse{}, "", "", errorcode.ValidationError{Msg: "Verification link is invalid or expired"}
 	}
 	apiKey, err := shared.GenerateAPIKey()
 	if err != nil {
-		return auth.LoginResponse{}, "", "", shared.NewInternalError("Failed to create API key", err)
+		return auth.LoginResponse{}, "", "", fmt.Errorf("Failed to create API key: %w", err)
 	}
 	if err := s.repo.RotateTenantAPIKey(ctx, user.TenantID, apiKey); err != nil {
-		return auth.LoginResponse{}, "", "", shared.NewInternalError("Failed to activate account", err)
+		return auth.LoginResponse{}, "", "", fmt.Errorf("Failed to activate account: %w", err)
 	}
 	session, refresh, err := s.issuer.IssueTokens(ctx, user)
 	if err != nil {
@@ -147,19 +149,27 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) (auth.LoginR
 func (s *Service) prepareSignupSecrets(password string) (signupSecrets, error) {
 	hash, err := shared.HashPassword(password)
 	if err != nil {
-		return signupSecrets{}, shared.NewInternalError("Failed to hash password", err)
+		return signupSecrets{}, fmt.Errorf("Failed to hash password: %w", err)
 	}
-	apiKey, err := shared.GenerateAPIKey()
-	if err != nil {
-		return signupSecrets{}, shared.NewInternalError("Failed to generate api key", err)
-	}
-	secrets := signupSecrets{passwordHash: hash, apiKey: apiKey}
+	secrets := signupSecrets{passwordHash: hash}
 	if !s.verificationRequired {
+		apiKey, err := shared.GenerateAPIKey()
+		if err != nil {
+			return signupSecrets{}, fmt.Errorf("Failed to generate api key: %w", err)
+		}
+		secrets.apiKey = apiKey
 		return secrets, nil
 	}
+	// Verified signups get their real key at verify time (VerifyEmail
+	// rotates it); until then store an unusable revoked sentinel.
+	sentinel, err := shared.GenerateRevokedKey()
+	if err != nil {
+		return signupSecrets{}, fmt.Errorf("Failed to generate api key: %w", err)
+	}
+	secrets.apiKey = sentinel
 	token, err := shared.GenerateDeviceCode()
 	if err != nil {
-		return signupSecrets{}, shared.NewInternalError("Failed to generate verification token", err)
+		return signupSecrets{}, fmt.Errorf("Failed to generate verification token: %w", err)
 	}
 	sum := sha256.Sum256([]byte(token))
 	secrets.verificationToken = token
@@ -187,15 +197,15 @@ func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, sec
 		return user, nil
 	}
 	if !IsDuplicateEmail(err) {
-		return shared.AuthUser{}, shared.NewInternalError("Failed to create account", err)
+		return shared.AuthUser{}, fmt.Errorf("Failed to create account: %w", err)
 	}
 
 	user, updateErr := s.repo.UpdateUnverifiedTenantAndAdmin(ctx, signupRow)
 	if updateErr != nil {
 		if errors.Is(updateErr, ErrAlreadyVerified) {
-			return shared.AuthUser{}, shared.NewConflictError("An account with this email already exists", err)
+			return shared.AuthUser{}, errorcode.ConflictError{Msg: "An account with this email already exists"}
 		}
-		return shared.AuthUser{}, shared.NewInternalError("Failed to update unverified account", updateErr)
+		return shared.AuthUser{}, fmt.Errorf("Failed to update unverified account: %w", updateErr)
 	}
 	return user, nil
 }
@@ -223,15 +233,15 @@ func normalizeSignup(req SignupRequest) (normalizedSignup, error) {
 func validateSignup(s normalizedSignup) error {
 	switch {
 	case s.email == "" || !strings.Contains(s.email, "@"):
-		return shared.NewValidationError("A valid email is required", nil)
+		return errorcode.ValidationError{Msg: "A valid email is required"}
 	case s.name == "":
-		return shared.NewValidationError("Your name is required", nil)
+		return errorcode.ValidationError{Msg: "Your name is required"}
 	case s.tenantName == "":
-		return shared.NewValidationError("An organization name is required", nil)
+		return errorcode.ValidationError{Msg: "An organization name is required"}
 	case len(s.password) < shared.MinPasswordLength:
-		return shared.NewValidationError("Password must be at least 8 characters", nil)
+		return errorcode.ValidationError{Msg: "Password must be at least 8 characters"}
 	case !s.acceptedTerms:
-		return shared.NewValidationError("You must accept the Terms of Service and Privacy Policy", nil)
+		return errorcode.ValidationError{Msg: "You must accept the Terms of Service and Privacy Policy"}
 	}
 	return nil
 }

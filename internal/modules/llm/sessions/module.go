@@ -6,12 +6,6 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-func RegisterRoutes(v1 chi.Router, h *Handler) {
-	v1.Get("/llm/sessions/overview", h.Overview)
-	v1.Post("/llm/sessions/query", h.Query)
-	v1.Get("/llm/sessions/{sessionId}", h.Detail)
-}
-
 func NewModule(nativeQuerier clickhouse.Conn) registry.Module {
 	m := &sessionsModule{}
 	m.configure(nativeQuerier)
@@ -29,5 +23,7 @@ func (m *sessionsModule) configure(db clickhouse.Conn) {
 }
 
 func (m *sessionsModule) RegisterRoutes(group chi.Router) {
-	RegisterRoutes(group, m.handler)
+	group.Get("/llm/sessions/overview", m.handler.Overview)
+	group.Post("/llm/sessions/query", m.handler.Query)
+	group.Get("/llm/sessions/{sessionId}", m.handler.Detail)
 }

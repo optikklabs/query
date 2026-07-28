@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	types "github.com/optikklabs/query/internal/shared/contracts"
 	"github.com/optikklabs/query/internal/shared/errorcode"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 const APIV1Base = "/api/v1"
@@ -70,6 +71,13 @@ func RespondOK(w http.ResponseWriter, data any) {
 }
 
 func RespondErrorWithCause(w http.ResponseWriter, r *http.Request, status int, code, msg string, err error) {
+	// Budget violations are client-fixable: remap to a typed 422 so the
+	// UI can prompt narrowing instead of showing a generic 500.
+	if err != nil && errors.Is(err, errorcode.ErrQueryBudgetExceeded) {
+		status = http.StatusUnprocessableEntity
+		code = errorcode.QueryBudgetExceeded
+		msg = "query exceeded its execution budget; narrow the time range or filters"
+	}
 	requestID := w.Header().Get("X-Request-Id")
 	if err != nil {
 		slog.ErrorContext(r.Context(), "request error",
@@ -84,6 +92,26 @@ func RespondErrorWithCause(w http.ResponseWriter, r *http.Request, status int, c
 			slog.String("request_id", requestID))
 	}
 	WriteJSON(w, status, types.Failure(code, msg, r.URL.Path, requestID))
+}
+
+// RespondServiceError maps the shared service error kinds (validation,
+// not-found, conflict) to HTTP responses; other errors become failMsg 500s.
+func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, failMsg string) {
+	var (
+		nf errorcode.NotFoundError
+		cf errorcode.ConflictError
+		ve errorcode.ValidationError
+	)
+	switch {
+	case errors.As(err, &nf):
+		RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, nf.Msg, nil)
+	case errors.As(err, &cf):
+		RespondErrorWithCause(w, r, http.StatusConflict, errorcode.Conflict, cf.Msg, nil)
+	case errors.As(err, &ve):
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, ve.Msg, nil)
+	default:
+		RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, failMsg, err)
+	}
 }
 
 func ParseInt64Param(r *http.Request, key string, fallback int64) int64 {
@@ -117,6 +145,9 @@ func ParsePageSize(r *http.Request, key string, fallback int) int {
 	return size
 }
 
+// Allowance for client clocks slightly ahead of the server.
+const rangeClockSkewMs = 60 * 1000
+
 func ParseRange(r *http.Request) (startMs, endMs int64, err error) {
 	now := time.Now().UnixMilli()
 	end := ParseInt64Param(r, "endTime", 0)
@@ -133,6 +164,12 @@ func ParseRange(r *http.Request) (startMs, endMs int64, err error) {
 	if start <= 0 {
 		start = end - (7 * 24 * 3600 * 1000)
 	}
+	if maxEnd := now + rangeClockSkewMs; end > maxEnd {
+		end = maxEnd
+	}
+	if end-start > filterutil.MaxTimeRangeMs {
+		start = end - filterutil.MaxTimeRangeMs
+	}
 	if start >= end {
 		return 0, 0, errors.New("start must be before end")
 	}
@@ -140,6 +177,13 @@ func ParseRange(r *http.Request) (startMs, endMs int64, err error) {
 }
 
 func ParseRequiredRange(w http.ResponseWriter, r *http.Request) (startMs, endMs int64, ok bool) {
+	q := r.URL.Query()
+	hasStart := q.Get("startTime") != "" || q.Get("start") != ""
+	hasEnd := q.Get("endTime") != "" || q.Get("end") != ""
+	if !hasStart || !hasEnd {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "start and end time params are required", nil)
+		return 0, 0, false
+	}
 	start, end, err := ParseRange(r)
 	if err != nil {
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "start and end time params are required", err)

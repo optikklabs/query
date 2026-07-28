@@ -1,8 +1,6 @@
 package ingestion
 
 import (
-	"context"
-	"fmt"
 	"sort"
 	"time"
 )
@@ -73,30 +71,6 @@ func pct(part, whole uint64) float64 {
 	return float64(part) / float64(whole) * 100
 }
 
-func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (SummaryResponse, error) {
-	logs, err := s.repo.DailyLogs(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return SummaryResponse{}, fmt.Errorf("ingestion.Summary logs: %w", err)
-	}
-	spans, err := s.repo.DailySpans(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return SummaryResponse{}, fmt.Errorf("ingestion.Summary spans: %w", err)
-	}
-	metrics, err := s.repo.DailyMetricDatapoints(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return SummaryResponse{}, fmt.Errorf("ingestion.Summary metrics: %w", err)
-	}
-	activeTS, err := s.repo.ActiveTimeseries(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return SummaryResponse{}, fmt.Errorf("ingestion.Summary timeseries: %w", err)
-	}
-	topMetric, err := s.repo.TopCardinalityMetric(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return SummaryResponse{}, fmt.Errorf("ingestion.Summary cardinality: %w", err)
-	}
-	return s.summaryFromUsage(logs, spans, metrics, activeTS, topMetric, startMs, endMs), nil
-}
-
 func (s *Service) summaryFromUsage(
 	logs, spans, metrics []dateCountRow,
 	activeTS uint64,
@@ -158,22 +132,6 @@ func (s *Service) summaryFromUsage(
 	}
 }
 
-func (s *Service) Cost(ctx context.Context, tenantID, startMs, endMs int64) (CostResponse, error) {
-	logs, err := s.repo.DailyLogs(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return CostResponse{}, fmt.Errorf("ingestion.Cost logs: %w", err)
-	}
-	spans, err := s.repo.DailySpans(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return CostResponse{}, fmt.Errorf("ingestion.Cost spans: %w", err)
-	}
-	metrics, err := s.repo.DailyMetricDatapoints(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return CostResponse{}, fmt.Errorf("ingestion.Cost metrics: %w", err)
-	}
-	return s.costFromUsage(logs, spans, metrics, startMs, endMs), nil
-}
-
 func (s *Service) costFromUsage(
 	logs, spans, metrics []dateCountRow,
 	startMs, endMs int64,
@@ -199,29 +157,6 @@ func (s *Service) costFromUsage(
 		daysInMonth: daysInMonth(end),
 	}
 	return estimateCost(u, s.cfg.Rates())
-}
-
-func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64, groupBy string) (TimeseriesResponse, error) {
-	dates := buildDateAxis(startMs, endMs)
-	idx := axisIndex(dates)
-
-	if groupBy == "service" {
-		return s.timeseriesByService(ctx, tenantID, startMs, endMs, dates, idx)
-	}
-
-	logs, err := s.repo.DailyLogs(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries logs: %w", err)
-	}
-	spans, err := s.repo.DailySpans(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries spans: %w", err)
-	}
-	metrics, err := s.repo.DailyMetricDatapoints(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries metrics: %w", err)
-	}
-	return timeseriesByType(logs, spans, metrics, dates, idx), nil
 }
 
 func timeseriesByType(
@@ -264,18 +199,6 @@ func accumulateByService(rowSets [][]svcDateCountRow, idx map[string]int, n int)
 		}
 	}
 	return perService
-}
-
-func (s *Service) timeseriesByService(ctx context.Context, tenantID, startMs, endMs int64, dates []string, idx map[string]int) (TimeseriesResponse, error) {
-	logs, err := s.repo.DailyLogsByService(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries svc logs: %w", err)
-	}
-	spans, err := s.repo.DailySpansByService(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return TimeseriesResponse{}, fmt.Errorf("ingestion.Timeseries svc spans: %w", err)
-	}
-	return timeseriesByServiceRows(logs, spans, dates, idx), nil
 }
 
 func timeseriesByServiceRows(
@@ -369,44 +292,6 @@ func priorRecordTotals(priorLogs, priorSpans []svcCountRow) map[string]uint64 {
 		totals[row.Service] += row.Count
 	}
 	return totals
-}
-
-func (s *Service) Services(ctx context.Context, tenantID, startMs, endMs int64) (ServicesResponse, error) {
-	logTotals, err := s.repo.ServiceLogTotals(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return ServicesResponse{}, fmt.Errorf("ingestion.Services logs: %w", err)
-	}
-	spanTotals, err := s.repo.ServiceSpanTotals(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return ServicesResponse{}, fmt.Errorf("ingestion.Services spans: %w", err)
-	}
-	tsTotals, err := s.repo.ServiceTimeseries(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return ServicesResponse{}, fmt.Errorf("ingestion.Services timeseries: %w", err)
-	}
-
-	span := endMs - startMs
-	priorLogs, err := s.repo.ServiceLogTotals(ctx, tenantID, startMs-span, startMs)
-	if err != nil {
-		return ServicesResponse{}, fmt.Errorf("ingestion.Services prior logs: %w", err)
-	}
-	priorSpans, err := s.repo.ServiceSpanTotals(ctx, tenantID, startMs-span, startMs)
-	if err != nil {
-		return ServicesResponse{}, fmt.Errorf("ingestion.Services prior spans: %w", err)
-	}
-
-	dailyLogs, err := s.repo.DailyLogsByService(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return ServicesResponse{}, fmt.Errorf("ingestion.Services daily logs: %w", err)
-	}
-	dailySpans, err := s.repo.DailySpansByService(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return ServicesResponse{}, fmt.Errorf("ingestion.Services daily spans: %w", err)
-	}
-	return servicesFromUsage(
-		logTotals, spanTotals, tsTotals, priorLogs, priorSpans,
-		dailyLogs, dailySpans, startMs, endMs,
-	), nil
 }
 
 func servicesFromUsage(

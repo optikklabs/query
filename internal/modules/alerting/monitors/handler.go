@@ -1,7 +1,6 @@
 package monitors
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -117,13 +116,5 @@ func parseIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 }
 
 func respondServiceError(w http.ResponseWriter, r *http.Request, err error) {
-	var ve ErrValidation
-	switch {
-	case errors.Is(err, ErrNotFound):
-		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "monitor not found", nil)
-	case errors.As(err, &ve):
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", ve)
-	default:
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "monitor request failed", err)
-	}
+	httputil.RespondServiceError(w, r, err, "monitor request failed")
 }

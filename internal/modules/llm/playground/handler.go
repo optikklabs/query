@@ -30,7 +30,7 @@ func (h *Handler) Complete(w http.ResponseWriter, r *http.Request) {
 }
 
 func respondErr(w http.ResponseWriter, r *http.Request, err error) {
-	var ve ErrValidation
+	var ve errorcode.ValidationError
 	switch {
 	case errors.As(err, &ve):
 		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, ve.Msg, nil)

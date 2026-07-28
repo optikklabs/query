@@ -6,19 +6,6 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-func RegisterRoutes(v1 chi.Router, h *ErrorHandler) {
-	v1.Get("/errors/service-error-rate", h.GetServiceErrorRate)
-	v1.Get("/errors/error-volume", h.GetErrorVolume)
-	v1.Get("/errors/groups", h.GetErrorGroups)
-	v1.Get("/errors/groups/{groupId}", h.GetErrorGroupDetail)
-	v1.Get("/errors/groups/{groupId}/traces", h.GetErrorGroupTraces)
-	v1.Get("/errors/groups/{groupId}/timeseries", h.GetErrorGroupTimeseries)
-	v1.Get("/errors/groups/{groupId}/latest-occurrence", h.GetErrorGroupLatestOccurrence)
-	v1.Get("/errors/groups/{groupId}/facets", h.GetErrorGroupFacets)
-
-	v1.Get("/spans/error-hotspot", h.GetErrorHotspot)
-}
-
 func NewModule(nativeQuerier clickhouse.Conn) registry.Module {
 	module := &errorsModule{}
 	module.configure(nativeQuerier)
@@ -38,5 +25,15 @@ func (m *errorsModule) configure(nativeQuerier clickhouse.Conn) {
 }
 
 func (m *errorsModule) RegisterRoutes(group chi.Router) {
-	RegisterRoutes(group, m.handler)
+	h := m.handler
+	group.Get("/errors/service-error-rate", h.GetServiceErrorRate)
+	group.Get("/errors/error-volume", h.GetErrorVolume)
+	group.Get("/errors/groups", h.GetErrorGroups)
+	group.Get("/errors/groups/{groupId}", h.GetErrorGroupDetail)
+	group.Get("/errors/groups/{groupId}/traces", h.GetErrorGroupTraces)
+	group.Get("/errors/groups/{groupId}/timeseries", h.GetErrorGroupTimeseries)
+	group.Get("/errors/groups/{groupId}/latest-occurrence", h.GetErrorGroupLatestOccurrence)
+	group.Get("/errors/groups/{groupId}/facets", h.GetErrorGroupFacets)
+
+	group.Get("/spans/error-hotspot", h.GetErrorHotspot)
 }

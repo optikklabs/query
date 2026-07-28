@@ -6,17 +6,6 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-func RegisterRoutes(v1 chi.Router, h *Handler) {
-	v1.Get("/llm/overview", h.Overview)
-	v1.Get("/llm/apps", h.Apps)
-	v1.Get("/llm/models", h.Models)
-	v1.Get("/llm/pricing", h.Pricing)
-	v1.Get("/llm/timeseries", h.Timeseries)
-	v1.Get("/llm/cost/breakdown", h.CostBreakdown)
-	v1.Post("/llm/traces/query", h.TracesQuery)
-	v1.Get("/llm/traces/{traceId}", h.TraceDetail)
-}
-
 func NewModule(nativeQuerier clickhouse.Conn) registry.Module {
 	m := &llmModule{}
 	m.configure(nativeQuerier)
@@ -36,5 +25,14 @@ func (m *llmModule) configure(db clickhouse.Conn) {
 }
 
 func (m *llmModule) RegisterRoutes(group chi.Router) {
-	RegisterRoutes(group, m.handler)
+	h := m.handler
+	group.Get("/llm/overview", h.Overview)
+	group.Get("/llm/apps", h.Apps)
+	group.Get("/llm/models", h.Models)
+	group.Get("/llm/pricing", h.Pricing)
+	group.Get("/llm/timeseries", h.Timeseries)
+	group.Get("/llm/cost/breakdown", h.CostBreakdown)
+	group.Post("/llm/traces/query", h.TracesQuery)
+	group.Get("/llm/traces/{traceId}", h.TraceDetail)
+	group.Get("/llm/traces/{traceId}/spans/{spanId}/io", h.SpanIO)
 }

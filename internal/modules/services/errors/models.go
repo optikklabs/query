@@ -2,6 +2,8 @@ package errors
 
 import (
 	"time"
+
+	"github.com/optikklabs/query/internal/shared/contracts"
 )
 
 type ErrorGroup struct {
@@ -36,8 +38,8 @@ type ErrorGroupTrace struct {
 }
 
 type PaginatedErrorTraces struct {
-	Results  []ErrorGroupTrace `json:"results"`
-	PageInfo PageInfo          `json:"pageInfo"`
+	Results  []ErrorGroupTrace  `json:"results"`
+	PageInfo contracts.PageInfo `json:"pageInfo"`
 }
 
 type ErrorLatestOccurrence struct {

@@ -1,37 +1,8 @@
 package config
 
 import (
-	"strings"
 	"time"
 )
-
-type AlertingConfig struct {
-	Kafka AlertingKafkaConfig `yaml:"kafka"`
-}
-
-type AlertingKafkaConfig struct {
-	Enabled        bool     `yaml:"enabled"`
-	BrokerList     string   `yaml:"broker_list"`
-	BrokersList    []string `yaml:"brokers"`
-	TopicPrefix    string   `yaml:"topic_prefix"`
-	ConsumerGroup  string   `yaml:"consumer_group"`
-	MaxPollRecords int      `yaml:"max_poll_records"`
-}
-
-func (c AlertingKafkaConfig) Brokers() []string {
-	if c.BrokerList != "" {
-		return strings.Split(c.BrokerList, ",")
-	}
-	return c.BrokersList
-}
-
-func (c AlertingKafkaConfig) MetricsTopic() string {
-	prefix := c.TopicPrefix
-	if prefix == "" {
-		prefix = "optikk.ingest"
-	}
-	return prefix + ".metrics"
-}
 
 type ServerConfig struct {
 	Port                      string `yaml:"port"`
@@ -67,6 +38,19 @@ type AuthConfig struct {
 
 type LLMConfig struct {
 	KeyEncryptionKey string `yaml:"key_encryption_key"`
+}
+
+// Billing rates and commitments used for usage-cost estimation.
+type BillingConfig struct {
+	GBPriceUSD              float64 `yaml:"gb_price_usd"`
+	DPMPriceUSD             float64 `yaml:"dpm_price_usd"`
+	MonthlyRecordCommitment uint64  `yaml:"monthly_record_commitment"`
+}
+
+// Public OTLP endpoints advertised to users for sending telemetry.
+type IngestionConfig struct {
+	PublicGRPCEndpoint string `yaml:"public_grpc_endpoint"`
+	PublicHTTPEndpoint string `yaml:"public_http_endpoint"`
 }
 
 type EmailConfig struct {

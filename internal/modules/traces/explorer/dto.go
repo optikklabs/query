@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/traces/filter"
+	"github.com/optikklabs/query/internal/shared/contracts"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -24,8 +25,8 @@ func (r *QueryRequest) BindTenant(tenantID int64) error {
 }
 
 type QueryResponse struct {
-	Results  []Trace  `json:"results"`
-	PageInfo PageInfo `json:"pageInfo"`
+	Results  []Trace            `json:"results"`
+	PageInfo contracts.PageInfo `json:"pageInfo"`
 }
 
 type traceIndexRowDTO struct {

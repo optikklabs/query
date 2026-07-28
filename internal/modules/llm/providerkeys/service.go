@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/optikklabs/query/internal/infra/secretbox"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 type Service struct {
@@ -19,13 +20,9 @@ func NewService(repo *Repository, box *secretbox.Box) *Service {
 }
 
 var (
-	ErrNotFound     = errors.New("provider key not found")
+	ErrNotFound     = errorcode.NotFoundError{Msg: "provider key not found"}
 	ErrNoEncryption = errors.New("provider key encryption is not configured")
 )
-
-type ErrValidation struct{ Msg string }
-
-func (e ErrValidation) Error() string { return e.Msg }
 
 var validProvider = map[string]struct{}{
 	"openai": {}, "anthropic": {}, "mistral": {},
@@ -48,15 +45,15 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 		return ProviderKey{}, ErrNoEncryption
 	}
 	if _, ok := validProvider[req.Provider]; !ok {
-		return ProviderKey{}, ErrValidation{Msg: "provider must be openai, anthropic or mistral"}
+		return ProviderKey{}, errorcode.ValidationError{Msg: "provider must be openai, anthropic or mistral"}
 	}
 	label := strings.TrimSpace(req.Label)
 	if label == "" {
-		return ProviderKey{}, ErrValidation{Msg: "label is required"}
+		return ProviderKey{}, errorcode.ValidationError{Msg: "label is required"}
 	}
 	apiKey := strings.TrimSpace(req.APIKey)
 	if len(apiKey) < 8 {
-		return ProviderKey{}, ErrValidation{Msg: "apiKey looks too short to be valid"}
+		return ProviderKey{}, errorcode.ValidationError{Msg: "apiKey looks too short to be valid"}
 	}
 	ct, nonce, err := s.box.Seal([]byte(apiKey))
 	if err != nil {

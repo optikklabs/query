@@ -50,12 +50,19 @@ type LatencyPercentilesPoint struct {
 	P99Ms     float64   `json:"p99Ms"`
 }
 
-type EndpointRatePoint struct {
-	Timestamp time.Time `json:"timestamp"`
-	HTTPRoute string    `json:"httpRoute"`
-	RPS       float64   `json:"rps"`
-	ErrorRate *float64  `json:"errorRate"`
-	P99Ms     *float64  `json:"p99Ms"`
+// EndpointRateSeries is the columnar per-route RED time series.
+// Timestamps are unix millis shared by every series entry.
+type EndpointRateSeries struct {
+	Timestamps []int64             `json:"timestamps"`
+	Series     []EndpointRateEntry `json:"series"`
+}
+
+// Nil errorRate/p99Ms entries mean the route had no traffic in that bucket.
+type EndpointRateEntry struct {
+	HTTPRoute string     `json:"httpRoute"`
+	RPS       []float64  `json:"rps"`
+	ErrorRate []*float64 `json:"errorRate"`
+	P99Ms     []*float64 `json:"p99Ms"`
 }
 
 type TopEndpoint struct {
@@ -126,10 +133,16 @@ type SaturationTimeSeriesPoint struct {
 	Value     float64   `json:"value"`
 }
 
-type RequestRatePoint struct {
-	Timestamp   time.Time `json:"timestamp"    ch:"bucket_at"`
-	ServiceName string    `json:"serviceName" ch:"service_name"`
-	RPS         float64   `json:"rps"`
+// RequestRateSeries is the columnar per-service request-rate time series.
+// Timestamps are unix millis shared by every series entry.
+type RequestRateSeries struct {
+	Timestamps []int64            `json:"timestamps"`
+	Series     []RequestRateEntry `json:"series"`
+}
+
+type RequestRateEntry struct {
+	ServiceName string    `json:"serviceName"`
+	RPS         []float64 `json:"rps"`
 }
 
 type operationBaselineRow struct {

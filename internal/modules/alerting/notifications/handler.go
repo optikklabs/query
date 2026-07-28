@@ -1,7 +1,6 @@
 package notifications
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -240,15 +239,5 @@ func parseIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 }
 
 func respondServiceError(w http.ResponseWriter, r *http.Request, err error) {
-	var ve ErrValidation
-	switch {
-	case errors.Is(err, ErrNotFound):
-		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "resource not found", nil)
-	case errors.Is(err, ErrChannelInUse):
-		httputil.RespondErrorWithCause(w, r, http.StatusConflict, errorcode.Conflict, "channel is in use by one or more monitors", nil)
-	case errors.As(err, &ve):
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", ve)
-	default:
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "request failed", err)
-	}
+	httputil.RespondServiceError(w, r, err, "request failed")
 }

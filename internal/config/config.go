@@ -16,10 +16,11 @@ type Config struct {
 	Server      ServerConfig     `yaml:"server"`
 	MySQL       MySQLConfig      `yaml:"mysql"`
 	ClickHouse  ClickHouseConfig `yaml:"clickhouse"`
-	Alerting    AlertingConfig   `yaml:"alerting"`
 	Auth        AuthConfig       `yaml:"auth"`
 	Email       EmailConfig      `yaml:"email"`
 	LLM         LLMConfig        `yaml:"llm"`
+	Ingestion   IngestionConfig  `yaml:"ingestion"`
+	Billing     BillingConfig    `yaml:"billing"`
 }
 
 func Load(path ...string) (Config, error) {
@@ -71,9 +72,6 @@ func (c Config) Validate() error {
 	}
 	if c.ClickHouse.Password == "" {
 		return errors.New("clickhouse.password must not be empty")
-	}
-	if c.Alerting.Kafka.Enabled && len(c.Alerting.Kafka.Brokers()) == 0 {
-		return errors.New("alerting.kafka.brokers must not be empty when alerting.kafka.enabled is true")
 	}
 	if c.Environment == "production" {
 		if !c.Auth.CookieSecure {
@@ -138,8 +136,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("clickhouse.database", "")
 	v.SetDefault("clickhouse.user", "")
 	v.SetDefault("clickhouse.password", "")
-	v.SetDefault("clickhouse.production", false)
-	v.SetDefault("clickhouse.cloud_host", "")
 	v.SetDefault("clickhouse.max_open_conns", 0)
 	v.SetDefault("clickhouse.max_idle_conns", 0)
 
@@ -163,12 +159,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("clickhouse.query_budgets.explorer.max_result_rows", 100_000)
 	v.SetDefault("clickhouse.query_budgets.explorer.max_threads", 4)
 	v.SetDefault("clickhouse.query_budgets.explorer.priority", 10)
-	v.SetDefault("alerting.kafka.enabled", false)
-	v.SetDefault("alerting.kafka.broker_list", "")
-	v.SetDefault("alerting.kafka.topic_prefix", "optikk.ingest")
-	v.SetDefault("alerting.kafka.consumer_group", "optikk-query-alerting")
-	v.SetDefault("alerting.kafka.max_poll_records", 1000)
-
 	v.SetDefault("auth.jwt_secret", "")
 	v.SetDefault("auth.access_ttl_ms", 900000)
 	v.SetDefault("auth.refresh_ttl_ms", 604800000)
@@ -182,5 +172,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("email.verify_base_url", "")
 
 	v.SetDefault("llm.key_encryption_key", "")
+
+	v.SetDefault("ingestion.public_grpc_endpoint", "ingest.optikk.in:4317")
+	v.SetDefault("ingestion.public_http_endpoint", "https://ingest.optikk.in:4318")
+
+	v.SetDefault("billing.gb_price_usd", 0.10)
+	v.SetDefault("billing.dpm_price_usd", 0.008)
+	v.SetDefault("billing.monthly_record_commitment", 5_000_000_000)
 
 }

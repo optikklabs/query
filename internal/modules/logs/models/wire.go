@@ -2,6 +2,7 @@ package models
 
 import (
 	"github.com/optikklabs/query/internal/modules/logs/filter"
+	"github.com/optikklabs/query/internal/shared/contracts"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -20,7 +21,7 @@ func (r *QueryRequest) BindTenant(tenantID int64) error {
 
 type QueryResponse struct {
 	Results  []Log    `json:"results"`
-	PageInfo PageInfo `json:"pageInfo"`
+	PageInfo contracts.PageInfo `json:"pageInfo"`
 }
 
 type FacetsRequest struct {

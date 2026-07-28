@@ -145,3 +145,26 @@ func (h *Handler) TraceDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	modulecommon.RespondOK(w, resp)
 }
+
+func (h *Handler) SpanIO(w http.ResponseWriter, r *http.Request) {
+	traceID := chi.URLParam(r, "traceId")
+	spanID := chi.URLParam(r, "spanId")
+	if traceID == "" || spanID == "" {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "traceId and spanId are required", nil)
+		return
+	}
+	startTimeMs, endTimeMs, ok := modulecommon.ParseRequiredExplicitRange(w, r)
+	if !ok {
+		return
+	}
+	resp, found, err := h.svc.SpanIO(r.Context(), modulecommon.Tenant(r).TenantID, traceID, spanID, startTimeMs, endTimeMs)
+	if err != nil {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to load LLM span content", err)
+		return
+	}
+	if !found {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "Span not found", nil)
+		return
+	}
+	modulecommon.RespondOK(w, resp)
+}

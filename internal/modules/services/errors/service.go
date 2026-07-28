@@ -32,78 +32,36 @@ func (s *Service) GetServiceErrorRate(ctx context.Context, tenantID int64, start
 	}
 
 	grain := timebucket.DisplayGrain(endMs - startMs)
-	startTime := time.UnixMilli(startMs).UTC().Truncate(grain)
-	endTime := time.UnixMilli(endMs).UTC().Truncate(grain)
+	bucketAt := func(r rawServiceRateRow) time.Time { return r.BucketAt }
+	point := func(svc string) func(time.Time, rawServiceRateRow, bool) TimeSeriesPoint {
+		return func(t time.Time, row rawServiceRateRow, _ bool) TimeSeriesPoint {
+			total, errs := int64(row.RequestCount), int64(row.ErrorCount)
+			return TimeSeriesPoint{
+				ServiceName:  svc,
+				Timestamp:    t,
+				RequestCount: total,
+				ErrorCount:   errs,
+				ErrorRate:    metrics.ComputeErrorRate(errs, total),
+				AvgLatency:   metrics.ComputeAvgLatency(row.DurationMsSum, row.RequestCount),
+			}
+		}
+	}
 
 	if serviceName == "" {
-		serviceNames := make(map[string]bool)
+		byService := make(map[string][]rawServiceRateRow)
 		for _, row := range raw {
 			if row.ServiceName != "" {
-				serviceNames[row.ServiceName] = true
+				byService[row.ServiceName] = append(byService[row.ServiceName], row)
 			}
 		}
-
-		rowMap := make(map[string]map[int64]rawServiceRateRow)
-		for svc := range serviceNames {
-			rowMap[svc] = make(map[int64]rawServiceRateRow)
-		}
-		for _, row := range raw {
-			ts := row.BucketAt.UTC().Truncate(grain).Unix()
-			if rowMap[row.ServiceName] != nil {
-				rowMap[row.ServiceName][ts] = row
-			}
-		}
-
 		var points []TimeSeriesPoint
-		for svc := range serviceNames {
-			for t := startTime; !t.After(endTime); t = t.Add(grain) {
-				row, ok := rowMap[svc][t.Unix()]
-				var total, errs int64
-				var durationMsSum float64
-				if ok {
-					total = int64(row.RequestCount)
-					errs = int64(row.ErrorCount)
-					durationMsSum = row.DurationMsSum
-				}
-				points = append(points, TimeSeriesPoint{
-					ServiceName:  svc,
-					Timestamp:    t,
-					RequestCount: total,
-					ErrorCount:   errs,
-					ErrorRate:    metrics.ComputeErrorRate(errs, total),
-					AvgLatency:   metrics.ComputeAvgLatency(durationMsSum, uint64(total)),
-				})
-			}
+		for svc, svcRows := range byService {
+			points = append(points, timebucket.FillGaps(startMs, endMs, grain, svcRows, bucketAt, point(svc))...)
 		}
 		return points, nil
 	}
 
-	rowMap := make(map[int64]rawServiceRateRow)
-	for _, row := range raw {
-		ts := row.BucketAt.UTC().Truncate(grain).Unix()
-		rowMap[ts] = row
-	}
-
-	var points []TimeSeriesPoint
-	for t := startTime; !t.After(endTime); t = t.Add(grain) {
-		row, ok := rowMap[t.Unix()]
-		var total, errs int64
-		var durationMsSum float64
-		if ok {
-			total = int64(row.RequestCount)
-			errs = int64(row.ErrorCount)
-			durationMsSum = row.DurationMsSum
-		}
-		points = append(points, TimeSeriesPoint{
-			ServiceName:  serviceName,
-			Timestamp:    t,
-			RequestCount: total,
-			ErrorCount:   errs,
-			ErrorRate:    metrics.ComputeErrorRate(errs, total),
-			AvgLatency:   metrics.ComputeAvgLatency(durationMsSum, uint64(total)),
-		})
-	}
-	return points, nil
+	return timebucket.FillGaps(startMs, endMs, grain, raw, bucketAt, point(serviceName)), nil
 }
 
 func (s *Service) GetErrorVolume(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]TimeSeriesPoint, error) {
@@ -121,66 +79,32 @@ func (s *Service) GetErrorVolume(ctx context.Context, tenantID int64, startMs, e
 	}
 
 	grain := timebucket.DisplayGrain(endMs - startMs)
-	startTime := time.UnixMilli(startMs).UTC().Truncate(grain)
-	endTime := time.UnixMilli(endMs).UTC().Truncate(grain)
+	bucketAt := func(r rawServiceErrorRow) time.Time { return r.BucketAt }
+	point := func(svc string) func(time.Time, rawServiceErrorRow, bool) TimeSeriesPoint {
+		return func(t time.Time, row rawServiceErrorRow, _ bool) TimeSeriesPoint {
+			return TimeSeriesPoint{
+				ServiceName: svc,
+				Timestamp:   t,
+				ErrorCount:  int64(row.ErrorCount),
+			}
+		}
+	}
 
 	if serviceName == "" {
-		serviceNames := make(map[string]bool)
+		byService := make(map[string][]rawServiceErrorRow)
 		for _, row := range raw {
 			if row.ServiceName != "" {
-				serviceNames[row.ServiceName] = true
+				byService[row.ServiceName] = append(byService[row.ServiceName], row)
 			}
 		}
-
-		rowMap := make(map[string]map[int64]rawServiceErrorRow)
-		for svc := range serviceNames {
-			rowMap[svc] = make(map[int64]rawServiceErrorRow)
-		}
-		for _, row := range raw {
-			ts := row.BucketAt.UTC().Truncate(grain).Unix()
-			if rowMap[row.ServiceName] != nil {
-				rowMap[row.ServiceName][ts] = row
-			}
-		}
-
 		var points []TimeSeriesPoint
-		for svc := range serviceNames {
-			for t := startTime; !t.After(endTime); t = t.Add(grain) {
-				row, ok := rowMap[svc][t.Unix()]
-				var errs int64
-				if ok {
-					errs = int64(row.ErrorCount)
-				}
-				points = append(points, TimeSeriesPoint{
-					ServiceName: svc,
-					Timestamp:   t,
-					ErrorCount:  errs,
-				})
-			}
+		for svc, svcRows := range byService {
+			points = append(points, timebucket.FillGaps(startMs, endMs, grain, svcRows, bucketAt, point(svc))...)
 		}
 		return points, nil
 	}
 
-	rowMap := make(map[int64]rawServiceErrorRow)
-	for _, row := range raw {
-		ts := row.BucketAt.UTC().Truncate(grain).Unix()
-		rowMap[ts] = row
-	}
-
-	var points []TimeSeriesPoint
-	for t := startTime; !t.After(endTime); t = t.Add(grain) {
-		row, ok := rowMap[t.Unix()]
-		var errs int64
-		if ok {
-			errs = int64(row.ErrorCount)
-		}
-		points = append(points, TimeSeriesPoint{
-			ServiceName: serviceName,
-			Timestamp:   t,
-			ErrorCount:  errs,
-		})
-	}
-	return points, nil
+	return timebucket.FillGaps(startMs, endMs, grain, raw, bucketAt, point(serviceName)), nil
 }
 
 func (s *Service) GetErrorGroups(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, limit int, cursorIn ErrorGroupsCursor) (PaginatedErrorGroups, error) {
@@ -188,42 +112,25 @@ func (s *Service) GetErrorGroups(ctx context.Context, tenantID int64, startMs, e
 	if err != nil {
 		return PaginatedErrorGroups{}, err
 	}
-	hasMore := len(raw) > limit
-	if hasMore {
-		raw = raw[:limit]
-	}
+	raw, pageInfo := cursor.Paginate(raw, limit, func(r rawErrorGroupRow) string {
+		return cursor.Encode(ErrorGroupsCursor{ErrorCount: r.ErrorCount, GroupID: r.GroupID})
+	})
 
 	results := make([]ErrorGroup, len(raw))
 	for i, row := range raw {
-		code := httpBucketToCode(row.HTTPStatusBucket)
 		results[i] = ErrorGroup{
 			GroupID:         row.GroupID,
 			ServiceName:     row.ServiceName,
 			OperationName:   row.OperationName,
 			StatusMessage:   row.StatusMessage,
-			HTTPStatusCode:  code,
+			HTTPStatusCode:  httpBucketToCode(row.HTTPStatusBucket),
 			ErrorCount:      int64(row.ErrorCount),
 			LastOccurrence:  row.LastOccurrence,
 			FirstOccurrence: row.FirstOccurrence,
 			SampleTraceID:   row.SampleTraceID,
 		}
 	}
-	var nextCursor string
-	if hasMore && len(raw) > 0 {
-		lastRow := raw[len(raw)-1]
-		nextCursor = cursor.Encode(ErrorGroupsCursor{
-			ErrorCount: lastRow.ErrorCount,
-			GroupID:    lastRow.GroupID,
-		})
-	}
-	return PaginatedErrorGroups{
-		Results: results,
-		PageInfo: PageInfo{
-			HasMore:    hasMore,
-			NextCursor: nextCursor,
-			Limit:      limit,
-		},
-	}, nil
+	return PaginatedErrorGroups{Results: results, PageInfo: pageInfo}, nil
 }
 
 func (s *Service) fetchErrorGroups(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, limit int, cursorIn ErrorGroupsCursor) ([]rawErrorGroupRow, error) {
@@ -319,10 +226,9 @@ func (s *Service) GetErrorGroupTraces(ctx context.Context, tenantID int64, start
 	if err != nil {
 		return PaginatedErrorTraces{}, err
 	}
-	hasMore := len(raw) > limit
-	if hasMore {
-		raw = raw[:limit]
-	}
+	raw, pageInfo := cursor.Paginate(raw, limit, func(r rawErrorGroupTraceRow) string {
+		return cursor.Encode(ErrorTracesCursor{Timestamp: r.Timestamp, SpanID: r.SpanID})
+	})
 	traces := make([]ErrorGroupTrace, len(raw))
 	for i, row := range raw {
 		traces[i] = ErrorGroupTrace{
@@ -333,22 +239,7 @@ func (s *Service) GetErrorGroupTraces(ctx context.Context, tenantID int64, start
 			StatusCode: row.StatusCode,
 		}
 	}
-	var nextCursor string
-	if hasMore && len(raw) > 0 {
-		lastRow := raw[len(raw)-1]
-		nextCursor = cursor.Encode(ErrorTracesCursor{
-			Timestamp: lastRow.Timestamp,
-			SpanID:    lastRow.SpanID,
-		})
-	}
-	return PaginatedErrorTraces{
-		Results: traces,
-		PageInfo: PageInfo{
-			HasMore:    hasMore,
-			NextCursor: nextCursor,
-			Limit:      limit,
-		},
-	}, nil
+	return PaginatedErrorTraces{Results: traces, PageInfo: pageInfo}, nil
 }
 
 func (s *Service) GetErrorGroupTimeseries(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]TimeSeriesPoint, error) {
@@ -358,28 +249,11 @@ func (s *Service) GetErrorGroupTimeseries(ctx context.Context, tenantID int64, s
 	}
 
 	grain := timebucket.DisplayGrain(endMs - startMs)
-	startTime := time.UnixMilli(startMs).UTC().Truncate(grain)
-	endTime := time.UnixMilli(endMs).UTC().Truncate(grain)
-
-	rowMap := make(map[int64]rawTimeBucketCountRow)
-	for _, row := range raw {
-		ts := row.BucketAt.UTC().Truncate(grain).Unix()
-		rowMap[ts] = row
-	}
-
-	var points []TimeSeriesPoint
-	for t := startTime; !t.After(endTime); t = t.Add(grain) {
-		row, ok := rowMap[t.Unix()]
-		var count int64
-		if ok {
-			count = int64(row.Count)
-		}
-		points = append(points, TimeSeriesPoint{
-			Timestamp:  t,
-			ErrorCount: count,
-		})
-	}
-	return points, nil
+	return timebucket.FillGaps(startMs, endMs, grain, raw,
+		func(r rawTimeBucketCountRow) time.Time { return r.BucketAt },
+		func(t time.Time, row rawTimeBucketCountRow, _ bool) TimeSeriesPoint {
+			return TimeSeriesPoint{Timestamp: t, ErrorCount: int64(row.Count)}
+		}), nil
 }
 
 func (s *Service) GetErrorHotspot(ctx context.Context, tenantID int64, startMs, endMs int64) ([]ErrorHotspotCell, error) {

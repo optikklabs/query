@@ -102,8 +102,3 @@ type TrendBucket struct {
 	Debug      uint64 `json:"debug"`
 }
 
-type PageInfo struct {
-	HasMore    bool   `json:"hasMore"`
-	NextCursor string `json:"nextCursor,omitempty"`
-	Limit      int    `json:"limit"`
-}

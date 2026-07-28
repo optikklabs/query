@@ -17,7 +17,7 @@ func SelectCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, qu
 	return coalesce(ctx, key, op, dest, func(runCtx context.Context, out any) error {
 		done := startCHOp(runCtx)
 		start := time.Now()
-		err := conn.Select(runCtx, out, query, args...)
+		err := wrapBudgetExceeded(conn.Select(runCtx, out, query, args...))
 		done(err, start, op)
 		return err
 	})
@@ -34,6 +34,7 @@ func QueryRowCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, 
 			done(nil, start, op)
 			return nil
 		}
+		err = wrapBudgetExceeded(err)
 		done(err, start, op)
 		return err
 	})

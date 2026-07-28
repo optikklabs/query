@@ -12,7 +12,6 @@ import (
 	alerting_evaluator "github.com/optikklabs/query/internal/modules/alerting/evaluator"
 	alerting_monitors "github.com/optikklabs/query/internal/modules/alerting/monitors"
 	alerting_notifications "github.com/optikklabs/query/internal/modules/alerting/notifications"
-	alerting_stream "github.com/optikklabs/query/internal/modules/alerting/stream"
 	billing "github.com/optikklabs/query/internal/modules/billing"
 	cloud "github.com/optikklabs/query/internal/modules/cloud"
 	dashboards "github.com/optikklabs/query/internal/modules/dashboards"
@@ -52,7 +51,7 @@ func configuredModules(
 	authService := user_auth.NewService(user_auth.NewRepository(infraDeps.DB), infraDeps.Tokens, infraDeps.Config.Email)
 	deviceService := user_device.NewService(user_device.NewRepository(infraDeps.DB), authService)
 	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService, infraDeps.Config.Email)
-	tenantService := user_tenant.NewService(user_tenant.NewRepository(infraDeps.DB))
+	tenantService := user_tenant.NewService(user_tenant.NewRepository(infraDeps.DB), infraDeps.Config.Ingestion)
 	usersService := user_users.NewService(user_users.NewRepository(infraDeps.DB), authService)
 
 	box, err := secretbox.New(infraDeps.Config.LLM.KeyEncryptionKey)
@@ -67,7 +66,7 @@ func configuredModules(
 		logs.NewModule(nativeQuerier),
 		infrastructure.NewModule(nativeQuerier),
 		metrics_explorer.NewModule(nativeQuerier),
-		ingestion.NewModule(nativeQuerier),
+		ingestion.NewModule(nativeQuerier, infraDeps.Config.Billing),
 		llm.NewModule(nativeQuerier),
 		llm_scores.NewModule(nativeQuerier),
 		llm_sessions.NewModule(nativeQuerier),
@@ -94,7 +93,6 @@ func configuredModules(
 		alerting_monitors.NewModule(infraDeps.DB, nativeQuerier),
 		alerting_notifications.NewModule(infraDeps.DB),
 		alerting_evaluator.NewModule(infraDeps.DB, nativeQuerier),
-		alerting_stream.NewModule(infraDeps.DB, infraDeps.Config.Alerting.Kafka),
 
 		billing.NewModule(infraDeps.DB),
 

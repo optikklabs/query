@@ -1,6 +1,10 @@
 package errors
 
-import "time"
+import (
+	"time"
+
+	"github.com/optikklabs/query/internal/shared/contracts"
+)
 
 type rawServiceRateRow struct {
 	ServiceName   string    `ch:"service_name"`
@@ -92,13 +96,7 @@ func (c ErrorTracesCursor) IsZero() bool {
 	return c.Timestamp.IsZero() && c.SpanID == ""
 }
 
-type PageInfo struct {
-	HasMore    bool   `json:"hasMore"`
-	NextCursor string `json:"nextCursor,omitempty"`
-	Limit      int    `json:"limit"`
-}
-
 type PaginatedErrorGroups struct {
-	Results  []ErrorGroup `json:"results"`
-	PageInfo PageInfo     `json:"pageInfo"`
+	Results  []ErrorGroup       `json:"results"`
+	PageInfo contracts.PageInfo `json:"pageInfo"`
 }

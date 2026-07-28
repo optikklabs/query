@@ -3,7 +3,6 @@ package traces
 import (
 	"net/http"
 
-	"github.com/optikklabs/query/internal/modules/traces/models"
 	"github.com/optikklabs/query/internal/modules/traces/service"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
@@ -32,21 +31,21 @@ func traceScope(w http.ResponseWriter, r *http.Request) (tenantID int64, traceID
 	return modulecommon.Tenant(r).TenantID, traceID, startMs, endMs, true
 }
 
-func (h *Handler) GetTraceSummary(w http.ResponseWriter, r *http.Request) {
+// GetTraceDetail serves the consolidated trace view: summary, span list
+// and all derived views in one response. A trace with no spans in range
+// responds 200 with a nil summary and empty spans, matching the previous
+// /spans behaviour the UI's logs-only fallback relies on.
+func (h *Handler) GetTraceDetail(w http.ResponseWriter, r *http.Request) {
 	tenantID, traceID, startMs, endMs, ok := traceScope(w, r)
 	if !ok {
 		return
 	}
-	resp, err := h.Service.GetTraceSummary(r.Context(), tenantID, traceID, startMs, endMs)
+	detail, err := h.Service.GetTraceDetail(r.Context(), tenantID, traceID, startMs, endMs)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch trace", err)
 		return
 	}
-	if resp == nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "trace not found", nil)
-		return
-	}
-	modulecommon.RespondOK(w, resp)
+	modulecommon.RespondOK(w, detail)
 }
 
 func (h *Handler) GetSpanEvents(w http.ResponseWriter, r *http.Request) {
@@ -114,72 +113,4 @@ func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	modulecommon.RespondOK(w, traces)
-}
-
-func (h *Handler) GetTraceSpans(w http.ResponseWriter, r *http.Request) {
-	tenantID, traceID, startMs, endMs, ok := traceScope(w, r)
-	if !ok {
-		return
-	}
-	items, err := h.Service.ListSpansByTrace(r.Context(), tenantID, traceID, startMs, endMs)
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to list trace spans", err)
-		return
-	}
-	if items == nil {
-		items = []models.SpanListItem{}
-	}
-	modulecommon.RespondOK(w, map[string]any{"spans": items})
-}
-
-func (h *Handler) GetCriticalPath(w http.ResponseWriter, r *http.Request) {
-	tenantID, traceID, startMs, endMs, ok := traceScope(w, r)
-	if !ok {
-		return
-	}
-	path, err := h.Service.GetCriticalPath(r.Context(), tenantID, traceID, startMs, endMs)
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to compute critical path", err)
-		return
-	}
-	modulecommon.RespondOK(w, path)
-}
-
-func (h *Handler) GetErrorPath(w http.ResponseWriter, r *http.Request) {
-	tenantID, traceID, startMs, endMs, ok := traceScope(w, r)
-	if !ok {
-		return
-	}
-	path, err := h.Service.GetErrorPath(r.Context(), tenantID, traceID, startMs, endMs)
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to compute error path", err)
-		return
-	}
-	modulecommon.RespondOK(w, path)
-}
-
-func (h *Handler) GetServiceMap(w http.ResponseWriter, r *http.Request) {
-	tenantID, traceID, startMs, endMs, ok := traceScope(w, r)
-	if !ok {
-		return
-	}
-	resp, err := h.Service.GetServiceMap(r.Context(), tenantID, traceID, startMs, endMs)
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to compute service map", err)
-		return
-	}
-	modulecommon.RespondOK(w, resp)
-}
-
-func (h *Handler) GetTraceErrors(w http.ResponseWriter, r *http.Request) {
-	tenantID, traceID, startMs, endMs, ok := traceScope(w, r)
-	if !ok {
-		return
-	}
-	groups, err := h.Service.GetTraceErrors(r.Context(), tenantID, traceID, startMs, endMs)
-	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch trace errors", err)
-		return
-	}
-	modulecommon.RespondOK(w, groups)
 }

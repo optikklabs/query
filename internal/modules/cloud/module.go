@@ -6,16 +6,6 @@ import (
 	"github.com/optikklabs/query/internal/app/registry"
 )
 
-func RegisterRoutes(v1 chi.Router, h *Handler) {
-	v1.Get("/cloud/inventory", h.GetInventory)
-	v1.Get("/cloud/categories", h.GetCategories)
-	v1.Get("/cloud/health", h.GetHealth)
-	v1.Get("/cloud/restarts", h.GetRestarts)
-	v1.Get("/cloud/provider/{provider}/platforms", h.GetProviderPlatforms)
-	v1.Get("/cloud/provider/{provider}/accounts", h.GetProviderAccounts)
-	v1.Get("/cloud/provider/{provider}/resources", h.GetProviderResources)
-}
-
 func NewModule(nativeQuerier clickhouse.Conn) registry.Module {
 	module := &cloudModule{}
 	module.configure(nativeQuerier)
@@ -35,5 +25,12 @@ func (m *cloudModule) configure(nativeQuerier clickhouse.Conn) {
 }
 
 func (m *cloudModule) RegisterRoutes(group chi.Router) {
-	RegisterRoutes(group, m.handler)
+	h := m.handler
+	group.Get("/cloud/inventory", h.GetInventory)
+	group.Get("/cloud/categories", h.GetCategories)
+	group.Get("/cloud/health", h.GetHealth)
+	group.Get("/cloud/restarts", h.GetRestarts)
+	group.Get("/cloud/provider/{provider}/platforms", h.GetProviderPlatforms)
+	group.Get("/cloud/provider/{provider}/accounts", h.GetProviderAccounts)
+	group.Get("/cloud/provider/{provider}/resources", h.GetProviderResources)
 }

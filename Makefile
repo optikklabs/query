@@ -3,7 +3,7 @@
 DEV_JWT_SECRET ?= optikk-local-development-secret-change-before-deploy
 
 build:
-	go build -v ./cmd/query
+	go build -v -o bin/query ./cmd/query
 
 run:
 	OPTIKK_AUTH_JWT_SECRET="$${OPTIKK_AUTH_JWT_SECRET:-$(DEV_JWT_SECRET)}" go run ./cmd/query

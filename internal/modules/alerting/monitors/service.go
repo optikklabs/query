@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 type Service struct {
@@ -19,11 +20,7 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-var ErrNotFound = errors.New("monitor not found")
-
-type ErrValidation struct{ Msg string }
-
-func (e ErrValidation) Error() string { return e.Msg }
+var ErrNotFound = errorcode.NotFoundError{Msg: "monitor not found"}
 
 func (s *Service) Create(ctx context.Context, tenantID, userID int64, req CreateMonitorRequest) (MonitorResponse, error) {
 	args, err := buildInsertArgs(tenantID, userID, req)
@@ -102,17 +99,17 @@ func (s *Service) List(ctx context.Context, tenantID int64, q ListQuery) (Monito
 func buildInsertArgs(tenantID, userID int64, req CreateMonitorRequest) (insertArgs, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return insertArgs{}, ErrValidation{Msg: "name is required"}
+		return insertArgs{}, errorcode.ValidationError{Msg: "name is required"}
 	}
 	if !models.IsValidType(req.Type) {
-		return insertArgs{}, ErrValidation{Msg: fmt.Sprintf("type must be one of %v", models.SupportedMonitorTypes)}
+		return insertArgs{}, errorcode.ValidationError{Msg: fmt.Sprintf("type must be one of %v", models.SupportedMonitorTypes)}
 	}
 	priority := req.Priority
 	if priority == "" {
 		priority = "P2"
 	}
 	if !models.IsValidPriority(priority) {
-		return insertArgs{}, ErrValidation{Msg: fmt.Sprintf("priority must be one of %v", models.SupportedPriorities)}
+		return insertArgs{}, errorcode.ValidationError{Msg: fmt.Sprintf("priority must be one of %v", models.SupportedPriorities)}
 	}
 	if err := validateQueryForType(req.Type, req.Query); err != nil {
 		return insertArgs{}, err
@@ -164,18 +161,18 @@ func validateQueryForType(t string, q models.MonitorQuery) error {
 	switch t {
 	case "metric":
 		if q.Metric == nil || strings.TrimSpace(q.Metric.Metric) == "" {
-			return ErrValidation{Msg: "metric query requires query.metric.metric"}
+			return errorcode.ValidationError{Msg: "metric query requires query.metric.metric"}
 		}
 	case "apm":
 		if q.APM == nil || strings.TrimSpace(q.APM.Service) == "" {
-			return ErrValidation{Msg: "apm query requires query.apm.service"}
+			return errorcode.ValidationError{Msg: "apm query requires query.apm.service"}
 		}
 		if q.APM.Track == "" {
-			return ErrValidation{Msg: "apm query requires query.apm.track"}
+			return errorcode.ValidationError{Msg: "apm query requires query.apm.track"}
 		}
 	case "log":
 		if q.Log == nil || strings.TrimSpace(q.Log.Query) == "" {
-			return ErrValidation{Msg: "log query requires query.log.query"}
+			return errorcode.ValidationError{Msg: "log query requires query.log.query"}
 		}
 	}
 	return nil
@@ -185,19 +182,19 @@ func validateConditions(c models.Conditions) error {
 	switch c.Comparator {
 	case "above", "below", "equal":
 	case "":
-		return ErrValidation{Msg: "conditions.comparator is required"}
+		return errorcode.ValidationError{Msg: "conditions.comparator is required"}
 	default:
-		return ErrValidation{Msg: "conditions.comparator must be above, below, or equal"}
+		return errorcode.ValidationError{Msg: "conditions.comparator must be above, below, or equal"}
 	}
 	if c.AlertThreshold == nil {
-		return ErrValidation{Msg: "conditions.alertThreshold is required"}
+		return errorcode.ValidationError{Msg: "conditions.alertThreshold is required"}
 	}
 	switch c.NoDataAs {
 	case "no_data", "alert", "ok":
 	case "":
 
 	default:
-		return ErrValidation{Msg: "conditions.noDataAs must be no_data, alert, or ok"}
+		return errorcode.ValidationError{Msg: "conditions.noDataAs must be no_data, alert, or ok"}
 	}
 	return nil
 }

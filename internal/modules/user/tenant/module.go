@@ -16,6 +16,7 @@ type module struct {
 func (m *module) Name() string { return "user-tenant" }
 
 func (m *module) RegisterRoutes(group chi.Router) {
+	group.Get("/tenants/current/ingestion-endpoints", m.handler.IngestionEndpoints)
 	group.Post("/settings/api-key/rotate", m.handler.RotateAPIKey)
 	group.Post("/settings/api-key/revoke", m.handler.RevokeAPIKey)
 	group.Post("/settings/tenant/deactivate", m.handler.DeactivateTenant)
