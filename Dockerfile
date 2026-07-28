@@ -26,7 +26,8 @@ COPY config.yml .
 
 EXPOSE 19090 19091
 
-USER nobody
+# Numeric so runAsNonRoot can verify the user (65534 = nobody).
+USER 65534:65534
 
 ENTRYPOINT ["./query"]
 
