@@ -2,6 +2,7 @@ package redfleet
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/timebucket"
@@ -123,8 +124,8 @@ func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDFilt
 		}), nil
 }
 
-func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters) (EndpointRateSeries, error) {
-	rows, err := s.repo.GetREDByEndpointTimeSeries(ctx, f)
+func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, limit int) (EndpointRateSeries, error) {
+	rows, err := s.repo.GetREDByEndpointTimeSeries(ctx, f, limit)
 	if err != nil {
 		return EndpointRateSeries{}, err
 	}
@@ -171,5 +172,23 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters) 
 		}
 		out.Series[i] = entry
 	}
+	// FillGapsKeyed returns endpoints in first-encounter order, which is the
+	// arbitrary order of the earliest bucket. Rank by volume so the chart
+	// legend reads busiest-first and colors stay stable across refreshes.
+	sort.SliceStable(out.Series, func(i, j int) bool {
+		li, lj := seriesLoad(out.Series[i].RPS), seriesLoad(out.Series[j].RPS)
+		if li != lj {
+			return li > lj
+		}
+		return out.Series[i].OperationName < out.Series[j].OperationName
+	})
 	return out, nil
+}
+
+func seriesLoad(rps []float64) float64 {
+	var total float64
+	for _, v := range rps {
+		total += v
+	}
+	return total
 }

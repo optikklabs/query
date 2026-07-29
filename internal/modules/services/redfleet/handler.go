@@ -54,8 +54,9 @@ func (h *REDFleetHandler) GetLatencyPercentilesTimeSeries(w http.ResponseWriter,
 }
 
 func (h *REDFleetHandler) GetREDByEndpointTimeSeries(w http.ResponseWriter, r *http.Request) {
+	limit := modulecommon.ParsePageSize(r, "limit", 0)
 	modulecommon.HandleRangeQuery(w, r, "Failed to query per-endpoint time series", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.Service.GetREDByEndpointTimeSeries(ctx, parseREDFilters(r, tenantID, startMs, endMs))
+		return h.Service.GetREDByEndpointTimeSeries(ctx, parseREDFilters(r, tenantID, startMs, endMs), limit)
 	})
 }
 

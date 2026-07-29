@@ -92,8 +92,9 @@ type endpointRateRow struct {
 	QS            []float64 `ch:"qs"`
 }
 
-// A chart legend only carries a handful of lines; the tail is left out.
-const endpointSeriesLimit = 8
+// Fallback series count when the caller does not ask for one. Callers pass an
+// explicit `limit`; the hard cap is httputil.MaxPageSize, applied at the handler.
+const defaultEndpointSeriesLimit = 20
 
 func (r *Repository) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]statusBucketTimeseriesRow, error) {
 	where, args := BuildREDClauses(f)
@@ -137,7 +138,19 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDF
 	return rows, nil
 }
 
-func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters) ([]endpointRateRow, error) {
+func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, limit int) ([]endpointRateRow, error) {
+	query, args := buildREDByEndpointQuery(f, limit)
+	var rows []endpointRateRow
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetREDByEndpointTimeSeries",
+		&rows, query, args...)
+}
+
+// Split out from the repository method so the generated SQL can be exercised
+// without a database.
+func buildREDByEndpointQuery(f REDFilters, limit int) (string, []any) {
+	if limit <= 0 {
+		limit = defaultEndpointSeriesLimit
+	}
 	where, args := BuildREDClauses(f)
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	rollup := timebucket.SpanStatsRollup(f.EndMs - f.StartMs)
@@ -165,11 +178,20 @@ func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilter
 		WHERE span_name IN (SELECT span_name FROM top_operations)
 		GROUP BY bucket_at, operation_name
 		ORDER BY bucket_at ASC
-		LIMIT 10000`
-	args = append(args, clickhouse.Named("endpointLimit", endpointSeriesLimit))
-	var rows []endpointRateRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetREDByEndpointTimeSeries",
-		&rows, query, args...)
+		LIMIT @rowLimit`
+	// One row per (endpoint, bucket). A fixed cap would silently truncate the
+	// tail of the window once the caller asks for many endpoints, so the cap
+	// tracks the shape of the result the caller actually requested.
+	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
+	buckets := int64(1)
+	if grain > 0 {
+		buckets += (f.EndMs - f.StartMs) / grain.Milliseconds()
+	}
+	args = append(args,
+		clickhouse.Named("endpointLimit", limit),
+		clickhouse.Named("rowLimit", int64(limit)*(buckets+1)),
+	)
+	return query, args
 }
 
 type serviceRequestRateRawRow struct {
