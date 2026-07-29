@@ -9,6 +9,14 @@ import (
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
+func (s *Service) GetTopicThroughput(ctx context.Context, tenantID, startMs, endMs int64, topic string) ([]models.TopicThroughputRow, error) {
+	return s.repo.QueryTopicThroughput(ctx, tenantID, startMs, endMs, topic)
+}
+
+func (s *Service) GetGroupPartitions(ctx context.Context, tenantID, startMs, endMs int64, group string) ([]models.GroupPartitionsRow, error) {
+	return s.repo.QueryGroupPartitions(ctx, tenantID, startMs, endMs, group)
+}
+
 func (s *Service) GetClients(ctx context.Context, tenantID, startMs, endMs int64) ([]string, error) {
 	clients, err := s.repo.QueryClients(ctx, tenantID, startMs, endMs)
 	if err != nil {

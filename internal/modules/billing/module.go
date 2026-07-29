@@ -12,7 +12,7 @@ import (
 )
 
 type Module struct {
-	svc      *Service
+	repo     *Repository
 	stop     chan struct{}
 	stopped  chan struct{}
 	once     sync.Once
@@ -21,7 +21,7 @@ type Module struct {
 
 func NewModule(sqlDB *registry.SQLDB) *Module {
 	return &Module{
-		svc:      NewService(NewRepository(sqlDB)),
+		repo:     NewRepository(sqlDB),
 		stop:     make(chan struct{}),
 		stopped:  make(chan struct{}),
 		interval: time.Hour,
@@ -64,7 +64,7 @@ func (m *Module) run() {
 func (m *Module) sweep() {
 	ctx, cancel := context.WithTimeout(context.Background(), m.interval)
 	defer cancel()
-	suspended, err := m.svc.SweepExpiredTrials(ctx, time.Now())
+	suspended, err := m.repo.SuspendExpiredTrials(ctx, time.Now().UTC())
 	if err != nil {
 		slog.Warn("billing.trial-sweeper: sweep failed", slog.Any("error", err))
 		return
