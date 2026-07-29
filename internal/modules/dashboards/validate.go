@@ -57,9 +57,8 @@ type builderQueryProbe struct {
 
 type querySpecProbe struct {
 	Query *struct {
-		Kind     string              `json:"kind"`
-		Endpoint string              `json:"endpoint"`
-		Queries  []builderQueryProbe `json:"queries"`
+		Kind    string              `json:"kind"`
+		Queries []builderQueryProbe `json:"queries"`
 	} `json:"query"`
 }
 
@@ -71,16 +70,10 @@ func validateQuery(spec json.RawMessage) error {
 	if probe.Query == nil {
 		return errorcode.ValidationError{Msg: "spec.query is required"}
 	}
-	if probe.Query.Kind == "metrics" {
-		return validateBuilderQuery(probe.Query.Queries)
+	if probe.Query.Kind != "metrics" {
+		return errorcode.ValidationError{Msg: fmt.Sprintf("spec.query.kind %q is not supported; expected \"metrics\"", probe.Query.Kind)}
 	}
-	if strings.TrimSpace(probe.Query.Endpoint) == "" {
-		return errorcode.ValidationError{Msg: "spec.query.endpoint is required"}
-	}
-	if !isAllowedEndpoint(probe.Query.Endpoint) {
-		return errorcode.ValidationError{Msg: fmt.Sprintf("spec.query.endpoint %q is not a dashboard-safe endpoint", probe.Query.Endpoint)}
-	}
-	return nil
+	return validateBuilderQuery(probe.Query.Queries)
 }
 
 func validateBuilderQuery(queries []builderQueryProbe) error {

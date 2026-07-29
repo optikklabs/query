@@ -1,34 +1,9 @@
 package dashboards
 
-var dashboardSafeEndpoints = map[string]struct{}{
-	"/spans/red/fleet-overview":                 {},
-	"/spans/red/request-and-error-rate":         {},
-	"/spans/red/status-timeseries":              {},
-	"/spans/red/latency-percentiles-timeseries": {},
-	"/spans/red/red-by-endpoint":                {},
-	"/spans/red/top-endpoints":                  {},
-	"/spans/red/top-db-queries":                 {},
-	"/errors/service-error-rate":                {},
-	"/errors/error-volume":                      {},
-	"/infrastructure/cpu/avg":                   {},
-	"/infrastructure/cpu/by-instance":           {},
-	"/infrastructure/memory/avg":                {},
-	"/infrastructure/memory/by-instance":        {},
-	"/saturation/database/latency/by-system":    {},
-}
-
-func isAllowedEndpoint(ep string) bool {
-	_, ok := dashboardSafeEndpoints[ep]
-	return ok
-}
-
+// Panel types the metrics widget builder can produce. The pre-builder,
+// endpoint-backed panels (request, error-rate, latency, stat-card, …) were
+// retired along with their renderers; no client can create or draw them.
 var dashboardPanelTypes = map[string]struct{}{
-	"bar": {}, "db-systems-overview": {}, "error-rate": {},
-	"exception-type-line": {}, "gauge": {}, "heatmap": {}, "latency": {},
-	"latency-heatmap": {}, "latency-histogram": {}, "log-histogram": {},
-	"pie": {}, "request": {}, "service-catalog": {}, "service-health-grid": {},
-	"service-map": {}, "stat-card": {}, "stat-cards-grid": {}, "stat-summary": {},
-	"table": {}, "trace-waterfall": {},
 	"metrics-timeseries": {}, "metrics-value": {}, "metrics-toplist": {}, "metrics-table": {},
 }
 
@@ -56,10 +31,9 @@ func isValidBuilderOperator(op string) bool {
 	return ok
 }
 
+// One per panel type, mirroring the builder's viz→variant mapping.
 var dashboardLayoutVariants = map[string]struct{}{
-	"kpi": {}, "summary": {}, "standard-chart": {}, "wide-chart": {},
-	"ranking": {}, "summary-table": {}, "detail-table": {}, "hero": {},
-	"hero-map": {}, "hero-detail": {}, "compact": {}, "wide-compact": {},
+	"standard-chart": {}, "kpi": {}, "ranking": {}, "detail-table": {},
 }
 
 func isValidLayoutVariant(v string) bool {
