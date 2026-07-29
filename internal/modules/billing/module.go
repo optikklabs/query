@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"database/sql"
 	"context"
 	"log/slog"
 	"sync"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/optikklabs/query/internal/app/registry"
 )
 
 type Module struct {
@@ -19,7 +19,7 @@ type Module struct {
 	interval time.Duration
 }
 
-func NewModule(sqlDB *registry.SQLDB) *Module {
+func NewModule(sqlDB *sql.DB) *Module {
 	return &Module{
 		repo:     NewRepository(sqlDB),
 		stop:     make(chan struct{}),

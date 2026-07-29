@@ -4,12 +4,11 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/optikklabs/query/internal/app/registry"
 	"github.com/optikklabs/query/internal/modules/infrastructure/repository"
 	"github.com/optikklabs/query/internal/modules/infrastructure/service"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) registry.Module {
+func NewModule(nativeQuerier clickhouse.Conn) *module {
 	return &module{
 		handler: &Handler{Service: service.NewService(repository.NewRepository(nativeQuerier))},
 	}

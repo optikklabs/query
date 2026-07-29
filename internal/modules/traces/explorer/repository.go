@@ -8,7 +8,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
-	"github.com/optikklabs/query/internal/modules/traces/filter"
+	"github.com/optikklabs/query/internal/shared/spanfilter"
 )
 
 type Repository struct {
@@ -19,7 +19,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func buildScanClauses(c filter.Clauses) (queryPrefix, prewhere, where string) {
+func buildScanClauses(c spanfilter.Clauses) (queryPrefix, prewhere, where string) {
 	var ctes []string
 	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end`
 	where = `WHERE 1=1` + c.Root
@@ -38,7 +38,7 @@ func buildScanClauses(c filter.Clauses) (queryPrefix, prewhere, where string) {
 }
 
 func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, error) {
-	c := filter.BuildClauses(req.Filters)
+	c := spanfilter.BuildClauses(req.Filters)
 	prefix, prewhere, where := buildScanClauses(c)
 	args := c.Args
 
@@ -101,7 +101,7 @@ func (r *Repository) EnrichTraces(ctx context.Context, tenantID int64, traceIDs 
 }
 
 func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) ([]facetDimRow, error) {
-	c := filter.BuildClauses(req.Filters)
+	c := spanfilter.BuildClauses(req.Filters)
 	prefix, prewhere, where := buildScanClauses(c)
 	query := prefix + `SELECT
 			multiIf(
@@ -141,7 +141,7 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) ([]face
 }
 
 func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]trendRow, error) {
-	c := filter.BuildClauses(req.Filters)
+	c := spanfilter.BuildClauses(req.Filters)
 	prefix, prewhere, where := buildScanClauses(c)
 	grainSQL := timebucket.DisplayGrainSQL(req.EndTime - req.StartTime)
 	query := prefix + `SELECT ` + grainSQL + ` AS time_bucket, count() AS total, countIf(is_error = 1) AS errors FROM optikk.spans_root ` + prewhere + ` ` + where + ` GROUP BY time_bucket ORDER BY time_bucket ASC`

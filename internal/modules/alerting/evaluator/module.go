@@ -1,6 +1,7 @@
 package evaluator
 
 import (
+	"database/sql"
 	"context"
 	"log/slog"
 	"sync"
@@ -9,7 +10,6 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/optikklabs/query/internal/app/registry"
 	"github.com/optikklabs/query/internal/modules/alerting/dispatch"
 	"github.com/optikklabs/query/internal/modules/alerting/shared/query"
 )
@@ -22,7 +22,7 @@ type Module struct {
 	interval time.Duration
 }
 
-func NewModule(sqlDB *registry.SQLDB, chConn clickhouse.Conn) *Module {
+func NewModule(sqlDB *sql.DB, chConn clickhouse.Conn) *Module {
 	repo := NewRepository(sqlDB)
 	registry := query.Registry{
 		Metric: query.NewMetricBackend(chConn),

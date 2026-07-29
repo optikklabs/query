@@ -2,10 +2,9 @@ package tenant
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/optikklabs/query/internal/app/registry"
 )
 
-func NewModule(service *Service) registry.Module {
+func NewModule(service *Service) *module {
 	return &module{handler: NewHandler(service)}
 }
 

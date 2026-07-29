@@ -3,10 +3,9 @@ package explorer
 import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
-	"github.com/optikklabs/query/internal/app/registry"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) registry.Module {
+func NewModule(nativeQuerier clickhouse.Conn) *metricsExplorerModule {
 	module := &metricsExplorerModule{}
 	module.configure(nativeQuerier)
 	return module

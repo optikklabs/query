@@ -22,37 +22,43 @@ func (h *ErrorHandler) GetServiceErrorRate(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (h *ErrorHandler) GetErrorVolume(w http.ResponseWriter, r *http.Request) {
-	serviceName := r.URL.Query().Get("serviceName")
-	modulecommon.HandleRangeQuery(w, r, "Failed to query error volume", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.Service.GetErrorVolume(ctx, tenantID, startMs, endMs, serviceName)
-	})
+func (h *ErrorHandler) QueryErrorGroups(w http.ResponseWriter, r *http.Request) {
+	var req GroupsRequest
+	if !modulecommon.BindFiltered(w, r, &req) {
+		return
+	}
+	resp, err := h.Service.QueryErrorGroups(r.Context(), req)
+	if err != nil {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error groups", err)
+		return
+	}
+	modulecommon.RespondOK(w, resp)
 }
 
-func (h *ErrorHandler) GetErrorGroups(w http.ResponseWriter, r *http.Request) {
-	tenantID := modulecommon.Tenant(r).TenantID
-	serviceName := r.URL.Query().Get("serviceName")
-
-	limit := modulecommon.ParseIntParam(r, "limit", 100)
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
-	if !ok {
+func (h *ErrorHandler) QueryErrorFacets(w http.ResponseWriter, r *http.Request) {
+	var req FacetsRequest
+	if !modulecommon.BindFiltered(w, r, &req) {
 		return
 	}
-	cursorStr := r.URL.Query().Get("cursor")
-	var cur ErrorGroupsCursor
-	if cursorStr != "" {
-		if decoded, ok := cursor.Decode[ErrorGroupsCursor](cursorStr); ok {
-			cur = decoded
-		}
-	}
-
-	groups, err := h.Service.GetErrorGroups(r.Context(), tenantID, startMs, endMs, serviceName, limit, cur)
+	resp, err := h.Service.QueryErrorFacets(r.Context(), req)
 	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query overview errors", err)
+		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error facets", err)
 		return
 	}
+	modulecommon.RespondOK(w, resp)
+}
 
-	modulecommon.RespondOK(w, groups)
+func (h *ErrorHandler) QueryErrorOverview(w http.ResponseWriter, r *http.Request) {
+	var req OverviewRequest
+	if !modulecommon.BindFiltered(w, r, &req) {
+		return
+	}
+	resp, err := h.Service.QueryErrorOverview(r.Context(), req)
+	if err != nil {
+		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error overview", err)
+		return
+	}
+	modulecommon.RespondOK(w, resp)
 }
 
 func (h *ErrorHandler) GetErrorGroupDetail(w http.ResponseWriter, r *http.Request) {

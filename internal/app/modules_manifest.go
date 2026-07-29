@@ -5,7 +5,6 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 
-	"github.com/optikklabs/query/internal/app/registry"
 	"github.com/optikklabs/query/internal/infra/llmproviders"
 	"github.com/optikklabs/query/internal/infra/secretbox"
 
@@ -44,9 +43,9 @@ import (
 
 func configuredModules(
 	nativeQuerier clickhouse.Conn,
-	appConfig registry.AppConfig,
+	appConfig AppConfig,
 	infraDeps *Infra,
-) []registry.Module {
+) []Module {
 
 	authService := user_auth.NewService(user_auth.NewRepository(infraDeps.DB), infraDeps.Tokens, infraDeps.Config.Email)
 	deviceService := user_device.NewService(user_device.NewRepository(infraDeps.DB), authService)
@@ -61,7 +60,7 @@ func configuredModules(
 	providerKeySvc := llm_providerkeys.NewService(llm_providerkeys.NewRepository(infraDeps.DB), box)
 	llmProviders := llmproviders.NewRegistry()
 
-	return []registry.Module{
+	return []Module{
 		cloud.NewModule(nativeQuerier),
 		logs.NewModule(nativeQuerier),
 		infrastructure.NewModule(nativeQuerier),

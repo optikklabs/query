@@ -35,17 +35,6 @@ func (s *Service) GetServiceErrorRate(ctx context.Context, tenantID int64, start
 		}), nil
 }
 
-func (s *Service) GetErrorVolume(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]TimeSeriesPoint, error) {
-	raw, err := s.repo.ServiceErrorRateRows(ctx, tenantID, startMs, endMs, serviceName)
-	if err != nil {
-		return nil, err
-	}
-	return fillServicePoints(startMs, endMs, serviceName, raw,
-		func(t time.Time, row rawServiceRateRow, _ bool) TimeSeriesPoint {
-			return TimeSeriesPoint{Timestamp: t, ErrorCount: int64(row.ErrorCount)}
-		}), nil
-}
-
 // fillServicePoints densifies rate rows into per-service series: one series
 // for a named service, or one per non-empty service in the rows otherwise.
 func fillServicePoints(
@@ -79,32 +68,6 @@ func fillServicePoints(
 		points = append(points, series[i]...)
 	}
 	return points
-}
-
-func (s *Service) GetErrorGroups(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, limit int, cursorIn ErrorGroupsCursor) (PaginatedErrorGroups, error) {
-	raw, err := s.repo.ErrorGroupRows(ctx, tenantID, startMs, endMs, serviceName, limit+1, cursorIn)
-	if err != nil {
-		return PaginatedErrorGroups{}, err
-	}
-	raw, pageInfo := cursor.Paginate(raw, limit, func(r rawErrorGroupRow) string {
-		return cursor.Encode(ErrorGroupsCursor{ErrorCount: r.ErrorCount, GroupID: r.GroupID})
-	})
-
-	results := make([]ErrorGroup, len(raw))
-	for i, row := range raw {
-		results[i] = ErrorGroup{
-			GroupID:         row.GroupID,
-			ServiceName:     row.ServiceName,
-			OperationName:   row.OperationName,
-			StatusMessage:   row.StatusMessage,
-			HTTPStatusCode:  httpBucketToCode(row.HTTPStatusBucket),
-			ErrorCount:      int64(row.ErrorCount),
-			LastOccurrence:  row.LastOccurrence,
-			FirstOccurrence: row.FirstOccurrence,
-			SampleTraceID:   row.SampleTraceID,
-		}
-	}
-	return PaginatedErrorGroups{Results: results, PageInfo: pageInfo}, nil
 }
 
 func (s *Service) GetErrorGroupDetail(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*ErrorGroupDetail, error) {

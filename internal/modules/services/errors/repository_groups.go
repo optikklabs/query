@@ -10,39 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-func (r *Repository) ErrorGroupRows(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, limit int, cursor ErrorGroupsCursor) ([]rawErrorGroupRow, error) {
-	clause, clauseArgs := serviceClause(serviceName)
-	var havingClause string
-	if !cursor.IsZero() {
-		havingClause = "HAVING (error_count < @cursorCount OR (error_count = @cursorCount AND error_group_id > @cursorID))"
-	}
-
-	query := `
-		SELECT error_group_id                    AS error_group_id,
-		       service                          AS service,
-		       name                             AS operation_name,
-		       http_status_bucket               AS http_status_bucket,
-		       count()                          AS error_count,
-		       max(timestamp)                   AS last_occurrence,
-		       min(timestamp)                   AS first_occurrence,
-		       anyLast(status_message)          AS status_message,
-		       anyLast(trace_id)                AS sample_trace_id
-		FROM optikk.spans
-		PREWHERE tenant_id   = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1` + clause + `
-		GROUP BY error_group_id, service, name, http_status_bucket
-		` + havingClause + `
-		ORDER BY error_count DESC, error_group_id ASC
-		LIMIT @limit`
-	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
-		clickhouse.Named("limit", limit),
-		clickhouse.Named("cursorCount", cursor.ErrorCount),
-		clickhouse.Named("cursorID", cursor.GroupID),
-	)
-	args = append(args, clauseArgs...)
-	var rows []rawErrorGroupRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroups", &rows, query, args...)
-}
-
 func (r *Repository) ErrorGroupDetailRow(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*rawErrorGroupDetailRow, error) {
 	const query = `
 		SELECT error_group_id                       AS error_group_id,

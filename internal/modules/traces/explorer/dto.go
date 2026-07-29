@@ -3,9 +3,9 @@ package explorer
 import (
 	"time"
 
-	"github.com/optikklabs/query/internal/modules/traces/filter"
 	"github.com/optikklabs/query/internal/shared/contracts"
 	"github.com/optikklabs/query/internal/shared/filterutil"
+	"github.com/optikklabs/query/internal/shared/spanfilter"
 )
 
 type QueryRequest struct {
@@ -14,7 +14,7 @@ type QueryRequest struct {
 	Limit     int    `json:"limit"`
 	Cursor    string `json:"cursor"`
 
-	filter.Filters
+	spanfilter.Filters
 }
 
 func (r *QueryRequest) BindTenant(tenantID int64) error {
@@ -54,7 +54,7 @@ type FacetsRequest struct {
 	StartTime int64 `json:"startTime"`
 	EndTime   int64 `json:"endTime"`
 
-	filter.Filters
+	spanfilter.Filters
 }
 
 func (r *FacetsRequest) BindTenant(tenantID int64) error {
@@ -80,7 +80,7 @@ type TrendRequest struct {
 	StartTime int64 `json:"startTime"`
 	EndTime   int64 `json:"endTime"`
 
-	filter.Filters
+	spanfilter.Filters
 }
 
 func (r *TrendRequest) BindTenant(tenantID int64) error {

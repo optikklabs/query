@@ -1,10 +1,7 @@
 package app
 
 import (
-	"context"
-	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -12,8 +9,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/middleware"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
-
-var readyCache = newHealthCache()
 
 func (a *App) Router() http.Handler {
 	r := chi.NewRouter()
@@ -51,45 +46,4 @@ func (a *App) setupAPIRoutes(r chi.Router) {
 			mod.RegisterRoutes(r)
 		}
 	})
-}
-
-func (a *App) healthLive(w http.ResponseWriter, _ *http.Request) {
-	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func (a *App) healthReady(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	res := readyCache.get(ctx, a.probeReady)
-
-	if !res.ready {
-		payload := map[string]string{"status": "not_ready"}
-		if !res.mysqlReady {
-			payload["mysql"] = "error"
-		}
-		if !res.clickhouseReady {
-			payload["clickhouse"] = "error"
-		}
-		httputil.WriteJSON(w, http.StatusServiceUnavailable, payload)
-		return
-	}
-
-	httputil.WriteJSON(w, http.StatusOK, map[string]string{"status": "ready", "mysql": "ok", "clickhouse": "ok"})
-}
-
-func (a *App) probeReady(ctx context.Context) *healthResult {
-	res := &healthResult{}
-	if err := a.Infra.DB.PingContext(ctx); err != nil {
-		slog.ErrorContext(ctx, "health check failed", slog.String("service", "mysql"), slog.Any("error", err))
-		return res
-	}
-	res.mysqlReady = true
-	if err := a.Infra.CH.Ping(ctx); err != nil {
-		slog.ErrorContext(ctx, "health check failed", slog.String("service", "clickhouse"), slog.Any("error", err))
-		return res
-	}
-	res.clickhouseReady = true
-	res.ready = true
-	return res
 }

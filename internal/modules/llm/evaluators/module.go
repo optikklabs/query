@@ -1,17 +1,17 @@
 package evaluators
 
 import (
+	"database/sql"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/optikklabs/query/internal/app/registry"
 )
 
 type Module struct {
 	handler *Handler
 }
 
-func NewModule(sqlDB *registry.SQLDB, ch clickhouse.Conn) *Module {
+func NewModule(sqlDB *sql.DB, ch clickhouse.Conn) *Module {
 	return &Module{handler: NewHandler(NewService(NewRepository(sqlDB, ch)))}
 }
 

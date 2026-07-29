@@ -2,11 +2,10 @@ package device
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/optikklabs/query/internal/app/registry"
 	"github.com/optikklabs/query/internal/infra/token"
 )
 
-func NewModule(service *Service, tokens *token.Service) registry.Module {
+func NewModule(service *Service, tokens *token.Service) *module {
 	return &module{handler: NewHandler(service, tokens)}
 }
 

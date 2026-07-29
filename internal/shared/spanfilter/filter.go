@@ -1,4 +1,4 @@
-package filter
+package spanfilter
 
 import (
 	"time"
@@ -24,6 +24,7 @@ type Filters struct {
 	Statuses      []string `json:"statuses,omitempty"`
 	Environments  []string `json:"environments,omitempty"`
 	PeerServices  []string `json:"peerServices,omitempty"`
+	ExceptionType []string `json:"exceptionTypes,omitempty"`
 	TraceID       string   `json:"traceId,omitempty"`
 	MinDurationNs int64    `json:"minDurationNs,omitempty"`
 	MaxDurationNs int64    `json:"maxDurationNs,omitempty"`
@@ -32,8 +33,10 @@ type Filters struct {
 	ExcludeServices []string `json:"excludeServices,omitempty"`
 	ExcludeStatuses []string `json:"excludeStatuses,omitempty"`
 
+	// Search matches the span name; Message matches the span status message.
 	Search     string `json:"search,omitempty"`
 	SearchMode string `json:"searchMode,omitempty"`
+	Message    string `json:"message,omitempty"`
 
 	Attributes []AttrFilter `json:"attributes,omitempty"`
 }
@@ -79,6 +82,7 @@ func BuildClauses(f Filters) Clauses {
 		filterutil.InClause{Column: "response_status_code", Bind: "httpStatuses", Values: f.HTTPStatuses},
 		filterutil.InClause{Column: "status_code_string", Bind: "statuses", Values: f.Statuses},
 		filterutil.InClause{Column: "peer_service", Bind: "peerServices", Values: f.PeerServices},
+		filterutil.InClause{Column: "exception_type", Bind: "exceptionTypes", Values: f.ExceptionType},
 	)
 
 	c.Args = filterutil.AppendIn(&c.Root, c.Args,
@@ -89,6 +93,10 @@ func BuildClauses(f Filters) Clauses {
 
 		c.Span += ` AND positionCaseInsensitive(name, @search) > 0`
 		c.Args = append(c.Args, clickhouse.Named("search", f.Search))
+	}
+	if f.Message != "" {
+		c.Span += ` AND positionCaseInsensitive(status_message, @message) > 0`
+		c.Args = append(c.Args, clickhouse.Named("message", f.Message))
 	}
 	for i, af := range f.Attributes {
 		clause, clauseArgs := buildAttrClause(af, i)

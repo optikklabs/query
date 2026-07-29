@@ -2,8 +2,6 @@ package errors
 
 import (
 	"time"
-
-	"github.com/optikklabs/query/internal/shared/contracts"
 )
 
 type rawServiceRateRow struct {
@@ -22,7 +20,7 @@ type rawErrorGroupRow struct {
 	ErrorCount       uint64    `ch:"error_count"`
 	LastOccurrence   time.Time `ch:"last_occurrence"`
 	FirstOccurrence  time.Time `ch:"first_occurrence"`
-	StatusMessage    string    `ch:"status_message"`
+	StatusMessage    string    `ch:"error_message"`
 	SampleTraceID    string    `ch:"sample_trace_id"`
 }
 
@@ -88,9 +86,4 @@ type ErrorTracesCursor struct {
 
 func (c ErrorTracesCursor) IsZero() bool {
 	return c.Timestamp.IsZero() && c.SpanID == ""
-}
-
-type PaginatedErrorGroups struct {
-	Results  []ErrorGroup       `json:"results"`
-	PageInfo contracts.PageInfo `json:"pageInfo"`
 }

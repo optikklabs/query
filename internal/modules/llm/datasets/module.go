@@ -1,16 +1,16 @@
 package datasets
 
 import (
+	"database/sql"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/optikklabs/query/internal/app/registry"
 )
 
 type Module struct {
 	handler *Handler
 }
 
-func NewModule(sqlDB *registry.SQLDB, keys KeyResolver, completer Completer) *Module {
+func NewModule(sqlDB *sql.DB, keys KeyResolver, completer Completer) *Module {
 	repo := NewRepository(sqlDB)
 	var experiment *ExperimentService
 	if keys != nil && completer != nil {

@@ -1,0 +1,132 @@
+package errors
+
+import (
+	"context"
+
+	"github.com/ClickHouse/clickhouse-go/v2"
+	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/shared/spanfilter"
+)
+
+// Error groups are always read from the error spans themselves, so span- and
+// root-level predicates both apply to the same row — no trace-level CTE.
+const errorSpanScan = `FROM optikk.spans
+		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1
+		WHERE 1=1`
+
+func errorSpanWhere(f spanfilter.Filters) (string, []any) {
+	c := spanfilter.BuildClauses(f)
+	return errorSpanScan + c.Span + c.Root, c.Args
+}
+
+// Cap on the groups scanned by the summary/facet aggregates. Well above the
+// number of distinct error groups any tenant surfaces in one range.
+const maxAggregatedGroups = 100000
+
+func (r *Repository) ExplorerGroupRows(ctx context.Context, req GroupsRequest) ([]rawErrorGroupRow, error) {
+	scan, args := errorSpanWhere(req.Filters)
+
+	var having string
+	if cur, ok := decodeGroupsCursor(req.Cursor); ok {
+		having = `HAVING (error_count < @cursorCount OR (error_count = @cursorCount AND error_group_id > @cursorID))`
+		args = append(args,
+			clickhouse.Named("cursorCount", cur.ErrorCount),
+			clickhouse.Named("cursorID", cur.GroupID),
+		)
+	}
+	args = append(args, clickhouse.Named("pgLimit", uint64(req.Limit)))
+
+	query := `
+		SELECT error_group_id           AS error_group_id,
+		       service                  AS service,
+		       name                     AS operation_name,
+		       http_status_bucket       AS http_status_bucket,
+		       count()                  AS error_count,
+		       max(timestamp)           AS last_occurrence,
+		       min(timestamp)           AS first_occurrence,
+		       -- Aliased away from the column name: a status_message alias
+		       -- shadows the column for the message filter in WHERE.
+		       anyLast(status_message)  AS error_message,
+		       anyLast(trace_id)        AS sample_trace_id
+		` + scan + `
+		GROUP BY error_group_id, service, name, http_status_bucket
+		` + having + `
+		ORDER BY error_count DESC, error_group_id ASC
+		LIMIT @pgLimit`
+
+	var rows []rawErrorGroupRow
+	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerGroups", &rows, query, args...)
+}
+
+func (r *Repository) ExplorerFacetRows(ctx context.Context, req FacetsRequest) ([]rawFacetDimRow, error) {
+	scan, args := errorSpanWhere(req.Filters)
+
+	query := `
+		SELECT multiIf(
+		           grouping(service) = 0,              'service',
+		           grouping(name) = 0,                 'operation',
+		           grouping(response_status_code) = 0, 'httpStatus',
+		           grouping(exception_type) = 0,       'exceptionType',
+		           ''
+		       ) AS dim,
+		       multiIf(
+		           grouping(service) = 0,              service,
+		           grouping(name) = 0,                 name,
+		           grouping(response_status_code) = 0, response_status_code,
+		           grouping(exception_type) = 0,       exception_type,
+		           ''
+		       ) AS value,
+		       count() AS cnt
+		` + scan + `
+		GROUP BY GROUPING SETS ((service), (name), (response_status_code), (exception_type))
+		HAVING value != ''
+		ORDER BY dim, cnt DESC
+		LIMIT 20 BY dim`
+
+	var rows []rawFacetDimRow
+	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerFacets", &rows, query, args...)
+}
+
+// ExplorerSummaryRow aggregates over groups, not spans, so "active"/"new"
+// issue counts are exact for the range instead of a sample of the first page.
+func (r *Repository) ExplorerSummaryRow(ctx context.Context, req OverviewRequest, newSinceMs int64) (rawSummaryRow, error) {
+	scan, args := errorSpanWhere(req.Filters)
+	args = append(args,
+		clickhouse.DateNamed("newSince", millisToTime(newSinceMs), clickhouse.MilliSeconds),
+		clickhouse.Named("groupCap", uint64(maxAggregatedGroups)),
+	)
+
+	query := `
+		SELECT sum(cnt)                        AS total_errors,
+		       count()                         AS active_issues,
+		       countIf(first_occ >= @newSince) AS new_issues,
+		       uniqExact(service)              AS services_affected
+		FROM (
+		    SELECT any(service)   AS service,
+		           count()        AS cnt,
+		           min(timestamp) AS first_occ
+		    ` + scan + `
+		    GROUP BY error_group_id
+		    LIMIT @groupCap
+		)`
+
+	var row rawSummaryRow
+	err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerSummary", &row, query, args...)
+	return row, err
+}
+
+func (r *Repository) ExplorerTrendRows(ctx context.Context, req OverviewRequest) ([]rawTrendRow, error) {
+	scan, args := errorSpanWhere(req.Filters)
+
+	query := `
+		SELECT ` + timebucket.DisplayGrainSQL(req.EndTime-req.StartTime) + ` AS time_bucket,
+		       count()                                                      AS errors
+		` + scan + `
+		GROUP BY time_bucket
+		ORDER BY time_bucket ASC
+		LIMIT 10000`
+
+	var rows []rawTrendRow
+	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerTrend", &rows, query, args...)
+}

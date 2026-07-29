@@ -1,9 +1,9 @@
 package notifications
 
 import (
+	"database/sql"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/optikklabs/query/internal/app/registry"
 	"github.com/optikklabs/query/internal/modules/alerting/dispatch"
 )
 
@@ -11,7 +11,7 @@ type Module struct {
 	handler *Handler
 }
 
-func NewModule(sqlDB *registry.SQLDB) *Module {
+func NewModule(sqlDB *sql.DB) *Module {
 	repo := NewRepository(sqlDB)
 	dispatcher := dispatch.NewDefaultDispatcher()
 	svc := NewService(repo, dispatcher)

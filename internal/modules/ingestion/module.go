@@ -3,11 +3,10 @@ package ingestion
 import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
-	"github.com/optikklabs/query/internal/app/registry"
 	"github.com/optikklabs/query/internal/config"
 )
 
-func NewModule(db clickhouse.Conn, billing config.BillingConfig) registry.Module {
+func NewModule(db clickhouse.Conn, billing config.BillingConfig) *module {
 	m := &module{cfg: NewConfig(billing)}
 	m.configure(db)
 	return m

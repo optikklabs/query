@@ -1,16 +1,16 @@
 package dashboards
 
 import (
+	"database/sql"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/optikklabs/query/internal/app/registry"
 )
 
 type Module struct {
 	handler *Handler
 }
 
-func NewModule(sqlDB *registry.SQLDB) *Module {
+func NewModule(sqlDB *sql.DB) *Module {
 	repo := NewRepository(sqlDB)
 	svc := NewService(repo)
 	return &Module{handler: NewHandler(svc)}

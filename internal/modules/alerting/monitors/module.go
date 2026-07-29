@@ -1,10 +1,10 @@
 package monitors
 
 import (
+	"database/sql"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/optikklabs/query/internal/app/registry"
 	"github.com/optikklabs/query/internal/modules/alerting/shared/query"
 )
 
@@ -12,7 +12,7 @@ type Module struct {
 	handler *Handler
 }
 
-func NewModule(sqlDB *registry.SQLDB, chConn clickhouse.Conn) *Module {
+func NewModule(sqlDB *sql.DB, chConn clickhouse.Conn) *Module {
 	repo := NewRepository(sqlDB)
 	svc := NewService(repo)
 	queries := query.Registry{

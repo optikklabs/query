@@ -12,14 +12,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/optikklabs/query/internal/app/registry"
 	"github.com/optikklabs/query/internal/config"
 )
 
 type App struct {
 	Config  config.Config
 	Infra   *Infra
-	Modules []registry.Module
+	Modules []Module
 }
 
 func New(cfg config.Config) (*App, error) {
@@ -78,7 +77,7 @@ func (a *App) addMetricsServerActor(g *run.Group) {
 
 func (a *App) startBackgroundModules() {
 	for _, mod := range a.Modules {
-		if r, ok := mod.(registry.BackgroundRunner); ok {
+		if r, ok := mod.(BackgroundRunner); ok {
 			r.Start()
 		}
 	}
@@ -86,7 +85,7 @@ func (a *App) startBackgroundModules() {
 
 func (a *App) stopBackgroundModules() {
 	for _, mod := range a.Modules {
-		if r, ok := mod.(registry.BackgroundRunner); ok {
+		if r, ok := mod.(BackgroundRunner); ok {
 			if stopErr := r.Stop(); stopErr != nil {
 				slog.Warn("error stopping module", slog.String("module", mod.Name()), slog.Any("error", stopErr))
 			}
