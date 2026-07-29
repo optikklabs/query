@@ -3,10 +3,9 @@ package redfleet
 import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
-	"github.com/optikklabs/query/internal/app/registry"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) registry.Module {
+func NewModule(nativeQuerier clickhouse.Conn) *redFleetModule {
 	module := &redFleetModule{}
 	module.configure(nativeQuerier)
 	return module

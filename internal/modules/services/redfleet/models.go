@@ -63,14 +63,16 @@ type EndpointRateSeries struct {
 // returned top N. Headline stats read from here so they agree with
 // status-timeseries rather than counting only the charted lines.
 type EndpointRateTotals struct {
-	RPS       []float64  `json:"rps"`
-	ErrorRate []*float64 `json:"errorRate"`
+	RPS          []float64  `json:"rps"`
+	RequestCount []uint64   `json:"requestCount"`
+	ErrorRate    []*float64 `json:"errorRate"`
 }
 
 // Nil errorRate/p99Ms entries mean the endpoint had no traffic in that bucket.
 type EndpointRateEntry struct {
 	OperationName string     `json:"operationName"`
 	RPS           []float64  `json:"rps"`
+	RequestCount  []uint64   `json:"requestCount"`
 	ErrorRate     []*float64 `json:"errorRate"`
 	P99Ms         []*float64 `json:"p99Ms"`
 }

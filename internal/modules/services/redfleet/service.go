@@ -164,6 +164,7 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, 
 
 	type cell struct {
 		rps     float64
+		count   uint64
 		errRate *float64
 		p99     *float64
 	}
@@ -179,7 +180,12 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, 
 			}
 			errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
 			p99 := httputil.SanitizeFloat(spanstats.LatencyP99.At(row.QS, spanstats.P99))
-			return cell{rps: float64(row.RequestCount) / grainSec, errRate: &errRate, p99: &p99}
+			return cell{
+				rps:     float64(row.RequestCount) / grainSec,
+				count:   row.RequestCount,
+				errRate: &errRate,
+				p99:     &p99,
+			}
 		})
 
 	totals := timebucket.FillGaps(f.StartMs, f.EndMs, grain, totalRows,
@@ -189,32 +195,39 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, 
 				return cell{}
 			}
 			errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
-			return cell{rps: float64(row.RequestCount) / grainSec, errRate: &errRate}
+			return cell{
+				rps:     float64(row.RequestCount) / grainSec,
+				count:   row.RequestCount,
+				errRate: &errRate,
+			}
 		})
 
 	out := EndpointRateSeries{
 		Timestamps: make([]int64, len(buckets)),
 		Series:     make([]EndpointRateEntry, len(operations)),
 		Totals: EndpointRateTotals{
-			RPS:       make([]float64, len(buckets)),
-			ErrorRate: make([]*float64, len(buckets)),
+			RPS:          make([]float64, len(buckets)),
+			RequestCount: make([]uint64, len(buckets)),
+			ErrorRate:    make([]*float64, len(buckets)),
 		},
 	}
 	for i, bucket := range buckets {
 		out.Timestamps[i] = bucket.UnixMilli()
 	}
 	for i, c := range totals {
-		out.Totals.RPS[i], out.Totals.ErrorRate[i] = c.rps, c.errRate
+		out.Totals.RPS[i], out.Totals.RequestCount[i], out.Totals.ErrorRate[i] = c.rps, c.count, c.errRate
 	}
 	for i, operation := range operations {
 		entry := EndpointRateEntry{
 			OperationName: operation,
 			RPS:           make([]float64, len(buckets)),
+			RequestCount:  make([]uint64, len(buckets)),
 			ErrorRate:     make([]*float64, len(buckets)),
 			P99Ms:         make([]*float64, len(buckets)),
 		}
 		for j, c := range series[i] {
-			entry.RPS[j], entry.ErrorRate[j], entry.P99Ms[j] = c.rps, c.errRate, c.p99
+			entry.RPS[j], entry.RequestCount[j] = c.rps, c.count
+			entry.ErrorRate[j], entry.P99Ms[j] = c.errRate, c.p99
 		}
 		out.Series[i] = entry
 	}
