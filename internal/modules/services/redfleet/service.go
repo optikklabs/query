@@ -124,10 +124,19 @@ func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDFilt
 		}), nil
 }
 
+type serviceBucketTotal struct {
+	BucketAt     time.Time
+	RequestCount uint64
+	ErrorCount   uint64
+}
+
 func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, limit int) (EndpointRateSeries, error) {
-	rows, err := s.repo.GetREDByEndpointTimeSeries(ctx, f, limit)
+	rows, err := s.repo.GetREDByEndpointTimeSeries(ctx, f)
 	if err != nil {
 		return EndpointRateSeries{}, err
+	}
+	if limit <= 0 {
+		limit = defaultEndpointSeriesLimit
 	}
 
 	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
@@ -136,12 +145,32 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, 
 		grainSec = 60
 	}
 
+	// Totals cover the whole service, so they are summed before the top-N cut.
+	totalsByBucket := make(map[int64]*serviceBucketTotal, len(rows))
+	for _, row := range rows {
+		key := row.BucketAt.UTC().Truncate(grain).Unix()
+		acc, ok := totalsByBucket[key]
+		if !ok {
+			acc = &serviceBucketTotal{BucketAt: row.BucketAt}
+			totalsByBucket[key] = acc
+		}
+		acc.RequestCount += row.RequestCount
+		acc.ErrorCount += row.ErrorCount
+	}
+	totalRows := make([]serviceBucketTotal, 0, len(totalsByBucket))
+	for _, acc := range totalsByBucket {
+		totalRows = append(totalRows, *acc)
+	}
+
 	type cell struct {
 		rps     float64
 		errRate *float64
 		p99     *float64
 	}
-	operations, buckets, series := timebucket.FillGapsKeyed(f.StartMs, f.EndMs, grain, rows,
+
+	charted := topEndpointRows(rows, limit)
+
+	operations, buckets, series := timebucket.FillGapsKeyed(f.StartMs, f.EndMs, grain, charted,
 		func(r endpointRateRow) string { return r.OperationName },
 		func(r endpointRateRow) time.Time { return r.BucketAt },
 		func(_ time.Time, row endpointRateRow, ok bool) cell {
@@ -153,12 +182,29 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, 
 			return cell{rps: float64(row.RequestCount) / grainSec, errRate: &errRate, p99: &p99}
 		})
 
+	totals := timebucket.FillGaps(f.StartMs, f.EndMs, grain, totalRows,
+		func(r serviceBucketTotal) time.Time { return r.BucketAt },
+		func(_ time.Time, row serviceBucketTotal, ok bool) cell {
+			if !ok {
+				return cell{}
+			}
+			errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
+			return cell{rps: float64(row.RequestCount) / grainSec, errRate: &errRate}
+		})
+
 	out := EndpointRateSeries{
 		Timestamps: make([]int64, len(buckets)),
 		Series:     make([]EndpointRateEntry, len(operations)),
+		Totals: EndpointRateTotals{
+			RPS:       make([]float64, len(buckets)),
+			ErrorRate: make([]*float64, len(buckets)),
+		},
 	}
 	for i, bucket := range buckets {
 		out.Timestamps[i] = bucket.UnixMilli()
+	}
+	for i, c := range totals {
+		out.Totals.RPS[i], out.Totals.ErrorRate[i] = c.rps, c.errRate
 	}
 	for i, operation := range operations {
 		entry := EndpointRateEntry{
@@ -183,6 +229,41 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, 
 		return out.Series[i].OperationName < out.Series[j].OperationName
 	})
 	return out, nil
+}
+
+// topEndpointRows keeps the rows of the busiest `limit` named endpoints.
+func topEndpointRows(rows []endpointRateRow, limit int) []endpointRateRow {
+	volume := make(map[string]uint64)
+	for _, row := range rows {
+		if row.OperationName != "" {
+			volume[row.OperationName] += row.RequestCount
+		}
+	}
+	names := make([]string, 0, len(volume))
+	for name := range volume {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		if volume[names[i]] != volume[names[j]] {
+			return volume[names[i]] > volume[names[j]]
+		}
+		return names[i] < names[j]
+	})
+	if len(names) > limit {
+		names = names[:limit]
+	}
+
+	keep := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		keep[name] = struct{}{}
+	}
+	out := make([]endpointRateRow, 0, len(rows))
+	for _, row := range rows {
+		if _, ok := keep[row.OperationName]; ok {
+			out = append(out, row)
+		}
+	}
+	return out
 }
 
 func seriesLoad(rps []float64) float64 {

@@ -15,12 +15,11 @@ import (
 // Renders the per-endpoint RED query with its named parameters inlined, so the
 // exact statement the server sends can be pasted into clickhouse-client.
 //
-//	SQL_TENANT=1 SQL_SERVICE=frontend-proxy SQL_LIMIT=20 SQL_HOURS=24 \
+//	SQL_TENANT=1 SQL_SERVICE=frontend-proxy SQL_HOURS=24 \
 //	    go test ./internal/modules/services/redfleet -run RenderREDByEndpointSQL -v
 func TestRenderREDByEndpointSQL(t *testing.T) {
 	tenant := envInt64(t, "SQL_TENANT", 1)
 	service := envStr("SQL_SERVICE", "frontend-proxy")
-	limit := int(envInt64(t, "SQL_LIMIT", 0))
 	hours := envInt64(t, "SQL_HOURS", 24)
 
 	end := time.Now().UnixMilli()
@@ -31,33 +30,30 @@ func TestRenderREDByEndpointSQL(t *testing.T) {
 		f.Services = []string{service}
 	}
 
-	query, args := buildREDByEndpointQuery(f, limit)
+	query, args := buildREDByEndpointQuery(f)
 	t.Log("\n" + inlineNamedArgs(query, args) + "\nFORMAT PrettyCompact")
 }
 
-// The row cap is one row per (endpoint, bucket). If it ever falls below that
-// product the query truncates the tail of the window and lines vanish from the
-// right of the chart with no error anywhere.
+// The row cap must cover every (endpoint, bucket) pair, or the query drops the
+// tail of the window with no error anywhere.
 func TestREDByEndpointRowCapCoversEveryBucket(t *testing.T) {
-	for _, tc := range []struct{ hours, limit int64 }{
-		{1, 20}, {6, 20}, {24, 20}, {24, 200}, {24 * 7, 200}, {24 * 90, 200}, {24 * 400, 200},
-	} {
+	for _, hours := range []int64{1, 6, 24, 24 * 7, 24 * 90, 24 * 400} {
 		end := time.Now().UnixMilli()
-		start := end - tc.hours*int64(time.Hour/time.Millisecond)
+		start := end - hours*int64(time.Hour/time.Millisecond)
 		f := REDFilters{TenantID: 1, StartMs: start, EndMs: end, Services: []string{"svc"}}
 
-		_, args := buildREDByEndpointQuery(f, int(tc.limit))
+		_, args := buildREDByEndpointQuery(f)
 		rowLimit, ok := namedArg(args, "rowLimit")
 		if !ok {
-			t.Fatalf("%dh/%d: no rowLimit arg", tc.hours, tc.limit)
+			t.Fatalf("%dh: no rowLimit arg", hours)
 		}
 
 		grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
 		buckets := (f.EndMs-f.StartMs)/grain.Milliseconds() + 1
-		want := tc.limit * buckets
+		want := maxEndpointCardinality * buckets
 		if got := rowLimit.(int64); got < want {
-			t.Errorf("%dh/%d endpoints: rowLimit %d < %d endpoint-buckets — series would truncate",
-				tc.hours, tc.limit, got, want)
+			t.Errorf("%dh: rowLimit %d < %d endpoint-buckets — series would truncate",
+				hours, got, want)
 		}
 	}
 }

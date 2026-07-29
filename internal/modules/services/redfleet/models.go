@@ -56,6 +56,15 @@ type LatencyPercentilesPoint struct {
 type EndpointRateSeries struct {
 	Timestamps []int64             `json:"timestamps"`
 	Series     []EndpointRateEntry `json:"series"`
+	Totals     EndpointRateTotals  `json:"totals"`
+}
+
+// EndpointRateTotals covers the whole service, including endpoints outside the
+// returned top N. Headline stats read from here so they agree with
+// status-timeseries rather than counting only the charted lines.
+type EndpointRateTotals struct {
+	RPS       []float64  `json:"rps"`
+	ErrorRate []*float64 `json:"errorRate"`
 }
 
 // Nil errorRate/p99Ms entries mean the endpoint had no traffic in that bucket.
