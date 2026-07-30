@@ -1,5 +1,7 @@
 package models
 
+import "github.com/optikklabs/query/internal/shared/contracts"
+
 type DatastoreSystemRow struct {
 	System            string  `json:"system"`
 	Category          string  `json:"category"`
@@ -38,6 +40,11 @@ type SlowQueryPattern struct {
 	P99Ms          *float64 `json:"p99Ms"`
 	CallCount      int64    `json:"callCount"`
 	ErrorCount     int64    `json:"errorCount"`
+}
+
+type QueryPatternsPage struct {
+	Results  []SlowQueryPattern `json:"results"`
+	PageInfo contracts.PageInfo `json:"pageInfo"`
 }
 
 type ServiceCalls struct {
