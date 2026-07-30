@@ -15,19 +15,20 @@ type Filters struct {
 	StartMs  int64 `json:"-"`
 	EndMs    int64 `json:"-"`
 
-	Services      []string `json:"services,omitempty"`
-	Operations    []string `json:"operations,omitempty"`
-	SpanKinds     []string `json:"spanKinds,omitempty"`
-	HTTPMethods   []string `json:"httpMethods,omitempty"`
-	HTTPStatuses  []string `json:"httpStatuses,omitempty"`
-	Statuses      []string `json:"statuses,omitempty"`
-	Environments  []string `json:"environments,omitempty"`
-	PeerServices  []string `json:"peerServices,omitempty"`
-	ExceptionType []string `json:"exceptionTypes,omitempty"`
-	TraceID       string   `json:"traceId,omitempty"`
-	MinDurationNs int64    `json:"minDurationNs,omitempty"`
-	MaxDurationNs int64    `json:"maxDurationNs,omitempty"`
-	HasError      *bool    `json:"hasError,omitempty"`
+	Services        []string `json:"services,omitempty"`
+	ServiceVersions []string `json:"serviceVersions,omitempty"`
+	Operations      []string `json:"operations,omitempty"`
+	SpanKinds       []string `json:"spanKinds,omitempty"`
+	HTTPMethods     []string `json:"httpMethods,omitempty"`
+	HTTPStatuses    []string `json:"httpStatuses,omitempty"`
+	Statuses        []string `json:"statuses,omitempty"`
+	Environments    []string `json:"environments,omitempty"`
+	PeerServices    []string `json:"peerServices,omitempty"`
+	ExceptionType   []string `json:"exceptionTypes,omitempty"`
+	TraceID         string   `json:"traceId,omitempty"`
+	MinDurationNs   int64    `json:"minDurationNs,omitempty"`
+	MaxDurationNs   int64    `json:"maxDurationNs,omitempty"`
+	HasError        *bool    `json:"hasError,omitempty"`
 
 	ExcludeServices []string `json:"excludeServices,omitempty"`
 	ExcludeStatuses []string `json:"excludeStatuses,omitempty"`
@@ -75,6 +76,9 @@ func BuildClauses(f Filters) Clauses {
 		c.Resource += ` AND service IN @services`
 		c.Args = append(c.Args, clickhouse.Named("services", f.Services))
 	}
+	c.Args = filterutil.AppendIn(&c.Root, c.Args,
+		filterutil.InClause{Column: "service_version", Bind: "serviceVersions", Values: f.ServiceVersions},
+	)
 
 	c.Args = filterutil.AppendIn(&c.Span, c.Args,
 		filterutil.InClause{Column: "environment", Bind: "environments", Values: f.Environments},

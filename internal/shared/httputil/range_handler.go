@@ -22,7 +22,7 @@ func HandleRangeQuery(
 	}
 	resp, err := query(r.Context(), tenantID, startMs, endMs)
 	if err != nil {
-		RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, errMessage, err)
+		RespondServiceError(w, r, err, errMessage)
 		return
 	}
 	RespondOK(w, resp)

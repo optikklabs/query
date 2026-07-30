@@ -6,13 +6,14 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/shared/errorgroups"
 	"github.com/optikklabs/query/internal/shared/spanfilter"
 )
 
 // Error groups are always read from the error spans themselves, so span- and
 // root-level predicates both apply to the same row — no trace-level CTE.
 const errorSpanScan = `FROM optikk.spans
-		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND is_error = 1
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND ` + errorgroups.Predicate + `
 		WHERE 1=1`
 
 func errorSpanWhere(f spanfilter.Filters) (string, []any) {

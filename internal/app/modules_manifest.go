@@ -14,6 +14,7 @@ import (
 	billing "github.com/optikklabs/query/internal/modules/billing"
 	cloud "github.com/optikklabs/query/internal/modules/cloud"
 	dashboards "github.com/optikklabs/query/internal/modules/dashboards"
+	"github.com/optikklabs/query/internal/modules/deployments"
 	"github.com/optikklabs/query/internal/modules/infrastructure"
 	ingestion "github.com/optikklabs/query/internal/modules/ingestion"
 	llm "github.com/optikklabs/query/internal/modules/llm"
@@ -62,6 +63,7 @@ func configuredModules(
 
 	return []Module{
 		cloud.NewModule(nativeQuerier),
+		deployments.NewModule(nativeQuerier),
 		logs.NewModule(nativeQuerier),
 		infrastructure.NewModule(nativeQuerier),
 		metrics_explorer.NewModule(nativeQuerier),

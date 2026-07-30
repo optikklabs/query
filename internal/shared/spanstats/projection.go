@@ -26,10 +26,11 @@ type Latency struct {
 }
 
 var (
-	LatencyP50P95P99 = Latency{quantiles: []float64{0.5, 0.95, 0.99}}
-	LatencyP50P95    = Latency{quantiles: []float64{0.5, 0.95}}
-	LatencyP95       = Latency{quantiles: []float64{0.95}}
-	LatencyP99       = Latency{quantiles: []float64{0.99}}
+	LatencyP50P75P90P95P99 = Latency{quantiles: []float64{0.5, 0.75, 0.9, 0.95, 0.99}}
+	LatencyP50P95P99       = Latency{quantiles: []float64{0.5, 0.95, 0.99}}
+	LatencyP50P95          = Latency{quantiles: []float64{0.5, 0.95}}
+	LatencyP95             = Latency{quantiles: []float64{0.95}}
+	LatencyP99             = Latency{quantiles: []float64{0.99}}
 )
 
 func (l Latency) SQL() string {
@@ -58,6 +59,8 @@ func (l Latency) At(qs []float64, q float64) float64 {
 
 const (
 	P50 = 0.5
+	P75 = 0.75
+	P90 = 0.9
 	P95 = 0.95
 	P99 = 0.99
 )
