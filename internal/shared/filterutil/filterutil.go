@@ -11,6 +11,10 @@ import (
 
 const MaxTimeRangeMs int64 = 30 * 24 * 60 * 60 * 1000
 
+// Caps trace-match subqueries; CH inlines them, so unbounded means a
+// whole-range trace_id set in memory.
+const MaxMatchedTraces = 200000
+
 type AttrFilter struct {
 	Key   string `json:"key"`
 	Op    string `json:"op,omitempty"`

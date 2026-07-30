@@ -1,4 +1,4 @@
-package redfleet
+package service
 
 import (
 	"context"
@@ -6,32 +6,38 @@ import (
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/filter"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/models"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/repository"
 	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/shared/metrics"
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
+// Series count when the caller does not ask for one; handler caps at MaxPageSize.
+const defaultEndpointSeriesLimit = 20
+
 type Service struct {
-	repo *Repository
+	repo *repository.Repository
 }
 
-func NewService(repo *Repository) *Service {
+func NewService(repo *repository.Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetFleetOverview(ctx context.Context, f REDFilters) (FleetOverviewResponse, error) {
+func (s *Service) GetFleetOverview(ctx context.Context, f filter.Filters) (models.FleetOverviewResponse, error) {
 	rows, err := s.repo.GetFleetREDMetrics(ctx, f)
 	if err != nil {
-		return FleetOverviewResponse{}, err
+		return models.FleetOverviewResponse{}, err
 	}
 	services := mapFleetServices(rows)
-	return FleetOverviewResponse{
+	return models.FleetOverviewResponse{
 		Totals:   computeFleetTotals(fleetTotalRow(rows), len(services), f.StartMs, f.EndMs),
 		Services: services,
 	}, nil
 }
 
-func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFilters) ([]ServicePerformancePoint, error) {
+func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f filter.Filters) ([]models.ServicePerformancePoint, error) {
 	rows, err := s.repo.GetRequestAndErrorRateTimeSeries(ctx, f)
 	if err != nil {
 		return nil, err
@@ -40,9 +46,9 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFil
 	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
 	grainSec := grain.Seconds()
 	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
-		func(r requestRateRawRow) time.Time { return r.BucketAt },
-		func(t time.Time, row requestRateRawRow, ok bool) ServicePerformancePoint {
-			pt := ServicePerformancePoint{Timestamp: t}
+		func(r models.RequestRateRawRow) time.Time { return r.BucketAt },
+		func(t time.Time, row models.RequestRateRawRow, ok bool) models.ServicePerformancePoint {
+			pt := models.ServicePerformancePoint{Timestamp: t}
 			if ok {
 				pt.RequestCount = row.RequestCount
 				pt.ErrorCount = row.ErrorCount
@@ -53,36 +59,36 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFil
 		}), nil
 }
 
-func (s *Service) GetRequestRateTimeSeries(ctx context.Context, f REDFilters) (RequestRateSeries, error) {
+func (s *Service) GetRequestRateTimeSeries(ctx context.Context, f filter.Filters) (models.RequestRateSeries, error) {
 	rows, err := s.repo.GetRequestRateTimeSeries(ctx, f)
 	if err != nil {
-		return RequestRateSeries{}, err
+		return models.RequestRateSeries{}, err
 	}
 
 	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
 	grainSec := grain.Seconds()
 
 	services, buckets, series := timebucket.FillGapsKeyed(f.StartMs, f.EndMs, grain, rows,
-		func(r serviceRequestRateRawRow) string { return r.ServiceName },
-		func(r serviceRequestRateRawRow) time.Time { return r.BucketAt },
-		func(_ time.Time, row serviceRequestRateRawRow, _ bool) float64 {
+		func(r models.ServiceRequestRateRow) string { return r.ServiceName },
+		func(r models.ServiceRequestRateRow) time.Time { return r.BucketAt },
+		func(_ time.Time, row models.ServiceRequestRateRow, _ bool) float64 {
 			return httputil.SanitizeFloat(float64(row.RequestCount) / grainSec)
 		})
 
-	out := RequestRateSeries{
+	out := models.RequestRateSeries{
 		Timestamps: make([]int64, len(buckets)),
-		Series:     make([]RequestRateEntry, len(services)),
+		Series:     make([]models.RequestRateEntry, len(services)),
 	}
 	for i, t := range buckets {
 		out.Timestamps[i] = t.UnixMilli()
 	}
 	for i, svc := range services {
-		out.Series[i] = RequestRateEntry{ServiceName: svc, RPS: series[i]}
+		out.Series[i] = models.RequestRateEntry{ServiceName: svc, RPS: series[i]}
 	}
 	return out, nil
 }
 
-func (s *Service) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]StatusTimeSeriesPoint, error) {
+func (s *Service) GetStatusTimeSeries(ctx context.Context, f filter.Filters) ([]models.StatusTimeSeriesPoint, error) {
 	rows, err := s.repo.GetStatusTimeSeries(ctx, f)
 	if err != nil {
 		return nil, err
@@ -91,9 +97,9 @@ func (s *Service) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]Stat
 	grainSec := grain.Seconds()
 
 	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
-		func(r statusBucketTimeseriesRow) time.Time { return r.BucketAt },
-		func(t time.Time, row statusBucketTimeseriesRow, ok bool) StatusTimeSeriesPoint {
-			pt := StatusTimeSeriesPoint{Timestamp: t}
+		func(r models.StatusBucketRow) time.Time { return r.BucketAt },
+		func(t time.Time, row models.StatusBucketRow, ok bool) models.StatusTimeSeriesPoint {
+			pt := models.StatusTimeSeriesPoint{Timestamp: t}
 			if ok {
 				pt.Status2xx = float64(row.Status2xx) / grainSec
 				pt.Status4xx = float64(row.Status4xx) / grainSec
@@ -104,7 +110,7 @@ func (s *Service) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]Stat
 		}), nil
 }
 
-func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDFilters) ([]LatencyPercentilesPoint, error) {
+func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f filter.Filters) ([]models.LatencyPercentilesPoint, error) {
 	rows, err := s.repo.GetLatencyPercentilesTimeSeries(ctx, f)
 	if err != nil {
 		return nil, err
@@ -112,9 +118,9 @@ func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDFilt
 
 	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
 	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
-		func(r latencyPercentilesTimeseriesRow) time.Time { return r.BucketAt },
-		func(t time.Time, row latencyPercentilesTimeseriesRow, ok bool) LatencyPercentilesPoint {
-			pt := LatencyPercentilesPoint{Timestamp: t}
+		func(r models.LatencyPercentilesRow) time.Time { return r.BucketAt },
+		func(t time.Time, row models.LatencyPercentilesRow, ok bool) models.LatencyPercentilesPoint {
+			pt := models.LatencyPercentilesPoint{Timestamp: t}
 			if ok {
 				pt.P50Ms = httputil.SanitizeFloat(float64(row.P50Ms))
 				pt.P95Ms = httputil.SanitizeFloat(float64(row.P95Ms))
@@ -130,10 +136,10 @@ type serviceBucketTotal struct {
 	ErrorCount   uint64
 }
 
-func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, limit int) (EndpointRateSeries, error) {
+func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Filters, limit int) (models.EndpointRateSeries, error) {
 	rows, err := s.repo.GetREDByEndpointTimeSeries(ctx, f)
 	if err != nil {
-		return EndpointRateSeries{}, err
+		return models.EndpointRateSeries{}, err
 	}
 	if limit <= 0 {
 		limit = defaultEndpointSeriesLimit
@@ -172,9 +178,9 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, 
 	charted := topEndpointRows(rows, limit)
 
 	operations, buckets, series := timebucket.FillGapsKeyed(f.StartMs, f.EndMs, grain, charted,
-		func(r endpointRateRow) string { return r.OperationName },
-		func(r endpointRateRow) time.Time { return r.BucketAt },
-		func(_ time.Time, row endpointRateRow, ok bool) cell {
+		func(r models.EndpointRateRow) string { return r.OperationName },
+		func(r models.EndpointRateRow) time.Time { return r.BucketAt },
+		func(_ time.Time, row models.EndpointRateRow, ok bool) cell {
 			if !ok {
 				return cell{}
 			}
@@ -202,10 +208,10 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, 
 			}
 		})
 
-	out := EndpointRateSeries{
+	out := models.EndpointRateSeries{
 		Timestamps: make([]int64, len(buckets)),
-		Series:     make([]EndpointRateEntry, len(operations)),
-		Totals: EndpointRateTotals{
+		Series:     make([]models.EndpointRateEntry, len(operations)),
+		Totals: models.EndpointRateTotals{
 			RPS:          make([]float64, len(buckets)),
 			RequestCount: make([]uint64, len(buckets)),
 			ErrorRate:    make([]*float64, len(buckets)),
@@ -218,7 +224,7 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, 
 		out.Totals.RPS[i], out.Totals.RequestCount[i], out.Totals.ErrorRate[i] = c.rps, c.count, c.errRate
 	}
 	for i, operation := range operations {
-		entry := EndpointRateEntry{
+		entry := models.EndpointRateEntry{
 			OperationName: operation,
 			RPS:           make([]float64, len(buckets)),
 			RequestCount:  make([]uint64, len(buckets)),
@@ -245,7 +251,7 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters, 
 }
 
 // topEndpointRows keeps the rows of the busiest `limit` named endpoints.
-func topEndpointRows(rows []endpointRateRow, limit int) []endpointRateRow {
+func topEndpointRows(rows []models.EndpointRateRow, limit int) []models.EndpointRateRow {
 	volume := make(map[string]uint64)
 	for _, row := range rows {
 		if row.OperationName != "" {
@@ -270,7 +276,7 @@ func topEndpointRows(rows []endpointRateRow, limit int) []endpointRateRow {
 	for _, name := range names {
 		keep[name] = struct{}{}
 	}
-	out := make([]endpointRateRow, 0, len(rows))
+	out := make([]models.EndpointRateRow, 0, len(rows))
 	for _, row := range rows {
 		if _, ok := keep[row.OperationName]; ok {
 			out = append(out, row)

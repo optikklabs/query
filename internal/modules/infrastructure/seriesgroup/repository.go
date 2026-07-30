@@ -29,30 +29,21 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func (r *Repository) QuerySeries(
 	ctx context.Context, tenantID int64, scopeCol, scopeVal string, startMs, endMs int64, def Def,
 ) ([]Point, error) {
-	valueExpr := "if(sum(m.val_count) = 0, 0, sum(m.val_sum) / sum(m.val_count))"
+	valueExpr := "if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count))"
 	if def.Agg == Rate {
 
-		valueExpr = "sum(if(fps.temporality = 'Delta', m.val_sum, greatest(m.val_max - m.val_min, 0))) / @bucketGrainSec"
+		valueExpr = "sum(if(temporality = 'Delta', val_sum, greatest(val_max - val_min, 0))) / @bucketGrainSec"
 	}
 
 	query := `
-		WITH fps AS (
-		    SELECT fingerprint,
-		           any(temporality) AS temporality,
-		           ` + def.LabelSQL + ` AS label
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
-		    WHERE ` + scopeCol + ` = @scopeVal
-		    GROUP BY fingerprint, label
-		)
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS time_bucket,
-		       fps.label  AS series,
+		       ` + def.LabelSQL + ` AS series,
 		       ` + valueExpr + ` AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
-		INNER JOIN fps ON m.fingerprint = fps.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.metric_name IN @metricNames
-		     AND m.timestamp   BETWEEN @start AND @end
+		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		PREWHERE tenant_id     = @tenantID
+		     AND metric_name IN @metricNames
+		     AND timestamp   BETWEEN @start AND @end
+		     AND ` + scopeCol + ` = @scopeVal
 		GROUP BY time_bucket, series
 		ORDER BY time_bucket ASC, series ASC
 		LIMIT @maxRows`

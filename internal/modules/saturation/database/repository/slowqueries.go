@@ -10,17 +10,15 @@ import (
 )
 
 type PatternRaw struct {
-	QueryHash      string  `ch:"query_hash"`
-	QueryText      string  `ch:"query_text"`
-	DBSystem       string  `ch:"db_system"`
-	CollectionName string  `ch:"collection_name"`
-	Namespace      string  `ch:"namespace"`
-	Server         string  `ch:"server"`
-	P50Ms          float32 `ch:"p50_ms"`
-	P95Ms          float32 `ch:"p95_ms"`
-	P99Ms          float32 `ch:"p99_ms"`
-	CallCount      uint64  `ch:"call_count"`
-	ErrorCount     uint64  `ch:"error_count"`
+	QueryHash      string    `ch:"query_hash"`
+	QueryText      string    `ch:"query_text"`
+	DBSystem       string    `ch:"db_system"`
+	CollectionName string    `ch:"collection_name"`
+	Namespace      string    `ch:"namespace"`
+	Server         string    `ch:"server"`
+	QS             []float32 `ch:"qs"`
+	CallCount      uint64    `ch:"call_count"`
+	ErrorCount     uint64    `ch:"error_count"`
 }
 
 const DefaultPatternLimit = 20
@@ -47,33 +45,20 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs
 func slowQueryPatternsQuery(filterWhere string) string {
 	return `
 		SELECT query_hash,
-		       query_text,
+		       any(db_statement_normalized)                                AS query_text,
 		       db_system,
-		       collection_name,
-		       namespace,
-		       server,
-		       qs[1]      AS p50_ms,
-		       qs[2]      AS p95_ms,
-		       qs[3]      AS p99_ms,
-		       call_count,
-		       error_count
-		FROM (
-		    SELECT query_hash,
-		           any(db_statement_normalized)                              AS query_text,
-		           db_system,
-		           db_name                                                    AS collection_name,
-		           ''                                                         AS namespace,
-		           ''                                                         AS server,
-		           quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
-		           count()                                                   AS call_count,
-		           countIf(is_error)                                         AS error_count
-		    FROM optikk.spans
-		    PREWHERE tenant_id = @tenantID
-		         AND timestamp BETWEEN @start AND @end
-		         AND db_system != ''
-		         AND query_hash != ''` + filterWhere + `
-		    GROUP BY query_hash, db_system, collection_name
-		)
+		       db_name                                                     AS collection_name,
+		       ''                                                          AS namespace,
+		       ''                                                          AS server,
+		       quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
+		       count()                                                     AS call_count,
+		       countIf(is_error)                                           AS error_count
+		FROM optikk.spans
+		PREWHERE tenant_id = @tenantID
+		     AND timestamp BETWEEN @start AND @end
+		     AND db_system != ''
+		     AND query_hash != ''` + filterWhere + `
+		GROUP BY query_hash, db_system, collection_name
 		ORDER BY call_count DESC
 		LIMIT @qLimit`
 }

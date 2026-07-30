@@ -1,18 +1,27 @@
-package redfleet
+package service
 
 import (
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/filter"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/models"
 	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
-func mapFleetServices(rows []redMetricsRow) []ServiceREDMetric {
-	services := make([]ServiceREDMetric, 0, len(rows))
+func windowSeconds(f filter.Filters) float64 {
+	if sec := float64(f.EndMs-f.StartMs) / 1000.0; sec > 0 {
+		return sec
+	}
+	return 1
+}
+
+func mapFleetServices(rows []models.REDMetricsRow) []models.ServiceREDMetric {
+	services := make([]models.ServiceREDMetric, 0, len(rows))
 	for _, row := range rows {
 		if row.IsTotal != 0 {
 			continue
 		}
-		services = append(services, ServiceREDMetric{
+		services = append(services, models.ServiceREDMetric{
 			ServiceName:  row.ServiceName,
 			RequestCount: int64(row.TotalCount),
 			ErrorCount:   int64(row.ErrorCount),
@@ -24,7 +33,7 @@ func mapFleetServices(rows []redMetricsRow) []ServiceREDMetric {
 	return services
 }
 
-func fleetTotalRow(rows []redMetricsRow) *redMetricsRow {
+func fleetTotalRow(rows []models.REDMetricsRow) *models.REDMetricsRow {
 	for i := range rows {
 		if rows[i].IsTotal != 0 {
 			return &rows[i]
@@ -33,19 +42,19 @@ func fleetTotalRow(rows []redMetricsRow) *redMetricsRow {
 	return nil
 }
 
-func computeFleetTotals(total *redMetricsRow, serviceCount int, startMs, endMs int64) FleetTotals {
+func computeFleetTotals(total *models.REDMetricsRow, serviceCount int, startMs, endMs int64) models.FleetTotals {
 	durationSec := float64(endMs-startMs) / 1000.0
 	if durationSec <= 0 {
 		durationSec = 1
 	}
 
 	if total == nil {
-		return FleetTotals{ServiceCount: int64(serviceCount)}
+		return models.FleetTotals{ServiceCount: int64(serviceCount)}
 	}
 	totalCount := int64(total.TotalCount)
 	totalErrors := int64(total.ErrorCount)
 	avgErrorRate := metrics.PercentageInt(totalErrors, totalCount)
-	return FleetTotals{
+	return models.FleetTotals{
 		ServiceCount:   int64(serviceCount),
 		TotalSpanCount: totalCount,
 		TotalErrors:    totalErrors,
@@ -57,16 +66,15 @@ func computeFleetTotals(total *redMetricsRow, serviceCount int, startMs, endMs i
 	}
 }
 
-func toTopDBQuery(row topDBQueryRow, durationSec float64) TopDBQuery {
+func toTopDBQuery(row models.TopDBQueryRow, durationSec float64) models.TopDBQuery {
 	total := int64(row.TotalCount)
 	errs := int64(row.ErrorCount)
-	errRate := metrics.PercentageInt(errs, total)
-	return TopDBQuery{
+	return models.TopDBQuery{
 		OperationName: row.OperationName,
 		ServiceName:   row.ServiceName,
 		DBSystem:      row.DBSystem,
 		RPS:           float64(total) / durationSec,
-		ErrorRate:     errRate,
+		ErrorRate:     metrics.PercentageInt(errs, total),
 		ErrorCount:    errs,
 		TotalCount:    total,
 		P50Ms:         httputil.SanitizeFloat(float64(row.P50Ms)),
@@ -75,11 +83,10 @@ func toTopDBQuery(row topDBQueryRow, durationSec float64) TopDBQuery {
 	}
 }
 
-func toTopEndpoint(row topEndpointRow, durationSec float64) TopEndpoint {
+func toTopEndpoint(row models.TopEndpointRow, durationSec float64) models.TopEndpoint {
 	total := int64(row.TotalCount)
 	errs := int64(row.ErrorCount)
-	errRate := metrics.PercentageInt(errs, total)
-	return TopEndpoint{
+	return models.TopEndpoint{
 		OperationName: row.OperationName,
 		ServiceName:   row.ServiceName,
 		SpanKind:      row.SpanKind,
@@ -87,7 +94,7 @@ func toTopEndpoint(row topEndpointRow, durationSec float64) TopEndpoint {
 		HTTPMethod:    row.HTTPMethod,
 		RPCSystem:     row.RPCSystem,
 		RPS:           float64(total) / durationSec,
-		ErrorRate:     errRate,
+		ErrorRate:     metrics.PercentageInt(errs, total),
 		ErrorCount:    errs,
 		TotalCount:    total,
 		P50Ms:         httputil.SanitizeFloat(float64(row.P50Ms)),
@@ -96,7 +103,7 @@ func toTopEndpoint(row topEndpointRow, durationSec float64) TopEndpoint {
 	}
 }
 
-func extractSaturationAverages(sats []serviceMetricRow) (cpuVal, memVal, diskVal float64) {
+func extractSaturationAverages(sats []models.ServiceMetricRow) (cpuVal, memVal, diskVal float64) {
 	var cpuValues []float64
 
 	for _, row := range sats {
@@ -123,7 +130,7 @@ func extractSaturationAverages(sats []serviceMetricRow) (cpuVal, memVal, diskVal
 	return cpuVal, memVal, diskVal
 }
 
-func extractREDMetrics(redRow *redMetricsRow, durationSec float64) (reqCount, errCount int64, rps, errRate, p50, p95, p99 float64) {
+func extractREDMetrics(redRow *models.REDMetricsRow, durationSec float64) (reqCount, errCount int64, rps, errRate, p50, p95, p99 float64) {
 	if redRow == nil {
 		return
 	}

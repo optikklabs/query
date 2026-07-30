@@ -5,13 +5,27 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"maps"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/optikklabs/query/internal/infra/metrics"
 )
 
+// Tags the query with op so system.query_log rows attribute back to the caller.
+func withOpComment(ctx context.Context, op string) context.Context {
+	base, ok := ctx.Value(budgetKey{}).(clickhouse.Settings)
+	if !ok {
+		return ctx
+	}
+	settings := make(clickhouse.Settings, len(base)+1)
+	maps.Copy(settings, base)
+	settings["log_comment"] = op
+	return clickhouse.Context(ctx, clickhouse.WithSettings(settings))
+}
+
 func SelectCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, query string, args ...any) error {
+	ctx = withOpComment(ctx, op)
 	done := startCHOp(ctx)
 	start := time.Now()
 	err := wrapBudgetExceeded(conn.Select(ctx, dest, query, args...))
@@ -20,6 +34,7 @@ func SelectCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, qu
 }
 
 func QueryRowCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, query string, args ...any) error {
+	ctx = withOpComment(ctx, op)
 	done := startCHOp(ctx)
 	start := time.Now()
 	err := conn.QueryRow(ctx, query, args...).ScanStruct(dest)

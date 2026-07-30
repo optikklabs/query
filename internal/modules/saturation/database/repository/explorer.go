@@ -70,27 +70,22 @@ func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, tenantID,
 	return out, nil
 }
 
+// The per-fingerprint level stays: argMaxMerge is the latest value per series,
+// then summed per system.
 func activeConnectionsQuery(rollupTable string) string {
 	return `
-		WITH series AS (
-		    SELECT fingerprint, ` + seriesDBSystem + ` AS db_system
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = @metricName
-		    WHERE ` + seriesDBSpan + `
-		    GROUP BY fingerprint, db_system
-		), latest AS (
-		    SELECT series.db_system AS db_system,
-		           m.fingerprint    AS fingerprint,
-		           argMaxMerge(m.val_last) AS latest_value
-		    FROM ` + rollupTable + ` AS m
-		    INNER JOIN series ON m.fingerprint = series.fingerprint
-		    PREWHERE m.tenant_id     = @tenantID
-		         AND m.metric_name = @metricName
-		         AND m.timestamp   BETWEEN @start AND @end
-		    GROUP BY db_system, fingerprint
-		)
 		SELECT db_system,
 		       toInt64(round(ifNotFinite(sum(latest_value), 0))) AS active_count
-		FROM latest
+		FROM (
+		    SELECT ` + seriesDBSystem + ` AS db_system,
+		           fingerprint,
+		           argMaxMerge(val_last) AS latest_value
+		    FROM ` + rollupTable + `
+		    PREWHERE tenant_id     = @tenantID
+		         AND metric_name = @metricName
+		         AND timestamp   BETWEEN @start AND @end
+		    WHERE ` + seriesDBSpan + `
+		    GROUP BY db_system, fingerprint
+		)
 		GROUP BY db_system`
 }

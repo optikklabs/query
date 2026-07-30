@@ -1,12 +1,13 @@
-package redfleet
+package repository
 
 import (
 	"context"
-	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/filter"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/models"
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
@@ -14,17 +15,20 @@ type Repository struct {
 	db clickhouse.Conn
 }
 
+func NewRepository(db clickhouse.Conn) *Repository {
+	return &Repository{db: db}
+}
+
 func extractQS(qs []float64) (p50, p95, p99 float32) {
 	a, b, c := spanstats.LatencyP50P95P99.P50P95P99(qs)
 	return float32(a), float32(b), float32(c)
 }
 
-func NewRepository(db clickhouse.Conn) *Repository {
-	return &Repository{db: db}
-}
+// Assumed endpoint ceiling for one service, used only to size the row cap.
+const maxEndpointCardinality = 500
 
-func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]redMetricsRow, error) {
-	where, args := BuildREDClauses(f)
+func (r *Repository) GetFleetREDMetrics(ctx context.Context, f filter.Filters) ([]models.REDMetricsRow, error) {
+	where, args := filter.BuildClauses(f)
 	query := `
 		SELECT service            AS service_name,
 		       grouping(service)  AS is_total,
@@ -35,7 +39,7 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp BETWEEN @start AND @end` + where + `
 		GROUP BY GROUPING SETS ((service_name), ())`
-	var rows []redMetricsRow
+	var rows []models.REDMetricsRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetFleetREDMetrics",
 		&rows, query, args...); err != nil {
 		return nil, err
@@ -46,14 +50,8 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f REDFilters) ([]re
 	return rows, nil
 }
 
-type requestRateRawRow struct {
-	BucketAt     time.Time `ch:"bucket_at"`
-	RequestCount uint64    `ch:"request_total"`
-	ErrorCount   uint64    `ch:"error_total"`
-}
-
-func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f REDFilters) ([]requestRateRawRow, error) {
-	where, args := BuildREDClauses(f)
+func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f filter.Filters) ([]models.RequestRateRawRow, error) {
+	where, args := filter.BuildClauses(f)
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(f.EndMs-f.StartMs) + ` AS bucket_at,
 		       ` + spanstats.Requests + `,
@@ -63,43 +61,13 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f RED
 		     AND timestamp BETWEEN @start AND @end` + where + `
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
-	var rows []requestRateRawRow
+	var rows []models.RequestRateRawRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetRequestAndErrorRateTimeSeries",
 		&rows, query, args...)
 }
 
-type statusBucketTimeseriesRow struct {
-	BucketAt    time.Time `ch:"bucket_at"`
-	Status2xx   uint64    `ch:"s2xx"`
-	Status4xx   uint64    `ch:"s4xx"`
-	Status5xx   uint64    `ch:"s5xx"`
-	StatusOther uint64    `ch:"s_other"`
-}
-
-type latencyPercentilesTimeseriesRow struct {
-	BucketAt time.Time `ch:"bucket_at"`
-	QS       []float64 `ch:"qs"`
-	P50Ms    float32   `ch:"p50_ms"`
-	P95Ms    float32   `ch:"p95_ms"`
-	P99Ms    float32   `ch:"p99_ms"`
-}
-
-type endpointRateRow struct {
-	BucketAt      time.Time `ch:"bucket_at"`
-	OperationName string    `ch:"operation_name"`
-	RequestCount  uint64    `ch:"request_total"`
-	ErrorCount    uint64    `ch:"error_total"`
-	QS            []float64 `ch:"qs"`
-}
-
-// Series count when the caller does not ask for one; handler caps at MaxPageSize.
-const defaultEndpointSeriesLimit = 20
-
-// Assumed endpoint ceiling for one service, used only to size the row cap.
-const maxEndpointCardinality = 500
-
-func (r *Repository) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]statusBucketTimeseriesRow, error) {
-	where, args := BuildREDClauses(f)
+func (r *Repository) GetStatusTimeSeries(ctx context.Context, f filter.Filters) ([]models.StatusBucketRow, error) {
+	where, args := filter.BuildClauses(f)
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	query := `
 		SELECT ` + grainSQL + ` AS bucket_at,
@@ -113,13 +81,13 @@ func (r *Repository) GetStatusTimeSeries(ctx context.Context, f REDFilters) ([]s
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
-	var rows []statusBucketTimeseriesRow
+	var rows []models.StatusBucketRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetStatusTimeSeries",
 		&rows, query, args...)
 }
 
-func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDFilters) ([]latencyPercentilesTimeseriesRow, error) {
-	where, args := BuildREDClauses(f)
+func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f filter.Filters) ([]models.LatencyPercentilesRow, error) {
+	where, args := filter.BuildClauses(f)
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	query := `
 		SELECT ` + grainSQL + ` AS bucket_at,
@@ -129,7 +97,7 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDF
 		     AND timestamp BETWEEN @start AND @end` + where + `
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
-	var rows []latencyPercentilesTimeseriesRow
+	var rows []models.LatencyPercentilesRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetLatencyPercentilesTimeSeries",
 		&rows, query, args...); err != nil {
 		return nil, err
@@ -140,16 +108,16 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f REDF
 	return rows, nil
 }
 
-func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f REDFilters) ([]endpointRateRow, error) {
+func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Filters) ([]models.EndpointRateRow, error) {
 	query, args := buildREDByEndpointQuery(f)
-	var rows []endpointRateRow
+	var rows []models.EndpointRateRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetREDByEndpointTimeSeries",
 		&rows, query, args...)
 }
 
 // Split out so the generated SQL can be exercised without a database.
-func buildREDByEndpointQuery(f REDFilters) (string, []any) {
-	where, args := BuildREDClauses(f)
+func buildREDByEndpointQuery(f filter.Filters) (string, []any) {
+	where, args := filter.BuildClauses(f)
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	rollup := timebucket.SpanStatsRollup(f.EndMs - f.StartMs)
 	// Every endpoint, every bucket; the service layer ranks and totals.
@@ -175,14 +143,8 @@ func buildREDByEndpointQuery(f REDFilters) (string, []any) {
 	return query, args
 }
 
-type serviceRequestRateRawRow struct {
-	BucketAt     time.Time `ch:"bucket_at"`
-	ServiceName  string    `ch:"service_name"`
-	RequestCount uint64    `ch:"request_total"`
-}
-
-func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters) ([]serviceRequestRateRawRow, error) {
-	where, args := BuildREDClauses(f)
+func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f filter.Filters) ([]models.ServiceRequestRateRow, error) {
+	where, args := filter.BuildClauses(f)
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(f.EndMs-f.StartMs) + ` AS bucket_at,
 		       service            AS service_name,
@@ -193,7 +155,7 @@ func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f REDFilters)
 		GROUP BY bucket_at, service_name
 		ORDER BY bucket_at ASC
 		LIMIT 10000`
-	var rows []serviceRequestRateRawRow
+	var rows []models.ServiceRequestRateRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetRequestRateTimeSeries",
 		&rows, query, args...)
 }

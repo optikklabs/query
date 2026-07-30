@@ -32,26 +32,19 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, tenantID, startMs
 	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 
 	query := `
-		WITH fps AS (
-		    SELECT fingerprint, host
-		    FROM optikk.metrics_series AS mr
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
-		    WHERE mr.host != ''
-		      AND NOT (metric_name = @cpuUtil AND ` + seriesdefs.AttrState + ` != 'idle')
-		      AND NOT (metric_name = @memUtil AND ` + seriesdefs.AttrState + ` != 'used')
-		    GROUP BY fingerprint, host
-		)
 		SELECT
-		    r.host        AS host,
-		    m.metric_name AS metric_name,
-		    if(m.metric_name = @cpuUtil,
-		       1 - sum(m.val_sum) / sum(m.val_count),
-		       sum(m.val_sum) / sum(m.val_count)) AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
-		INNER JOIN fps AS r ON m.fingerprint = r.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.metric_name IN @metricNames
-		     AND m.timestamp   BETWEEN @start AND @end
+		    host,
+		    metric_name,
+		    if(metric_name = @cpuUtil,
+		       1 - sum(val_sum) / sum(val_count),
+		       sum(val_sum) / sum(val_count)) AS value
+		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		PREWHERE tenant_id     = @tenantID
+		     AND metric_name IN @metricNames
+		     AND timestamp   BETWEEN @start AND @end
+		     AND host != ''
+		WHERE NOT (metric_name = @cpuUtil AND ` + seriesdefs.AttrState + ` != 'idle')
+		  AND NOT (metric_name = @memUtil AND ` + seriesdefs.AttrState + ` != 'used')
 		GROUP BY host, metric_name
 		ORDER BY host, metric_name
 		LIMIT 500`

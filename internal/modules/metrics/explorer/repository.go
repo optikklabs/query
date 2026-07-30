@@ -179,16 +179,16 @@ func (r *Repository) ResolveSeriesKinds(
 func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([]timeseriesPointDTO, error) {
 	bucketSec := filter.BucketDurationSeconds(f.StartMs, f.EndMs, f.Step)
 	f.StartMs = timebucket.FloorMsToBucket(f.StartMs, bucketSec)
-	fromTable, cte, joins, selectCols, groupByCols, filterArgs := filter.BuildSelection(f)
+	fromTable, where, selectCols, groupByCols, filterArgs := filter.BuildSelection(f)
 
 	var query string
 	switch {
 	case f.Histogram && isPercentile(f.Aggregation):
-		query = histogramQuantileQuery(cte, fromTable, joins, selectCols, groupByCols)
+		query = histogramQuantileQuery(fromTable, where, selectCols, groupByCols)
 	case f.Cumulative:
-		query = cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols)
+		query = cumulativeRollupQuery(fromTable, where, selectCols, groupByCols)
 	default:
-		query = deltaRollupQuery(cte, fromTable, joins, selectCols, groupByCols)
+		query = deltaRollupQuery(fromTable, where, selectCols, groupByCols)
 	}
 
 	args := append(metricArgs(f), filterArgs...)
@@ -199,8 +199,8 @@ func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([
 	return rows, nil
 }
 
-func deltaRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
-	return cte + `
+func deltaRollupQuery(fromTable, where, selectCols, groupByCols string) string {
+	return `
 		SELECT ` + selectCols + `,
 		       sum(val_sum)    AS val_sum,
 		       sum(val_count)  AS val_count,
@@ -208,39 +208,39 @@ func deltaRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) str
 		       max(val_max)    AS val_max,
 		       sum(hist_sum)   AS hist_sum,
 		       sum(hist_count) AS hist_count
-		FROM ` + fromTable + ` AS m` + joins + `
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.metric_name = @metricName
-		     AND m.timestamp   BETWEEN @start AND @end
+		FROM ` + fromTable + `
+		PREWHERE tenant_id     = @tenantID
+		     AND metric_name = @metricName
+		     AND timestamp   BETWEEN @start AND @end` + where + `
 		GROUP BY ` + groupByCols + `
 		ORDER BY bucket_at ASC
 		LIMIT 10000
 		SETTINGS max_execution_time = 30`
 }
 
-func histogramQuantileQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
-	return cte + `
+func histogramQuantileQuery(fromTable, where, selectCols, groupByCols string) string {
+	return `
 		SELECT ` + selectCols + `,
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(latency_state) AS quantiles
-		FROM ` + fromTable + ` AS m` + joins + `
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.metric_name = @metricName
-		     AND m.timestamp   BETWEEN @start AND @end
+		FROM ` + fromTable + `
+		PREWHERE tenant_id     = @tenantID
+		     AND metric_name = @metricName
+		     AND timestamp   BETWEEN @start AND @end` + where + `
 		GROUP BY ` + groupByCols + `
 		ORDER BY bucket_at ASC
 		LIMIT 10000
 		SETTINGS max_execution_time = 30`
 }
 
-func cumulativeRollupQuery(cte, fromTable, joins, selectCols, groupByCols string) string {
-	perSeries := cte + `
-		SELECT m.fingerprint AS fingerprint, ` + selectCols + `,
-		       argMaxMerge(m.val_last) AS cval
-		FROM ` + fromTable + ` AS m` + joins + `
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.metric_name = @metricName
-		     AND m.timestamp   BETWEEN @start AND @end
-		GROUP BY m.fingerprint, ` + groupByCols + ``
+func cumulativeRollupQuery(fromTable, where, selectCols, groupByCols string) string {
+	perSeries := `
+		SELECT fingerprint, ` + selectCols + `,
+		       argMaxMerge(val_last) AS cval
+		FROM ` + fromTable + `
+		PREWHERE tenant_id     = @tenantID
+		     AND metric_name = @metricName
+		     AND timestamp   BETWEEN @start AND @end` + where + `
+		GROUP BY fingerprint, ` + groupByCols + ``
 
 	increase := `
 		SELECT ` + groupByCols + `,

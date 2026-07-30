@@ -21,28 +21,26 @@ func NewRepository(db clickhouse.Conn) *Repository {
 const edgeWhere = `kind_string IN ('CLIENT', 'PRODUCER')
 		  AND peer_name != '' AND peer_name != service`
 
-func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int64, focusService string) ([]nodeAggRow, error) {
-	rollup := timebucket.SpanStatsRollup(endMs - startMs)
+const maxTopologyNodes = 1000
+
+// Nodes are returned fleet-wide; filterNeighborhood trims to the focus service.
+func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int64) ([]nodeAggRow, error) {
 	query := `
-		WITH neighbor_services AS (
-		    SELECT if(peer_name = @focusService, service, peer_name) AS service
-		    FROM ` + rollup + `
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
-		    WHERE ` + edgeWhere + `
-		      AND (service = @focusService OR peer_name = @focusService)
-		)
 		SELECT service AS service_name,
 		       ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `,
 		       ` + spanstats.LatencyP50P95P99.SQL() + `
-		FROM ` + rollup + `
+		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
 		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
 		  AND service != ''
-		  AND (@focusService = '' OR service = @focusService OR service IN (SELECT service FROM neighbor_services))
-		GROUP BY service_name`
+		GROUP BY service_name
+		ORDER BY ` + spanstats.RequestTotal + ` DESC
+		LIMIT @nodeLimit`
+	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
+		clickhouse.Named("nodeLimit", uint64(maxTopologyNodes)))
 	var rows []nodeAggRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetNodes",
-		&rows, query, topologyArgs(tenantID, startMs, endMs, focusService)...); err != nil {
+		&rows, query, args...); err != nil {
 		return nil, err
 	}
 	for i := range rows {

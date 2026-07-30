@@ -44,21 +44,48 @@ func (r *Repository) QueryClients(ctx context.Context, tenantID, startMs, endMs 
 	return clients, nil
 }
 
+// Edge cap after topic scoping; the scan limit is wider so scoping has slack.
+const (
+	maxEdges    = 1000
+	maxEdgeScan = 10000
+)
+
+// Topic scoping is applied in Go: keep every edge on a topic that services touch.
 func (r *Repository) QueryEdges(ctx context.Context, tenantID, startMs, endMs int64, services []string) ([]EdgeRow, error) {
 	query := edgesQuery(timebucket.SpanStatsRollup(endMs - startMs))
-	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs), clickhouse.Named("services", services))
+	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
+		clickhouse.Named("scanLimit", uint64(maxEdgeScan)))
 	var rows []EdgeRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryEdges", &rows, query, args...)
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryEdges", &rows, query, args...); err != nil {
+		return nil, err
+	}
+	return scopeEdgesToTopics(rows, services), nil
+}
+
+func scopeEdgesToTopics(rows []EdgeRow, services []string) []EdgeRow {
+	inScope := make(map[string]struct{}, len(services))
+	for _, s := range services {
+		inScope[s] = struct{}{}
+	}
+	topics := make(map[string]struct{})
+	for _, row := range rows {
+		if _, ok := inScope[row.Service]; ok {
+			topics[row.Topic] = struct{}{}
+		}
+	}
+	out := make([]EdgeRow, 0, len(rows))
+	for _, row := range rows {
+		if _, ok := topics[row.Topic]; ok {
+			if out = append(out, row); len(out) == maxEdges {
+				break
+			}
+		}
+	}
+	return out
 }
 
 func edgesQuery(rollupTable string) string {
 	return `
-		WITH scoped_topics AS (
-		    SELECT DISTINCT messaging_destination AS topic
-		    FROM ` + rollupTable + `
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service IN @services
-		    WHERE messaging_system = 'kafka' AND messaging_destination != ''
-		)
 		SELECT service                                           AS service,
 		       messaging_destination                             AS topic,
 		       messaging_consumer_group                          AS consumer_group,
@@ -70,7 +97,8 @@ func edgesQuery(rollupTable string) string {
 		     AND timestamp BETWEEN @start AND @end
 		     AND service != ''
 		WHERE messaging_system = 'kafka'
-		  AND messaging_destination IN (SELECT topic FROM scoped_topics)
+		  AND messaging_destination != ''
 		GROUP BY service, topic, consumer_group
-		LIMIT 1000`
+		ORDER BY call_count DESC
+		LIMIT @scanLimit`
 }

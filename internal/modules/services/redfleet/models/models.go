@@ -1,6 +1,10 @@
-package redfleet
+package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/optikklabs/query/internal/shared/contracts"
+)
 
 type FleetTotals struct {
 	ServiceCount   int64   `json:"serviceCount"`
@@ -106,17 +110,6 @@ type TopDBQuery struct {
 	P99Ms         float64 `json:"p99Ms"`
 }
 
-type redMetricsRow struct {
-	ServiceName string    `ch:"service_name"`
-	IsTotal     uint64    `ch:"is_total"`
-	TotalCount  uint64    `ch:"request_total"`
-	ErrorCount  uint64    `ch:"error_total"`
-	QS          []float64 `ch:"qs"`
-	P50Ms       float32   `ch:"p50_ms"`
-	P95Ms       float32   `ch:"p95_ms"`
-	P99Ms       float32   `ch:"p99_ms"`
-}
-
 type OperationBaseline struct {
 	ServiceName   string  `json:"serviceName"`
 	OperationName string  `json:"operationName"`
@@ -157,7 +150,37 @@ type RequestRateEntry struct {
 	RPS         []float64 `json:"rps"`
 }
 
-type operationBaselineRow struct {
+type TopEndpointsCursor struct {
+	TotalCount    uint64 `json:"cnt"`
+	OperationName string `json:"op"`
+}
+
+func (c TopEndpointsCursor) IsZero() bool {
+	return c.TotalCount == 0 && c.OperationName == ""
+}
+
+type PaginatedEndpoints struct {
+	Results  []TopEndpoint      `json:"results"`
+	PageInfo contracts.PageInfo `json:"pageInfo"`
+}
+
+type PaginatedDBQueries struct {
+	Results  []TopDBQuery       `json:"results"`
+	PageInfo contracts.PageInfo `json:"pageInfo"`
+}
+
+type REDMetricsRow struct {
+	ServiceName string    `ch:"service_name"`
+	IsTotal     uint64    `ch:"is_total"`
+	TotalCount  uint64    `ch:"request_total"`
+	ErrorCount  uint64    `ch:"error_total"`
+	QS          []float64 `ch:"qs"`
+	P50Ms       float32   `ch:"p50_ms"`
+	P95Ms       float32   `ch:"p95_ms"`
+	P99Ms       float32   `ch:"p99_ms"`
+}
+
+type OperationBaselineRow struct {
 	SpanCount uint64    `ch:"request_total"`
 	QS        []float64 `ch:"qs"`
 	P50Ms     float32   `ch:"p50_ms"`
@@ -165,13 +188,76 @@ type operationBaselineRow struct {
 	P99Ms     float32   `ch:"p99_ms"`
 }
 
-type serviceMetricRow struct {
+type ServiceMetricRow struct {
 	Service    string  `ch:"service"`
 	MetricName string  `ch:"metric_name"`
 	Value      float64 `ch:"value"`
 }
 
-type saturationTimeSeriesRawRow struct {
+type SaturationPointRow struct {
 	BucketAt time.Time `ch:"bucket_at"`
 	Value    float64   `ch:"value"`
+}
+
+type RequestRateRawRow struct {
+	BucketAt     time.Time `ch:"bucket_at"`
+	RequestCount uint64    `ch:"request_total"`
+	ErrorCount   uint64    `ch:"error_total"`
+}
+
+type StatusBucketRow struct {
+	BucketAt    time.Time `ch:"bucket_at"`
+	Status2xx   uint64    `ch:"s2xx"`
+	Status4xx   uint64    `ch:"s4xx"`
+	Status5xx   uint64    `ch:"s5xx"`
+	StatusOther uint64    `ch:"s_other"`
+}
+
+type LatencyPercentilesRow struct {
+	BucketAt time.Time `ch:"bucket_at"`
+	QS       []float64 `ch:"qs"`
+	P50Ms    float32   `ch:"p50_ms"`
+	P95Ms    float32   `ch:"p95_ms"`
+	P99Ms    float32   `ch:"p99_ms"`
+}
+
+type EndpointRateRow struct {
+	BucketAt      time.Time `ch:"bucket_at"`
+	OperationName string    `ch:"operation_name"`
+	RequestCount  uint64    `ch:"request_total"`
+	ErrorCount    uint64    `ch:"error_total"`
+	QS            []float64 `ch:"qs"`
+}
+
+type ServiceRequestRateRow struct {
+	BucketAt     time.Time `ch:"bucket_at"`
+	ServiceName  string    `ch:"service_name"`
+	RequestCount uint64    `ch:"request_total"`
+}
+
+type TopDBQueryRow struct {
+	ServiceName   string    `ch:"service_any"`
+	OperationName string    `ch:"operation_name"`
+	DBSystem      string    `ch:"db_system_any"`
+	TotalCount    uint64    `ch:"request_total"`
+	ErrorCount    uint64    `ch:"error_total"`
+	QS            []float64 `ch:"qs"`
+	P50Ms         float32   `ch:"p50_ms"`
+	P95Ms         float32   `ch:"p95_ms"`
+	P99Ms         float32   `ch:"p99_ms"`
+}
+
+type TopEndpointRow struct {
+	ServiceName   string    `ch:"service_any"`
+	OperationName string    `ch:"operation_name"`
+	SpanKind      string    `ch:"kind_string_any"`
+	HTTPRoute     string    `ch:"http_route_any"`
+	HTTPMethod    string    `ch:"http_method_any"`
+	RPCSystem     string    `ch:"rpc_system_any"`
+	TotalCount    uint64    `ch:"request_total"`
+	ErrorCount    uint64    `ch:"error_total"`
+	QS            []float64 `ch:"qs"`
+	P50Ms         float32   `ch:"p50_ms"`
+	P95Ms         float32   `ch:"p95_ms"`
+	P99Ms         float32   `ch:"p99_ms"`
 }

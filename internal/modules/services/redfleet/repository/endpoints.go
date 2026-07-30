@@ -1,4 +1,4 @@
-package redfleet
+package repository
 
 import (
 	"context"
@@ -6,47 +6,32 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/filter"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/models"
 	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-type topDBQueryRow struct {
-	ServiceName   string    `ch:"service_any"`
-	OperationName string    `ch:"operation_name"`
-	DBSystem      string    `ch:"db_system_any"`
-	TotalCount    uint64    `ch:"request_total"`
-	ErrorCount    uint64    `ch:"error_total"`
-	QS            []float64 `ch:"qs"`
-	P50Ms         float32   `ch:"p50_ms"`
-	P95Ms         float32   `ch:"p95_ms"`
-	P99Ms         float32   `ch:"p99_ms"`
+func cursorFilter(cursor models.TopEndpointsCursor) string {
+	if cursor.IsZero() {
+		return ""
+	}
+	return "AND (" + spanstats.RequestTotal + " < @cursorCount OR (" +
+		spanstats.RequestTotal + " = @cursorCount AND operation_name > @cursorOp))"
 }
 
-type topEndpointRow struct {
-	ServiceName   string    `ch:"service_any"`
-	OperationName string    `ch:"operation_name"`
-	SpanKind      string    `ch:"kind_string_any"`
-	HTTPRoute     string    `ch:"http_route_any"`
-	HTTPMethod    string    `ch:"http_method_any"`
-	RPCSystem     string    `ch:"rpc_system_any"`
-	TotalCount    uint64    `ch:"request_total"`
-	ErrorCount    uint64    `ch:"error_total"`
-	QS            []float64 `ch:"qs"`
-	P50Ms         float32   `ch:"p50_ms"`
-	P95Ms         float32   `ch:"p95_ms"`
-	P99Ms         float32   `ch:"p99_ms"`
+func cursorArgs(args []any, limit int, cursor models.TopEndpointsCursor) []any {
+	return append(args,
+		clickhouse.Named("limit", limit),
+		clickhouse.Named("cursorCount", cursor.TotalCount),
+		clickhouse.Named("cursorOp", cursor.OperationName),
+	)
 }
 
 func (r *Repository) GetTopEndpointsCombined(
-	ctx context.Context, f REDFilters, limit int, cursor TopEndpointsCursor,
-) ([]topEndpointRow, error) {
-	where, args := BuildREDClauses(f)
-	var paginationFilter string
-	if !cursor.IsZero() {
-		paginationFilter = "AND (" + spanstats.RequestTotal + " < @cursorCount OR (" +
-			spanstats.RequestTotal + " = @cursorCount AND operation_name > @cursorOp))"
-	}
-
+	ctx context.Context, f filter.Filters, limit int, cursor models.TopEndpointsCursor,
+) ([]models.TopEndpointRow, error) {
+	where, args := filter.BuildClauses(f)
 	query := `
 		SELECT any(service)     AS service_any,
 		       span_name        AS operation_name,
@@ -62,17 +47,12 @@ func (r *Repository) GetTopEndpointsCombined(
 		     AND timestamp BETWEEN @start AND @end
 		     AND span_name != ''` + where + `
 		GROUP BY operation_name
-		HAVING operation_name != '' ` + paginationFilter + `
+		HAVING operation_name != '' ` + cursorFilter(cursor) + `
 		ORDER BY ` + spanstats.RequestTotal + ` DESC, operation_name ASC
 		LIMIT @limit`
-	args = append(args,
-		clickhouse.Named("limit", limit),
-		clickhouse.Named("cursorCount", cursor.TotalCount),
-		clickhouse.Named("cursorOp", cursor.OperationName),
-	)
-	var rows []topEndpointRow
+	var rows []models.TopEndpointRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetTopEndpointsCombined",
-		&rows, query, args...); err != nil {
+		&rows, query, cursorArgs(args, limit, cursor)...); err != nil {
 		return nil, err
 	}
 	for i := range rows {
@@ -82,16 +62,10 @@ func (r *Repository) GetTopEndpointsCombined(
 }
 
 func (r *Repository) GetTopDBQueriesCombined(
-	ctx context.Context, f REDFilters, limit int, cursor TopEndpointsCursor,
-) ([]topDBQueryRow, error) {
+	ctx context.Context, f filter.Filters, limit int, cursor models.TopEndpointsCursor,
+) ([]models.TopDBQueryRow, error) {
 	// Database calls are CLIENT spans, so this one skips the inbound filter.
-	where, args := buildServiceClauses(f)
-	var paginationFilter string
-	if !cursor.IsZero() {
-		paginationFilter = "AND (" + spanstats.RequestTotal + " < @cursorCount OR (" +
-			spanstats.RequestTotal + " = @cursorCount AND operation_name > @cursorOp))"
-	}
-
+	where, args := filter.BuildServiceClauses(f)
 	query := `
 		SELECT any(service)   AS service_any,
 		       span_name      AS operation_name,
@@ -105,17 +79,12 @@ func (r *Repository) GetTopDBQueriesCombined(
 		     AND ` + spanstats.DBSpanPred + `
 		     AND span_name != ''` + where + `
 		GROUP BY operation_name
-		HAVING operation_name != '' ` + paginationFilter + `
+		HAVING operation_name != '' ` + cursorFilter(cursor) + `
 		ORDER BY ` + spanstats.RequestTotal + ` DESC, operation_name ASC
 		LIMIT @limit`
-	args = append(args,
-		clickhouse.Named("limit", limit),
-		clickhouse.Named("cursorCount", cursor.TotalCount),
-		clickhouse.Named("cursorOp", cursor.OperationName),
-	)
-	var rows []topDBQueryRow
+	var rows []models.TopDBQueryRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetTopDBQueriesCombined",
-		&rows, query, args...); err != nil {
+		&rows, query, cursorArgs(args, limit, cursor)...); err != nil {
 		return nil, err
 	}
 	for i := range rows {
@@ -124,7 +93,9 @@ func (r *Repository) GetTopDBQueriesCombined(
 	return rows, nil
 }
 
-func (r *Repository) GetOperationBaseline(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName, operationName string) (operationBaselineRow, error) {
+func (r *Repository) GetOperationBaseline(
+	ctx context.Context, tenantID int64, startMs, endMs int64, serviceName, operationName string,
+) (models.OperationBaselineRow, error) {
 	query := `
 		SELECT ` + spanstats.Requests + `,
 		       ` + spanstats.LatencyP50P95P99.SQL() + `
@@ -137,13 +108,13 @@ func (r *Repository) GetOperationBaseline(ctx context.Context, tenantID int64, s
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("operationName", operationName),
 	)
-	var rows []operationBaselineRow
+	var rows []models.OperationBaselineRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetOperationBaseline",
 		&rows, query, args...); err != nil {
-		return operationBaselineRow{}, err
+		return models.OperationBaselineRow{}, err
 	}
 	if len(rows) == 0 {
-		return operationBaselineRow{}, nil
+		return models.OperationBaselineRow{}, nil
 	}
 	row := rows[0]
 	row.P50Ms, row.P95Ms, row.P99Ms = extractQS(row.QS)

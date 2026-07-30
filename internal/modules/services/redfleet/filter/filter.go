@@ -1,4 +1,4 @@
-package redfleet
+package filter
 
 import (
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -6,20 +6,20 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-type REDFilters struct {
+type Filters struct {
 	TenantID int64
 	StartMs  int64
 	EndMs    int64
 	Services []string
 }
 
-func BuildREDClauses(f REDFilters) (where string, args []any) {
-	where, args = buildServiceClauses(f)
+func BuildClauses(f Filters) (where string, args []any) {
+	where, args = BuildServiceClauses(f)
 	return " AND " + spanstats.InboundPred + where, args
 }
 
 // Outbound queries scope by service without the inbound filter.
-func buildServiceClauses(f REDFilters) (where string, args []any) {
+func BuildServiceClauses(f Filters) (where string, args []any) {
 	args = chargs.RollupRangeArgs(f.TenantID, f.StartMs, f.EndMs)
 	if len(f.Services) == 1 {
 		where = " AND service = @serviceName"
@@ -31,7 +31,7 @@ func buildServiceClauses(f REDFilters) (where string, args []any) {
 	return where, args
 }
 
-func (f REDFilters) SingleService() string {
+func (f Filters) SingleService() string {
 	if len(f.Services) == 1 {
 		return f.Services[0]
 	}

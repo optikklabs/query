@@ -3,27 +3,24 @@ package redfleet
 import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/optikklabs/query/internal/modules/services/redfleet/repository"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/service"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) *redFleetModule {
-	module := &redFleetModule{}
-	module.configure(nativeQuerier)
-	return module
-}
-
-type redFleetModule struct {
-	handler *REDFleetHandler
-}
-
-func (m *redFleetModule) Name() string { return "redFleet" }
-
-func (m *redFleetModule) configure(nativeQuerier clickhouse.Conn) {
-	m.handler = &REDFleetHandler{
-		Service: NewService(NewRepository(nativeQuerier)),
+func NewModule(nativeQuerier clickhouse.Conn) *module {
+	return &module{
+		handler: &Handler{Service: service.NewService(repository.NewRepository(nativeQuerier))},
 	}
 }
 
-func (m *redFleetModule) RegisterRoutes(group chi.Router) {
+type module struct {
+	handler *Handler
+}
+
+func (m *module) Name() string { return "redFleet" }
+
+func (m *module) RegisterRoutes(group chi.Router) {
 	h := m.handler
 	group.Get("/spans/red/fleet-overview", h.GetFleetOverview)
 

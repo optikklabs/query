@@ -42,11 +42,11 @@ func DisplayGrainSQL(windowMs int64) string {
 func RollupTableForGrain(grainSec int64) string {
 	switch {
 	case grainSec < 300:
-		return "optikk.metrics_1m"
+		return "optikk.metrics_1m_v2"
 	case grainSec < 3600:
-		return "optikk.metrics_5m"
+		return "optikk.metrics_5m_v2"
 	default:
-		return "optikk.metrics_1h"
+		return "optikk.metrics_1h_v2"
 	}
 }
 

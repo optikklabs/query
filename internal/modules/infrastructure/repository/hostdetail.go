@@ -86,26 +86,16 @@ var kpiMetricNames = []string{
 
 func (r *Repository) QueryKPIs(ctx context.Context, tenantID int64, host string, startMs, endMs int64) ([]KPIRow, error) {
 	query := `
-		WITH fps AS (
-		    SELECT fingerprint,
-		           metric_name        AS mname,
-		           ` + seriesdefs.AttrState + `      AS mstate,
-		           ` + seriesdefs.AttrMountpoint + ` AS mmount
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
-		    WHERE host = @host
-		    GROUP BY fingerprint, mname, mstate, mmount
-		)
 		SELECT
-		    fps.mname  AS metric_name,
-		    fps.mstate AS state,
-		    fps.mmount AS mount,
-		    if(sum(m.val_count) = 0, 0, sum(m.val_sum) / sum(m.val_count)) AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + ` AS m
-		INNER JOIN fps ON m.fingerprint = fps.fingerprint
-		PREWHERE m.tenant_id     = @tenantID
-		     AND m.metric_name IN @metricNames
-		     AND m.timestamp   BETWEEN @start AND @end
+		    metric_name,
+		    ` + seriesdefs.AttrState + `      AS state,
+		    ` + seriesdefs.AttrMountpoint + ` AS mount,
+		    if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count)) AS value
+		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		PREWHERE tenant_id     = @tenantID
+		     AND metric_name IN @metricNames
+		     AND timestamp   BETWEEN @start AND @end
+		     AND host = @host
 		GROUP BY metric_name, state, mount`
 	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), kpiMetricNames)
 	args = append(args, clickhouse.Named("host", host))

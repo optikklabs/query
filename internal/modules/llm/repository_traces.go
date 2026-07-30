@@ -2,12 +2,14 @@ package llm
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/shared/chargs"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, error) {
@@ -72,9 +74,12 @@ func (r *Repository) queryTraceRootPage(ctx context.Context, tenantID int64, req
 		FROM optikk.spans AS s
 		PREWHERE s.tenant_id = @tenantID AND s.timestamp BETWEEN @start AND @end AND s.is_root = 1
 		WHERE s.trace_id IN (
-		    SELECT DISTINCT trace_id
+		    SELECT trace_id
 		    FROM optikk.spans
 		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND is_gen_ai` + genAIServiceFilter + `
+		    GROUP BY trace_id
+		    ORDER BY max(timestamp) DESC
+		    LIMIT ` + strconv.Itoa(filterutil.MaxMatchedTraces) + `
 		)` + where + `
 		ORDER BY s.timestamp DESC, s.span_id DESC
 		LIMIT @pgLimit`

@@ -22,22 +22,24 @@ const entityExpr = `if(pod != '', pod,
                         if(k8s_node != '', k8s_node,
                            if(host != '', host, service)))`
 
+// cloud.*/k8s.node.name are resource attributes; reading them from the
+// datapoint attributes map returned nothing.
 const invSeries = `
 	WITH cloud_series AS (
-	    SELECT fingerprint,
-	           attributes['cloud.provider']                                            AS provider,
-	           attributes['cloud.account.id']                                          AS account,
-	           if(attributes['cloud.region'] != '',
-	              attributes['cloud.region'], attributes['aws.region'])           AS region,
-	           attributes['cloud.platform']                                            AS platform,
-	           attributes['k8s.node.name']                                             AS k8s_node,
+	    SELECT resource_attributes['cloud.provider']   AS provider,
+	           resource_attributes['cloud.account.id'] AS account,
+	           if(resource_attributes['cloud.region'] != '',
+	              resource_attributes['cloud.region'],
+	              resource_attributes['aws.region'])   AS region,
+	           resource_attributes['cloud.platform']   AS platform,
+	           resource_attributes['k8s.node.name']    AS k8s_node,
 	           pod, host, service,
-	           ` + entityExpr + `                                                           AS entity,
-	           max(timestamp)                                                               AS last_seen_ts
+	           ` + entityExpr + ` AS entity,
+	           max(timestamp)     AS last_seen_ts
 	    FROM optikk.metrics_series
 	    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
-	    WHERE attributes['cloud.provider'] != ''
-	    GROUP BY fingerprint, provider, account, region, platform, k8s_node, pod, host, service
+	    WHERE resource_attributes['cloud.provider'] != ''
+	    GROUP BY provider, account, region, platform, k8s_node, pod, host, service
 	)`
 
 type Repository struct {
@@ -103,23 +105,15 @@ func (r *Repository) QueryProviderHealth(ctx context.Context, tenantID, startMs,
 func (r *Repository) QueryRestarts(ctx context.Context, tenantID, startMs, endMs int64) ([]RestartRow, error) {
 	rollupTable := timebucket.MetricsRollup(endMs - startMs)
 	query := `
-		WITH series AS (
-		    SELECT fingerprint,
-		           attributes['cloud.provider'] AS provider,
-		           pod
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name = '` + restartMetric + `'
-		    WHERE attributes['cloud.provider'] != ''
-		    GROUP BY fingerprint, provider, pod
-		)
 		SELECT provider, toUInt64(sum(latest)) AS restarts
 		FROM (
-		    SELECT s.provider                     AS provider,
-		           s.pod                          AS pod,
-		           argMax(m.val_max, m.timestamp) AS latest
-		    FROM ` + rollupTable + ` AS m
-		    INNER JOIN series AS s ON m.fingerprint = s.fingerprint
-		    PREWHERE m.tenant_id = @tenantID AND m.timestamp BETWEEN @start AND @end AND m.metric_name = '` + restartMetric + `'
+		    SELECT cloud_provider              AS provider,
+		           pod,
+		           argMax(val_max, timestamp)  AS latest
+		    FROM ` + rollupTable + `
+		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		         AND metric_name = '` + restartMetric + `'
+		    WHERE cloud_provider != ''
 		    GROUP BY provider, pod
 		)
 		GROUP BY provider`

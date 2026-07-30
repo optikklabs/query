@@ -39,12 +39,6 @@ func (r *Repository) QueryMemoryUtilizationAgg(ctx context.Context, tenantID int
 
 func (r *Repository) QueryMemoryUtilizationForInstance(ctx context.Context, tenantID int64, startMs, endMs int64, host, pod, serviceName string) ([]MemoryMetricNameRow, error) {
 	query := `
-		WITH fps AS (
-		    SELECT fingerprint
-		    FROM optikk.metrics_series
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND metric_name IN @metricNames
-		    WHERE host = @host AND service = @serviceName AND pod = @pod
-		)
 		SELECT
 		    metric_name AS metric_name,
 		    if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count))  AS value
@@ -52,7 +46,8 @@ func (r *Repository) QueryMemoryUtilizationForInstance(ctx context.Context, tena
 		PREWHERE tenant_id        = @tenantID
 		     AND metric_name   IN @metricNames
 		     AND timestamp   BETWEEN @start AND @end
-		WHERE fingerprint IN fps
+		     AND host = @host AND service = @serviceName
+		WHERE pod = @pod
 		GROUP BY metric_name`
 	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), memMetricNames)
 	args = append(args,

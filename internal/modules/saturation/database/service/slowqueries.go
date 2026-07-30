@@ -14,7 +14,6 @@ func (s *Service) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs, e
 	}
 	out := make([]models.SlowQueryPattern, len(rows))
 	for i, r := range rows {
-		p50, p95, p99 := float64(r.P50Ms), float64(r.P95Ms), float64(r.P99Ms)
 		out[i] = models.SlowQueryPattern{
 			QueryHash:      r.QueryHash,
 			QueryText:      r.QueryText,
@@ -22,11 +21,12 @@ func (s *Service) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs, e
 			CollectionName: r.CollectionName,
 			Namespace:      r.Namespace,
 			Server:         r.Server,
-			P50Ms:          &p50,
-			P95Ms:          &p95,
-			P99Ms:          &p99,
 			CallCount:      int64(r.CallCount),
 			ErrorCount:     int64(r.ErrorCount),
+		}
+		if len(r.QS) >= 3 {
+			p50, p95, p99 := float64(r.QS[0]), float64(r.QS[1]), float64(r.QS[2])
+			out[i].P50Ms, out[i].P95Ms, out[i].P99Ms = &p50, &p95, &p99
 		}
 	}
 	return out, nil

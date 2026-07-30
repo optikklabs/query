@@ -1,4 +1,4 @@
-package redfleet
+package repository
 
 import (
 	"fmt"
@@ -10,13 +10,14 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/modules/services/redfleet/filter"
 )
 
 // Renders the per-endpoint RED query with its named parameters inlined, so the
 // exact statement the server sends can be pasted into clickhouse-client.
 //
 //	SQL_TENANT=1 SQL_SERVICE=frontend-proxy SQL_HOURS=24 \
-//	    go test ./internal/modules/services/redfleet -run RenderREDByEndpointSQL -v
+//	    go test ./internal/modules/services/redfleet/repository -run RenderREDByEndpointSQL -v
 func TestRenderREDByEndpointSQL(t *testing.T) {
 	tenant := envInt64(t, "SQL_TENANT", 1)
 	service := envStr("SQL_SERVICE", "frontend-proxy")
@@ -25,7 +26,7 @@ func TestRenderREDByEndpointSQL(t *testing.T) {
 	end := time.Now().UnixMilli()
 	start := end - hours*int64(time.Hour/time.Millisecond)
 
-	f := REDFilters{TenantID: tenant, StartMs: start, EndMs: end}
+	f := filter.Filters{TenantID: tenant, StartMs: start, EndMs: end}
 	if service != "" {
 		f.Services = []string{service}
 	}
@@ -40,7 +41,7 @@ func TestREDByEndpointRowCapCoversEveryBucket(t *testing.T) {
 	for _, hours := range []int64{1, 6, 24, 24 * 7, 24 * 90, 24 * 400} {
 		end := time.Now().UnixMilli()
 		start := end - hours*int64(time.Hour/time.Millisecond)
-		f := REDFilters{TenantID: 1, StartMs: start, EndMs: end, Services: []string{"svc"}}
+		f := filter.Filters{TenantID: 1, StartMs: start, EndMs: end, Services: []string{"svc"}}
 
 		_, args := buildREDByEndpointQuery(f)
 		rowLimit, ok := namedArg(args, "rowLimit")

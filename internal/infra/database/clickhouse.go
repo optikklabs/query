@@ -86,14 +86,24 @@ func InitQueryBudgets(budgets config.QueryBudgetsConfig) {
 	explorerSettings = budgetSettings(budgets.Explorer)
 }
 
+// WithSettings replaces rather than merges; SelectCH needs the base map.
+type budgetKey struct{}
+
+func budgetCtx(ctx context.Context, settings clickhouse.Settings) context.Context {
+	return context.WithValue(
+		clickhouse.Context(ctx, clickhouse.WithSettings(settings)),
+		budgetKey{}, settings,
+	)
+}
+
 func DashboardCtx(ctx context.Context) context.Context {
-	return clickhouse.Context(ctx, clickhouse.WithSettings(dashboardSettings))
+	return budgetCtx(ctx, dashboardSettings)
 }
 
 func OverviewCtx(ctx context.Context) context.Context {
-	return clickhouse.Context(ctx, clickhouse.WithSettings(overviewSettings))
+	return budgetCtx(ctx, overviewSettings)
 }
 
 func ExplorerCtx(ctx context.Context) context.Context {
-	return clickhouse.Context(ctx, clickhouse.WithSettings(explorerSettings))
+	return budgetCtx(ctx, explorerSettings)
 }

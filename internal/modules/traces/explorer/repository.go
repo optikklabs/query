@@ -2,12 +2,14 @@ package explorer
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 	"github.com/optikklabs/query/internal/shared/spanfilter"
 )
 
@@ -25,8 +27,10 @@ func buildScanClauses(c spanfilter.Clauses) (queryPrefix, prewhere, where string
 	where = `WHERE 1=1` + c.Root
 
 	if c.HasSpanMatch() {
-		inner := `SELECT DISTINCT trace_id FROM optikk.spans PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end` + c.Resource
-		ctes = append(ctes, `matched AS (`+inner+` WHERE 1=1`+c.Span+`)`)
+		inner := `SELECT trace_id FROM optikk.spans PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end` + c.Resource
+		ctes = append(ctes, `matched AS (`+inner+` WHERE 1=1`+c.Span+
+			` GROUP BY trace_id ORDER BY max(timestamp) DESC LIMIT `+
+			strconv.Itoa(filterutil.MaxMatchedTraces)+`)`)
 		where += ` AND trace_id IN matched`
 	}
 

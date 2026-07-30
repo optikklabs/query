@@ -27,7 +27,7 @@ func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int6
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		rows, err := s.repo.GetNodes(gctx, tenantID, startMs, endMs, focusService)
+		rows, err := s.repo.GetNodes(gctx, tenantID, startMs, endMs)
 		if err != nil {
 			return err
 		}
