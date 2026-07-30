@@ -201,7 +201,7 @@ func (m monitorWithState) toRows() (models.MonitorRow, models.MonitorStateRow, e
 	return m.MonitorRow, state, nil
 }
 
-func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]models.MonitorRow, []models.MonitorStateRow, error) {
+func monitorListWhere(tenantID int64, q ListQuery) ([]string, []any) {
 	where := []string{"m.tenant_id = ?"}
 	args := []any{tenantID}
 	if q.Type != "" {
@@ -213,8 +213,12 @@ func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]m
 		args = append(args, q.Priority)
 	}
 	if q.Status != "" {
-		where = append(where, "s.status = ?")
-		args = append(args, q.Status)
+		if q.Status == "no_data" {
+			where = append(where, "(s.status IS NULL OR s.status = 'no_data')")
+		} else {
+			where = append(where, "s.status = ?")
+			args = append(args, q.Status)
+		}
 	}
 	if q.Muted != nil {
 		if *q.Muted {
@@ -227,6 +231,11 @@ func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]m
 		where = append(where, "m.name LIKE ?")
 		args = append(args, "%"+q.Search+"%")
 	}
+	return where, args
+}
+
+func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]models.MonitorRow, []models.MonitorStateRow, error) {
+	where, args := monitorListWhere(tenantID, q)
 	limit := q.Limit
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -242,7 +251,7 @@ func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]m
 		  FROM optikk.monitors m
 		  LEFT JOIN optikk.monitor_state s ON s.monitor_id = m.id
 		 WHERE %s
-		 ORDER BY m.created_at DESC
+		 ORDER BY m.created_at DESC, m.id DESC
 		 LIMIT ? OFFSET ?
 	`, selectMonitorCols, selectStateCols, strings.Join(where, " AND "))
 
@@ -258,4 +267,20 @@ func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]m
 		states = append(states, state)
 	}
 	return rows, states, nil
+}
+
+func (r *Repository) Count(ctx context.Context, tenantID int64, q ListQuery) (StatusCounts, error) {
+	where, args := monitorListWhere(tenantID, q)
+	query := fmt.Sprintf(`
+		SELECT COUNT(*) AS total,
+		       COALESCE(SUM(s.status = 'alert'), 0) AS alert,
+		       COALESCE(SUM(s.status = 'warn'), 0) AS warn,
+		       COALESCE(SUM(s.status = 'ok'), 0) AS ok,
+		       COALESCE(SUM(s.status IS NULL OR s.status = 'no_data'), 0) AS no_data,
+		       COALESCE(SUM(m.muted_until IS NOT NULL AND m.muted_until > NOW()), 0) AS muted
+		  FROM optikk.monitors m
+		  LEFT JOIN optikk.monitor_state s ON s.monitor_id = m.id
+		 WHERE %s`, strings.Join(where, " AND "))
+	var counts StatusCounts
+	return counts, dbutil.GetSQL(ctx, r.db, "monitors.Count", &counts, query, args...)
 }

@@ -23,7 +23,7 @@ func (r *Repository) GetByID(ctx context.Context, tenantID int64, logID string, 
 		SELECT ` + models.LogColumns + `
 		FROM optikk.logs
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND ts_bucket BETWEEN @startBucket AND @endBucket
 		     AND log_id = @logID
 		LIMIT 1`

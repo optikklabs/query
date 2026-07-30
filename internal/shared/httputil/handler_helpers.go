@@ -29,6 +29,10 @@ func ValidateSuggestRequest(w http.ResponseWriter, r *http.Request, req *filteru
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required", nil)
 		return false
 	}
+	if req.EndTime-req.StartTime > filterutil.RawRetentionMs {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "time range must not exceed retained 15 days", nil)
+		return false
+	}
 	req.Field = strings.TrimSpace(req.Field)
 	if req.Field == "" {
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "field is required", nil)

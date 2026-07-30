@@ -32,8 +32,7 @@ func (r *TraceSpanRow) DurationMs() float64 {
 	return float64(r.DurationNano) / 1_000_000.0
 }
 
-// ListTraceSpanRows scans a trace's spans once. LIMIT 10000 preserves the
-// largest cap of the queries it replaces (the service-map scan).
+// ListTraceSpanRows scans a trace's spans once.
 func (r *Repository) ListTraceSpanRows(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]TraceSpanRow, error) {
 	const query = `
 		SELECT span_id,
@@ -51,10 +50,9 @@ func (r *Repository) ListTraceSpanRows(ctx context.Context, tenantID int64, trac
 		       timestamp
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND trace_id = @traceID
-		ORDER BY timestamp ASC
-		LIMIT 10000`
+		ORDER BY timestamp ASC, span_id ASC`
 	var rows []TraceSpanRow
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.ListTraceSpanRows", &rows, query,
 		boundedTraceArgs(tenantID, traceID, startMs, endMs)...,

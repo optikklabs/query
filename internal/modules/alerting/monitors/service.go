@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	alertquery "github.com/optikklabs/query/internal/modules/alerting/shared/query"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
@@ -74,24 +75,13 @@ func (s *Service) List(ctx context.Context, tenantID int64, q ListQuery) (Monito
 	if err != nil {
 		return MonitorListResponse{}, err
 	}
+	counts, err := s.repo.Count(ctx, tenantID, q)
+	if err != nil {
+		return MonitorListResponse{}, err
+	}
 	items := make([]MonitorResponse, 0, len(rows))
-	counts := StatusCounts{Total: len(rows)}
 	for i, row := range rows {
-		state := states[i]
-		items = append(items, toResponse(row, state))
-		switch state.Status {
-		case "alert":
-			counts.Alert++
-		case "warn":
-			counts.Warn++
-		case "ok":
-			counts.OK++
-		case "no_data", "":
-			counts.NoData++
-		}
-		if row.MutedUntil.Valid {
-			counts.Muted++
-		}
+		items = append(items, toResponse(row, states[i]))
 	}
 	return MonitorListResponse{Items: items, Counts: counts}, nil
 }
@@ -113,6 +103,9 @@ func buildInsertArgs(tenantID, userID int64, req CreateMonitorRequest) (insertAr
 	}
 	if err := validateQueryForType(req.Type, req.Query); err != nil {
 		return insertArgs{}, err
+	}
+	if _, _, err := alertquery.CompileScope(req.Type, req.Scope, nil); err != nil {
+		return insertArgs{}, errorcode.ValidationError{Msg: err.Error()}
 	}
 	if err := validateConditions(req.Conditions); err != nil {
 		return insertArgs{}, err
@@ -163,12 +156,22 @@ func validateQueryForType(t string, q models.MonitorQuery) error {
 		if q.Metric == nil || strings.TrimSpace(q.Metric.Metric) == "" {
 			return errorcode.ValidationError{Msg: "metric query requires query.metric.metric"}
 		}
+		switch q.Metric.Aggregation {
+		case "avg", "sum", "min", "max", "p50", "p95", "p99":
+		default:
+			return errorcode.ValidationError{Msg: "unsupported metric aggregation"}
+		}
+		if q.Metric.Aggregation == "sum" && q.Metric.WindowSec > models.MaxExactMetricSumWindowSec {
+			return errorcode.ValidationError{Msg: "metric sum window exceeds exact raw retention"}
+		}
 	case "apm":
 		if q.APM == nil || strings.TrimSpace(q.APM.Service) == "" {
 			return errorcode.ValidationError{Msg: "apm query requires query.apm.service"}
 		}
-		if q.APM.Track == "" {
-			return errorcode.ValidationError{Msg: "apm query requires query.apm.track"}
+		switch q.APM.Track {
+		case "errors", "hits", "latency":
+		default:
+			return errorcode.ValidationError{Msg: "unsupported apm track"}
 		}
 	case "log":
 		if q.Log == nil || strings.TrimSpace(q.Log.Query) == "" {

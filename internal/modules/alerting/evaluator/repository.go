@@ -45,7 +45,7 @@ func (r *Repository) ClaimDue(ctx context.Context, claimID string, now time.Time
 		 WHERE next_evaluation_at <= ?
 		   AND (claimed_until IS NULL OR claimed_until < ?)
 		   AND monitor_id IN (SELECT id FROM optikk.monitors WHERE active = 1)
-		 ORDER BY next_evaluation_at
+		 ORDER BY next_evaluation_at, monitor_id
 		 LIMIT ?
 	`
 	res, err := dbutil.ExecSQL(ctx, r.db, "evaluator.ClaimDue", claim,
@@ -77,7 +77,7 @@ func (r *Repository) ClaimDue(ctx context.Context, claimID string, now time.Time
 		FROM optikk.monitors m
 		JOIN optikk.monitor_state s ON s.monitor_id = m.id
 		WHERE s.claimed_by = ?
-		ORDER BY s.next_evaluation_at
+		ORDER BY s.next_evaluation_at, s.monitor_id
 	`
 	var raw []dueRow
 	if err := dbutil.SelectSQL(ctx, r.db, "evaluator.LoadClaimed", &raw, query, claimID); err != nil {

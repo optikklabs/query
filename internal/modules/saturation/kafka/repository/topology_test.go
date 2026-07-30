@@ -31,13 +31,3 @@ func TestScopeEdgesToTopicsNoMatch(t *testing.T) {
 		t.Errorf("want no edges, got %+v", got)
 	}
 }
-
-func TestScopeEdgesToTopicsCaps(t *testing.T) {
-	rows := make([]EdgeRow, maxEdges+10)
-	for i := range rows {
-		rows[i] = edge("orders", "payments")
-	}
-	if got := scopeEdgesToTopics(rows, []string{"orders"}); len(got) != maxEdges {
-		t.Errorf("want cap at %d, got %d", maxEdges, len(got))
-	}
-}

@@ -21,31 +21,31 @@ func TestBuildAttrClauseGolden(t *testing.T) {
 		{
 			name: "empty op defaults to eq",
 			af:   AttrFilter{Key: "http.method", Value: "GET"},
-			sql:  ` AND attributes[@akey_0] = @aval_0`,
+			sql:  ` AND (mapContains(attributes, @akey_0) AND attributes[@akey_0] = @aval_0)`,
 			args: []any{key, clickhouse.Named("aval_0", "GET")},
 		},
 		{
 			name: "eq",
 			af:   AttrFilter{Key: "http.method", Op: "eq", Value: "GET"},
-			sql:  ` AND attributes[@akey_0] = @aval_0`,
+			sql:  ` AND (mapContains(attributes, @akey_0) AND attributes[@akey_0] = @aval_0)`,
 			args: []any{key, clickhouse.Named("aval_0", "GET")},
 		},
 		{
 			name: "neq requires attribute to exist",
 			af:   AttrFilter{Key: "http.method", Op: "neq", Value: "GET"},
-			sql:  ` AND (NOT (attributes[@akey_0] IS NULL) AND attributes[@akey_0] != @aval_0)`,
+			sql:  ` AND (mapContains(attributes, @akey_0) AND attributes[@akey_0] != @aval_0)`,
 			args: []any{key, clickhouse.Named("aval_0", "GET")},
 		},
 		{
 			name: "contains",
 			af:   AttrFilter{Key: "http.method", Op: "contains", Value: "GE"},
-			sql:  ` AND positionCaseInsensitive(attributes[@akey_0], @aval_0) > 0`,
+			sql:  ` AND positionCaseInsensitive(if(mapContains(attributes, @akey_0), attributes[@akey_0], NULL), @aval_0) > 0`,
 			args: []any{key, clickhouse.Named("aval_0", "GE")},
 		},
 		{
 			name: "regex",
 			af:   AttrFilter{Key: "http.method", Op: "regex", Value: "^GE.*"},
-			sql:  ` AND match(attributes[@akey_0], @aval_0)`,
+			sql:  ` AND match(if(mapContains(attributes, @akey_0), attributes[@akey_0], NULL), @aval_0)`,
 			args: []any{key, clickhouse.Named("aval_0", "^GE.*")},
 		},
 		{
@@ -75,13 +75,13 @@ func TestBuildAttrClauseGolden(t *testing.T) {
 		{
 			name: "exists",
 			af:   AttrFilter{Key: "http.method", Op: "exists"},
-			sql:  ` AND NOT (attributes[@akey_0] IS NULL)`,
+			sql:  ` AND mapContains(attributes, @akey_0)`,
 			args: []any{key},
 		},
 		{
 			name: "not_exists",
 			af:   AttrFilter{Key: "http.method", Op: "not_exists"},
-			sql:  ` AND attributes[@akey_0] IS NULL`,
+			sql:  ` AND NOT mapContains(attributes, @akey_0)`,
 			args: []any{key},
 		},
 		{
@@ -94,7 +94,7 @@ func TestBuildAttrClauseGolden(t *testing.T) {
 			name: "bind names follow the filter index",
 			af:   AttrFilter{Key: "http.method", Op: "eq", Value: "GET"},
 			i:    3,
-			sql:  ` AND attributes[@akey_3] = @aval_3`,
+			sql:  ` AND (mapContains(attributes, @akey_3) AND attributes[@akey_3] = @aval_3)`,
 			args: []any{clickhouse.Named("akey_3", "http.method"), clickhouse.Named("aval_3", "GET")},
 		},
 	}

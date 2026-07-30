@@ -29,7 +29,6 @@ type HostSpansRow struct {
 }
 
 func (r *Repository) QueryHostUtilization(ctx context.Context, tenantID, startMs, endMs int64) ([]HostMetricRow, error) {
-	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 
 	query := `
 		SELECT
@@ -38,10 +37,10 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, tenantID, startMs
 		    if(metric_name = @cpuUtil,
 		       1 - sum(val_sum) / sum(val_count),
 		       sum(val_sum) / sum(val_count)) AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name IN @metricNames
-		     AND timestamp   BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND host != ''
 		WHERE NOT (metric_name = @cpuUtil AND ` + seriesdefs.AttrState + ` != 'idle')
 		  AND NOT (metric_name = @memUtil AND ` + seriesdefs.AttrState + ` != 'used')
@@ -67,19 +66,19 @@ func (r *Repository) QueryHostSpans(
 	query := `
 		SELECT
 		    if(host != '', host, @unknownHost)                       AS host,
-		    any(environment)                                         AS zone,
+		    argMax(environment, (timestamp, environment))            AS zone,
 		    ` + spanstats.Requests + `,
 		    ` + spanstats.Errors + `,
 		    toFloat32(quantileTDigestMerge(0.99)(latency_state))     AS p99_ms,
 		    max(timestamp)                                           AS last_seen
-		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND service = @serviceName
 		GROUP BY host
-		ORDER BY ` + spanstats.RequestTotal + ` DESC
+		ORDER BY ` + spanstats.RequestTotal + ` DESC, host ASC
 		LIMIT 200`
-	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("unknownHost", unknownHost),
 	)

@@ -45,7 +45,7 @@ func (r *Repository) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs
 func slowQueryPatternsQuery(filterWhere string) string {
 	return `
 		SELECT query_hash,
-		       any(db_statement_normalized)                                AS query_text,
+		       argMax(db_statement_normalized, (timestamp, span_id))       AS query_text,
 		       db_system,
 		       db_name                                                     AS collection_name,
 		       ''                                                          AS namespace,
@@ -55,10 +55,10 @@ func slowQueryPatternsQuery(filterWhere string) string {
 		       countIf(is_error)                                           AS error_count
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND db_system != ''
 		     AND query_hash != ''` + filterWhere + `
 		GROUP BY query_hash, db_system, collection_name
-		ORDER BY call_count DESC
+		ORDER BY call_count DESC, query_hash ASC, db_system ASC, collection_name ASC
 		LIMIT @qLimit`
 }

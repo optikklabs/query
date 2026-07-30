@@ -25,7 +25,7 @@ func (r *Repository) Events(ctx context.Context, monitorID, tenantID int64, limi
 		  FROM optikk.monitor_events e
 		  JOIN optikk.monitors m ON m.id = e.monitor_id
 		 WHERE e.monitor_id = ? AND e.tenant_id = ?
-		 ORDER BY e.started_at DESC
+		 ORDER BY e.started_at DESC, e.id DESC
 		 LIMIT ?
 	`
 	var rows []EventRow
@@ -44,7 +44,7 @@ func (r *Repository) Activity(ctx context.Context, tenantID int64, since time.Ti
 		  FROM optikk.monitor_events e
 		  JOIN optikk.monitors m ON m.id = e.monitor_id
 		 WHERE e.tenant_id = ? AND e.started_at >= ?
-		 ORDER BY e.started_at DESC
+		 ORDER BY e.started_at DESC, e.id DESC
 		 LIMIT ?
 	`
 	var rows []EventRow
@@ -59,7 +59,7 @@ func (r *Repository) StatusTimelineRows(ctx context.Context, monitorID, tenantID
 		       ended_at, resolved_by, peak_value, note
 		  FROM optikk.monitor_events
 		 WHERE monitor_id = ? AND tenant_id = ? AND started_at >= ?
-		 ORDER BY started_at ASC
+		 ORDER BY started_at ASC, id ASC
 	`
 	err := dbutil.SelectSQL(ctx, r.db, "monitors.StatusTimelineRows", &rows, q, monitorID, tenantID, since)
 	return rows, err

@@ -21,15 +21,15 @@ func (r *Repository) TopUsers(ctx context.Context, tenantID, startMs, endMs int6
 	query := `
 		SELECT llm_user_id AS user_id,
 		       arrayElement(topK(1)(service), 1) AS top_service,
-		       uniqCombined64(trace_id) AS traces,
+		       uniqExact(trace_id) AS traces,
 		       sum(gen_ai_input_tokens + gen_ai_output_tokens) AS tokens,
 		       sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost,
 		       max(timestamp) AS last_seen
 		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE is_gen_ai AND llm_user_id != ''
 		GROUP BY user_id
-		ORDER BY cost DESC
+		ORDER BY cost DESC, user_id ASC
 		LIMIT @limit`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	args = append(args, clickhouse.Named("limit", uint64(limit)))
@@ -39,11 +39,11 @@ func (r *Repository) TopUsers(ctx context.Context, tenantID, startMs, endMs int6
 
 func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int64) (overviewRow, error) {
 	query := `
-		SELECT uniqCombined64(llm_user_id) AS active_users,
-		       uniqCombined64(trace_id)     AS traces,
+		SELECT uniqExact(llm_user_id) AS active_users,
+		       uniqExact(trace_id)     AS traces,
 		       sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
 		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE is_gen_ai AND llm_user_id != ''`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var row overviewRow
@@ -54,7 +54,7 @@ func (r *Repository) MeanScoreByUser(ctx context.Context, tenantID, startMs, end
 	query := `
 		SELECT user_id, avg(value) AS mean
 		FROM optikk.llm_scores
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE user_id IN @userIDs AND data_type = 'numeric'
 		GROUP BY user_id`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
@@ -69,7 +69,7 @@ func (r *Repository) LowScoreUserCount(ctx context.Context, tenantID, startMs, e
 		FROM (
 		    SELECT avg(value) AS mean
 		    FROM optikk.llm_scores
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		    PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		    WHERE user_id != '' AND data_type = 'numeric'
 		    GROUP BY user_id
 		)`

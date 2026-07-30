@@ -45,12 +45,3 @@ make run                                  # API/health :19090, metrics :19091
 Configuration is read from `config.yml` (env overrides via the `OPTIKK_` prefix).
 `make run` supplies a local-only JWT secret when the environment does not set
 `OPTIKK_AUTH_JWT_SECRET`; production must always provide its own secret.
-
-## Production benchmark
-
-The 2026-07-26 Optikk query benchmark measured 31 backend APIs across four
-lookback windows and five concurrency levels:
-
-- [Interactive HTML results](docs/benchmark-2026-07-26.html)
-- [Markdown results](docs/benchmark-2026-07-26.md)
-- [Latency diagnosis and remediation plan](docs/query-latency-remediation-2026-07-26.md)

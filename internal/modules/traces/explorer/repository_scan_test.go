@@ -1,16 +1,13 @@
 package explorer
 
 import (
-	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/optikklabs/query/internal/shared/filterutil"
 	"github.com/optikklabs/query/internal/shared/spanfilter"
 )
 
-// CH inlines the CTE, so an unbounded trace_id set is held in memory whole.
-func TestSpanMatchCTEIsBounded(t *testing.T) {
+func TestSpanMatchCTEIsExact(t *testing.T) {
 	c := spanfilter.BuildClauses(spanfilter.Filters{
 		TenantID:   1,
 		StartMs:    0,
@@ -23,11 +20,8 @@ func TestSpanMatchCTEIsBounded(t *testing.T) {
 	}
 
 	prefix, _, where := buildScanClauses(c)
-	if !strings.Contains(prefix, "LIMIT "+strconv.Itoa(filterutil.MaxMatchedTraces)) {
-		t.Errorf("span-match CTE is unbounded:\n%s", prefix)
-	}
-	if !strings.Contains(prefix, "ORDER BY max(timestamp) DESC") {
-		t.Errorf("bounded CTE must keep the most recent traces:\n%s", prefix)
+	if strings.Contains(prefix, "LIMIT") {
+		t.Errorf("span-match CTE silently truncates aggregate inputs:\n%s", prefix)
 	}
 	if !strings.Contains(where, "trace_id IN matched") {
 		t.Errorf("outer query lost the match filter: %s", where)

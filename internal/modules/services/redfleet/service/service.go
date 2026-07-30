@@ -43,7 +43,7 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f filter
 		return nil, err
 	}
 
-	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
+	grain := timebucket.DisplayGrainForRange(f.StartMs, f.EndMs)
 	grainSec := grain.Seconds()
 	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
 		func(r models.RequestRateRawRow) time.Time { return r.BucketAt },
@@ -65,7 +65,7 @@ func (s *Service) GetRequestRateTimeSeries(ctx context.Context, f filter.Filters
 		return models.RequestRateSeries{}, err
 	}
 
-	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
+	grain := timebucket.DisplayGrainForRange(f.StartMs, f.EndMs)
 	grainSec := grain.Seconds()
 
 	services, buckets, series := timebucket.FillGapsKeyed(f.StartMs, f.EndMs, grain, rows,
@@ -93,7 +93,7 @@ func (s *Service) GetStatusTimeSeries(ctx context.Context, f filter.Filters) ([]
 	if err != nil {
 		return nil, err
 	}
-	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
+	grain := timebucket.DisplayGrainForRange(f.StartMs, f.EndMs)
 	grainSec := grain.Seconds()
 
 	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
@@ -116,7 +116,7 @@ func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f filter.
 		return nil, err
 	}
 
-	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
+	grain := timebucket.DisplayGrainForRange(f.StartMs, f.EndMs)
 	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
 		func(r models.LatencyPercentilesRow) time.Time { return r.BucketAt },
 		func(t time.Time, row models.LatencyPercentilesRow, ok bool) models.LatencyPercentilesPoint {
@@ -145,7 +145,7 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Filte
 		limit = defaultEndpointSeriesLimit
 	}
 
-	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
+	grain := timebucket.DisplayGrainForRange(f.StartMs, f.EndMs)
 	grainSec := float64(grain.Seconds())
 	if grainSec <= 0 {
 		grainSec = 60

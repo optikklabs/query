@@ -18,7 +18,10 @@ func (s *Service) GetTopEndpointsCombined(
 	}
 
 	rows, pageInfo := cursor.Paginate(rows, limit, func(r models.TopEndpointRow) string {
-		return cursor.Encode(models.TopEndpointsCursor{TotalCount: r.TotalCount, OperationName: r.OperationName})
+		return cursor.Encode(models.TopEndpointsCursor{
+			TotalCount: r.TotalCount, ServiceName: r.ServiceName, OperationName: r.OperationName,
+			SpanKind: r.SpanKind, HTTPRoute: r.HTTPRoute, HTTPMethod: r.HTTPMethod, RPCSystem: r.RPCSystem,
+		})
 	})
 
 	durationSec := windowSeconds(f)
@@ -39,7 +42,10 @@ func (s *Service) GetTopDBQueries(
 	}
 
 	rows, pageInfo := cursor.Paginate(rows, limit, func(r models.TopDBQueryRow) string {
-		return cursor.Encode(models.TopEndpointsCursor{TotalCount: r.TotalCount, OperationName: r.OperationName})
+		return cursor.Encode(models.TopEndpointsCursor{
+			TotalCount: r.TotalCount, ServiceName: r.ServiceName,
+			OperationName: r.OperationName, DBSystem: r.DBSystem,
+		})
 	})
 
 	durationSec := windowSeconds(f)

@@ -14,7 +14,8 @@ func FormatDisplayBucket(t time.Time) string {
 }
 
 func DisplayGrain(windowMs int64) time.Duration {
-	return displayGrain(windowMs)
+	sec := GrainSecondsFor(displayGrainLadder, windowMs/1000)
+	return time.Duration(sec) * time.Second
 }
 
 const MaxBucketPoints int64 = 300
@@ -30,13 +31,8 @@ func GrainSecondsFor(ladder []int64, windowSeconds int64) int64 {
 	return ladder[len(ladder)-1]
 }
 
-func displayGrain(windowMs int64) time.Duration {
-	sec := GrainSecondsFor(displayGrainLadder, windowMs/1000)
-	return time.Duration(sec) * time.Second
-}
-
 func DisplayGrainSQL(windowMs int64) string {
-	return GrainSQL(int64(displayGrain(windowMs).Seconds()))
+	return GrainSQL(int64(DisplayGrain(windowMs).Seconds()))
 }
 
 func RollupTableForGrain(grainSec int64) string {
@@ -57,42 +53,62 @@ func GrainSQL(grainSec int64) string {
 	return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL %d SECOND)", grainSec)
 }
 
-func UseHourRollup(windowMs int64) bool {
-	return displayGrain(windowMs) >= time.Hour
-}
-
-func FloorMsToHour(ms int64) int64 {
-	return ms - ms%(3600*1000)
-}
-
 func FloorMsToBucket(ms, bucketSec int64) int64 {
 	return ms - ms%(bucketSec*1000)
 }
 
-func SnapRangeForRollup(startMs, endMs int64) (int64, int64) {
-	if UseHourRollup(endMs - startMs) {
-		return FloorMsToHour(startMs), endMs
+func AvailableRollupGrain(startMs, grainSec int64) int64 {
+	age := time.Since(time.UnixMilli(startMs))
+	if grainSec < 300 && age > 7*24*time.Hour {
+		grainSec = 300
 	}
-	return startMs, endMs
+	if grainSec < 3600 && age > 14*24*time.Hour {
+		grainSec = 3600
+	}
+	return grainSec
 }
 
-func MetricsRollup(windowMs int64) string {
-	return RollupTableForGrain(int64(displayGrain(windowMs).Seconds()))
+func RollupTableForRange(startMs, grainSec int64) string {
+	return RollupTableForGrain(AvailableRollupGrain(startMs, grainSec))
 }
 
-func SpanStatsRollup(windowMs int64) string {
-	switch grainSec := int64(displayGrain(windowMs).Seconds()); {
-	case grainSec < 300:
+func MetricsRollup(startMs, endMs int64) string {
+	return RollupTableForRange(startMs, int64(DisplayGrain(endMs-startMs).Seconds()))
+}
+
+func RollupGrainSeconds(windowMs int64) int64 {
+	switch grain := int64(DisplayGrain(windowMs).Seconds()); {
+	case grain < 300:
+		return 60
+	case grain < 3600:
+		return 300
+	default:
+		return 3600
+	}
+}
+
+func SpanStatsRollup(startMs, endMs int64) string {
+	switch AvailableRollupGrain(startMs, int64(DisplayGrain(endMs-startMs).Seconds())) {
+	case 60:
 		return "optikk.span_stats_1m"
-	case grainSec < 3600:
+	case 300:
 		return "optikk.span_stats_5m"
 	default:
 		return "optikk.span_stats_1h"
 	}
 }
 
+func DisplayGrainForRange(startMs, endMs int64) time.Duration {
+	grain := int64(DisplayGrain(endMs - startMs).Seconds())
+	return time.Duration(AvailableRollupGrain(startMs, grain)) * time.Second
+}
+
+func DisplayGrainSQLForRange(startMs, endMs int64) string {
+	return GrainSQL(int64(DisplayGrainForRange(startMs, endMs).Seconds()))
+}
+
 func WithBucketGrainSec(args []any, startMs, endMs int64) []any {
-	sec := int64(displayGrain(endMs - startMs).Seconds())
+	sec := int64(DisplayGrainForRange(startMs, endMs).Seconds())
 	if sec <= 0 {
 		sec = 60
 	}
@@ -101,9 +117,8 @@ func WithBucketGrainSec(args []any, startMs, endMs int64) []any {
 
 func DenseBuckets(startMs, endMs int64, grain time.Duration) []time.Time {
 	start := time.UnixMilli(startMs).UTC().Truncate(grain)
-	end := time.UnixMilli(endMs).UTC().Truncate(grain)
 	var out []time.Time
-	for b := start; !b.After(end); b = b.Add(grain) {
+	for b := start; b.Before(time.UnixMilli(endMs)); b = b.Add(grain) {
 		out = append(out, b)
 	}
 	return out
@@ -114,13 +129,13 @@ func BuildDenseTimestamps(startMs, endMs int64, bucketSec int64) []int64 {
 	bucketMs := bucketSec * 1000
 
 	var ts []int64
-	for t := flooredStart; t <= endMs; t += bucketMs {
+	for t := flooredStart; t < endMs; t += bucketMs {
 		ts = append(ts, t)
 	}
 	return ts
 }
 
-// FillGaps builds one point per grain bucket in [startMs, endMs].
+// FillGaps builds one point per grain bucket in [startMs, endMs).
 // Rows are keyed by their truncated bucket via at; point receives the
 // zero row and ok=false for buckets that have no matching row.
 func FillGaps[R, P any](
@@ -142,7 +157,7 @@ func FillGaps[R, P any](
 }
 
 // FillGapsKeyed groups rows by key and builds one dense series per key over
-// the grain buckets in [startMs, endMs]. Keys keep first-seen order; point
+// the grain buckets in [startMs, endMs). Keys keep first-seen order; point
 // receives the zero row and ok=false for buckets with no matching row.
 func FillGapsKeyed[R, P any](
 	startMs, endMs int64, grain time.Duration, rows []R,

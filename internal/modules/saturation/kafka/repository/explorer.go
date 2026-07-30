@@ -11,7 +11,6 @@ import (
 )
 
 func buildFilterArgs(tenantID, startMs, endMs int64, metricNames []string, filterCol, filterVal string) (string, []any) {
-	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	args := filter.WithMetricNames(filter.MetricArgs(tenantID, startMs, endMs), metricNames)
 	var extraWhere string
 	if filterVal != "" {
@@ -45,10 +44,10 @@ func (r *Repository) QueryTopicThroughput(ctx context.Context, tenantID, startMs
 		           ifNotFinite(val_sum / val_count, 0), NULL))    AS records_per_sec,
 		    max(if(metric_name = 'kafka.consumer.records_consumed_total',
 		           ifNotFinite(val_sum / val_count, 0), NULL))    AS records_total
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id   = @tenantID
 		     AND metric_name IN @metricNames
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		WHERE ` + filter.AttrTopic + ` != '' ` + extraWhere + `
 		GROUP BY topic
 		ORDER BY bytes_per_sec DESC, topic ASC
@@ -67,10 +66,10 @@ func (r *Repository) QueryGroupPartitions(ctx context.Context, tenantID, startMs
 		    toFloat64(countDistinctIf(fingerprint, metric_name = 'kafka.consumer_group.lag')) AS assigned_partitions,
 		    countDistinctIf(` + filter.AttrTopic + `, ` + filter.AttrTopic + ` != '' AND metric_name = 'kafka.consumer_group.lag') AS topic_count,
 		    ifNotFinite(argMaxIf(val_max, timestamp, metric_name = 'kafka.consumer_group.members'), 0) AS members
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id   = @tenantID
 		     AND metric_name IN @metricNames
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		WHERE ` + filter.AttrConsumerGroup + ` != '' ` + extraWhere + `
 		GROUP BY consumer_group
 		ORDER BY assigned_partitions DESC, consumer_group ASC

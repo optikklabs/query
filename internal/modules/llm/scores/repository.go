@@ -39,13 +39,13 @@ func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, tra
 	now := time.Now()
 	start := now.Add(-30 * 24 * time.Hour)
 	query := `
-		SELECT anyLast(service)        AS service_any,
-		       anyLast(environment)    AS environment_any,
-		       anyLastIf(llm_session_id, llm_session_id != '') AS session_id,
-		       anyLastIf(llm_user_id, llm_user_id != '')       AS user_id
+		SELECT argMax(service, (timestamp, span_id)) AS service_any,
+		       argMax(environment, (timestamp, span_id)) AS environment_any,
+		       argMaxIf(llm_session_id, (timestamp, span_id), llm_session_id != '') AS session_id,
+		       argMaxIf(llm_user_id, (timestamp, span_id), llm_user_id != '') AS user_id
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND trace_id = @traceID
 		LIMIT 1`
 	var row struct {
@@ -81,9 +81,9 @@ func (r *Repository) Insert(ctx context.Context, s scoreInsert) error {
 
 func (r *Repository) Names(ctx context.Context, tenantID, startMs, endMs int64) ([]nameRow, error) {
 	query := `
-		SELECT name, anyLast(data_type) AS data_type
+		SELECT name, argMax(data_type, (timestamp, trace_id, span_id)) AS data_type
 		FROM ` + scoresTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		GROUP BY name
 		ORDER BY name`
 	var rows []nameRow
@@ -93,12 +93,12 @@ func (r *Repository) Names(ctx context.Context, tenantID, startMs, endMs int64) 
 
 func (r *Repository) Summary(ctx context.Context, tenantID, startMs, endMs int64) ([]summaryRow, error) {
 	query := `
-		SELECT name, anyLast(data_type) AS data_type,
+		SELECT name, argMax(data_type, (timestamp, trace_id, span_id)) AS data_type,
 		       count() AS cnt, avg(value) AS mean
 		FROM ` + scoresTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		GROUP BY name
-		ORDER BY cnt DESC`
+		ORDER BY cnt DESC, name ASC`
 	var rows []summaryRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.scores.Summary", &rows, query,
 		chargs.RangeArgs(tenantID, startMs, endMs)...)
@@ -109,7 +109,7 @@ func (r *Repository) Timeseries(ctx context.Context, tenantID, startMs, endMs in
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       avg(value) AS mean
 		FROM ` + scoresTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE name = @name
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
@@ -122,7 +122,7 @@ func (r *Repository) Distribution(ctx context.Context, tenantID, startMs, endMs 
 	query := `
 		SELECT least(toUInt8(value * 10), 9) AS bucket, count() AS cnt
 		FROM ` + scoresTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE name = @name AND data_type = 'numeric'
 		GROUP BY bucket
 		ORDER BY bucket ASC`

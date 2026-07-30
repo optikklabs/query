@@ -38,9 +38,9 @@ func (r *Repository) AppAggregates(ctx context.Context, tenantID, startMs, endMs
 		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs,
 		       sum(` + pricing.TokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
 		FROM ` + rollupTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		GROUP BY service
-		ORDER BY llm_spans DESC`
+		ORDER BY llm_spans DESC, service ASC`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var rows []appAggRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.AppAggregates", &rows, query, args...)
@@ -56,10 +56,10 @@ func (r *Repository) ModelBreakdown(ctx context.Context, tenantID, startMs, endM
 		       sum(output_tokens)   AS out_tokens,
 		       sum(` + pricing.TokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
 		FROM ` + rollupTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE gen_ai_request_model != ''
 		GROUP BY service, vendor, model
-		ORDER BY cost DESC`
+		ORDER BY cost DESC, service ASC, vendor ASC, model ASC`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var rows []modelBreakdownRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.ModelBreakdown", &rows, query, args...)
@@ -96,12 +96,12 @@ func (r *Repository) CostBreakdownByKey(ctx context.Context, tenantID, startMs, 
 		           sum(output_tokens)   AS out_tok,
 		           sum(` + pricing.TokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost_total
 		    FROM ` + rollupTable + `
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		    PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		    WHERE gen_ai_request_model != ''
 		    GROUP BY service, vendor, model
 		)
 		GROUP BY key
-		ORDER BY cost DESC
+		ORDER BY cost DESC, key ASC
 		LIMIT 1000`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var rows []costBreakdownRow
@@ -111,17 +111,17 @@ func (r *Repository) CostBreakdownByKey(ctx context.Context, tenantID, startMs, 
 func (r *Repository) ModelUsage(ctx context.Context, tenantID, startMs, endMs int64) ([]modelUsageRow, error) {
 	query := `
 		SELECT gen_ai_request_model AS model,
-		       any(gen_ai_system)   AS vendor,
+		       argMax(gen_ai_system, (timestamp, service, gen_ai_system)) AS vendor,
 		       sum(span_count)      AS traces,
 		       sum(input_tokens)    AS in_tokens,
 		       sum(output_tokens)   AS out_tokens,
 		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs,
 		       sum(` + pricing.TokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
 		FROM ` + rollupTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE gen_ai_request_model != ''
 		GROUP BY model
-		ORDER BY cost DESC`
+		ORDER BY cost DESC, model ASC`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var rows []modelUsageRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.ModelUsage", &rows, query, args...)
@@ -133,7 +133,7 @@ func (r *Repository) AppTrends(ctx context.Context, tenantID, startMs, endMs int
 		       service,
 		       sum(span_count) AS cnt
 		FROM ` + rollupTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		GROUP BY bucket_at, service
 		ORDER BY bucket_at ASC`
 	var rows []trendRow
@@ -147,7 +147,7 @@ func (r *Repository) TokensByVendor(ctx context.Context, tenantID, startMs, endM
 		       gen_ai_system AS key,
 		       toFloat64(sum(input_tokens + output_tokens)) AS value
 		FROM ` + rollupTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE gen_ai_system != ''
 		GROUP BY bucket_at, key
 		ORDER BY bucket_at ASC`
@@ -162,7 +162,7 @@ func (r *Repository) SpendByVendor(ctx context.Context, tenantID, startMs, endMs
 		       gen_ai_system AS key,
 		       sum(` + pricing.TokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS value
 		FROM ` + rollupTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE gen_ai_request_model != ''
 		GROUP BY bucket_at, key
 		ORDER BY bucket_at ASC`
@@ -176,7 +176,7 @@ func (r *Repository) LatencyPercentiles(ctx context.Context, tenantID, startMs, 
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs
 		FROM ` + rollupTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 	var rows []latencyBucketRow
@@ -196,7 +196,7 @@ func (r *Repository) OverviewWindows(ctx context.Context, tenantID, startMs, end
 		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs,
 		       sum(` + pricing.TokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
 		FROM ` + rollupTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @prevStart AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @prevStart AND timestamp < @end
 		GROUP BY is_current`
 	args := append(overviewArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var rows []overviewWindowRow
@@ -213,7 +213,7 @@ func (r *Repository) OverviewSeries(ctx context.Context, tenantID, startMs, endM
 		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs,
 		       sum(` + pricing.TokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
 		FROM ` + rollupTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
@@ -224,10 +224,10 @@ func (r *Repository) OverviewSeries(ctx context.Context, tenantID, startMs, endM
 func (r *Repository) TraceCounts(ctx context.Context, tenantID, startMs, endMs int64) ([]traceCountRow, error) {
 	query := `
 		SELECT if(timestamp >= @start, 1, 0) AS is_current,
-		       uniqCombined64(trace_id) AS traces,
+		       uniqExact(trace_id) AS traces,
 		       count()        AS spans
 		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @prevStart AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @prevStart AND timestamp < @end
 		WHERE is_gen_ai
 		GROUP BY is_current`
 	var rows []traceCountRow

@@ -12,12 +12,12 @@ import (
 
 // service_hosts stays: the host set is span-derived, so it cannot come from the
 // metrics rollup.
-func saturationCTEs(rangeMs int64) string {
+func saturationCTEs(startMs, endMs int64) string {
 	return `
 		WITH service_hosts AS (
 		    SELECT DISTINCT host
-		    FROM ` + timebucket.SpanStatsRollup(rangeMs) + `
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		    FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
+		    PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		      AND service = @serviceName AND host != ''
 		)`
 }
@@ -26,7 +26,7 @@ const saturationScope = `
 		WHERE service = @serviceName OR (host != '' AND host IN service_hosts)`
 
 func saturationArgs(tenantID, startMs, endMs int64, serviceName string, metricNames []string) []any {
-	return append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
+	return append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("metricNames", metricNames),
 	)
@@ -35,15 +35,15 @@ func saturationArgs(tenantID, startMs, endMs int64, serviceName string, metricNa
 func (r *Repository) GetServiceSaturationAggs(
 	ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, metricNames []string,
 ) ([]models.ServiceMetricRow, error) {
-	query := saturationCTEs(endMs-startMs) + `
+	query := saturationCTEs(startMs, endMs) + `
 		SELECT
 		    @serviceName                  AS service,
 		    metric_name,
 		    sum(val_sum) / sum(val_count) AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name IN @metricNames
-		     AND timestamp   BETWEEN @start AND @end` + saturationScope + `
+		     AND timestamp >= @start AND timestamp < @end` + saturationScope + `
 		GROUP BY metric_name`
 
 	var rows []models.ServiceMetricRow
@@ -54,14 +54,14 @@ func (r *Repository) GetServiceSaturationAggs(
 func (r *Repository) GetServiceSaturationTimeSeries(
 	ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string, metricNames []string,
 ) ([]models.SaturationPointRow, error) {
-	query := saturationCTEs(endMs-startMs) + `
+	query := saturationCTEs(startMs, endMs) + `
 		SELECT
-		    ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
+		    ` + timebucket.DisplayGrainSQLForRange(startMs, endMs) + ` AS bucket_at,
 		    sum(val_sum) / sum(val_count) AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name IN @metricNames
-		     AND timestamp   BETWEEN @start AND @end` + saturationScope + `
+		     AND timestamp >= @start AND timestamp < @end` + saturationScope + `
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 

@@ -43,7 +43,7 @@ func (r *Repository) QueryHostSeries(ctx context.Context, tenantID int64, host s
 
 func aboutAttrSQL(key, alias string) string {
 	expr := "resource_attributes['" + key + "']"
-	return "anyLastIf(" + expr + ", " + expr + " != '') AS " + alias
+	return "argMaxIf(" + expr + ", (timestamp, fingerprint), " + expr + " != '') AS " + alias
 }
 
 func (r *Repository) QueryHostMeta(ctx context.Context, tenantID int64, host string, startMs, endMs int64) (HostMetaRow, error) {
@@ -63,7 +63,7 @@ func (r *Repository) QueryHostMeta(ctx context.Context, tenantID int64, host str
 		    ` + aboutAttrSQL("cloud.availability_zone", "cloud_zone") + `,
 		    ` + aboutAttrSQL("k8s.node.name", "k8s_node_name") + `
 		FROM optikk.metrics_series
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE host = @host`
 	args := chargs.RangeArgs(tenantID, startMs, endMs)
 	args = append(args,
@@ -91,13 +91,13 @@ func (r *Repository) QueryKPIs(ctx context.Context, tenantID int64, host string,
 		    ` + seriesdefs.AttrState + `      AS state,
 		    ` + seriesdefs.AttrMountpoint + ` AS mount,
 		    if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count)) AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name IN @metricNames
-		     AND timestamp   BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND host = @host
 		GROUP BY metric_name, state, mount`
-	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), kpiMetricNames)
+	args := chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), kpiMetricNames)
 	args = append(args, clickhouse.Named("host", host))
 	var rows []KPIRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hostdetail.QueryKPIs", &rows, query, args...)

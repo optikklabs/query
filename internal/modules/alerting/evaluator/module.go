@@ -1,8 +1,8 @@
 package evaluator
 
 import (
-	"database/sql"
 	"context"
+	"database/sql"
 	"log/slog"
 	"sync"
 	"time"

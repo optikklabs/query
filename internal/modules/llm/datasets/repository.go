@@ -29,7 +29,7 @@ func (r *Repository) List(ctx context.Context, tenantID int64) ([]datasetRow, er
 		`SELECT `+datasetCols+`
 		   FROM optikk.llm_datasets d
 		  WHERE d.tenant_id = ?
-		  ORDER BY COALESCE(d.updated_at, d.created_at) DESC`, tenantID)
+		  ORDER BY COALESCE(d.updated_at, d.created_at) DESC, d.id DESC`, tenantID)
 	return rows, err
 }
 

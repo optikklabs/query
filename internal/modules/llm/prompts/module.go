@@ -3,7 +3,6 @@ package prompts
 import (
 	"database/sql"
 	"github.com/go-chi/chi/v5"
-
 )
 
 type Module struct {

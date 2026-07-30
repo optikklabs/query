@@ -120,7 +120,7 @@ func (r *Repository) ListPages(ctx context.Context, tenantID int64, q ListPagesQ
 	}
 	listArgs := append(append([]any{}, args...), limit, offset)
 	listSQL := fmt.Sprintf(`SELECT %s WHERE %s
-		ORDER BY p.is_favorite DESC, p.updated_at DESC, p.created_at DESC
+		ORDER BY p.is_favorite DESC, p.updated_at DESC, p.created_at DESC, p.id DESC
 		LIMIT ? OFFSET ?`, selectPageCols, whereSQL)
 
 	var rows []DashboardPageRow

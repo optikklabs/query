@@ -25,6 +25,7 @@ type metricKindDTO struct {
 	Temporality string `ch:"temporality"`
 	IsMonotonic bool   `ch:"is_monotonic"`
 	MetricType  string `ch:"metric_type"`
+	Variants    uint64 `ch:"variants"`
 }
 
 type timeseriesPointDTO struct {

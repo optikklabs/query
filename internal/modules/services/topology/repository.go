@@ -30,13 +30,13 @@ func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int6
 		       ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `,
 		       ` + spanstats.LatencyP50P95P99.SQL() + `
-		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		  AND service != ''
 		GROUP BY service_name
-		ORDER BY ` + spanstats.RequestTotal + ` DESC
+		ORDER BY ` + spanstats.RequestTotal + ` DESC, service_name ASC
 		LIMIT @nodeLimit`
-	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("nodeLimit", uint64(maxTopologyNodes)))
 	var rows []nodeAggRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "topology.GetNodes",
@@ -57,8 +57,8 @@ func (r *Repository) GetEdges(ctx context.Context, tenantID, startMs, endMs int6
 		       ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `,
 		       ` + spanstats.LatencyP50P95.SQL() + `
-		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE ` + edgeWhere + `
 		  AND (@focusService = '' OR service = @focusService OR peer_name = @focusService)
 		GROUP BY source, target`
@@ -75,6 +75,6 @@ func (r *Repository) GetEdges(ctx context.Context, tenantID, startMs, endMs int6
 }
 
 func topologyArgs(tenantID, startMs, endMs int64, focusService string) []any {
-	return append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
+	return append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("focusService", focusService))
 }

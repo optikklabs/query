@@ -2,14 +2,12 @@ package explorer
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
-	"github.com/optikklabs/query/internal/shared/filterutil"
 	"github.com/optikklabs/query/internal/shared/spanfilter"
 )
 
@@ -23,14 +21,12 @@ func NewRepository(db clickhouse.Conn) *Repository {
 
 func buildScanClauses(c spanfilter.Clauses) (queryPrefix, prewhere, where string) {
 	var ctes []string
-	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end`
+	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end`
 	where = `WHERE 1=1` + c.Root
 
 	if c.HasSpanMatch() {
-		inner := `SELECT trace_id FROM optikk.spans PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end` + c.Resource
-		ctes = append(ctes, `matched AS (`+inner+` WHERE 1=1`+c.Span+
-			` GROUP BY trace_id ORDER BY max(timestamp) DESC LIMIT `+
-			strconv.Itoa(filterutil.MaxMatchedTraces)+`)`)
+		inner := `SELECT trace_id FROM optikk.spans PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end` + c.Resource
+		ctes = append(ctes, `matched AS (`+inner+` WHERE 1=1`+c.Span+` GROUP BY trace_id)`)
 		where += ` AND trace_id IN matched`
 	}
 
@@ -87,7 +83,7 @@ func (r *Repository) EnrichTraces(ctx context.Context, tenantID int64, traceIDs 
 		       groupUniqArray(service)                              AS service_set
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND trace_id IN @traceIDs
 		GROUP BY trace_id
 		LIMIT 500`
@@ -134,7 +130,7 @@ func (r *Repository) QueryFacets(ctx context.Context, req FacetsRequest) ([]face
 			(status_code_string)
 		)
 		HAVING value != ''
-		ORDER BY dim, cnt DESC
+		ORDER BY dim, cnt DESC, value ASC
 		LIMIT 20 BY dim`
 
 	var rows []facetDimRow
@@ -163,11 +159,11 @@ func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs
 		SELECT ` + column + `        AS value,
 		       count()               AS count
 		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @startMs AND @endMs
+		PREWHERE tenant_id = @tenantID AND timestamp >= @startMs AND timestamp < @endMs
 		WHERE ` + column + ` != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
-		ORDER BY count DESC
+		ORDER BY count DESC, value ASC
 		LIMIT @limit`
 	var rows []suggestionRow
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestScalar", &rows, query, suggestArgs(tenantID, startMs, endMs, prefix, limit)...); err != nil {
@@ -180,11 +176,11 @@ func (r *Repository) SuggestAttribute(ctx context.Context, tenantID, startMs, en
 	const query = `
 		SELECT attributes[@attrKey] AS value, count() AS count
 		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @startMs AND @endMs
+		PREWHERE tenant_id = @tenantID AND timestamp >= @startMs AND timestamp < @endMs
 		WHERE value != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
-		ORDER BY count DESC
+		ORDER BY count DESC, value ASC
 		LIMIT @limit`
 	args := append(suggestArgs(tenantID, startMs, endMs, prefix, limit),
 		clickhouse.Named("attrKey", strings.TrimPrefix(attrKey, "@")),

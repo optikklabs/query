@@ -2,14 +2,12 @@ package llm
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/shared/chargs"
-	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, error) {
@@ -72,14 +70,12 @@ func (r *Repository) queryTraceRootPage(ctx context.Context, tenantID int64, req
 		       s.llm_session_id     AS session_id,
 		       s.llm_tags           AS tags
 		FROM optikk.spans AS s
-		PREWHERE s.tenant_id = @tenantID AND s.timestamp BETWEEN @start AND @end AND s.is_root = 1
+		PREWHERE s.tenant_id = @tenantID AND s.timestamp >= @start AND s.timestamp < @end AND s.is_root = 1
 		WHERE s.trace_id IN (
 		    SELECT trace_id
 		    FROM optikk.spans
-		    PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND is_gen_ai` + genAIServiceFilter + `
+		    PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND is_gen_ai` + genAIServiceFilter + `
 		    GROUP BY trace_id
-		    ORDER BY max(timestamp) DESC
-		    LIMIT ` + strconv.Itoa(filterutil.MaxMatchedTraces) + `
 		)` + where + `
 		ORDER BY s.timestamp DESC, s.span_id DESC
 		LIMIT @pgLimit`
@@ -96,13 +92,13 @@ func (r *Repository) traceAggregates(ctx context.Context, tenantID, startMs, end
 		SELECT trace_id,
 		       sum(gen_ai_input_tokens)  AS input_tokens,
 		       sum(gen_ai_output_tokens) AS output_tokens,
-		       anyIf(gen_ai_system, gen_ai_system != '') AS vendor,
+		       argMinIf(gen_ai_system, (timestamp, span_id), gen_ai_system != '') AS vendor,
 		       argMaxIf(gen_ai_request_model, gen_ai_input_tokens + gen_ai_output_tokens, gen_ai_request_model != '') AS model,
 		       countIf(gen_ai_operation = 'chat' AND gen_ai_request_model != '') AS llm_calls,
-		       anyIf(substring(gen_ai_prompt, 1, 160), gen_ai_prompt != '') AS prompt_preview,
+		       argMinIf(substring(gen_ai_prompt, 1, 160), (timestamp, span_id), gen_ai_prompt != '') AS prompt_preview,
 		       sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
 		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND is_gen_ai
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND is_gen_ai
 		WHERE trace_id IN @traceIDs
 		GROUP BY trace_id`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
@@ -131,14 +127,14 @@ func (r *Repository) queryTracesPreAggregated(ctx context.Context, tenantID int6
 		    SELECT trace_id,
 		           sum(gen_ai_input_tokens)  AS input_tokens,
 		           sum(gen_ai_output_tokens) AS output_tokens,
-		           anyIf(gen_ai_system, gen_ai_system != '') AS vendor,
+		           argMinIf(gen_ai_system, (timestamp, span_id), gen_ai_system != '') AS vendor,
 		           argMaxIf(gen_ai_request_model, gen_ai_input_tokens + gen_ai_output_tokens, gen_ai_request_model != '') AS model,
 		           countIf(gen_ai_operation = 'chat' AND gen_ai_request_model != '') AS llm_calls,
-		           anyIf(substring(gen_ai_prompt, 1, 160), gen_ai_prompt != '') AS prompt_preview,
+		           argMinIf(substring(gen_ai_prompt, 1, 160), (timestamp, span_id), gen_ai_prompt != '') AS prompt_preview,
 		           sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
 		    FROM optikk.spans
 		    PREWHERE tenant_id = @tenantID
-		         AND timestamp BETWEEN @start AND @end
+		         AND timestamp >= @start AND timestamp < @end
 		         AND is_gen_ai` + cteServiceFilter + `
 		    GROUP BY trace_id
 		)
@@ -162,7 +158,7 @@ func (r *Repository) queryTracesPreAggregated(ctx context.Context, tenantID int6
 		       llm.cost             AS cost
 		FROM optikk.spans AS s
 		INNER JOIN llm ON s.trace_id = llm.trace_id
-		PREWHERE s.tenant_id = @tenantID AND s.timestamp BETWEEN @start AND @end AND s.is_root = 1
+		PREWHERE s.tenant_id = @tenantID AND s.timestamp >= @start AND s.timestamp < @end AND s.is_root = 1
 		WHERE 1=1` + where + `
 		ORDER BY s.timestamp DESC, s.span_id DESC
 		LIMIT @pgLimit`
@@ -235,9 +231,9 @@ func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID str
 		       lengthUTF8(gen_ai_completion) > @ioMaxChars       AS completion_truncated
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND trace_id = @traceID
-		ORDER BY timestamp ASC
+		ORDER BY timestamp ASC, span_id ASC
 		LIMIT @maxSpans`
 	var rows []traceSpanRow
 	args := append(chargs.RangeArgs(tenantID, startTimeMs, endTimeMs),
@@ -257,7 +253,7 @@ func (r *Repository) TraceSpanIO(ctx context.Context, tenantID int64, traceID, s
 		       gen_ai_completion AS completion
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND trace_id = @traceID
 		WHERE span_id = @spanID
 		LIMIT 1`
@@ -282,9 +278,9 @@ func (r *Repository) ScoresForTraces(ctx context.Context, tenantID, startMs, end
 	query := `
 		SELECT trace_id, name, data_type, value, string_value, source, comment
 		FROM optikk.llm_scores
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE trace_id IN @traceIDs
-		ORDER BY timestamp ASC`
+		ORDER BY timestamp ASC, trace_id ASC, name ASC, span_id ASC`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("traceIDs", traceIDs))
 	var rows []traceScoreRow
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.ScoresForTraces", &rows, query, args...)

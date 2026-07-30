@@ -1,13 +1,12 @@
 package spanfilter
 
 import (
+	"errors"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
-
-const maxTimeRangeMs = filterutil.MaxTimeRangeMs
 
 type AttrFilter = filterutil.AttrFilter
 
@@ -44,6 +43,9 @@ type Filters struct {
 func (f *Filters) Validate() error {
 	if err := filterutil.ValidateTimeRange(&f.StartMs, &f.EndMs); err != nil {
 		return err
+	}
+	if f.EndMs-f.StartMs > filterutil.RawRetentionMs {
+		return errors.New("filters: span data is retained for 15 days")
 	}
 	return filterutil.ValidateAttrs(f.Attributes)
 }
@@ -122,33 +124,33 @@ func BuildClauses(f Filters) Clauses {
 		c.Args = append(c.Args, clickhouse.Named("maxDur", uint64(f.MaxDurationNs)))
 	}
 	if f.HasError != nil {
+		op := " NOT IN "
 		if *f.HasError {
-
-			c.Span += ` AND has_error = 1`
-		} else {
-
-			c.Root += ` AND has_error = 0`
+			op = " IN "
 		}
+		c.Root += ` AND trace_id` + op + `(SELECT trace_id FROM optikk.spans
+			PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
+			WHERE is_error = 1)`
 	}
 	return c
 }
 
-// attrSQL: traces keep one nullable string attribute map; unlike logs,
+// attrSQL: traces keep one string attribute map; unlike logs,
 // eq/neq compare the string value only (no typed number/bool matching).
 var attrSQL = filterutil.AttrSQL{
-	StringExpr:    func(k string) string { return `attributes[@` + k + `]` },
+	StringExpr:    func(k string) string { return `if(mapContains(attributes, @` + k + `), attributes[@` + k + `], NULL)` },
 	NumberExpr:    func(k string) string { return `toFloat64OrNull(attributes[@` + k + `])` },
-	ExistsExpr:    func(k string) string { return `NOT (attributes[@` + k + `] IS NULL)` },
-	NotExistsExpr: func(k string) string { return `attributes[@` + k + `] IS NULL` },
+	ExistsExpr:    func(k string) string { return `mapContains(attributes, @` + k + `)` },
+	NotExistsExpr: func(k string) string { return `NOT mapContains(attributes, @` + k + `)` },
 	EqExpr:        buildAttrEqClause,
 }
 
 func buildAttrEqClause(af AttrFilter, k, v string, keyArg any, negate bool) (string, []any) {
 	args := []any{keyArg, clickhouse.Named(v, af.Value)}
 	if negate {
-		return ` AND (NOT (attributes[@` + k + `] IS NULL) AND attributes[@` + k + `] != @` + v + `)`, args
+		return ` AND (mapContains(attributes, @` + k + `) AND attributes[@` + k + `] != @` + v + `)`, args
 	}
-	return ` AND attributes[@` + k + `] = @` + v, args
+	return ` AND (mapContains(attributes, @` + k + `) AND attributes[@` + k + `] = @` + v + `)`, args
 }
 
 func buildAttrClause(af AttrFilter, i int) (string, []any) {

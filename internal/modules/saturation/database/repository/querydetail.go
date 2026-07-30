@@ -37,10 +37,10 @@ type SummaryRaw struct {
 func (r *Repository) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (*SummaryRaw, error) {
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
-		SELECT any(db_statement_normalized)                       AS query_text,
-		       any(db_system)                                     AS db_system_any,
-		       any(db_name)                                       AS collection_name,
-		       any(attributes['db.operation.name'])               AS operation_name,
+		SELECT argMax(db_statement_normalized, (timestamp, span_id)) AS query_text,
+		       argMax(db_system, (timestamp, span_id))             AS db_system_any,
+		       argMax(db_name, (timestamp, span_id))               AS collection_name,
+		       argMax(attributes['db.operation.name'], (timestamp, span_id)) AS operation_name,
 		       count()                                            AS call_count,
 		       countIf(is_error)                                  AS error_count,
 		       quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
@@ -71,7 +71,7 @@ func (r *Repository) GetServices(ctx context.Context, tenantID, startMs, endMs i
 		SELECT service, count() AS call_count
 		FROM optikk.spans` + queryHashPrewhere + filterWhere + `
 		GROUP BY service
-		ORDER BY call_count DESC
+		ORDER BY call_count DESC, service ASC
 		LIMIT 10`
 
 	args := append(hashArgs(tenantID, startMs, endMs, hash), filterArgs...)
@@ -128,7 +128,7 @@ func (r *Repository) GetExecutions(ctx context.Context, tenantID, startMs, endMs
 		       host,
 		       toFloat64OrNull(attributes['db.response.returned_rows']) AS row_count
 		FROM optikk.spans` + queryHashPrewhere + filterWhere + `
-		ORDER BY timestamp DESC
+		ORDER BY timestamp DESC, span_id DESC
 		LIMIT @qLimit`
 
 	args := append(hashArgs(tenantID, startMs, endMs, hash), clickhouse.Named("qLimit", uint64(limit)))

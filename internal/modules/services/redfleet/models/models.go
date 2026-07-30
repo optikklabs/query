@@ -152,11 +152,17 @@ type RequestRateEntry struct {
 
 type TopEndpointsCursor struct {
 	TotalCount    uint64 `json:"cnt"`
+	ServiceName   string `json:"svc"`
 	OperationName string `json:"op"`
+	SpanKind      string `json:"kind,omitempty"`
+	HTTPRoute     string `json:"route,omitempty"`
+	HTTPMethod    string `json:"method,omitempty"`
+	RPCSystem     string `json:"rpc,omitempty"`
+	DBSystem      string `json:"db,omitempty"`
 }
 
 func (c TopEndpointsCursor) IsZero() bool {
-	return c.TotalCount == 0 && c.OperationName == ""
+	return c.TotalCount == 0 && c.ServiceName == "" && c.OperationName == ""
 }
 
 type PaginatedEndpoints struct {

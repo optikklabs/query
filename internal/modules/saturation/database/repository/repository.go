@@ -18,7 +18,7 @@ const queryHashPrewhere = `
 	    PREWHERE tenant_id = @tenantID
 	         AND db_system != ''
 	         AND query_hash = @hash
-	         AND timestamp BETWEEN @start AND @end`
+	         AND timestamp >= @start AND timestamp < @end`
 
 func hashArgs(tenantID, startMs, endMs int64, hash string) []any {
 	return append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("hash", hash))

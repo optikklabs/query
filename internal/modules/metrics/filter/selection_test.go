@@ -30,6 +30,8 @@ func TestBuildSelectionGroupByColumns(t *testing.T) {
 	for key, want := range map[string]string{
 		"host":          "host",
 		"service.name":  "service",
+		"k8s.pod.name":  "pod",
+		"cloud.region":  "cloud_region",
 		"k8s_namespace": "k8s_namespace",
 		"state":         "attributes['state']",
 		"custom.label":  "attributes['custom.label']",

@@ -14,7 +14,7 @@ func (r *Repository) FetchLogsByTrace(ctx context.Context, tenantID int64, trace
 		FROM optikk.logs
 		PREWHERE tenant_id = @tenantID
 		     AND trace_id = @traceID
-		ORDER BY timestamp ASC
+		ORDER BY timestamp ASC, log_id ASC
 		LIMIT @limit`
 
 	args := []any{

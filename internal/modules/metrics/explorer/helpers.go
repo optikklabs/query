@@ -18,6 +18,8 @@ func normalizeMetricType(t string) string {
 		return "counter"
 	case "histogram":
 		return "histogram"
+	case "exponentialhistogram":
+		return "exponential_histogram"
 	case "summary":
 		return "summary"
 	default:
@@ -99,14 +101,6 @@ func deltaValue(row timeseriesPointDTO, agg string, bucketSec float64) float64 {
 	}
 }
 
-func isPercentile(aggregation string) bool {
-	switch aggregation {
-	case "p50", "p95", "p99":
-		return true
-	}
-	return false
-}
-
 func quantileFor(qs []float64, aggregation string) float64 {
 	idx := map[string]int{"p50": 0, "p95": 1, "p99": 2}[aggregation]
 	if idx < len(qs) {
@@ -141,15 +135,32 @@ func resolveSeriesFlags(kind *metricKindDTO) (cumulative, histogram bool) {
 		return false, false
 	}
 	cumulative = kind.Temporality == "Cumulative" && kind.IsMonotonic
-	histogram = strings.EqualFold(kind.MetricType, "histogram")
+	t := strings.ToLower(kind.MetricType)
+	histogram = t == "histogram" || t == "exponentialhistogram" || t == "summary"
 	return cumulative, histogram
 }
 
-func metricTypeFrom(kind *metricKindDTO) string {
+func validateAggregationForKind(kind *metricKindDTO, agg string) error {
 	if kind == nil {
-		return ""
+		return nil
 	}
-	return kind.MetricType
+	if kind.Variants > 1 {
+		return fmt.Errorf("metric name has incompatible series types")
+	}
+	t := strings.ToLower(kind.MetricType)
+	if kind.Temporality == "Cumulative" && kind.IsMonotonic && agg != "sum" && agg != "rate" {
+		return fmt.Errorf("%s is not supported for cumulative counters", agg)
+	}
+	if t == "summary" {
+		return fmt.Errorf("summary metrics are not safely aggregatable")
+	}
+	if (t == "histogram" || t == "exponentialhistogram") && kind.Temporality == "Cumulative" {
+		return fmt.Errorf("cumulative distributions are not safely aggregatable")
+	}
+	if (t == "histogram" || t == "exponentialhistogram") && (agg == "min" || agg == "max") {
+		return fmt.Errorf("%s is not retained for distribution metrics", agg)
+	}
+	return nil
 }
 
 func shouldZeroFill(metricType, aggregation string, cumulative bool) bool {

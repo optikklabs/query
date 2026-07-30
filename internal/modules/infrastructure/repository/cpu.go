@@ -28,12 +28,12 @@ func (r *Repository) QueryCPUUtilizationAgg(ctx context.Context, tenantID int64,
 		SELECT
 		    metric_name AS metric_name,
 		    if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count))  AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id        = @tenantID
 		     AND metric_name   IN @metricNames
-		     AND timestamp   BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		GROUP BY metric_name`
-	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), infraconsts.CPUMetrics)
+	args := chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), infraconsts.CPUMetrics)
 	var rows []CPUMetricNameRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "cpu.QueryCPUUtilizationAgg", &rows, query, args...)
 }
@@ -48,15 +48,15 @@ func (r *Repository) QueryCPUUtilizationByInstance(ctx context.Context, tenantID
 		    service,
 		    metric_name,
 		    if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count)) AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name IN @metricNames
-		     AND timestamp   BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND service != ''
 		GROUP BY host, pod, container, service, metric_name
 		ORDER BY service, pod
 		LIMIT 500`
-	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), infraconsts.CPUMetrics)
+	args := chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), infraconsts.CPUMetrics)
 	var rows []CPUInstanceMetricRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "cpu.QueryCPUUtilizationByInstance", &rows, query, args...)
 }

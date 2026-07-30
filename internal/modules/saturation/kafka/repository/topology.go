@@ -3,18 +3,17 @@ package repository
 import (
 	"context"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-func clientsQuery(windowMs int64) string {
+func clientsQuery(startMs, endMs int64) string {
 	return `
 		SELECT DISTINCT service
-		FROM ` + timebucket.SpanStatsRollup(windowMs) + `
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND service != ''
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND service != ''
 		WHERE messaging_system = 'kafka' AND messaging_destination != ''
 		ORDER BY service
 		LIMIT 200`
@@ -30,11 +29,11 @@ type EdgeRow struct {
 }
 
 func (r *Repository) QueryClients(ctx context.Context, tenantID, startMs, endMs int64) ([]string, error) {
-	query := clientsQuery(endMs - startMs)
+	query := clientsQuery(startMs, endMs)
 	var rows []struct {
 		Service string `ch:"service"`
 	}
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryClients", &rows, query, chargs.RollupRangeArgs(tenantID, startMs, endMs)...); err != nil {
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryClients", &rows, query, chargs.RangeArgs(tenantID, startMs, endMs)...); err != nil {
 		return nil, err
 	}
 	clients := make([]string, len(rows))
@@ -44,19 +43,12 @@ func (r *Repository) QueryClients(ctx context.Context, tenantID, startMs, endMs 
 	return clients, nil
 }
 
-// Edge cap after topic scoping; the scan limit is wider so scoping has slack.
-const (
-	maxEdges    = 1000
-	maxEdgeScan = 10000
-)
-
 // Topic scoping is applied in Go: keep every edge on a topic that services touch.
 func (r *Repository) QueryEdges(ctx context.Context, tenantID, startMs, endMs int64, services []string) ([]EdgeRow, error) {
-	query := edgesQuery(timebucket.SpanStatsRollup(endMs - startMs))
-	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs),
-		clickhouse.Named("scanLimit", uint64(maxEdgeScan)))
+	query := edgesQuery(timebucket.SpanStatsRollup(startMs, endMs))
 	var rows []EdgeRow
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryEdges", &rows, query, args...); err != nil {
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryEdges", &rows, query,
+		chargs.RangeArgs(tenantID, startMs, endMs)...); err != nil {
 		return nil, err
 	}
 	return scopeEdgesToTopics(rows, services), nil
@@ -76,9 +68,7 @@ func scopeEdgesToTopics(rows []EdgeRow, services []string) []EdgeRow {
 	out := make([]EdgeRow, 0, len(rows))
 	for _, row := range rows {
 		if _, ok := topics[row.Topic]; ok {
-			if out = append(out, row); len(out) == maxEdges {
-				break
-			}
+			out = append(out, row)
 		}
 	}
 	return out
@@ -94,11 +84,10 @@ func edgesQuery(rollupTable string) string {
 		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs
 		FROM ` + rollupTable + `
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND service != ''
 		WHERE messaging_system = 'kafka'
 		  AND messaging_destination != ''
 		GROUP BY service, topic, consumer_group
-		ORDER BY call_count DESC
-		LIMIT @scanLimit`
+		ORDER BY call_count DESC, service ASC, topic ASC, consumer_group ASC`
 }

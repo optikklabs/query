@@ -67,11 +67,11 @@ func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs
 		SELECT ` + column + `        AS value,
 		       count()               AS count
 		FROM optikk.logs
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND ts_bucket BETWEEN @startBucket AND @endBucket
 		WHERE value != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
-		ORDER BY count DESC
+		ORDER BY count DESC, value ASC
 		LIMIT @limit`
 	return r.runSuggest(ctx, "suggest.SuggestResource", query, suggestArgs(tenantID, startMs, endMs, prefix, limit))
 }
@@ -82,11 +82,12 @@ func (r *Repository) suggestSeverity(ctx context.Context, tenantID, startMs, end
 		       count()               AS count
 		FROM optikk.logs
 		PREWHERE tenant_id = @tenantID
-		WHERE ts_bucket BETWEEN @startBucket AND @endBucket
-		  AND value != ''
+		     AND timestamp >= @start AND timestamp < @end
+		     AND ts_bucket BETWEEN @startBucket AND @endBucket
+		WHERE value != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
-		ORDER BY count DESC
+		ORDER BY count DESC, value ASC
 		LIMIT @limit`
 	return r.runSuggest(ctx, "suggest.SuggestSeverity", query, suggestArgs(tenantID, startMs, endMs, prefix, limit))
 }
@@ -97,11 +98,12 @@ func (r *Repository) SuggestAttribute(ctx context.Context, tenantID, startMs, en
 		       count()                     AS count
 		FROM optikk.logs
 		PREWHERE tenant_id = @tenantID
-		WHERE ts_bucket BETWEEN @startBucket AND @endBucket
-		  AND value != ''
+		     AND timestamp >= @start AND timestamp < @end
+		     AND ts_bucket BETWEEN @startBucket AND @endBucket
+		WHERE value != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
-		ORDER BY count DESC
+		ORDER BY count DESC, value ASC
 		LIMIT @limit`
 	args := append(suggestArgs(tenantID, startMs, endMs, prefix, limit),
 		clickhouse.Named("attrKey", strings.TrimPrefix(attrKey, "@")),

@@ -33,14 +33,14 @@ func (r *Repository) QueryFleetPods(ctx context.Context, tenantID int64, startMs
 		    ` + spanstats.DurationSum + `,
 		    toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms,
 		    max(timestamp)                                           AS last_seen
-		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		WHERE pod != '' AND (@hostFilter = '' OR host = @hostFilter)
 		GROUP BY pod, host
-		ORDER BY ` + spanstats.RequestTotal + ` DESC
+		ORDER BY ` + spanstats.RequestTotal + ` DESC, pod ASC, host ASC
 		LIMIT @maxFleetPods`
-	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
+	args := chargs.RangeArgs(tenantID, startMs, endMs)
 	args = append(args,
 		clickhouse.Named("defaultUnknown", unknownHost),
 		clickhouse.Named("maxFleetPods", uint64(maxFleetPods)),

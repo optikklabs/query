@@ -39,14 +39,14 @@ func (r *Repository) QueryPodMeta(ctx context.Context, tenantID int64, pod strin
 	query := `
 		SELECT
 		    max(timestamp)                                                        AS last_seen,
-		    anyLastIf(host, host != '')                                           AS host_any,
+		    argMaxIf(host, (timestamp, fingerprint), host != '')                  AS host_any,
 		    groupUniqArrayIf(container, container != '')                          AS containers,
 		    groupUniqArrayIf(service, service != '')                              AS services,
 		    groupUniqArrayIf(environment, environment != '')                      AS environments,
 		    groupUniqArrayIf(k8s_namespace, k8s_namespace != '')                  AS namespaces,
 		    groupUniqArrayIf(metric_name, metric_name IN @podMetricNames)         AS metric_names
 		FROM optikk.metrics_series
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE pod = @pod`
 	args := chargs.RangeArgs(tenantID, startMs, endMs)
 	args = append(args,
@@ -64,11 +64,11 @@ func (r *Repository) QueryPodRED(ctx context.Context, tenantID int64, pod string
 		    ` + spanstats.Errors + `,
 		    ` + spanstats.DurationSum + `,
 		    toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms
-		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND pod = @pod`
-	args := chargs.RollupRangeArgs(tenantID, startMs, endMs)
+	args := chargs.RangeArgs(tenantID, startMs, endMs)
 	args = append(args,
 		clickhouse.Named("pod", pod),
 	)

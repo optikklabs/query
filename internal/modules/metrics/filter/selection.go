@@ -27,42 +27,46 @@ func BuildSelection(f Filters) (fromTable, where, selectCols, groupByCols string
 }
 
 func rollupTable(startMs, endMs int64, step string) string {
-	return timebucket.RollupTableForGrain(BucketDurationSeconds(startMs, endMs, step))
+	return timebucket.RollupTableForRange(startMs, BucketDurationSeconds(startMs, endMs, step))
 }
 
 func seriesColumn(key string) string {
 	if canonical := Canonical(key); canonical != "" {
-		return ResourceColumn(canonical)
+		return canonical
 	}
 	return AttrColumn(key)
 }
 
 func BucketDurationSeconds(startMs, endMs int64, step string) int64 {
+	var grain int64
 	switch step {
 	case "1m":
-
-		return 60
+		grain = 60
 	case "5m":
-		return 300
+		grain = 300
 	case "15m":
-		return 900
+		grain = 900
 	case "1h":
-		return 3600
+		grain = 3600
 	case "1d":
-		return 86400
+		grain = 86400
 	default:
 		h := (endMs - startMs) / 3_600_000
 		switch {
 		case h <= 2:
-			return 60
+			grain = 60
 		case h <= 24:
-			return 300
+			grain = 300
 		case h <= 168:
-			return 3600
+			grain = 3600
 		default:
-			return 86400
+			grain = 86400
 		}
 	}
+	if step == "" {
+		grain = max(grain, timebucket.AvailableRollupGrain(startMs, grain))
+	}
+	return grain
 }
 
 func bucketGrainSQL(startMs, endMs int64, step string) string {

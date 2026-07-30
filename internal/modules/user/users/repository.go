@@ -46,7 +46,7 @@ func (r *Repository) ListUsersByTenantID(ctx context.Context, tenantID int64) ([
 		SELECT id, email, name, tenant_id, active, role, created_at
 		FROM users
 		WHERE active = 1 AND tenant_id = ?
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, id DESC
 	`, tenantID)
 	return records, err
 }

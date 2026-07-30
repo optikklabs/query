@@ -18,16 +18,15 @@ type OpsRaw struct {
 }
 
 func (r *Repository) GetOpsBySystem(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters) ([]OpsRaw, error) {
-	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	filterWhere, filterArgs := filter.BuildMetricsClauses(f)
 
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS time_bucket,
+		SELECT ` + timebucket.DisplayGrainSQLForRange(startMs, endMs) + ` AS time_bucket,
 		       db_system                                        AS group_by,
 		       sum(request_count) / @bucketGrainSec             AS ops_per_sec
-		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		WHERE ` + spanstats.DBSpanPred + filterWhere + `
 		GROUP BY time_bucket, group_by
 		ORDER BY time_bucket, group_by`

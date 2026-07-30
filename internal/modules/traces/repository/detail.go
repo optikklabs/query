@@ -69,7 +69,7 @@ func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID 
 		       exception_type, exception_message, exception_stacktrace
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND trace_id = @traceID
 		WHERE NOT empty(events) OR NOT empty(exception_type)`
 	var rows []SpanEventCombinedRow
@@ -92,7 +92,7 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, trac
 		       links AS links
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND trace_id = @traceID
 		     AND span_id  = @spanID
 		LIMIT 1`
@@ -124,11 +124,11 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 		       timestamp                  AS start_time
 		FROM optikk.spans_root
 		PREWHERE tenant_id      = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND service      = @serviceName
 		     AND name         = @operationName
 		WHERE trace_id != @excludeTraceID
-		ORDER BY timestamp DESC
+		ORDER BY timestamp DESC, span_id DESC
 		LIMIT @limit`
 	args := []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
@@ -149,11 +149,11 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 		SELECT trace_id,
 		       min(timestamp)                                            AS start_time,
 		       max(timestamp + toIntervalNanosecond(duration_nano))      AS end_time,
-		       argMin(service,              timestamp)                   AS root_service,
-		       argMin(name,                 timestamp)                   AS root_operation,
-		       argMin(status_code_string,   timestamp)                   AS root_status,
-		       argMin(http_method,          timestamp)                   AS root_http_method,
-		       argMin(response_status_code, timestamp)                   AS root_http_status,
+		       if(root_missing, argMin(service, (timestamp, span_id)), argMinIf(service, (timestamp, span_id), is_root = 1))                           AS root_service,
+		       if(root_missing, argMin(name, (timestamp, span_id)), argMinIf(name, (timestamp, span_id), is_root = 1))                                AS root_operation,
+		       if(root_missing, argMin(status_code_string, (timestamp, span_id)), argMinIf(status_code_string, (timestamp, span_id), is_root = 1))    AS root_status,
+		       if(root_missing, argMin(http_method, (timestamp, span_id)), argMinIf(http_method, (timestamp, span_id), is_root = 1))                   AS root_http_method,
+		       if(root_missing, argMin(response_status_code, (timestamp, span_id)), argMinIf(response_status_code, (timestamp, span_id), is_root = 1)) AS root_http_status,
 		       count()                                                   AS span_count,
 		       countIf(is_error = 1)                                     AS error_count,
 		       error_count > 0                                           AS trace_has_error,
@@ -161,7 +161,7 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 		       countIf(is_root = 1) = 0                                  AS root_missing
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND trace_id = @traceID
 		GROUP BY trace_id
 		LIMIT 1`

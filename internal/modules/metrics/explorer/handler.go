@@ -53,7 +53,7 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 
 	tags, err := h.Service.ListTags(r.Context(), tenantID, startMs, endMs, metricName, tagKey)
 	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to list tags", err)
+		modulecommon.RespondServiceError(w, r, err, "Failed to list tags")
 		return
 	}
 	modulecommon.RespondOK(w, FETagsResponse{Tags: tags})
@@ -73,7 +73,7 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	tenantID := modulecommon.Tenant(r).TenantID
 	result, err := h.Service.Query(r.Context(), tenantID, req)
 	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to execute explorer query", err)
+		modulecommon.RespondServiceError(w, r, err, "Failed to execute explorer query")
 		return
 	}
 	modulecommon.RespondOK(w, result)

@@ -20,7 +20,7 @@ func BuildClauses(f Filters) (where string, args []any) {
 
 // Outbound queries scope by service without the inbound filter.
 func BuildServiceClauses(f Filters) (where string, args []any) {
-	args = chargs.RollupRangeArgs(f.TenantID, f.StartMs, f.EndMs)
+	args = chargs.RangeArgs(f.TenantID, f.StartMs, f.EndMs)
 	if len(f.Services) == 1 {
 		where = " AND service = @serviceName"
 		args = append(args, clickhouse.Named("serviceName", f.Services[0]))

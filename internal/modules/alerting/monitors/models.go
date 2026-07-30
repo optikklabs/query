@@ -36,12 +36,12 @@ type MonitorListResponse struct {
 }
 
 type StatusCounts struct {
-	Alert  int `json:"alert"`
-	Warn   int `json:"warn"`
-	OK     int `json:"ok"`
-	NoData int `json:"noData"`
-	Muted  int `json:"muted"`
-	Total  int `json:"total"`
+	Alert  int `json:"alert" db:"alert"`
+	Warn   int `json:"warn" db:"warn"`
+	OK     int `json:"ok" db:"ok"`
+	NoData int `json:"noData" db:"no_data"`
+	Muted  int `json:"muted" db:"muted"`
+	Total  int `json:"total" db:"total"`
 }
 
 func toResponse(row models.MonitorRow, state models.MonitorStateRow) MonitorResponse {

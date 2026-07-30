@@ -41,7 +41,7 @@ func buildFacetQuery(prewhere, where string) string {
 			(environment)
 		)
 		HAVING value != ''
-		ORDER BY dim, cnt DESC
+		ORDER BY dim, cnt DESC, value ASC
 		LIMIT @facetLimit BY dim`
 }
 

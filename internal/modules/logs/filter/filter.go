@@ -1,15 +1,13 @@
 package filter
 
 import (
+	"errors"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
-
-const maxTimeRangeMs = filterutil.MaxTimeRangeMs
 
 type AttrFilter = filterutil.AttrFilter
 
@@ -41,6 +39,9 @@ func (f *Filters) Validate() error {
 	if err := filterutil.ValidateTimeRange(&f.StartMs, &f.EndMs); err != nil {
 		return err
 	}
+	if f.EndMs-f.StartMs > filterutil.RawRetentionMs {
+		return errors.New("filters: log data is retained for 15 days")
+	}
 	return filterutil.ValidateAttrs(f.Attributes)
 }
 
@@ -58,7 +59,7 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 		clickhouse.Named("endBucket", endBucket),
 	}
 
-	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND ts_bucket BETWEEN @startBucket AND @endBucket`
+	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND ts_bucket BETWEEN @startBucket AND @endBucket`
 	where = `WHERE 1=1`
 
 	args = filterutil.AppendIn(&prewhere, args,
@@ -89,7 +90,7 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 	if f.Search != "" {
 
 		where += ` AND lowerUTF8(body) LIKE @search`
-		args = append(args, clickhouse.Named("search", likeSubstringPattern(f.Search)))
+		args = append(args, clickhouse.Named("search", filterutil.LikeSubstringPattern(f.Search)))
 	}
 	for i, af := range f.Attributes {
 		clause, clauseArgs := buildAttrClause(af, i)
@@ -99,15 +100,12 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 	return prewhere, where, args
 }
 
-func likeSubstringPattern(term string) string {
-	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.ToLower(term))
-	return "%" + esc + "%"
-}
-
 // attrSQL: logs split attributes into typed string/number/bool maps;
 // unlike traces, eq/neq also match typed number/bool values.
 var attrSQL = filterutil.AttrSQL{
-	StringExpr: func(k string) string { return `attributes_string[@` + k + `]` },
+	StringExpr: func(k string) string {
+		return `if(mapContains(attributes_string, @` + k + `), attributes_string[@` + k + `], NULL)`
+	},
 	NumberExpr: func(k string) string {
 		return `coalesce(toFloat64OrNull(attributes_string[@` + k + `]),` +
 			` if(mapContains(attributes_number, @` + k + `), attributes_number[@` + k + `], NULL))`
@@ -126,10 +124,7 @@ func buildAttrEqClause(af AttrFilter, k, v string, keyArg any, negate bool) (str
 	if negate {
 		op = "!="
 	}
-	strCmp := `attributes_string[@` + k + `] ` + op + ` @` + v
-	if negate {
-		strCmp = `(mapContains(attributes_string, @` + k + `) AND ` + strCmp + `)`
-	}
+	strCmp := `(mapContains(attributes_string, @` + k + `) AND attributes_string[@` + k + `] ` + op + ` @` + v + `)`
 	args := []any{keyArg, clickhouse.Named(v, af.Value)}
 
 	if n, err := strconv.ParseFloat(af.Value, 64); err == nil {

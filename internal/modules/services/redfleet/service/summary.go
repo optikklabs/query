@@ -88,7 +88,7 @@ func (s *Service) GetServiceSaturationTimeSeries(ctx context.Context, f filter.F
 		return nil, err
 	}
 
-	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
+	grain := timebucket.DisplayGrainForRange(f.StartMs, f.EndMs)
 	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
 		func(r models.SaturationPointRow) time.Time { return r.BucketAt },
 		func(t time.Time, row models.SaturationPointRow, ok bool) models.SaturationTimeSeriesPoint {

@@ -35,6 +35,8 @@ type MetricQuery struct {
 	WindowSec int `json:"windowSec"`
 }
 
+const MaxExactMetricSumWindowSec = 47 * 60 * 60
+
 type APMQuery struct {
 	Service  string `json:"service"`
 	Resource string `json:"resource,omitempty"`
@@ -46,8 +48,7 @@ type APMQuery struct {
 type LogQuery struct {
 	Query string `json:"query"`
 
-	GroupBy   string `json:"groupBy,omitempty"`
-	WindowSec int    `json:"windowSec"`
+	WindowSec int `json:"windowSec"`
 }
 
 type NotifyTargets struct {

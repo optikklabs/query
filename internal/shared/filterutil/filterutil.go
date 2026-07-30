@@ -10,10 +10,7 @@ import (
 )
 
 const MaxTimeRangeMs int64 = 30 * 24 * 60 * 60 * 1000
-
-// Caps trace-match subqueries; CH inlines them, so unbounded means a
-// whole-range trace_id set in memory.
-const MaxMatchedTraces = 200000
+const RawRetentionMs int64 = 15 * 24 * 60 * 60 * 1000
 
 type AttrFilter struct {
 	Key   string `json:"key"`
@@ -37,7 +34,7 @@ func ValidateTimeRange(startMs, endMs *int64) error {
 		return errors.New("filters: endTime must be after startTime")
 	}
 	if (*endMs - *startMs) > MaxTimeRangeMs {
-		*startMs = *endMs - MaxTimeRangeMs
+		return errors.New("filters: time range must not exceed 30 days")
 	}
 	return nil
 }
@@ -152,4 +149,9 @@ func ExtractValues(v any) []string {
 		}
 		return nil
 	}
+}
+
+func LikeSubstringPattern(term string) string {
+	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.ToLower(term))
+	return "%" + esc + "%"
 }

@@ -168,7 +168,7 @@ func ParseRange(r *http.Request) (startMs, endMs int64, err error) {
 		end = maxEnd
 	}
 	if end-start > filterutil.MaxTimeRangeMs {
-		start = end - filterutil.MaxTimeRangeMs
+		return 0, 0, errors.New("time range must not exceed 30 days")
 	}
 	if start >= end {
 		return 0, 0, errors.New("start must be before end")

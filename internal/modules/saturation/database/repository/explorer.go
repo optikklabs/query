@@ -32,7 +32,6 @@ type connRaw struct {
 }
 
 func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startMs, endMs int64) ([]SystemSummaryRaw, error) {
-	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 	query := `
 		SELECT db_system                                                AS db_system,
 		       sum(request_count)                                       AS query_count,
@@ -40,12 +39,12 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startM
 		       sum(duration_ms_sum) / nullIf(sum(request_count), 0)     AS avg_latency_ms,
 		       toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_ms,
 		       max(timestamp)                                           AS last_seen
-		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		WHERE ` + spanstats.DBSpanPred + `
 		GROUP BY db_system
-		ORDER BY query_count DESC`
+		ORDER BY query_count DESC, db_system ASC`
 
 	args := chargs.RangeArgs(tenantID, startMs, endMs)
 	var rows []SystemSummaryRaw
@@ -53,9 +52,7 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startM
 }
 
 func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, tenantID, startMs, endMs int64) (map[string]int64, error) {
-	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
-
-	query := activeConnectionsQuery(timebucket.MetricsRollup(endMs - startMs))
+	query := activeConnectionsQuery(timebucket.MetricsRollup(startMs, endMs))
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("metricName", filter.MetricDBSQLConnectionOpen),
 	)
@@ -83,7 +80,7 @@ func activeConnectionsQuery(rollupTable string) string {
 		    FROM ` + rollupTable + `
 		    PREWHERE tenant_id     = @tenantID
 		         AND metric_name = @metricName
-		         AND timestamp   BETWEEN @start AND @end
+		         AND timestamp >= @start AND timestamp < @end
 		    WHERE ` + seriesDBSpan + `
 		    GROUP BY db_system, fingerprint
 		)

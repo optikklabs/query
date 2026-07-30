@@ -59,9 +59,7 @@ func (s *Service) Tick(ctx context.Context, now time.Time) error {
 func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {
 	m := due.Monitor
 	state := due.State
-	cond := query.DecodeConditions(m)
-	q := query.DecodeQuery(m)
-	scope := query.DecodeScope(m)
+	cond, q, scope := m.Conditions, m.Query, m.Scope
 
 	backend, err := s.queries.For(m.Type)
 	if err != nil {

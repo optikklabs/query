@@ -12,17 +12,13 @@ import (
 // Error groups are always read from the error spans themselves, so span- and
 // root-level predicates both apply to the same row — no trace-level CTE.
 const errorSpanScan = `FROM optikk.spans
-		PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end AND is_error = 1
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND is_error = 1
 		WHERE 1=1`
 
 func errorSpanWhere(f spanfilter.Filters) (string, []any) {
 	c := spanfilter.BuildClauses(f)
 	return errorSpanScan + c.Span + c.Root, c.Args
 }
-
-// Cap on the groups scanned by the summary/facet aggregates. Well above the
-// number of distinct error groups any tenant surfaces in one range.
-const maxAggregatedGroups = 100000
 
 func (r *Repository) ExplorerGroupRows(ctx context.Context, req GroupsRequest) ([]rawErrorGroupRow, error) {
 	scan, args := errorSpanWhere(req.Filters)
@@ -47,8 +43,8 @@ func (r *Repository) ExplorerGroupRows(ctx context.Context, req GroupsRequest) (
 		       min(timestamp)           AS first_occurrence,
 		       -- Aliased away from the column name: a status_message alias
 		       -- shadows the column for the message filter in WHERE.
-		       anyLast(status_message)  AS error_message,
-		       anyLast(trace_id)        AS sample_trace_id
+		       argMax(status_message, (timestamp, span_id)) AS error_message,
+		       argMax(trace_id, (timestamp, span_id))       AS sample_trace_id
 		` + scan + `
 		GROUP BY error_group_id, service, name, http_status_bucket
 		` + having + `
@@ -81,7 +77,7 @@ func (r *Repository) ExplorerFacetRows(ctx context.Context, req FacetsRequest) (
 		` + scan + `
 		GROUP BY GROUPING SETS ((service), (name), (response_status_code), (exception_type))
 		HAVING value != ''
-		ORDER BY dim, cnt DESC
+		ORDER BY dim, cnt DESC, value ASC
 		LIMIT 20 BY dim`
 
 	var rows []rawFacetDimRow
@@ -92,10 +88,7 @@ func (r *Repository) ExplorerFacetRows(ctx context.Context, req FacetsRequest) (
 // issue counts are exact for the range instead of a sample of the first page.
 func (r *Repository) ExplorerSummaryRow(ctx context.Context, req OverviewRequest, newSinceMs int64) (rawSummaryRow, error) {
 	scan, args := errorSpanWhere(req.Filters)
-	args = append(args,
-		clickhouse.DateNamed("newSince", millisToTime(newSinceMs), clickhouse.MilliSeconds),
-		clickhouse.Named("groupCap", uint64(maxAggregatedGroups)),
-	)
+	args = append(args, clickhouse.DateNamed("newSince", millisToTime(newSinceMs), clickhouse.MilliSeconds))
 
 	query := `
 		SELECT sum(cnt)                        AS total_errors,
@@ -103,12 +96,11 @@ func (r *Repository) ExplorerSummaryRow(ctx context.Context, req OverviewRequest
 		       countIf(first_occ >= @newSince) AS new_issues,
 		       uniqExact(service)              AS services_affected
 		FROM (
-		    SELECT any(service)   AS service,
+		    SELECT min(service)   AS service,
 		           count()        AS cnt,
 		           min(timestamp) AS first_occ
 		    ` + scan + `
 		    GROUP BY error_group_id
-		    LIMIT @groupCap
 		)`
 
 	var row rawSummaryRow
@@ -124,8 +116,7 @@ func (r *Repository) ExplorerTrendRows(ctx context.Context, req OverviewRequest)
 		       count()                                                      AS errors
 		` + scan + `
 		GROUP BY time_bucket
-		ORDER BY time_bucket ASC
-		LIMIT 10000`
+		ORDER BY time_bucket ASC`
 
 	var rows []rawTrendRow
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerTrend", &rows, query, args...)

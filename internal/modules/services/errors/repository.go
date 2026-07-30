@@ -32,17 +32,16 @@ func (r *Repository) ServiceErrorRateRows(ctx context.Context, tenantID int64, s
 	clause, clauseArgs := serviceClause(serviceName)
 	query := `
 		SELECT service                                           AS service_name,
-		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
+		       ` + timebucket.DisplayGrainSQLForRange(startMs, endMs) + ` AS bucket_at,
 		       ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `,
 		       ` + spanstats.DurationSum + `
-		FROM ` + timebucket.SpanStatsRollup(endMs-startMs) + `
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end` + clause + `
+		     AND timestamp >= @start AND timestamp < @end` + clause + `
 		GROUP BY service_name, bucket_at
-		ORDER BY bucket_at ASC
-		LIMIT 10000`
-	args := append(chargs.RollupRangeArgs(tenantID, startMs, endMs), clauseArgs...)
+		ORDER BY bucket_at ASC`
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clauseArgs...)
 	var rows []rawServiceRateRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ServiceErrorRate", &rows, query, args...)
 }

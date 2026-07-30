@@ -1,14 +1,13 @@
 package billing
 
 import (
-	"database/sql"
 	"context"
+	"database/sql"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-
 )
 
 type Module struct {

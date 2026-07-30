@@ -41,7 +41,7 @@ func fillServicePoints(
 	startMs, endMs int64, serviceName string, raw []rawServiceRateRow,
 	point func(t time.Time, row rawServiceRateRow, ok bool) TimeSeriesPoint,
 ) []TimeSeriesPoint {
-	grain := timebucket.DisplayGrain(endMs - startMs)
+	grain := timebucket.DisplayGrainForRange(startMs, endMs)
 	at := func(r rawServiceRateRow) time.Time { return r.BucketAt }
 
 	if serviceName != "" {

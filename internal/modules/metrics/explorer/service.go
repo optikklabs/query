@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/optikklabs/query/internal/modules/metrics/filter"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -35,6 +37,9 @@ func (s *Service) ListMetricNames(ctx context.Context, tenantID, startMs, endMs 
 }
 
 func (s *Service) ListTagValues(ctx context.Context, tenantID, startMs, endMs int64, metricName, tagKey string) ([]TagValueResult, error) {
+	if !filter.ValidKey(tagKey) {
+		return nil, errorcode.ValidationError{Msg: fmt.Sprintf("invalid tag key %q", tagKey)}
+	}
 	var rows []tagValueDTO
 	var err error
 	if canonical := filter.Canonical(tagKey); canonical != "" {
@@ -75,7 +80,8 @@ func (s *Service) ListTags(ctx context.Context, tenantID, startMs, endMs int64, 
 		valuesByKey[row.TagKey] = append(valuesByKey[row.TagKey], row.TagValue)
 	}
 	// Static resource keys always appear, even with no values in range.
-	for _, static := range []string{"service", "host", "environment", "k8s_namespace"} {
+	for _, static := range []string{"service", "host", "pod", "container", "environment", "k8s_namespace",
+		"k8s.node.name", "cloud.provider", "cloud.account.id", "cloud.region", "cloud.platform"} {
 		if _, ok := valuesByKey[static]; !ok {
 			valuesByKey[static] = []string{}
 		}
@@ -130,8 +136,17 @@ func (s *Service) Query(ctx context.Context, tenantID int64, req FEQueryRequest)
 			if found {
 				kindPtr = &kind
 			}
+			if err := validateAggregationForKind(kindPtr, query.filter.Aggregation); err != nil {
+				return errorcode.ValidationError{Msg: fmt.Sprintf("query %q: %v", query.request.ID, err)}
+			}
 			query.filter.Cumulative, query.filter.Histogram = resolveSeriesFlags(kindPtr)
-			metricType := metricTypeFrom(kindPtr)
+			if query.filter.Cumulative && query.filter.StartMs < time.Now().Add(-48*time.Hour).UnixMilli() {
+				return errorcode.ValidationError{Msg: fmt.Sprintf("query %q: exact cumulative data is retained for 48 hours", query.request.ID)}
+			}
+			metricType := ""
+			if kindPtr != nil {
+				metricType = kindPtr.MetricType
+			}
 			fillZero := shouldZeroFill(
 				metricType, query.filter.Aggregation, query.filter.Cumulative,
 			)

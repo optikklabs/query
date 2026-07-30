@@ -10,8 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-const maxSeriesRows = 10000
-
 type Point struct {
 	TimeBucket time.Time `json:"timeBucket" ch:"time_bucket"`
 	Series     string    `json:"series"      ch:"series"`
@@ -36,24 +34,20 @@ func (r *Repository) QuerySeries(
 	}
 
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS time_bucket,
+		SELECT ` + timebucket.DisplayGrainSQLForRange(startMs, endMs) + ` AS time_bucket,
 		       ` + def.LabelSQL + ` AS series,
 		       ` + valueExpr + ` AS value
-		FROM ` + timebucket.MetricsRollup(endMs-startMs) + `
+		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name IN @metricNames
-		     AND timestamp   BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND ` + scopeCol + ` = @scopeVal
 		GROUP BY time_bucket, series
-		ORDER BY time_bucket ASC, series ASC
-		LIMIT @maxRows`
+		ORDER BY time_bucket ASC, series ASC`
 
-	args := chargs.WithMetricNames(chargs.RollupRangeArgs(tenantID, startMs, endMs), def.MetricNames)
+	args := chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), def.MetricNames)
 	args = timebucket.WithBucketGrainSec(args, startMs, endMs)
-	args = append(args,
-		clickhouse.Named("scopeVal", scopeVal),
-		clickhouse.Named("maxRows", uint64(maxSeriesRows)),
-	)
+	args = append(args, clickhouse.Named("scopeVal", scopeVal))
 	var rows []Point
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "seriesgroup.QuerySeries."+scopeCol,
 		&rows, query, args...)

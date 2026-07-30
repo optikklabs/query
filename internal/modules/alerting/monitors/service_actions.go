@@ -58,9 +58,7 @@ func (s *Service) Test(ctx context.Context, tenantID, id int64, queries query.Re
 		}
 		return TestResult{}, err
 	}
-	cond := query.DecodeConditions(row)
-	q := query.DecodeQuery(row)
-	scope := query.DecodeScope(row)
+	cond, q, scope := row.Conditions, row.Query, row.Scope
 	backend, err := queries.For(row.Type)
 	if err != nil {
 		return TestResult{}, err
@@ -96,9 +94,7 @@ func (s *Service) Series(ctx context.Context, tenantID, id int64, queries query.
 		}
 		return SeriesResponse{}, err
 	}
-	cond := query.DecodeConditions(row)
-	q := query.DecodeQuery(row)
-	scope := query.DecodeScope(row)
+	cond, q, scope := row.Conditions, row.Query, row.Scope
 	backend, err := queries.For(row.Type)
 	if err != nil {
 		return SeriesResponse{}, err

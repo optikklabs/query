@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
-
 )
 
 type Module struct {

@@ -113,7 +113,7 @@ func (r *Repository) ScoreAggregates(ctx context.Context, tenantID, startMs, end
 		SELECT name, count() AS cnt, avg(value) AS mean
 		FROM optikk.llm_scores
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		WHERE name IN (@names)
+		WHERE name IN @names
 		GROUP BY name`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("names", names))
 	var rows []scoreAgg

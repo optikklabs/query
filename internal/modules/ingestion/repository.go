@@ -69,7 +69,7 @@ func (r *Repository) DailySignals(ctx context.Context, tenantID, startMs, endMs 
 	       sum(record_count) AS c, sum(byte_count) AS b
 	FROM optikk.ingestion_stats
 	PREWHERE tenant_id = @tenantID
-	     AND bucket_hour BETWEEN @start AND @end
+	     AND bucket_hour >= @start AND bucket_hour < @end
 	     AND signal IN @signals
 	GROUP BY signal, d
 	ORDER BY d, signal`
@@ -87,11 +87,11 @@ func (r *Repository) ServiceUsage(
 	query := `
 	SELECT if(bucket_hour < @currentStart, 'prior', 'current') AS period,
 	       signal, toDate(bucket_hour) AS d, service AS svc,
-	       any(environment) AS env, sum(record_count) AS c,
+	       argMax(environment, (bucket_hour, environment)) AS env, sum(record_count) AS c,
 	       sum(byte_count) AS b
 	FROM optikk.ingestion_stats
 	PREWHERE tenant_id = @tenantID
-	     AND bucket_hour BETWEEN @start AND @end
+	     AND bucket_hour >= @start AND bucket_hour < @end
 	     AND signal IN @signals
 	GROUP BY period, signal, d, svc
 	ORDER BY period, d, svc, signal`
@@ -106,11 +106,11 @@ func (r *Repository) ServiceUsage(
 func (r *Repository) MetricCardinality(ctx context.Context, tenantID, startMs, endMs int64) ([]metricCardinalityRow, error) {
 	query := `
 	SELECT metric_name AS name, grouping(metric_name) AS is_total,
-	       uniq(fingerprint) AS c
+	       uniqExact(fingerprint) AS c
 	FROM optikk.metrics_series
-	PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+	PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 	GROUP BY GROUPING SETS ((metric_name), ())
-	ORDER BY is_total DESC, c DESC`
+	ORDER BY is_total DESC, c DESC, name ASC`
 	var rows []metricCardinalityRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db,
 		"ingestion.MetricCardinality", &rows, query,
@@ -119,11 +119,11 @@ func (r *Repository) MetricCardinality(ctx context.Context, tenantID, startMs, e
 
 func (r *Repository) ServiceTimeseries(ctx context.Context, tenantID, startMs, endMs int64) ([]svcCountRow, error) {
 	query := `
-	SELECT service AS svc, '' AS env, uniq(fingerprint) AS c, toUInt64(0) AS b
+	SELECT service AS svc, '' AS env, uniqExact(fingerprint) AS c, toUInt64(0) AS b
 	FROM optikk.metrics_series
-	PREWHERE tenant_id = @tenantID AND timestamp BETWEEN @start AND @end
+	PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 	GROUP BY svc
-	ORDER BY c DESC`
+	ORDER BY c DESC, svc ASC`
 	var rows []svcCountRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "ingestion.ServiceTimeseries", &rows, query, chargs.RangeArgs(tenantID, startMs, endMs)...)
 }

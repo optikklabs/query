@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
 const MaxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
@@ -35,7 +36,7 @@ type TagFilter struct {
 
 var validAggregations = map[string]bool{
 	"avg": true, "sum": true, "min": true, "max": true, "count": true,
-	"p50": true, "p75": true, "p95": true, "p99": true,
+	"p50": true, "p95": true, "p99": true,
 	"rate": true,
 }
 
@@ -58,54 +59,58 @@ func (f *Filters) Validate() error {
 	if !validAggregations[f.Aggregation] {
 		return errors.New("unsupported aggregation: " + f.Aggregation)
 	}
+	if f.Step != "" {
+		grain := BucketDurationSeconds(f.StartMs, f.EndMs, f.Step)
+		if grain < timebucket.AvailableRollupGrain(f.StartMs, grain) {
+			return errors.New("requested step is no longer retained")
+		}
+	}
+	for _, key := range f.GroupBy {
+		if !ValidKey(key) {
+			return errors.New("invalid group-by key: " + key)
+		}
+	}
+	for _, tag := range f.Tags {
+		if !ValidKey(tag.Key) || !validOperators[tag.Operator] || len(tag.Values) == 0 {
+			return errors.New("invalid metric filter: " + tag.Key)
+		}
+	}
 	return nil
 }
 
-var keyAliases = map[string]string{
+var resourceColumns = map[string]string{
 	"service":                "service",
 	"service.name":           "service",
 	"host":                   "host",
 	"host.name":              "host",
+	"pod":                    "pod",
+	"k8s.pod.name":           "pod",
+	"container":              "container",
+	"container.name":         "container",
 	"environment":            "environment",
 	"deployment.environment": "environment",
 	"k8s_namespace":          "k8s_namespace",
 	"k8s.namespace.name":     "k8s_namespace",
+	"k8s.node.name":          "k8s_node",
+	"cloud.provider":         "cloud_provider",
+	"cloud.account.id":       "cloud_account",
+	"cloud.region":           "cloud_region",
+	"cloud.platform":         "cloud_platform",
 }
 
 func Canonical(key string) string {
-	return keyAliases[key]
-}
-
-func ResourceColumn(canonical string) string {
-	switch canonical {
-	case "service":
-		return "service"
-	case "host":
-		return "host"
-	case "environment":
-		return "environment"
-	case "k8s_namespace":
-		return "k8s_namespace"
-	}
-	return ""
+	return resourceColumns[key]
 }
 
 func AttrColumn(key string) string {
-	return "attributes['" + SanitizeKey(key) + "']"
+	return "attributes['" + key + "']"
 }
 
-func SanitizeKey(key string) string {
-	var b strings.Builder
-	b.Grow(len(key))
-	for _, r := range key {
-		if (r >= 'a' && r <= 'z') ||
-			(r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') ||
-			r == '.' || r == '_' || r == '-' {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
+func ValidKey(key string) bool {
+	return key != "" && (Canonical(key) != "" || strings.IndexFunc(key, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
+			r == '.' || r == '_' || r == '-')
+	}) < 0)
 }
 
 var validOperators = map[string]bool{
@@ -120,22 +125,17 @@ func BuildClauses(f Filters) (resourceWhere, attrWhere string, args []any) {
 		positive []string
 		negative []string
 	}
-	resAccum := map[string]*resourceAccum{
-		"service":       {},
-		"host":          {},
-		"environment":   {},
-		"k8s_namespace": {},
-	}
+	resAccum := make(map[string]*resourceAccum)
+	var resourceOrder []string
 
 	rowIdx := 0
 	for _, t := range f.Tags {
-		if !validOperators[t.Operator] || len(t.Values) == 0 {
-			continue
-		}
 		if canonical := Canonical(t.Key); canonical != "" {
 			acc := resAccum[canonical]
 			if acc == nil {
-				continue
+				acc = &resourceAccum{}
+				resAccum[canonical] = acc
+				resourceOrder = append(resourceOrder, canonical)
 			}
 			negated := t.Operator == "!=" || t.Operator == "NOT IN"
 			if negated {
@@ -147,43 +147,34 @@ func BuildClauses(f Filters) (resourceWhere, attrWhere string, args []any) {
 		}
 
 		col := AttrColumn(t.Key)
+		exists := "mapContains(attributes, '" + t.Key + "')"
 		bind := "mf" + strconv.Itoa(rowIdx)
 		rowIdx++
 		switch t.Operator {
 		case "=":
-			attrWhere += " AND " + col + " = @" + bind
+			attrWhere += " AND " + exists + " AND " + col + " = @" + bind
 			args = append(args, clickhouse.Named(bind, t.Values[0]))
 		case "!=":
-			attrWhere += " AND " + col + " != @" + bind
+			attrWhere += " AND " + exists + " AND " + col + " != @" + bind
 			args = append(args, clickhouse.Named(bind, t.Values[0]))
 		case "IN":
-			attrWhere += " AND " + col + " IN @" + bind
+			attrWhere += " AND " + exists + " AND " + col + " IN @" + bind
 			args = append(args, clickhouse.Named(bind, t.Values))
 		case "NOT IN":
-			attrWhere += " AND " + col + " NOT IN @" + bind
+			attrWhere += " AND " + exists + " AND " + col + " NOT IN @" + bind
 			args = append(args, clickhouse.Named(bind, t.Values))
 		}
 	}
 
-	for _, spec := range []struct {
-		canonical string
-		col       string
-		posBind   string
-		negBind   string
-	}{
-		{"service", "service", "services", "excServices"},
-		{"host", "host", "hosts", "excHosts"},
-		{"environment", "environment", "environments", "excEnvironments"},
-		{"k8s_namespace", "k8s_namespace", "k8sNamespaces", "excK8sNamespaces"},
-	} {
-		acc := resAccum[spec.canonical]
+	for i, col := range resourceOrder {
+		acc, bind := resAccum[col], "mr"+strconv.Itoa(i)
 		if len(acc.positive) > 0 {
-			resourceWhere += " AND " + spec.col + " IN @" + spec.posBind
-			args = append(args, clickhouse.Named(spec.posBind, acc.positive))
+			resourceWhere += " AND " + col + " IN @" + bind
+			args = append(args, clickhouse.Named(bind, acc.positive))
 		}
 		if len(acc.negative) > 0 {
-			resourceWhere += " AND " + spec.col + " NOT IN @" + spec.negBind
-			args = append(args, clickhouse.Named(spec.negBind, acc.negative))
+			resourceWhere += " AND " + col + " NOT IN @x" + bind
+			args = append(args, clickhouse.Named("x"+bind, acc.negative))
 		}
 	}
 

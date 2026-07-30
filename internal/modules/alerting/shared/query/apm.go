@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -17,16 +18,12 @@ type APMBackend struct {
 
 func NewAPMBackend(db clickhouse.Conn) *APMBackend { return &APMBackend{db: db} }
 
-func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, _ models.Scope, cond models.Conditions, now time.Time) (ScalarResult, error) {
+func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, cond models.Conditions, now time.Time) (ScalarResult, error) {
 	if q.APM == nil {
 		return ScalarResult{}, nil
 	}
-	windowSec := int64(q.APM.WindowSec)
-	if windowSec <= 0 {
-		windowSec = 300
-	}
-	endMs := now.UnixMilli()
-	startMs := endMs - windowSec*1000
+	windowSec := monitorWindowSec(q.APM.WindowSec)
+	startMs, endMs := completeWindow(now, windowSec, 60)
 
 	query := `
 		SELECT ` + spanstats.Requests + `,
@@ -34,11 +31,16 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		       ` + spanstats.LatencyP99.SQL() + `
 		FROM optikk.span_stats_1m
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND service = @service
+		     AND (@resource = '' OR span_name = @resource)
 		     AND ` + spanstats.InboundPred
 
-	args := apmArgs(m.TenantID, q.APM.Service, startMs, endMs)
+	scopeSQL, args, err := CompileScope("apm", scope, apmArgs(m.TenantID, *q.APM, startMs, endMs))
+	if err != nil {
+		return ScalarResult{}, err
+	}
+	query += scopeSQL
 	var rows []apmAggRow
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.apm.Scalar", &rows, query, args...); err != nil {
 		return ScalarResult{}, err
@@ -57,42 +59,42 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 	return ScalarResult{Value: value, HasData: true}, nil
 }
 
-func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, _ models.Scope, _ models.Conditions, windowMs int64, now time.Time) ([]Point, error) {
+func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, _ models.Conditions, windowMs int64, now time.Time) ([]Point, error) {
 	if q.APM == nil {
 		return nil, nil
 	}
 	endMs := now.UnixMilli()
 	startMs := endMs - windowMs
-	startMs, endMs = timebucket.SnapRangeForRollup(startMs, endMs)
 
+	scopeSQL, args, err := CompileScope("apm", scope, apmArgs(m.TenantID, *q.APM, startMs, endMs))
+	if err != nil {
+		return nil, err
+	}
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket,
 		       ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `,
 		       ` + spanstats.LatencyP99.SQL() + `
-		FROM ` + timebucket.SpanStatsRollup(windowMs) + `
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp BETWEEN @start AND @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND service = @service
-		     AND ` + spanstats.InboundPred + `
+		     AND (@resource = '' OR span_name = @resource)
+		     AND ` + spanstats.InboundPred + scopeSQL + `
 		GROUP BY bucket
 		ORDER BY bucket`
 
-	args := apmArgs(m.TenantID, q.APM.Service, startMs, endMs)
 	var rows []apmSeriesRow
 	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.apm.Series", &rows, query, args...); err != nil {
 		return nil, err
 	}
 	out := make([]Point, 0, len(rows))
-	windowSec := int64(q.APM.WindowSec)
-	if windowSec <= 0 {
-		windowSec = 300
-	}
+	bucketSec := int64(timebucket.DisplayGrain(windowMs).Seconds())
 	for _, r := range rows {
 		var p99 float64
 		p99 = spanstats.LatencyP99.At(r.QS, spanstats.P99)
 		row := apmAggRow{RequestCount: r.RequestCount, ErrorCount: r.ErrorCount, P99: p99}
-		out = append(out, Point{BucketMs: r.Bucket.UnixMilli(), Value: apmTrackValue(q.APM.Track, row, windowSec)})
+		out = append(out, Point{BucketMs: r.Bucket.UnixMilli(), Value: apmTrackValue(q.APM.Track, row, bucketSec)})
 	}
 	return out, nil
 }
@@ -111,17 +113,15 @@ func apmTrackValue(track string, row apmAggRow, windowSec int64) float64 {
 		return float64(row.RequestCount) / float64(windowSec)
 	case "latency":
 		return row.P99
-	case "apdex":
-
-		return 0
 	}
 	return 0
 }
 
-func apmArgs(tenantID int64, service string, startMs, endMs int64) []any {
+func apmArgs(tenantID int64, q models.APMQuery, startMs, endMs int64) []any {
 	return []any{
 		tenantIDArg(tenantID),
-		clickhouse.Named("service", service),
+		clickhouse.Named("service", q.Service),
+		clickhouse.Named("resource", strings.TrimSpace(q.Resource)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 	}

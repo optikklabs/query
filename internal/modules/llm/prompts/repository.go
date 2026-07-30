@@ -55,12 +55,19 @@ func (r *Repository) CreatePrompt(ctx context.Context, p promptInsertArgs, v ver
 	if err != nil {
 		return 0, err
 	}
-	status := "production"
-	if _, err := tx.ExecContext(ctx, `
+	version, err := tx.ExecContext(ctx, `
 		INSERT INTO optikk.llm_prompt_versions
 		  (prompt_id, tenant_id, version, template_json, variables_json, notes, status, created_at, created_by_user_id)
 		VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`,
-		promptID, v.TenantID, v.TemplateJSON, v.VariablesJSON, v.Notes, status, time.Now().UTC(), v.CreatedBy); err != nil {
+		promptID, v.TenantID, v.TemplateJSON, v.VariablesJSON, v.Notes, "draft", time.Now().UTC(), v.CreatedBy)
+	if err != nil {
+		return 0, err
+	}
+	versionID, err := version.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE optikk.llm_prompts SET production_version_id = ? WHERE id = ?`, versionID, promptID); err != nil {
 		return 0, err
 	}
 	return promptID, tx.Commit()
@@ -73,66 +80,64 @@ func (r *Repository) CreateVersion(ctx context.Context, v versionInsertArgs) (in
 	}
 	defer tx.Rollback()
 
+	var promptID int64
+	if err := tx.GetContext(ctx, &promptID,
+		`SELECT id FROM optikk.llm_prompts WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+		v.PromptID, v.TenantID); err != nil {
+		return 0, err
+	}
 	var maxVersion int
 	if err := tx.GetContext(ctx, &maxVersion,
 		`SELECT COALESCE(MAX(version), 0) FROM optikk.llm_prompt_versions WHERE prompt_id = ?`,
-		v.PromptID); err != nil {
+		promptID); err != nil {
 		return 0, err
 	}
 	next := maxVersion + 1
-	status := "draft"
-	if v.Production {
-		status = "production"
-		if err := demoteProduction(ctx, tx, v.PromptID); err != nil {
-			return 0, err
-		}
-	}
-	if _, err := tx.ExecContext(ctx, `
+	res, err := tx.ExecContext(ctx, `
 		INSERT INTO optikk.llm_prompt_versions
 		  (prompt_id, tenant_id, version, template_json, variables_json, notes, status, created_at, created_by_user_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		v.PromptID, v.TenantID, next, v.TemplateJSON, v.VariablesJSON, v.Notes, status, time.Now().UTC(), v.CreatedBy); err != nil {
+		promptID, v.TenantID, next, v.TemplateJSON, v.VariablesJSON, v.Notes, "draft", time.Now().UTC(), v.CreatedBy)
+	if err != nil {
 		return 0, err
 	}
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE optikk.llm_prompts SET updated_at = ? WHERE id = ?`, time.Now().UTC(), v.PromptID); err != nil {
+	versionID, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE optikk.llm_prompts
+		   SET production_version_id = IF(?, ?, production_version_id), updated_at = ?
+		 WHERE id = ?`, v.Production, versionID, time.Now().UTC(), promptID); err != nil {
 		return 0, err
 	}
 	return next, tx.Commit()
 }
 
 func (r *Repository) SetVersionStatus(ctx context.Context, promptID int64, version int, status string) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
+	res, err := dbutil.ExecSQL(ctx, r.db, "prompts.SetVersionStatus", `
+		UPDATE optikk.llm_prompts p
+		JOIN optikk.llm_prompt_versions v ON v.prompt_id = p.id AND v.version = ?
+		   SET v.status = IF(? = 'production', 'draft', ?),
+		       p.production_version_id = CASE
+		           WHEN ? = 'production' THEN v.id
+		           WHEN p.production_version_id = v.id THEN NULL
+		           ELSE p.production_version_id END,
+		       p.updated_at = ?
+		 WHERE p.id = ?`, version, status, status, status, time.Now().UTC(), promptID)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-
-	if status == "production" {
-		if err := demoteProduction(ctx, tx, promptID); err != nil {
-			return err
-		}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
 	}
-	res, err := tx.ExecContext(ctx,
-		`UPDATE optikk.llm_prompt_versions SET status = ? WHERE prompt_id = ? AND version = ?`,
-		status, promptID, version)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	var exists bool
+	err = dbutil.GetSQL(ctx, r.db, "prompts.VersionExists", &exists,
+		`SELECT EXISTS(SELECT 1 FROM optikk.llm_prompt_versions WHERE prompt_id = ? AND version = ?)`,
+		promptID, version)
+	if err == nil && !exists {
 		return sql.ErrNoRows
 	}
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE optikk.llm_prompts SET updated_at = ? WHERE id = ?`, time.Now().UTC(), promptID); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-func demoteProduction(ctx context.Context, tx *sqlx.Tx, promptID int64) error {
-	_, err := tx.ExecContext(ctx,
-		`UPDATE optikk.llm_prompt_versions SET status = 'archived' WHERE prompt_id = ? AND status = 'production'`,
-		promptID)
 	return err
 }
 
@@ -147,8 +152,12 @@ func (r *Repository) GetPromptByName(ctx context.Context, tenantID int64, name s
 func (r *Repository) ListVersions(ctx context.Context, promptID int64) ([]versionRow, error) {
 	var rows []versionRow
 	err := dbutil.SelectSQL(ctx, r.db, "prompts.ListVersions", &rows, `
-		SELECT version, template_json, variables_json, notes, status, created_at
-		  FROM optikk.llm_prompt_versions WHERE prompt_id = ? ORDER BY version DESC`, promptID)
+		SELECT v.version, v.template_json, v.variables_json, v.notes,
+		       IF(v.id = p.production_version_id, 'production',
+		          IF(v.status = 'production', 'draft', v.status)) AS status, v.created_at
+		  FROM optikk.llm_prompt_versions v
+		  JOIN optikk.llm_prompts p ON p.id = v.prompt_id
+		 WHERE v.prompt_id = ? ORDER BY v.version DESC`, promptID)
 	return rows, err
 }
 
@@ -163,10 +172,10 @@ func (r *Repository) ListPrompts(ctx context.Context, tenantID int64) ([]promptC
 	err := dbutil.SelectSQL(ctx, r.db, "prompts.List", &rows, `
 		SELECT p.id, p.name, p.type, p.description, p.tags_json, p.updated_at, p.created_at,
 		       (SELECT COUNT(*) FROM optikk.llm_prompt_versions v WHERE v.prompt_id = p.id) AS version_count,
-		       (SELECT v.version FROM optikk.llm_prompt_versions v
-		         WHERE v.prompt_id = p.id AND v.status = 'production' LIMIT 1) AS production_version
+		       pv.version AS production_version
 		  FROM optikk.llm_prompts p
+		  LEFT JOIN optikk.llm_prompt_versions pv ON pv.id = p.production_version_id
 		 WHERE p.tenant_id = ?
-		 ORDER BY COALESCE(p.updated_at, p.created_at) DESC`, tenantID)
+		 ORDER BY COALESCE(p.updated_at, p.created_at) DESC, p.id DESC`, tenantID)
 	return rows, err
 }
