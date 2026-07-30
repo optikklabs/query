@@ -1,14 +1,23 @@
-package errors
+package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/optikklabs/query/internal/infra/cursor"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/modules/services/errors/models"
 	"github.com/optikklabs/query/internal/shared/errorgroups"
 	"github.com/optikklabs/query/internal/shared/spanfilter"
 )
+
+func decodeGroupsCursor(raw string) (models.ErrorGroupsCursor, bool) {
+	return cursor.Decode[models.ErrorGroupsCursor](raw)
+}
+
+func millisToTime(ms int64) time.Time { return time.UnixMilli(ms) }
 
 // Error groups are always read from the error spans themselves, so span- and
 // root-level predicates both apply to the same row — no trace-level CTE.
@@ -21,7 +30,7 @@ func errorSpanWhere(f spanfilter.Filters) (string, []any) {
 	return errorSpanScan + c.Span + c.Root, c.Args
 }
 
-func (r *Repository) ExplorerGroupRows(ctx context.Context, req GroupsRequest) ([]rawErrorGroupRow, error) {
+func (r *Repository) ExplorerGroupRows(ctx context.Context, req models.GroupsRequest) ([]models.RawErrorGroupRow, error) {
 	scan, args := errorSpanWhere(req.Filters)
 
 	var having string
@@ -52,11 +61,11 @@ func (r *Repository) ExplorerGroupRows(ctx context.Context, req GroupsRequest) (
 		ORDER BY error_count DESC, error_group_id ASC
 		LIMIT @pgLimit`
 
-	var rows []rawErrorGroupRow
+	var rows []models.RawErrorGroupRow
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerGroups", &rows, query, args...)
 }
 
-func (r *Repository) ExplorerFacetRows(ctx context.Context, req FacetsRequest) ([]rawFacetDimRow, error) {
+func (r *Repository) ExplorerFacetRows(ctx context.Context, req models.FacetsRequest) ([]models.RawFacetDimRow, error) {
 	scan, args := errorSpanWhere(req.Filters)
 
 	query := `
@@ -81,18 +90,18 @@ func (r *Repository) ExplorerFacetRows(ctx context.Context, req FacetsRequest) (
 		ORDER BY dim, cnt DESC, value ASC
 		LIMIT 20 BY dim`
 
-	var rows []rawFacetDimRow
+	var rows []models.RawFacetDimRow
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerFacets", &rows, query, args...)
 }
 
 // ExplorerSummaryRow aggregates over groups, not spans, so "active"/"new"
 // issue counts are exact for the range instead of a sample of the first page.
-func (r *Repository) ExplorerSummaryRow(ctx context.Context, req OverviewRequest, newSinceMs int64) (rawSummaryRow, error) {
+func (r *Repository) ExplorerSummaryRow(ctx context.Context, req models.OverviewRequest, newSinceMs int64) (models.RawSummaryRow, error) {
 	scan, args := errorSpanWhere(req.Filters)
 	args = append(args, clickhouse.DateNamed("newSince", millisToTime(newSinceMs), clickhouse.MilliSeconds))
 
 	query := `
-		SELECT sum(cnt)                        AS total_errors,
+		SELECT toUInt64OrZero(sum(cnt))        AS total_errors,
 		       count()                         AS active_issues,
 		       countIf(first_occ >= @newSince) AS new_issues,
 		       uniqExact(service)              AS services_affected
@@ -104,12 +113,12 @@ func (r *Repository) ExplorerSummaryRow(ctx context.Context, req OverviewRequest
 		    GROUP BY error_group_id
 		)`
 
-	var row rawSummaryRow
+	var row models.RawSummaryRow
 	err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerSummary", &row, query, args...)
 	return row, err
 }
 
-func (r *Repository) ExplorerTrendRows(ctx context.Context, req OverviewRequest) ([]rawTrendRow, error) {
+func (r *Repository) ExplorerTrendRows(ctx context.Context, req models.OverviewRequest) ([]models.RawTrendRow, error) {
 	scan, args := errorSpanWhere(req.Filters)
 
 	query := `
@@ -119,6 +128,6 @@ func (r *Repository) ExplorerTrendRows(ctx context.Context, req OverviewRequest)
 		GROUP BY time_bucket
 		ORDER BY time_bucket ASC`
 
-	var rows []rawTrendRow
+	var rows []models.RawTrendRow
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerTrend", &rows, query, args...)
 }

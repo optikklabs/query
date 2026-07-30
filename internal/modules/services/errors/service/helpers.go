@@ -1,4 +1,4 @@
-package errors
+package service
 
 func httpBucketToCode(bucket string) int {
 	switch bucket {

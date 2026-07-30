@@ -1,4 +1,4 @@
-package errors
+package repository
 
 import (
 	"context"
@@ -7,11 +7,12 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/modules/services/errors/models"
 	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/errorgroups"
 )
 
-func (r *Repository) ErrorGroupDetailRow(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*rawErrorGroupDetailRow, error) {
+func (r *Repository) ErrorGroupDetailRow(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*models.RawErrorGroupDetailRow, error) {
 	query := `
 		SELECT ` + errorgroups.IdentityProjection("") + `,
 		       service                              AS service,
@@ -26,14 +27,14 @@ func (r *Repository) ErrorGroupDetailRow(ctx context.Context, tenantID int64, st
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("groupID", groupID),
 	)
-	var row rawErrorGroupDetailRow
+	var row models.RawErrorGroupDetailRow
 	if err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupDetail", &row, query, args...); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
-func (r *Repository) ErrorGroupTraceRows(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string, limit int, cursor ErrorTracesCursor) ([]rawErrorGroupTraceRow, error) {
+func (r *Repository) ErrorGroupTraceRows(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string, limit int, cursor models.ErrorTracesCursor) ([]models.RawErrorGroupTraceRow, error) {
 	var paginationFilter string
 	if !cursor.IsZero() {
 		paginationFilter = "AND (s.timestamp < @cursorTs OR (s.timestamp = @cursorTs AND s.span_id > @cursorSpan))"
@@ -60,11 +61,11 @@ func (r *Repository) ErrorGroupTraceRows(ctx context.Context, tenantID int64, st
 		clickhouse.Named("cursorTs", cursor.Timestamp),
 		clickhouse.Named("cursorSpan", cursor.SpanID),
 	}
-	var rows []rawErrorGroupTraceRow
+	var rows []models.RawErrorGroupTraceRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupTraces", &rows, query, args...)
 }
 
-func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]rawTimeBucketCountRow, error) {
+func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]models.RawTimeBucketCountRow, error) {
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       count()                            AS count
@@ -80,11 +81,11 @@ func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, tenantID int6
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("groupID", groupID),
 	}
-	var rows []rawTimeBucketCountRow
+	var rows []models.RawTimeBucketCountRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupTimeseries", &rows, query, args...)
 }
 
-func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*rawErrorLatestOccurrenceRow, error) {
+func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*models.RawErrorLatestOccurrenceRow, error) {
 	query := `
 		SELECT s.trace_id                  AS trace_id,
 		       s.span_id                   AS span_id,
@@ -107,20 +108,14 @@ func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, tenantID
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("groupID", groupID),
 	)
-	var row rawErrorLatestOccurrenceRow
+	var row models.RawErrorLatestOccurrenceRow
 	if err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupLatestOccurrence", &row, query, args...); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
-type rawErrorFacetGroupRow struct {
-	Dim   string `ch:"dim"`
-	Value string `ch:"value"`
-	Count uint64 `ch:"cnt"`
-}
-
-func (r *Repository) ErrorGroupFacetRowsAll(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]rawErrorFacetGroupRow, error) {
+func (r *Repository) ErrorGroupFacetRowsAll(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]models.RawFacetDimRow, error) {
 	query := `
 		SELECT
 			multiIf(
@@ -153,11 +148,11 @@ func (r *Repository) ErrorGroupFacetRowsAll(ctx context.Context, tenantID int64,
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("groupID", groupID),
 	)
-	var rows []rawErrorFacetGroupRow
+	var rows []models.RawFacetDimRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupFacetAll", &rows, query, args...)
 }
 
-func (r *Repository) ErrorHotspotRows(ctx context.Context, tenantID int64, startMs, endMs int64) ([]rawErrorHotspotRow, error) {
+func (r *Repository) ErrorHotspotRows(ctx context.Context, tenantID int64, startMs, endMs int64) ([]models.RawErrorHotspotRow, error) {
 	query := `
 		SELECT service,
 		       argMax(name, (timestamp, span_id)) AS operation_name,
@@ -171,6 +166,6 @@ func (r *Repository) ErrorHotspotRows(ctx context.Context, tenantID int64, start
 		ORDER BY error_count DESC, service ASC, error_group_id ASC
 		LIMIT 2 BY service`
 	args := chargs.RangeArgs(tenantID, startMs, endMs)
-	var rows []rawErrorHotspotRow
+	var rows []models.RawErrorHotspotRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorHotspot", &rows, query, args...)
 }

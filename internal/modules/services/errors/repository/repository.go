@@ -1,4 +1,4 @@
-package errors
+package repository
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/modules/services/errors/models"
 	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
@@ -28,7 +29,7 @@ func serviceClause(serviceName string) (string, []any) {
 		     AND service = @serviceName`, []any{clickhouse.Named("serviceName", serviceName)}
 }
 
-func (r *Repository) ServiceErrorRateRows(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]rawServiceRateRow, error) {
+func (r *Repository) ServiceErrorRateRows(ctx context.Context, tenantID int64, startMs, endMs int64, serviceName string) ([]models.RawServiceRateRow, error) {
 	clause, clauseArgs := serviceClause(serviceName)
 	query := `
 		SELECT service                                           AS service_name,
@@ -42,6 +43,6 @@ func (r *Repository) ServiceErrorRateRows(ctx context.Context, tenantID int64, s
 		GROUP BY service_name, bucket_at
 		ORDER BY bucket_at ASC`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clauseArgs...)
-	var rows []rawServiceRateRow
+	var rows []models.RawServiceRateRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ServiceErrorRate", &rows, query, args...)
 }

@@ -6,13 +6,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/optikklabs/query/internal/infra/cursor"
+	"github.com/optikklabs/query/internal/modules/services/errors/models"
+	"github.com/optikklabs/query/internal/modules/services/errors/service"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 
 	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
 )
 
 type ErrorHandler struct {
-	Service *Service
+	Service *service.Service
 }
 
 func (h *ErrorHandler) GetServiceErrorRate(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +25,7 @@ func (h *ErrorHandler) GetServiceErrorRate(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ErrorHandler) QueryErrorGroups(w http.ResponseWriter, r *http.Request) {
-	var req GroupsRequest
+	var req models.GroupsRequest
 	if !modulecommon.BindFiltered(w, r, &req) {
 		return
 	}
@@ -36,7 +38,7 @@ func (h *ErrorHandler) QueryErrorGroups(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ErrorHandler) QueryErrorFacets(w http.ResponseWriter, r *http.Request) {
-	var req FacetsRequest
+	var req models.FacetsRequest
 	if !modulecommon.BindFiltered(w, r, &req) {
 		return
 	}
@@ -49,7 +51,7 @@ func (h *ErrorHandler) QueryErrorFacets(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ErrorHandler) QueryErrorOverview(w http.ResponseWriter, r *http.Request) {
-	var req OverviewRequest
+	var req models.OverviewRequest
 	if !modulecommon.BindFiltered(w, r, &req) {
 		return
 	}
@@ -81,9 +83,9 @@ func (h *ErrorHandler) GetErrorGroupTraces(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	var cur ErrorTracesCursor
+	var cur models.ErrorTracesCursor
 	if cursorStr := r.URL.Query().Get("cursor"); cursorStr != "" {
-		if decoded, ok := cursor.Decode[ErrorTracesCursor](cursorStr); ok {
+		if decoded, ok := cursor.Decode[models.ErrorTracesCursor](cursorStr); ok {
 			cur = decoded
 		}
 	}

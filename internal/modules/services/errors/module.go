@@ -3,6 +3,9 @@ package errors
 import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/optikklabs/query/internal/modules/services/errors/repository"
+	"github.com/optikklabs/query/internal/modules/services/errors/service"
 )
 
 func NewModule(nativeQuerier clickhouse.Conn) *errorsModule {
@@ -19,7 +22,7 @@ func (m *errorsModule) Name() string { return "servicesErrors" }
 
 func (m *errorsModule) configure(nativeQuerier clickhouse.Conn) {
 	m.handler = &ErrorHandler{
-		Service: NewService(NewRepository(nativeQuerier)),
+		Service: service.NewService(repository.NewRepository(nativeQuerier)),
 	}
 }
 

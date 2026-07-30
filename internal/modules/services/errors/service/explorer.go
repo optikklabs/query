@@ -1,10 +1,11 @@
-package errors
+package service
 
 import (
 	"context"
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/cursor"
+	"github.com/optikklabs/query/internal/modules/services/errors/models"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -16,40 +17,34 @@ const (
 	newIssueWindow = 24 * time.Hour
 )
 
-func decodeGroupsCursor(raw string) (ErrorGroupsCursor, bool) {
-	return cursor.Decode[ErrorGroupsCursor](raw)
-}
-
-func millisToTime(ms int64) time.Time { return time.UnixMilli(ms) }
-
-func (s *Service) QueryErrorGroups(ctx context.Context, req GroupsRequest) (GroupsResponse, error) {
+func (s *Service) QueryErrorGroups(ctx context.Context, req models.GroupsRequest) (models.GroupsResponse, error) {
 	limit := filterutil.PickLimit(req.Limit, defaultGroupsLimit, maxGroupsLimit)
 	req.Limit = limit + 1
 
 	raw, err := s.repo.ExplorerGroupRows(ctx, req)
 	if err != nil {
-		return GroupsResponse{}, err
+		return models.GroupsResponse{}, err
 	}
-	raw, pageInfo := cursor.Paginate(raw, limit, func(r rawErrorGroupRow) string {
-		return cursor.Encode(ErrorGroupsCursor{ErrorCount: r.ErrorCount, GroupID: r.GroupID})
+	raw, pageInfo := cursor.Paginate(raw, limit, func(r models.RawErrorGroupRow) string {
+		return cursor.Encode(models.ErrorGroupsCursor{ErrorCount: r.ErrorCount, GroupID: r.GroupID})
 	})
 
-	results := make([]ErrorGroup, len(raw))
+	results := make([]models.ErrorGroup, len(raw))
 	for i, row := range raw {
 		results[i] = toErrorGroup(row)
 	}
-	return GroupsResponse{Results: results, PageInfo: pageInfo}, nil
+	return models.GroupsResponse{Results: results, PageInfo: pageInfo}, nil
 }
 
-func (s *Service) QueryErrorFacets(ctx context.Context, req FacetsRequest) (Facets, error) {
+func (s *Service) QueryErrorFacets(ctx context.Context, req models.FacetsRequest) (models.Facets, error) {
 	rows, err := s.repo.ExplorerFacetRows(ctx, req)
 	if err != nil {
-		return Facets{}, err
+		return models.Facets{}, err
 	}
 
-	var facets Facets
+	var facets models.Facets
 	for _, row := range rows {
-		bucket := FacetBucket{Value: row.Value, Count: int64(row.Count)}
+		bucket := models.FacetBucket{Value: row.Value, Count: int64(row.Count)}
 		switch row.Dim {
 		case "service":
 			facets.Service = append(facets.Service, bucket)
@@ -64,23 +59,24 @@ func (s *Service) QueryErrorFacets(ctx context.Context, req FacetsRequest) (Face
 	return facets, nil
 }
 
-func (s *Service) QueryErrorOverview(ctx context.Context, req OverviewRequest) (OverviewResponse, error) {
+func (s *Service) QueryErrorOverview(ctx context.Context, req models.OverviewRequest) (models.OverviewResponse, error) {
 	newSinceMs := time.Now().Add(-newIssueWindow).UnixMilli()
 	summary, err := s.repo.ExplorerSummaryRow(ctx, req, newSinceMs)
 	if err != nil {
-		return OverviewResponse{}, err
+		return models.OverviewResponse{}, err
 	}
 	trendRows, err := s.repo.ExplorerTrendRows(ctx, req)
 	if err != nil {
-		return OverviewResponse{}, err
+		return models.OverviewResponse{}, err
 	}
 
-	trend := make([]TrendBucket, len(trendRows))
+	trend := make([]models.TrendBucket, len(trendRows))
 	for i, row := range trendRows {
-		trend[i] = TrendBucket{TimeBucket: row.TimeBucket, Errors: int64(row.Errors)}
+		trend[i] = models.TrendBucket{TimeBucket: row.TimeBucket, Errors: int64(row.Errors)}
 	}
-	return OverviewResponse{
-		Summary: Summary{
+
+	return models.OverviewResponse{
+		Summary: models.Summary{
 			TotalErrors:      int64(summary.TotalErrors),
 			ActiveIssues:     int64(summary.ActiveIssues),
 			NewIssues:        int64(summary.NewIssues),
@@ -90,8 +86,8 @@ func (s *Service) QueryErrorOverview(ctx context.Context, req OverviewRequest) (
 	}, nil
 }
 
-func toErrorGroup(row rawErrorGroupRow) ErrorGroup {
-	return ErrorGroup{
+func toErrorGroup(row models.RawErrorGroupRow) models.ErrorGroup {
+	return models.ErrorGroup{
 		GroupID:         row.GroupID,
 		ServiceName:     row.ServiceName,
 		OperationName:   row.OperationName,
