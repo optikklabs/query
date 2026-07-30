@@ -2,7 +2,7 @@
 
 The DB/query/API layer of the Optikk observability backend. Serves the HTTP
 `/api/v1` API (chi), reading ClickHouse (spans/logs/metrics) and MySQL
-(users/teams/alerting). Owns the **MySQL** schema; its DDL lives in `db/mysql`
+(users/teams/alerting). Owns the **MySQL** schema; its DDL lives in `db`
 and is applied by hand (no migration-on-boot).
 
 The ingestion path (OTLP gRPC + Kafka) lives in the separate
@@ -13,13 +13,13 @@ exist.
 
 ## Schema
 
-The MySQL DDL lives in [`db/mysql`](db/mysql) as numbered `.sql` files and is
+The MySQL DDL lives in [`db`](db) as numbered `.sql` files and is
 **applied by hand** — the service does not migrate on boot. Apply it (in lexical
 order) at least once before starting query against a fresh database, or it will
 fail against missing tables. The DDL is idempotent, so re-applying is safe:
 
 ```bash
-for f in db/mysql/*.sql; do mysql < "$f"; done
+for f in db/*.sql; do mysql < "$f"; done
 ```
 
 The ClickHouse tables this service reads are owned by `ingest`; apply that
