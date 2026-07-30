@@ -135,7 +135,7 @@ func (s *Service) costFromUsage(
 	logs, spans, metrics []dateCountRow,
 	startMs, endMs int64,
 ) CostResponse {
-	var logsBytes, spansBytes, metricDPs uint64
+	var logsBytes, spansBytes, metricSamples uint64
 	for _, row := range logs {
 		logsBytes += row.Bytes
 	}
@@ -143,17 +143,16 @@ func (s *Service) costFromUsage(
 		spansBytes += row.Bytes
 	}
 	for _, row := range metrics {
-		metricDPs += row.Count
+		metricSamples += row.Count
 	}
 
 	end := time.UnixMilli(endMs).UTC()
 	u := usageQuantities{
-		logsBytes:   logsBytes,
-		spansBytes:  spansBytes,
-		metricDPs:   metricDPs,
-		windowMin:   float64(endMs-startMs) / float64(time.Minute/time.Millisecond),
-		daysElapsed: end.Day(),
-		daysInMonth: daysInMonth(end),
+		logsBytes:     logsBytes,
+		spansBytes:    spansBytes,
+		metricSamples: metricSamples,
+		daysElapsed:   end.Day(),
+		daysInMonth:   daysInMonth(end),
 	}
 	return estimateCost(u, s.cfg.Rates())
 }

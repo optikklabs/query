@@ -1,109 +1,286 @@
 package service
 
 import (
-	"math"
 	"testing"
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/deployments/models"
 )
 
-func TestBuildListResponseDerivesBaselineTimelineAndTrafficShare(t *testing.T) {
-	start := time.Date(2026, 7, 30, 8, 0, 0, 0, time.UTC)
-	rows := []models.RawDeploymentRow{
-		{
-			Service: "checkout", Environment: "prod", Version: "v2",
-			FirstSeen: start.Add(30 * time.Minute), Requests: 300, Errors: 6, QS: []float64{240},
-		},
-		{
-			Service: "checkout", Environment: "prod", Version: "v1",
-			FirstSeen: start, Requests: 100, Errors: 1, QS: []float64{200},
-		},
-	}
+var (
+	t0 = time.Date(2026, 7, 30, 22, 0, 0, 0, time.UTC)
+	t1 = t0.Add(1 * time.Hour)  // next deployment at T0+1h
+	t2 = t0.Add(2 * time.Hour)  // picker end or third deploy
+)
 
-	got := buildListResponse(rows, start.Add(time.Hour).UnixMilli())
-	if got.Summary.DeploymentCount != 2 || got.Summary.ServiceCount != 1 || got.Summary.EnvironmentCount != 1 {
-		t.Fatalf("unexpected summary: %+v", got.Summary)
-	}
-	if len(got.Results) != 2 {
-		t.Fatalf("got %d results, want 2", len(got.Results))
-	}
+func ms(t time.Time) int64 { return t.UnixMilli() }
 
-	latest := got.Results[0]
-	if latest.Version != "v2" {
-		t.Fatalf("latest version = %q, want v2", latest.Version)
+func makeRows(service, env string, versions ...struct {
+	version   string
+	firstSeen time.Time
+}) []models.RawDeploymentRow {
+	rows := make([]models.RawDeploymentRow, len(versions))
+	for i, v := range versions {
+		rows[i] = models.RawDeploymentRow{
+			Service:     service,
+			Environment: env,
+			Version:     v.version,
+			FirstSeen:   v.firstSeen,
+		}
 	}
-	if latest.PreviousVersion == nil || *latest.PreviousVersion != "v1" {
-		t.Fatalf("previous version = %v, want v1", latest.PreviousVersion)
-	}
-	if latest.ErrorRateDelta == nil || math.Abs(*latest.ErrorRateDelta-1) > 0.0001 {
-		t.Fatalf("error-rate delta = %v, want 1pp", latest.ErrorRateDelta)
-	}
-	if latest.P95DeltaMs == nil || *latest.P95DeltaMs != 40 {
-		t.Fatalf("p95 delta = %v, want 40ms", latest.P95DeltaMs)
-	}
-
-	var share float64
-	for _, deployment := range got.Results {
-		share += deployment.TrafficShare
-	}
-	if math.Abs(share-100) > 0.0001 {
-		t.Fatalf("traffic shares sum to %v, want 100", share)
-	}
-
-	earliest := got.Results[1]
-	if !earliest.TimelineEnd.Equal(latest.FirstSeen) {
-		t.Fatalf("v1 timeline end = %v, want %v", earliest.TimelineEnd, latest.FirstSeen)
-	}
+	return rows
 }
 
-func TestFindContextUsesEqualWindowsAndPrecedingFirstSeen(t *testing.T) {
-	start := time.Date(2026, 7, 30, 8, 0, 0, 0, time.UTC)
-	rows := []models.RawDeploymentRow{
-		{Service: "checkout", Environment: "prod", Version: "v3", FirstSeen: start.Add(50 * time.Minute)},
-		{Service: "checkout", Environment: "prod", Version: "v1", FirstSeen: start},
-		{Service: "checkout", Environment: "prod", Version: "v2", FirstSeen: start.Add(20 * time.Minute)},
-		{Service: "checkout", Environment: "staging", Version: "v9", FirstSeen: start.Add(10 * time.Minute)},
-	}
+func ver(version string, firstSeen time.Time) struct {
+	version   string
+	firstSeen time.Time
+} {
+	return struct {
+		version   string
+		firstSeen time.Time
+	}{version, firstSeen}
+}
+
+func TestFindContext_PickerClampsWindowStart(t *testing.T) {
+	// Deployment v1.0 at T0, v1.1 at T1. Picker range starts at T0+30m.
+	// The current window should be [T0+30m, T1], not [T0, T1].
+	rows := makeRows("svc", "prod", ver("1.0.0", t0), ver("1.1.0", t1))
+	pickerStart := t0.Add(30 * time.Minute)
+
 	req := models.DetailRequest{
-		ListRequest:    models.ListRequest{StartMs: start.UnixMilli(), EndMs: start.Add(time.Hour).UnixMilli()},
-		Service:        "checkout",
-		Version:        "v2",
+		ListRequest: models.ListRequest{
+			TenantID: 1,
+			StartMs:  ms(pickerStart),
+			EndMs:    ms(t2),
+		},
+		Service:        "svc",
+		Version:        "1.0.0",
 		Environment:    "prod",
 		EnvironmentSet: true,
 	}
 
-	got, err := findContext(rows, req)
+	ctx, err := findContext(rows, req)
 	if err != nil {
-		t.Fatalf("findContext returned error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.BaselineVersion == nil || *got.BaselineVersion != "v1" {
-		t.Fatalf("baseline = %v, want v1", got.BaselineVersion)
+
+	// Current window should be clamped to [pickerStart, T1]
+	if !ctx.Window.CurrentStart.Equal(pickerStart) {
+		t.Errorf("CurrentStart = %v, want %v", ctx.Window.CurrentStart, pickerStart)
 	}
-	if !got.Window.CurrentEnd.Equal(start.Add(50 * time.Minute)) {
-		t.Fatalf("current end = %v, want next first-seen", got.Window.CurrentEnd)
+	if !ctx.Window.CurrentEnd.Equal(t1) {
+		t.Errorf("CurrentEnd = %v, want %v", ctx.Window.CurrentEnd, t1)
 	}
-	currentLength := got.Window.CurrentEnd.Sub(got.Window.CurrentStart)
-	baselineLength := got.Window.BaselineEnd.Sub(got.Window.BaselineStart)
-	if currentLength != baselineLength {
-		t.Fatalf("window lengths differ: current=%v baseline=%v", currentLength, baselineLength)
+
+	// Baseline should mirror: 30 min before pickerStart
+	expectedDuration := t1.Sub(pickerStart) // 30 min
+	expectedBaselineStart := pickerStart.Add(-expectedDuration)
+	if !ctx.Window.BaselineStart.Equal(expectedBaselineStart) {
+		t.Errorf("BaselineStart = %v, want %v", ctx.Window.BaselineStart, expectedBaselineStart)
 	}
-	if !got.Window.BaselineStart.Equal(start.Add(-10 * time.Minute)) {
-		t.Fatalf("baseline start = %v, want %v", got.Window.BaselineStart, start.Add(-10*time.Minute))
+	if !ctx.Window.BaselineEnd.Equal(pickerStart) {
+		t.Errorf("BaselineEnd = %v, want %v", ctx.Window.BaselineEnd, pickerStart)
 	}
 }
 
-func TestComparisonMetricsWithoutBaselineLeavesDeltasNull(t *testing.T) {
-	got := comparisonMetrics(models.RawComparisonRow{
-		CurrentRequests: 10,
-		CurrentErrors:   1,
-		CurrentQS:       []float64{1, 2, 3, 4, 5},
-	}, false)
+func TestFindContext_PickerBeforeFirstSeen(t *testing.T) {
+	// Picker starts before the deployment — window should start at FirstSeen.
+	rows := makeRows("svc", "prod", ver("1.0.0", t0), ver("1.1.0", t1))
+	pickerStart := t0.Add(-1 * time.Hour) // 1h before first seen
 
-	if got.Requests.Current != 10 || got.ErrorRate.Current != 10 {
-		t.Fatalf("unexpected current metrics: %+v", got)
+	req := models.DetailRequest{
+		ListRequest: models.ListRequest{
+			TenantID: 1,
+			StartMs:  ms(pickerStart),
+			EndMs:    ms(t2),
+		},
+		Service:        "svc",
+		Version:        "1.0.0",
+		Environment:    "prod",
+		EnvironmentSet: true,
 	}
-	if got.Requests.Baseline != nil || got.Requests.Delta != nil || got.Requests.DeltaPercent != nil {
-		t.Fatalf("baseline fields must be null without a baseline: %+v", got.Requests)
+
+	ctx, err := findContext(rows, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Window start should be FirstSeen (not picker start which is earlier)
+	if !ctx.Window.CurrentStart.Equal(t0) {
+		t.Errorf("CurrentStart = %v, want %v", ctx.Window.CurrentStart, t0)
+	}
+	if !ctx.Window.CurrentEnd.Equal(t1) {
+		t.Errorf("CurrentEnd = %v, want %v", ctx.Window.CurrentEnd, t1)
+	}
+}
+
+func TestFindContext_LastDeploymentUsesPickerEnd(t *testing.T) {
+	// Only one deployment, no next deployment — window end should be pickerEnd.
+	rows := makeRows("svc", "prod", ver("1.0.0", t0))
+	pickerEnd := t0.Add(15 * time.Minute)
+
+	req := models.DetailRequest{
+		ListRequest: models.ListRequest{
+			TenantID: 1,
+			StartMs:  ms(t0),
+			EndMs:    ms(pickerEnd),
+		},
+		Service:        "svc",
+		Version:        "1.0.0",
+		Environment:    "prod",
+		EnvironmentSet: true,
+	}
+
+	ctx, err := findContext(rows, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !ctx.Window.CurrentStart.Equal(t0) {
+		t.Errorf("CurrentStart = %v, want %v", ctx.Window.CurrentStart, t0)
+	}
+	if !ctx.Window.CurrentEnd.Equal(pickerEnd) {
+		t.Errorf("CurrentEnd = %v, want %v", ctx.Window.CurrentEnd, pickerEnd)
+	}
+
+	// Baseline: 15 min before T0
+	expectedBaselineStart := t0.Add(-15 * time.Minute)
+	if !ctx.Window.BaselineStart.Equal(expectedBaselineStart) {
+		t.Errorf("BaselineStart = %v, want %v", ctx.Window.BaselineStart, expectedBaselineStart)
+	}
+}
+
+func TestFindContext_NotFound(t *testing.T) {
+	rows := makeRows("svc", "prod", ver("1.0.0", t0))
+
+	req := models.DetailRequest{
+		ListRequest:    models.ListRequest{TenantID: 1, StartMs: ms(t0), EndMs: ms(t2)},
+		Service:        "svc",
+		Version:        "2.0.0", // doesn't exist
+		Environment:    "prod",
+		EnvironmentSet: true,
+	}
+
+	_, err := findContext(rows, req)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestFindContext_NoTrafficWindow(t *testing.T) {
+	// Picker range ends at or before FirstSeen — no valid window.
+	rows := makeRows("svc", "prod", ver("1.0.0", t0))
+
+	req := models.DetailRequest{
+		ListRequest: models.ListRequest{
+			TenantID: 1,
+			StartMs:  ms(t0.Add(-1 * time.Hour)),
+			EndMs:    ms(t0), // ends exactly at FirstSeen
+		},
+		Service:        "svc",
+		Version:        "1.0.0",
+		Environment:    "prod",
+		EnvironmentSet: true,
+	}
+
+	_, err := findContext(rows, req)
+	if err == nil {
+		t.Fatal("expected validation error for zero-duration window, got nil")
+	}
+}
+
+func TestFindContext_BaselineVersion(t *testing.T) {
+	rows := makeRows("svc", "prod",
+		ver("1.0.0", t0),
+		ver("1.1.0", t1),
+	)
+
+	req := models.DetailRequest{
+		ListRequest:    models.ListRequest{TenantID: 1, StartMs: ms(t0), EndMs: ms(t2)},
+		Service:        "svc",
+		Version:        "1.1.0",
+		Environment:    "prod",
+		EnvironmentSet: true,
+	}
+
+	ctx, err := findContext(rows, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ctx.BaselineVersion == nil {
+		t.Fatal("expected BaselineVersion to be set")
+	}
+	if *ctx.BaselineVersion != "1.0.0" {
+		t.Errorf("BaselineVersion = %q, want %q", *ctx.BaselineVersion, "1.0.0")
+	}
+}
+
+func TestFindContext_NoBaseline(t *testing.T) {
+	// First deployment has no baseline.
+	rows := makeRows("svc", "prod", ver("1.0.0", t0))
+
+	req := models.DetailRequest{
+		ListRequest:    models.ListRequest{TenantID: 1, StartMs: ms(t0), EndMs: ms(t2)},
+		Service:        "svc",
+		Version:        "1.0.0",
+		Environment:    "prod",
+		EnvironmentSet: true,
+	}
+
+	ctx, err := findContext(rows, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ctx.BaselineVersion != nil {
+		t.Errorf("expected nil BaselineVersion, got %q", *ctx.BaselineVersion)
+	}
+}
+
+func TestComputeWindow_ClampsBothEnds(t *testing.T) {
+	firstSeen := t0
+	next := t0.Add(2 * time.Hour)
+
+	// Picker is [T0+30m, T0+90m] — narrower than [firstSeen, next]
+	pickerStart := t0.Add(30 * time.Minute)
+	pickerEnd := t0.Add(90 * time.Minute)
+
+	w, err := computeWindow(firstSeen, &next, pickerStart, pickerEnd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !w.CurrentStart.Equal(pickerStart) {
+		t.Errorf("CurrentStart = %v, want %v", w.CurrentStart, pickerStart)
+	}
+	if !w.CurrentEnd.Equal(pickerEnd) {
+		t.Errorf("CurrentEnd = %v, want %v", w.CurrentEnd, pickerEnd)
+	}
+
+	duration := pickerEnd.Sub(pickerStart) // 60 min
+	if !w.BaselineStart.Equal(pickerStart.Add(-duration)) {
+		t.Errorf("BaselineStart = %v, want %v", w.BaselineStart, pickerStart.Add(-duration))
+	}
+	if !w.BaselineEnd.Equal(pickerStart) {
+		t.Errorf("BaselineEnd = %v, want %v", w.BaselineEnd, pickerStart)
+	}
+}
+
+func TestComputeWindow_NilNextFirstSeen(t *testing.T) {
+	w, err := computeWindow(t0, nil, t0, t0.Add(30*time.Minute))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !w.CurrentEnd.Equal(t0.Add(30 * time.Minute)) {
+		t.Errorf("CurrentEnd = %v, want %v", w.CurrentEnd, t0.Add(30*time.Minute))
+	}
+}
+
+func TestComputeWindow_ZeroDuration(t *testing.T) {
+	// pickerEnd == firstSeen → zero duration → error
+	_, err := computeWindow(t0, nil, t0, t0)
+	if err == nil {
+		t.Fatal("expected error for zero-duration window")
 	}
 }

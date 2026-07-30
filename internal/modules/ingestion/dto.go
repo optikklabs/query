@@ -6,28 +6,28 @@ type Config struct {
 	MonthlyRecordCommitment uint64
 	MonthlyByteCommitment   uint64
 
-	PricePerGBLogsTraces float64
-	PricePerDPMMetrics   float64
-	Currency             string
+	PricePerGBLogsTraces         float64
+	PricePerMillionMetricSamples float64
+	Currency                     string
 }
 
 // NewConfig builds pricing from the billing config section; rates and
 // the record commitment default via viper (billing.* keys).
 func NewConfig(billing config.BillingConfig) Config {
 	return Config{
-		MonthlyRecordCommitment: billing.MonthlyRecordCommitment,
-		MonthlyByteCommitment:   50 * 1024 * 1024 * 1024 * 1024,
-		PricePerGBLogsTraces:    billing.GBPriceUSD,
-		PricePerDPMMetrics:      billing.DPMPriceUSD,
-		Currency:                "USD",
+		MonthlyRecordCommitment:      billing.MonthlyRecordCommitment,
+		MonthlyByteCommitment:        50 * 1024 * 1024 * 1024 * 1024,
+		PricePerGBLogsTraces:         billing.GBPriceUSD,
+		PricePerMillionMetricSamples: billing.MetricMillionSamplesPriceUSD,
+		Currency:                     "USD",
 	}
 }
 
 func (c Config) Rates() Rates {
 	return Rates{
-		Currency:        c.Currency,
-		PerGBLogsTraces: c.PricePerGBLogsTraces,
-		PerDPMMetrics:   c.PricePerDPMMetrics,
+		Currency:                c.Currency,
+		PerGBLogsTraces:         c.PricePerGBLogsTraces,
+		PerMillionMetricSamples: c.PricePerMillionMetricSamples,
 	}
 }
 

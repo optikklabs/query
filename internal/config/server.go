@@ -42,9 +42,9 @@ type LLMConfig struct {
 
 // Billing rates and commitments used for usage-cost estimation.
 type BillingConfig struct {
-	GBPriceUSD              float64 `yaml:"gb_price_usd"`
-	DPMPriceUSD             float64 `yaml:"dpm_price_usd"`
-	MonthlyRecordCommitment uint64  `yaml:"monthly_record_commitment"`
+	GBPriceUSD                   float64 `yaml:"gb_price_usd"`
+	MetricMillionSamplesPriceUSD float64 `yaml:"metric_million_samples_price_usd"`
+	MonthlyRecordCommitment      uint64  `yaml:"monthly_record_commitment"`
 }
 
 // Public OTLP endpoints advertised to users for sending telemetry.

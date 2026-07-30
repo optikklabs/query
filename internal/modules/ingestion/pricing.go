@@ -1,11 +1,14 @@
 package ingestion
 
-const bytesPerGB = 1_000_000_000.0
+const (
+	bytesPerGB        = 1_000_000_000.0
+	samplesPerMillion = 1_000_000.0
+)
 
 type Rates struct {
-	Currency        string
-	PerGBLogsTraces float64
-	PerDPMMetrics   float64
+	Currency                string
+	PerGBLogsTraces         float64
+	PerMillionMetricSamples float64
 }
 
 type CostLine struct {
@@ -25,24 +28,20 @@ type CostResponse struct {
 }
 
 type usageQuantities struct {
-	logsBytes   uint64
-	spansBytes  uint64
-	metricDPs   uint64
-	windowMin   float64
-	daysElapsed int
-	daysInMonth int
+	logsBytes     uint64
+	spansBytes    uint64
+	metricSamples uint64
+	daysElapsed   int
+	daysInMonth   int
 }
 
 func estimateCost(u usageQuantities, r Rates) CostResponse {
-	var dpm float64
-	if u.windowMin > 0 {
-		dpm = float64(u.metricDPs) / u.windowMin
-	}
-	metricsCost := dpm * r.PerDPMMetrics
+	metricMillions := float64(u.metricSamples) / samplesPerMillion
+	metricsCost := metricMillions * r.PerMillionMetricSamples
 	lines := []CostLine{
 		volumeLine("Logs", gigabytes(u.logsBytes), r.PerGBLogsTraces),
 		volumeLine("Traces", gigabytes(u.spansBytes), r.PerGBLogsTraces),
-		{Category: "Metrics", Unit: "DPM", Quantity: dpm, Rate: r.PerDPMMetrics,
+		{Category: "Metrics", Unit: "million samples", Quantity: metricMillions, Rate: r.PerMillionMetricSamples,
 			Cost: metricsCost},
 	}
 	var current float64

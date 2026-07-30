@@ -177,7 +177,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("ingestion.public_http_endpoint", "https://ingest.optikk.in:4318")
 
 	v.SetDefault("billing.gb_price_usd", 0.10)
-	v.SetDefault("billing.dpm_price_usd", 0.008)
+	v.SetDefault("billing.metric_million_samples_price_usd", 0.10)
 	v.SetDefault("billing.monthly_record_commitment", 5_000_000_000)
 
 }

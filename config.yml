@@ -55,5 +55,5 @@ ingestion:
 
 billing:
   gb_price_usd: 0.10
-  dpm_price_usd: 0.008
+  metric_million_samples_price_usd: 0.10
   monthly_record_commitment: 5000000000
