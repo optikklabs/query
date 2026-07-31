@@ -103,7 +103,6 @@ func isExplorerPath(path string) bool {
 }
 
 var expensiveQueryPrefixes = []string{
-	"/api/v1/cloud",
 	"/api/v1/infrastructure",
 	"/api/v1/llm",
 	"/api/v1/logs",

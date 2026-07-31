@@ -12,7 +12,6 @@ import (
 	alerting_monitors "github.com/optikklabs/query/internal/modules/alerting/monitors"
 	alerting_notifications "github.com/optikklabs/query/internal/modules/alerting/notifications"
 	billing "github.com/optikklabs/query/internal/modules/billing"
-	cloud "github.com/optikklabs/query/internal/modules/cloud"
 	dashboards "github.com/optikklabs/query/internal/modules/dashboards"
 	"github.com/optikklabs/query/internal/modules/deployments"
 	"github.com/optikklabs/query/internal/modules/infrastructure"
@@ -62,7 +61,6 @@ func configuredModules(
 	llmProviders := llmproviders.NewRegistry()
 
 	return []Module{
-		cloud.NewModule(nativeQuerier),
 		deployments.NewModule(nativeQuerier),
 		logs.NewModule(nativeQuerier),
 		infrastructure.NewModule(nativeQuerier),
