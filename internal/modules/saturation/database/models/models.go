@@ -28,6 +28,52 @@ type OpsTimeSeries struct {
 	OpsPerSec    *float64 `json:"opsPerSec"`
 }
 
+type QueryPerformanceCollection struct {
+	Name       string   `json:"name"`
+	QueryCount int64    `json:"queryCount"`
+	CallCount  int64    `json:"callCount"`
+	P95Ms      *float64 `json:"p95Ms"`
+	P99Ms      *float64 `json:"p99Ms"`
+}
+
+type QueryPerformanceOption struct {
+	QueryHash      string   `json:"queryHash"`
+	QueryLabel     string   `json:"queryLabel"`
+	CollectionName string   `json:"collectionName"`
+	CallCount      int64    `json:"callCount"`
+	P95Ms          *float64 `json:"p95Ms"`
+	P99Ms          *float64 `json:"p99Ms"`
+}
+
+type QueryPerformanceCatalogue struct {
+	Collections  []QueryPerformanceCollection `json:"collections"`
+	Queries      []QueryPerformanceOption     `json:"queries"`
+	TotalQueries int64                        `json:"totalQueries"`
+	Truncated    bool                         `json:"truncated"`
+}
+
+type QueryPerformancePoint struct {
+	TimeBucketMs int64   `json:"timeBucketMs"`
+	P50Ms        float64 `json:"p50Ms"`
+	P95Ms        float64 `json:"p95Ms"`
+	P99Ms        float64 `json:"p99Ms"`
+	OpsPerSec    float64 `json:"opsPerSec"`
+}
+
+type QueryPerformanceSeries struct {
+	QueryHash      string                  `json:"queryHash"`
+	QueryLabel     string                  `json:"queryLabel"`
+	CollectionName string                  `json:"collectionName"`
+	CallCount      int64                   `json:"callCount"`
+	Points         []QueryPerformancePoint `json:"points"`
+}
+
+type QueryPerformanceResponse struct {
+	BucketSizeSeconds int64                    `json:"bucketSizeSeconds"`
+	Series            []QueryPerformanceSeries `json:"series"`
+	Truncated         bool                     `json:"truncated"`
+}
+
 type SlowQueryPattern struct {
 	QueryHash      string   `json:"queryHash"`
 	QueryText      string   `json:"queryText"`

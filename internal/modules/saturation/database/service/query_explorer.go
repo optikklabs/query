@@ -10,14 +10,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
-func (s *Service) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters, limit int) ([]models.SlowQueryPattern, error) {
-	rows, err := s.repo.GetSlowQueryPatterns(ctx, tenantID, startMs, endMs, f, limit)
-	if err != nil {
-		return nil, err
-	}
-	return toSlowQueryPatterns(rows), nil
-}
-
 func (s *Service) QueryPatterns(
 	ctx context.Context,
 	tenantID, startMs, endMs int64,

@@ -12,7 +12,4 @@ func NewService(repo *repository.Repository) *Service {
 	return &Service{repo: repo}
 }
 
-const (
-	DefaultPatternLimit    = repository.DefaultPatternLimit
-	DefaultExecutionsLimit = repository.DefaultExecutionsLimit
-)
+const DefaultExecutionsLimit = repository.DefaultExecutionsLimit

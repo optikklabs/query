@@ -31,46 +31,6 @@ type QueryPatternsCursor struct {
 
 const DefaultPatternLimit = 20
 
-const maxPatternLimit = 200
-
-func clampPatternLimit(limit int) int {
-	if limit <= 0 {
-		return DefaultPatternLimit
-	}
-	return min(limit, maxPatternLimit)
-}
-
-func (r *Repository) GetSlowQueryPatterns(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters, limit int) ([]PatternRaw, error) {
-	limit = clampPatternLimit(limit)
-	filterWhere, filterArgs := filter.BuildSpanClauses(f)
-	query := slowQueryPatternsQuery(filterWhere)
-	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("qLimit", uint64(limit)))
-	args = append(args, filterArgs...)
-	var rows []PatternRaw
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "slowqueries.GetSlowQueryPatterns", &rows, query, args...)
-}
-
-func slowQueryPatternsQuery(filterWhere string) string {
-	return `
-		SELECT query_hash,
-		       argMax(db_statement_normalized, (timestamp, span_id))       AS query_text,
-		       db_system,
-		       db_name                                                     AS collection_name,
-		       ''                                                          AS namespace,
-		       ''                                                          AS server,
-		       quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
-		       count()                                                     AS call_count,
-		       countIf(is_error)                                           AS error_count
-		FROM optikk.spans
-		PREWHERE tenant_id = @tenantID
-		     AND timestamp >= @start AND timestamp < @end
-		     AND db_system != ''
-		     AND query_hash != ''` + filterWhere + `
-		GROUP BY query_hash, db_system, collection_name
-		ORDER BY call_count DESC, query_hash ASC, db_system ASC, collection_name ASC
-		LIMIT @qLimit`
-}
-
 func (r *Repository) QueryPatterns(
 	ctx context.Context,
 	tenantID, startMs, endMs int64,
