@@ -39,59 +39,60 @@ func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID str
 		return nil, err
 	}
 	eventRows, exceptionRows := splitEventRows(combined)
+	events, seenExceptions := mapExplicitEvents(eventRows)
+	for _, row := range exceptionRows {
+		if !seenExceptions[row.SpanID] {
+			events = append(events, mapExceptionEvent(row))
+		}
+	}
+	sortSpanEvents(events)
+	return events, nil
+}
 
-	events := make([]models.SpanEvent, 0, len(eventRows))
-	seenException := make(map[string]bool, len(eventRows))
-	for _, row := range eventRows {
+func mapExplicitEvents(rows []spanEventRow) ([]models.SpanEvent, map[string]bool) {
+	events := make([]models.SpanEvent, 0, len(rows))
+	seenException := make(map[string]bool, len(rows))
+	for _, row := range rows {
 		if row.Event.Name == "exception" {
 			seenException[row.SpanID] = true
 		}
-
-		attrJSON := "{}"
-		if len(row.Event.Attributes) > 0 {
-			if b, marshalErr := json.Marshal(row.Event.Attributes); marshalErr == nil {
-				attrJSON = string(b)
-			}
-		}
-
 		events = append(events, models.SpanEvent{
 			SpanID:     row.SpanID,
 			TraceID:    row.TraceID,
 			EventName:  row.Event.Name,
 			Timestamp:  time.Unix(0, int64(row.Event.TimeUnixNano)),
-			Attributes: attrJSON,
+			Attributes: marshalAttributes(row.Event.Attributes),
 		})
 	}
+	return events, seenException
+}
 
-	for _, row := range exceptionRows {
-		if seenException[row.SpanID] {
-			continue
-		}
-		attrs := map[string]string{}
-		if row.ExceptionType != "" {
-			attrs["exception.type"] = row.ExceptionType
-		}
-		if row.ExceptionMessage != "" {
-			attrs["exception.message"] = row.ExceptionMessage
-		}
-		if row.ExceptionStacktrace != "" {
-			attrs["exception.stacktrace"] = row.ExceptionStacktrace
-		}
-		attrJSON := "{}"
-		if len(attrs) > 0 {
-			if b, marshalErr := json.Marshal(attrs); marshalErr == nil {
-				attrJSON = string(b)
-			}
-		}
-		events = append(events, models.SpanEvent{
-			SpanID:     row.SpanID,
-			TraceID:    row.TraceID,
-			EventName:  "exception",
-			Timestamp:  row.Timestamp,
-			Attributes: attrJSON,
-		})
+func mapExceptionEvent(row exceptionRow) models.SpanEvent {
+	attrs := map[string]string{}
+	if row.ExceptionType != "" {
+		attrs["exception.type"] = row.ExceptionType
 	}
+	if row.ExceptionMessage != "" {
+		attrs["exception.message"] = row.ExceptionMessage
+	}
+	if row.ExceptionStacktrace != "" {
+		attrs["exception.stacktrace"] = row.ExceptionStacktrace
+	}
+	return models.SpanEvent{SpanID: row.SpanID, TraceID: row.TraceID, EventName: "exception", Timestamp: row.Timestamp, Attributes: marshalAttributes(attrs)}
+}
 
+func marshalAttributes(attrs map[string]string) string {
+	if len(attrs) == 0 {
+		return "{}"
+	}
+	b, err := json.Marshal(attrs)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+func sortSpanEvents(events []models.SpanEvent) {
 	sort.Slice(events, func(i, j int) bool {
 		if events[i].Timestamp.Equal(events[j].Timestamp) {
 			if events[i].SpanID == events[j].SpanID {
@@ -101,7 +102,6 @@ func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID str
 		}
 		return events[i].Timestamp.Before(events[j].Timestamp)
 	})
-	return events, nil
 }
 
 func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startMs, endMs int64) (*models.SpanAttributes, error) {

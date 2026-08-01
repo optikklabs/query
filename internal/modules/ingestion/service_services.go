@@ -69,15 +69,31 @@ func servicesFromUsage(
 }
 
 func buildServicesResponse(services map[string]*serviceAgg, prior map[string]uint64, spark map[string]*svcSeries, n int) ServicesResponse {
-	var grandTotal, grandBytes uint64
+	names, grandTotal, grandBytes := rankedServices(services)
+	limit := min(topServiceRows, len(names))
+	rows := make([]ServiceRow, 0, limit)
+	var topSum, topByteSum uint64
+	for _, name := range names[:limit] {
+		row := buildServiceRow(name, services[name], prior[name], spark[name], n, grandTotal, grandBytes)
+		topSum += row.Total
+		topByteSum += row.Bytes
+		rows = append(rows, row)
+	}
+	return ServicesResponse{
+		Services: rows, TotalServices: len(names),
+		TopSharePct: pct(topSum, grandTotal), TopShareBytesPct: pct(topByteSum, grandBytes),
+	}
+}
+
+func rankedServices(services map[string]*serviceAgg) ([]string, uint64, uint64) {
+	var totalRecords, totalBytes uint64
 	names := make([]string, 0, len(services))
 	for name, a := range services {
-
 		if name == "" {
 			continue
 		}
-		grandTotal += a.records()
-		grandBytes += a.bytes()
+		totalRecords += a.records()
+		totalBytes += a.bytes()
 		names = append(names, name)
 	}
 	sort.Slice(names, func(i, j int) bool {
@@ -87,49 +103,22 @@ func buildServicesResponse(services map[string]*serviceAgg, prior map[string]uin
 		}
 		return ti > tj
 	})
+	return names, totalRecords, totalBytes
+}
 
-	limit := topServiceRows
-	if limit > len(names) {
-		limit = len(names)
+func buildServiceRow(name string, agg *serviceAgg, prior uint64, spark *svcSeries, n int, totalRecords, totalBytes uint64) ServiceRow {
+	total, bytes := agg.records(), agg.bytes()
+	delta := 0.0
+	if prior > 0 {
+		delta = (float64(total) - float64(prior)) / float64(prior) * 100
 	}
-	rows := make([]ServiceRow, 0, limit)
-	var topSum, topByteSum uint64
-	for _, name := range names[:limit] {
-		a := services[name]
-		total, bytes := a.records(), a.bytes()
-		topSum += total
-		topByteSum += bytes
-		delta := 0.0
-		if p := prior[name]; p > 0 {
-			delta = (float64(total) - float64(p)) / float64(p) * 100
-		}
-
-		var spC, spB []uint64
-		if ser := spark[name]; ser != nil {
-			spC, spB = ser.counts, ser.bytes
-		} else {
-			spC, spB = make([]uint64, n), make([]uint64, n)
-		}
-		rows = append(rows, ServiceRow{
-			Name:       name,
-			Env:        a.env,
-			Logs:       a.logs,
-			Spans:      a.spans,
-			Timeseries: a.timeseries,
-			Total:      total,
-			Bytes:      bytes,
-			Pct:        pct(total, grandTotal),
-			BytesPct:   pct(bytes, grandBytes),
-			DeltaPct:   delta,
-			Spark:      spC,
-			ByteSpark:  spB,
-		})
+	counts, byteSpark := make([]uint64, n), make([]uint64, n)
+	if spark != nil {
+		counts, byteSpark = spark.counts, spark.bytes
 	}
-
-	return ServicesResponse{
-		Services:         rows,
-		TotalServices:    len(names),
-		TopSharePct:      pct(topSum, grandTotal),
-		TopShareBytesPct: pct(topByteSum, grandBytes),
+	return ServiceRow{
+		Name: name, Env: agg.env, Logs: agg.logs, Spans: agg.spans, Timeseries: agg.timeseries,
+		Total: total, Bytes: bytes, Pct: pct(total, totalRecords), BytesPct: pct(bytes, totalBytes),
+		DeltaPct: delta, Spark: counts, ByteSpark: byteSpark,
 	}
 }

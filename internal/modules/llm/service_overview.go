@@ -33,7 +33,10 @@ func (s *Service) Apps(ctx context.Context, tenantID, startMs, endMs int64) (App
 	if err := g.Wait(); err != nil {
 		return AppsResponse{}, err
 	}
+	return buildAppsResponse(aggs, models, trends), nil
+}
 
+func buildAppsResponse(aggs []appAggRow, models []modelBreakdownRow, trends []trendRow) AppsResponse {
 	primary := map[string]modelBreakdownRow{}
 	for _, m := range models {
 		if best, ok := primary[m.Service]; !ok || m.Spans > best.Spans {
@@ -71,7 +74,7 @@ func (s *Service) Apps(ctx context.Context, tenantID, startMs, endMs int64) (App
 		}
 		apps[i] = app
 	}
-	return AppsResponse{Apps: apps}, nil
+	return AppsResponse{Apps: apps}
 }
 
 func deriveKind(a appAggRow) string {

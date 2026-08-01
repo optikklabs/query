@@ -136,6 +136,13 @@ type serviceBucketTotal struct {
 	ErrorCount   uint64
 }
 
+type endpointSeriesCell struct {
+	rps     float64
+	count   uint64
+	errRate *float64
+	p99     *float64
+}
+
 func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Filters, limit int) (models.EndpointRateSeries, error) {
 	rows, err := s.repo.GetREDByEndpointTimeSeries(ctx, f)
 	if err != nil {
@@ -148,73 +155,63 @@ func buildEndpointRateSeries(rows []models.EndpointRateRow, f filter.Filters, li
 	if limit <= 0 {
 		limit = defaultEndpointSeriesLimit
 	}
-
 	grain := timebucket.DisplayGrainForRange(f.StartMs, f.EndMs)
 	grainSec := float64(grain.Seconds())
 	if grainSec <= 0 {
 		grainSec = 60
 	}
-
-	// Totals cover the whole service, so they are summed before the top-N cut.
-	totalsByBucket := make(map[int64]*serviceBucketTotal, len(rows))
-	for _, row := range rows {
-		key := row.BucketAt.UTC().Truncate(grain).Unix()
-		acc, ok := totalsByBucket[key]
-		if !ok {
-			acc = &serviceBucketTotal{BucketAt: row.BucketAt}
-			totalsByBucket[key] = acc
-		}
-		acc.RequestCount += row.RequestCount
-		acc.ErrorCount += row.ErrorCount
-	}
-	totalRows := make([]serviceBucketTotal, 0, len(totalsByBucket))
-	for _, acc := range totalsByBucket {
-		totalRows = append(totalRows, *acc)
-	}
-
-	type cell struct {
-		rps     float64
-		count   uint64
-		errRate *float64
-		p99     *float64
-	}
-
-	charted := topEndpointRows(rows, limit)
-
-	operations, buckets, series := timebucket.FillGapsKeyed(f.StartMs, f.EndMs, grain, charted,
+	operations, buckets, series := timebucket.FillGapsKeyed(f.StartMs, f.EndMs, grain, topEndpointRows(rows, limit),
 		func(r models.EndpointRateRow) string { return r.OperationName },
 		func(r models.EndpointRateRow) time.Time { return r.BucketAt },
-		func(_ time.Time, row models.EndpointRateRow, ok bool) cell {
-			if !ok {
-				return cell{}
-			}
-			errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
-			var p99 float64
-			if len(row.QS) > 0 {
-				p99 = httputil.SanitizeFloat(spanstats.LatencyP99.At(row.QS, spanstats.P99))
-			}
-			return cell{
-				rps:     float64(row.RequestCount) / grainSec,
-				count:   row.RequestCount,
-				errRate: &errRate,
-				p99:     &p99,
-			}
-		})
-
-	totals := timebucket.FillGaps(f.StartMs, f.EndMs, grain, totalRows,
+		endpointCell(grainSec))
+	totals := timebucket.FillGaps(f.StartMs, f.EndMs, grain, serviceTotalRows(rows, grain),
 		func(r serviceBucketTotal) time.Time { return r.BucketAt },
-		func(_ time.Time, row serviceBucketTotal, ok bool) cell {
-			if !ok {
-				return cell{}
-			}
-			errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
-			return cell{
-				rps:     float64(row.RequestCount) / grainSec,
-				count:   row.RequestCount,
-				errRate: &errRate,
-			}
-		})
+		totalCell(grainSec))
+	return assembleEndpointRateSeries(operations, buckets, series, totals)
+}
 
+func serviceTotalRows(rows []models.EndpointRateRow, grain time.Duration) []serviceBucketTotal {
+	byBucket := make(map[int64]*serviceBucketTotal, len(rows))
+	for _, row := range rows {
+		key := row.BucketAt.UTC().Truncate(grain).Unix()
+		if byBucket[key] == nil {
+			byBucket[key] = &serviceBucketTotal{BucketAt: row.BucketAt}
+		}
+		byBucket[key].RequestCount += row.RequestCount
+		byBucket[key].ErrorCount += row.ErrorCount
+	}
+	totals := make([]serviceBucketTotal, 0, len(byBucket))
+	for _, total := range byBucket {
+		totals = append(totals, *total)
+	}
+	return totals
+}
+
+func endpointCell(grainSec float64) func(time.Time, models.EndpointRateRow, bool) endpointSeriesCell {
+	return func(_ time.Time, row models.EndpointRateRow, ok bool) endpointSeriesCell {
+		if !ok {
+			return endpointSeriesCell{}
+		}
+		errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
+		var p99 float64
+		if len(row.QS) > 0 {
+			p99 = httputil.SanitizeFloat(spanstats.LatencyP99.At(row.QS, spanstats.P99))
+		}
+		return endpointSeriesCell{float64(row.RequestCount) / grainSec, row.RequestCount, &errRate, &p99}
+	}
+}
+
+func totalCell(grainSec float64) func(time.Time, serviceBucketTotal, bool) endpointSeriesCell {
+	return func(_ time.Time, row serviceBucketTotal, ok bool) endpointSeriesCell {
+		if !ok {
+			return endpointSeriesCell{}
+		}
+		errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
+		return endpointSeriesCell{rps: float64(row.RequestCount) / grainSec, count: row.RequestCount, errRate: &errRate}
+	}
+}
+
+func assembleEndpointRateSeries(operations []string, buckets []time.Time, series [][]endpointSeriesCell, totals []endpointSeriesCell) models.EndpointRateSeries {
 	out := models.EndpointRateSeries{
 		Timestamps: make([]int64, len(buckets)),
 		Series:     make([]models.EndpointRateEntry, len(operations)),
@@ -244,7 +241,6 @@ func buildEndpointRateSeries(rows []models.EndpointRateRow, f filter.Filters, li
 		}
 		out.Series[i] = entry
 	}
-	// Keep legend order and colors stable across refreshes.
 	sort.SliceStable(out.Series, func(i, j int) bool {
 		li, lj := seriesLoad(out.Series[i].RPS), seriesLoad(out.Series[j].RPS)
 		if li != lj {

@@ -87,32 +87,9 @@ func (s *Service) List(ctx context.Context, tenantID int64, q ListQuery) (Monito
 }
 
 func buildInsertArgs(tenantID, userID int64, req CreateMonitorRequest) (insertArgs, error) {
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		return insertArgs{}, errorcode.ValidationError{Msg: "name is required"}
-	}
-	if !models.IsValidType(req.Type) {
-		return insertArgs{}, errorcode.ValidationError{Msg: fmt.Sprintf("type must be one of %v", models.SupportedMonitorTypes)}
-	}
-	priority := req.Priority
-	if priority == "" {
-		priority = "P2"
-	}
-	if !models.IsValidPriority(priority) {
-		return insertArgs{}, errorcode.ValidationError{Msg: fmt.Sprintf("priority must be one of %v", models.SupportedPriorities)}
-	}
-	if err := validateQueryForType(req.Type, req.Query); err != nil {
+	name, priority, evalEvery, err := validateCreateRequest(req)
+	if err != nil {
 		return insertArgs{}, err
-	}
-	if _, _, err := alertquery.CompileScope(req.Type, req.Scope, nil); err != nil {
-		return insertArgs{}, errorcode.ValidationError{Msg: err.Error()}
-	}
-	if err := validateConditions(req.Conditions); err != nil {
-		return insertArgs{}, err
-	}
-	evalEvery := req.EvalEverySec
-	if evalEvery <= 0 {
-		evalEvery = 300
 	}
 	scopeJSON, _ := json.Marshal(req.Scope)
 	queryJSON, _ := json.Marshal(req.Query)
@@ -124,16 +101,9 @@ func buildInsertArgs(tenantID, userID int64, req CreateMonitorRequest) (insertAr
 	}
 
 	args := insertArgs{
-		TenantID:       tenantID,
-		Name:           name,
-		Type:           req.Type,
-		Priority:       priority,
-		ScopeJSON:      scopeJSON,
-		QueryJSON:      queryJSON,
-		ConditionsJSON: condJSON,
-		NotifyJSON:     notifyJSON,
-		TagsJSON:       tagsJSON,
-		EvalEverySec:   evalEvery,
+		TenantID: tenantID, Name: name, Type: req.Type, Priority: priority,
+		ScopeJSON: scopeJSON, QueryJSON: queryJSON, ConditionsJSON: condJSON,
+		NotifyJSON: notifyJSON, TagsJSON: tagsJSON, EvalEverySec: evalEvery,
 	}
 	if msg := strings.TrimSpace(req.MessageBody); msg != "" {
 		args.MessageBody = sql.NullString{Valid: true, String: msg}
@@ -150,35 +120,76 @@ func buildInsertArgs(tenantID, userID int64, req CreateMonitorRequest) (insertAr
 	return args, nil
 }
 
+func validateCreateRequest(req CreateMonitorRequest) (name, priority string, evalEvery int, err error) {
+	name = strings.TrimSpace(req.Name)
+	if name == "" {
+		return "", "", 0, errorcode.ValidationError{Msg: "name is required"}
+	}
+	if !models.IsValidType(req.Type) {
+		return "", "", 0, errorcode.ValidationError{Msg: fmt.Sprintf("type must be one of %v", models.SupportedMonitorTypes)}
+	}
+	priority = req.Priority
+	if priority == "" {
+		priority = "P2"
+	}
+	if !models.IsValidPriority(priority) {
+		return "", "", 0, errorcode.ValidationError{Msg: fmt.Sprintf("priority must be one of %v", models.SupportedPriorities)}
+	}
+	if err := validateQueryForType(req.Type, req.Query); err != nil {
+		return "", "", 0, err
+	}
+	if _, _, err := alertquery.CompileScope(req.Type, req.Scope, nil); err != nil {
+		return "", "", 0, errorcode.ValidationError{Msg: err.Error()}
+	}
+	if err := validateConditions(req.Conditions); err != nil {
+		return "", "", 0, err
+	}
+	evalEvery = req.EvalEverySec
+	if evalEvery <= 0 {
+		evalEvery = 300
+	}
+	return name, priority, evalEvery, nil
+}
+
 func validateQueryForType(t string, q models.MonitorQuery) error {
 	switch t {
 	case "metric":
-		if q.Metric == nil || strings.TrimSpace(q.Metric.Metric) == "" {
-			return errorcode.ValidationError{Msg: "metric query requires query.metric.metric"}
-		}
-		switch q.Metric.Aggregation {
-		case "avg", "sum", "min", "max", "p50", "p95", "p99":
-		default:
-			return errorcode.ValidationError{Msg: "unsupported metric aggregation"}
-		}
-		if q.Metric.Aggregation == "sum" && q.Metric.WindowSec > models.MaxExactMetricSumWindowSec {
-			return errorcode.ValidationError{Msg: "metric sum window exceeds exact raw retention"}
-		}
+		return validateMetricQuery(q.Metric)
 	case "apm":
-		if q.APM == nil || strings.TrimSpace(q.APM.Service) == "" {
-			return errorcode.ValidationError{Msg: "apm query requires query.apm.service"}
-		}
-		switch q.APM.Track {
-		case "errors", "hits", "latency":
-		default:
-			return errorcode.ValidationError{Msg: "unsupported apm track"}
-		}
+		return validateAPMQuery(q.APM)
 	case "log":
 		if q.Log == nil || strings.TrimSpace(q.Log.Query) == "" {
 			return errorcode.ValidationError{Msg: "log query requires query.log.query"}
 		}
 	}
 	return nil
+}
+
+func validateMetricQuery(query *models.MetricQuery) error {
+	if query == nil || strings.TrimSpace(query.Metric) == "" {
+		return errorcode.ValidationError{Msg: "metric query requires query.metric.metric"}
+	}
+	switch query.Aggregation {
+	case "avg", "sum", "min", "max", "p50", "p95", "p99":
+	default:
+		return errorcode.ValidationError{Msg: "unsupported metric aggregation"}
+	}
+	if query.Aggregation == "sum" && query.WindowSec > models.MaxExactMetricSumWindowSec {
+		return errorcode.ValidationError{Msg: "metric sum window exceeds exact raw retention"}
+	}
+	return nil
+}
+
+func validateAPMQuery(query *models.APMQuery) error {
+	if query == nil || strings.TrimSpace(query.Service) == "" {
+		return errorcode.ValidationError{Msg: "apm query requires query.apm.service"}
+	}
+	switch query.Track {
+	case "errors", "hits", "latency":
+		return nil
+	default:
+		return errorcode.ValidationError{Msg: "unsupported apm track"}
+	}
 }
 
 func validateConditions(c models.Conditions) error {

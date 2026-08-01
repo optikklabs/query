@@ -95,54 +95,53 @@ func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID strin
 	if err != nil || len(rows) == 0 {
 		return TraceDetailResponse{}, err
 	}
-	resp := TraceDetailResponse{TraceID: traceID, Spans: make([]LLMSpan, len(rows))}
-	for i, r := range rows {
-		cost := pricing.CostOf(r.Model, r.InputTokens, r.OutputTokens)
-		resp.Spans[i] = LLMSpan{
-			SpanID:              r.SpanID,
-			ParentSpanID:        r.ParentSpanID,
-			Name:                r.Name,
-			Service:             r.Service,
-			Operation:           r.Operation,
-			Kind:                r.Kind,
-			Vendor:              r.Vendor,
-			Model:               r.Model,
-			ResponseModel:       r.ResponseModel,
-			StartMs:             r.Timestamp.UnixMilli(),
-			DurationMs:          float64(r.DurationNano) / 1e6,
-			HasError:            r.HasError,
-			InputTokens:         r.InputTokens,
-			OutputTokens:        r.OutputTokens,
-			Cost:                cost,
-			Prompt:              r.Prompt,
-			Completion:          r.Completion,
-			PromptTruncated:     r.PromptTruncated != 0,
-			CompletionTruncated: r.CompletionTruncated != 0,
-		}
-		resp.InputTokens += r.InputTokens
-		resp.OutputTokens += r.OutputTokens
-		resp.Cost += cost
-		resp.HasError = resp.HasError || r.HasError
-
-		if r.ParentSpanID == "" {
-			resp.Name = r.Name
-			resp.Service = r.Service
-			resp.Environment = r.Environment
-			resp.UserID = r.UserID
-			resp.SessionID = r.SessionID
-			resp.Release = r.Release
-			resp.StartMs = r.Timestamp.UnixMilli()
-			resp.DurationMs = float64(r.DurationNano) / 1e6
-			resp.Prompt = r.Prompt
-			resp.Output = r.Completion
-		}
-	}
+	resp := buildTraceDetail(traceID, rows)
 	if scores, err := s.repo.ScoresForTraces(ctx, tenantID, startTimeMs, endTimeMs, []string{traceID}); err != nil {
 		slog.Warn("llm: scores lookup failed", "error", err)
 	} else {
 		resp.Scores = groupScores(scores)[traceID]
 	}
+	fillTraceIO(&resp, rows)
+	return resp, nil
+}
 
+func buildTraceDetail(traceID string, rows []traceSpanRow) TraceDetailResponse {
+	resp := TraceDetailResponse{TraceID: traceID, Spans: make([]LLMSpan, len(rows))}
+	for i, r := range rows {
+		span := mapLLMSpan(r)
+		resp.Spans[i] = span
+		resp.InputTokens += r.InputTokens
+		resp.OutputTokens += r.OutputTokens
+		resp.Cost += span.Cost
+		resp.HasError = resp.HasError || r.HasError
+		if r.ParentSpanID == "" {
+			applyTraceRoot(&resp, r)
+		}
+	}
+	return resp
+}
+
+func mapLLMSpan(r traceSpanRow) LLMSpan {
+	return LLMSpan{
+		SpanID: r.SpanID, ParentSpanID: r.ParentSpanID, Name: r.Name,
+		Service: r.Service, Operation: r.Operation, Kind: r.Kind, Vendor: r.Vendor,
+		Model: r.Model, ResponseModel: r.ResponseModel, StartMs: r.Timestamp.UnixMilli(),
+		DurationMs: float64(r.DurationNano) / 1e6, HasError: r.HasError,
+		InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
+		Cost:   pricing.CostOf(r.Model, r.InputTokens, r.OutputTokens),
+		Prompt: r.Prompt, Completion: r.Completion,
+		PromptTruncated: r.PromptTruncated != 0, CompletionTruncated: r.CompletionTruncated != 0,
+	}
+}
+
+func applyTraceRoot(resp *TraceDetailResponse, r traceSpanRow) {
+	resp.Name, resp.Service, resp.Environment = r.Name, r.Service, r.Environment
+	resp.UserID, resp.SessionID, resp.Release = r.UserID, r.SessionID, r.Release
+	resp.StartMs, resp.DurationMs = r.Timestamp.UnixMilli(), float64(r.DurationNano)/1e6
+	resp.Prompt, resp.Output = r.Prompt, r.Completion
+}
+
+func fillTraceIO(resp *TraceDetailResponse, rows []traceSpanRow) {
 	for _, r := range rows {
 		if resp.Prompt != "" {
 			break
@@ -154,7 +153,6 @@ func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID strin
 			resp.Output = rows[i].Completion
 		}
 	}
-	return resp, nil
 }
 
 // SpanIO returns the untruncated prompt/completion for a single span.

@@ -37,7 +37,10 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, en
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+	return mapDatastoreSystems(spanRows, conns), nil
+}
 
+func mapDatastoreSystems(spanRows []repository.SystemSummaryRaw, conns map[string]int64) []models.DatastoreSystemRow {
 	rows := make([]models.DatastoreSystemRow, 0, len(spanRows))
 	seen := make(map[string]struct{}, len(spanRows))
 	for _, r := range spanRows {
@@ -73,8 +76,7 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, en
 		}
 		return rows[i].QueryCount > rows[j].QueryCount
 	})
-
-	return rows, nil
+	return rows
 }
 
 func datastoreCategory(system string) string {

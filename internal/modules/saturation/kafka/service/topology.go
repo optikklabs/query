@@ -74,71 +74,86 @@ type nodeAgg struct {
 	latency percentileValues
 }
 
-func buildGraph(rows []repository.EdgeRow, winSecs float64) models.TopologyResponse {
-	producers := map[string]*nodeAgg{}
-	consumers := map[string]*nodeAgg{}
-	consumerMeta := map[string][2]string{}
-	topicProduce := map[string]uint64{}
-	topicProducers := map[string]map[string]struct{}{}
-	topicGroups := map[string]map[string]struct{}{}
-	topicTop := map[string]struct {
-		svc   string
-		calls uint64
-	}{}
-	edges := make([]models.StreamEdge, 0, len(rows))
+type topicLeader struct {
+	service string
+	calls   uint64
+}
 
-	for _, row := range rows {
-		if row.ConsumerGroup != "" {
-			continue
-		}
-		acc(producers, row.Service, row.CallCount, row.ErrorCount, percentiles(row.QS))
-		topicProduce[row.Topic] += row.CallCount
-		addSet(topicProducers, row.Topic, row.Service)
-		top, exists := topicTop[row.Topic]
-		if !exists || row.CallCount > top.calls || (row.CallCount == top.calls && row.Service < top.svc) {
-			topicTop[row.Topic] = struct {
-				svc   string
-				calls uint64
-			}{row.Service, row.CallCount}
-		}
-		edges = append(edges, models.StreamEdge{
-			Source: row.Service, Target: row.Topic, Kind: "produce",
-			RatePerSec: float64(row.CallCount) / winSecs,
-		})
+type graphData struct {
+	producers      map[string]*nodeAgg
+	consumers      map[string]*nodeAgg
+	consumerMeta   map[string][2]string
+	topicProduce   map[string]uint64
+	topicProducers map[string]map[string]struct{}
+	topicGroups    map[string]map[string]struct{}
+	topicLeaders   map[string]topicLeader
+	consumeEdges   map[[2]string]uint64
+	edges          []models.StreamEdge
+	pathways       []models.Pathway
+}
+
+func newGraphData(size int) *graphData {
+	return &graphData{
+		producers: map[string]*nodeAgg{}, consumers: map[string]*nodeAgg{},
+		consumerMeta: map[string][2]string{}, topicProduce: map[string]uint64{},
+		topicProducers: map[string]map[string]struct{}{}, topicGroups: map[string]map[string]struct{}{},
+		topicLeaders: map[string]topicLeader{}, consumeEdges: map[[2]string]uint64{},
+		edges: make([]models.StreamEdge, 0, size), pathways: make([]models.Pathway, 0, size),
 	}
+}
 
-	consumeEdge := map[[2]string]uint64{}
-	pathways := make([]models.Pathway, 0, len(rows))
+func (g *graphData) addProducer(row repository.EdgeRow, winSecs float64) {
+	acc(g.producers, row.Service, row.CallCount, row.ErrorCount, percentiles(row.QS))
+	g.topicProduce[row.Topic] += row.CallCount
+	addSet(g.topicProducers, row.Topic, row.Service)
+	leader, exists := g.topicLeaders[row.Topic]
+	if !exists || row.CallCount > leader.calls || (row.CallCount == leader.calls && row.Service < leader.service) {
+		g.topicLeaders[row.Topic] = topicLeader{service: row.Service, calls: row.CallCount}
+	}
+	g.edges = append(g.edges, models.StreamEdge{
+		Source: row.Service, Target: row.Topic, Kind: "produce",
+		RatePerSec: float64(row.CallCount) / winSecs,
+	})
+}
+
+func (g *graphData) addConsumer(row repository.EdgeRow, winSecs float64) {
+	key := row.Service + "|" + row.ConsumerGroup
+	acc(g.consumers, key, row.CallCount, row.ErrorCount, percentiles(row.QS))
+	g.consumerMeta[key] = [2]string{row.Service, row.ConsumerGroup}
+	addSet(g.topicGroups, row.Topic, row.ConsumerGroup)
+	g.consumeEdges[[2]string{row.Topic, row.Service}] += row.CallCount
+	g.pathways = append(g.pathways, models.Pathway{
+		Producer: g.topicLeaders[row.Topic].service, Topic: row.Topic,
+		Group: row.ConsumerGroup, Consumer: row.Service,
+		ProduceRatePerSec: float64(g.topicProduce[row.Topic]) / winSecs,
+		ConsumeRatePerSec: float64(row.CallCount) / winSecs,
+		ErrorRate:         errRate(row.ErrorCount, row.CallCount),
+	})
+}
+
+func buildGraph(rows []repository.EdgeRow, winSecs float64) models.TopologyResponse {
+	graph := newGraphData(len(rows))
 	for _, row := range rows {
 		if row.ConsumerGroup == "" {
-			continue
+			graph.addProducer(row, winSecs)
 		}
-		key := row.Service + "|" + row.ConsumerGroup
-		acc(consumers, key, row.CallCount, row.ErrorCount, percentiles(row.QS))
-		consumerMeta[key] = [2]string{row.Service, row.ConsumerGroup}
-		addSet(topicGroups, row.Topic, row.ConsumerGroup)
-		consumeEdge[[2]string{row.Topic, row.Service}] += row.CallCount
-		pathways = append(pathways, models.Pathway{
-			Producer: topicTop[row.Topic].svc, Topic: row.Topic,
-			Group: row.ConsumerGroup, Consumer: row.Service,
-			ProduceRatePerSec: float64(topicProduce[row.Topic]) / winSecs,
-			ConsumeRatePerSec: float64(row.CallCount) / winSecs,
-			ErrorRate:         errRate(row.ErrorCount, row.CallCount),
-		})
 	}
-	for k, calls := range consumeEdge {
-		edges = append(edges, models.StreamEdge{
-			Source: k[0], Target: k[1], Kind: "consume",
+	for _, row := range rows {
+		if row.ConsumerGroup != "" {
+			graph.addConsumer(row, winSecs)
+		}
+	}
+	for key, calls := range graph.consumeEdges {
+		graph.edges = append(graph.edges, models.StreamEdge{
+			Source: key[0], Target: key[1], Kind: "consume",
 			RatePerSec: float64(calls) / winSecs,
 		})
 	}
-
 	return models.TopologyResponse{
-		Producers: producerNodes(producers, winSecs),
-		Topics:    topicNodes(topicProduce, topicProducers, topicGroups, winSecs),
-		Consumers: consumerNodes(consumers, consumerMeta, winSecs),
-		Edges:     edges,
-		Pathways:  pathways,
+		Producers: producerNodes(graph.producers, winSecs),
+		Topics:    topicNodes(graph.topicProduce, graph.topicProducers, graph.topicGroups, winSecs),
+		Consumers: consumerNodes(graph.consumers, graph.consumerMeta, winSecs),
+		Edges:     graph.edges, Pathways: graph.pathways,
 	}
 }
 
