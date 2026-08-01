@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/optikklabs/query/internal/infra/timebucket"
 )
 
 const MaxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
@@ -58,12 +57,6 @@ func (f *Filters) Validate() error {
 	}
 	if !validAggregations[f.Aggregation] {
 		return errors.New("unsupported aggregation: " + f.Aggregation)
-	}
-	if f.Step != "" {
-		grain := BucketDurationSeconds(f.StartMs, f.EndMs, f.Step)
-		if grain < timebucket.AvailableRollupGrain(f.StartMs, grain) {
-			return errors.New("requested step is no longer retained")
-		}
 	}
 	for _, key := range f.GroupBy {
 		if !ValidKey(key) {

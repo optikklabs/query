@@ -52,7 +52,7 @@ func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, e
 		return QueryResponse{}, err
 	}
 	rows, pageInfo := cursor.Paginate(rows, limit, func(last traceIndexRowDTO) string {
-		return TraceCursor{StartNs: uint64(last.StartTime.UnixNano()), SpanID: last.SpanID}.Encode()
+		return TraceCursor{StartNs: uint64(last.StartTime.UnixNano()), TraceID: last.TraceID, SpanID: last.SpanID}.Encode()
 	})
 	aggs, err := s.enrichPage(ctx, req.TenantID, rows)
 	if err != nil {

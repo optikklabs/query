@@ -1,7 +1,6 @@
 package spanfilter
 
 import (
-	"errors"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -44,9 +43,6 @@ type Filters struct {
 func (f *Filters) Validate() error {
 	if err := filterutil.ValidateTimeRange(&f.StartMs, &f.EndMs); err != nil {
 		return err
-	}
-	if f.EndMs-f.StartMs > filterutil.RawRetentionMs {
-		return errors.New("filters: span data is retained for 15 days")
 	}
 	return filterutil.ValidateAttrs(f.Attributes)
 }

@@ -1,7 +1,6 @@
 package filter
 
 import (
-	"errors"
 	"strconv"
 	"time"
 
@@ -38,9 +37,6 @@ type Filters struct {
 func (f *Filters) Validate() error {
 	if err := filterutil.ValidateTimeRange(&f.StartMs, &f.EndMs); err != nil {
 		return err
-	}
-	if f.EndMs-f.StartMs > filterutil.RawRetentionMs {
-		return errors.New("filters: log data is retained for 15 days")
 	}
 	return filterutil.ValidateAttrs(f.Attributes)
 }
@@ -98,6 +94,73 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 		args = append(args, clauseArgs...)
 	}
 	return prewhere, where, args
+}
+
+const statsGrainMs int64 = 60 * 1000
+
+type StatsClauses struct {
+	RawPrewhere    string
+	RollupPrewhere string
+	Where          string
+	Args           []any
+}
+
+// SupportsStats reports whether every requested predicate is represented in
+// logs_stats_1m. Body, ID, and arbitrary-attribute predicates remain raw-only.
+func SupportsStats(f Filters) bool {
+	return f.TraceID == "" && f.SpanID == "" && f.Search == "" && len(f.Attributes) == 0
+}
+
+// BuildStatsClauses splits an exact aggregate read into complete minutes from
+// logs_stats_1m and at most two partial-minute fragments from raw logs. This is
+// a single deterministic query plan, not an age- or retention-based fallback.
+func BuildStatsClauses(f Filters) (StatsClauses, bool) {
+	if !SupportsStats(f) {
+		return StatsClauses{}, false
+	}
+	rollupStartMs := ((f.StartMs + statsGrainMs - 1) / statsGrainMs) * statsGrainMs
+	rollupEndMs := (f.EndMs / statsGrainMs) * statsGrainMs
+	if rollupStartMs >= rollupEndMs {
+		return StatsClauses{}, false
+	}
+
+	args := []any{
+		clickhouse.Named("tenantID", uint32(f.TenantID)),
+		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
+		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
+		clickhouse.Named("startBucket", uint32((f.StartMs/1000)/300*300)),
+		clickhouse.Named("endBucket", uint32((f.EndMs/1000)/300*300)),
+		clickhouse.Named("rollupStart", time.UnixMilli(rollupStartMs)),
+		clickhouse.Named("rollupEnd", time.UnixMilli(rollupEndMs)),
+	}
+
+	dimensions := ""
+	args = filterutil.AppendIn(&dimensions, args,
+		filterutil.InClause{Column: "service", Bind: "services", Values: f.Services},
+		filterutil.InClause{Column: "service", Bind: "excServices", Values: f.ExcludeServices, Negate: true},
+		filterutil.InClause{Column: "host", Bind: "hosts", Values: f.Hosts},
+		filterutil.InClause{Column: "host", Bind: "excHosts", Values: f.ExcludeHosts, Negate: true},
+		filterutil.InClause{Column: "pod", Bind: "pods", Values: f.Pods},
+		filterutil.InClause{Column: "container", Bind: "containers", Values: f.Containers},
+		filterutil.InClause{Column: "environment", Bind: "environments", Values: f.Environments},
+	)
+
+	where := "WHERE 1=1"
+	args = filterutil.AppendIn(&where, args,
+		filterutil.InClause{Column: "upper(severity_text)", Bind: "severities", Values: filterutil.UpperAll(f.Severities)},
+		filterutil.InClause{Column: "upper(severity_text)", Bind: "excSeverities", Values: filterutil.UpperAll(f.ExcludeSeverities), Negate: true},
+	)
+
+	return StatsClauses{
+		RawPrewhere: `PREWHERE tenant_id = @tenantID
+			AND timestamp >= @start AND timestamp < @end
+			AND ts_bucket BETWEEN @startBucket AND @endBucket
+			AND (timestamp < @rollupStart OR timestamp >= @rollupEnd)` + dimensions,
+		RollupPrewhere: `PREWHERE tenant_id = @tenantID
+			AND timestamp >= @rollupStart AND timestamp < @rollupEnd` + dimensions,
+		Where: where,
+		Args:  args,
+	}, true
 }
 
 // attrSQL: logs split attributes into typed string/number/bool maps;

@@ -20,7 +20,7 @@ func (r *Repository) ErrorGroupDetailRow(ctx context.Context, tenantID int64, st
 		       count()                                   AS error_count,
 		       max(timestamp)                       AS last_occurrence,
 		       min(timestamp)                       AS first_occurrence
-		FROM optikk.spans
+		FROM optikk.error_events
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		     AND ` + errorgroups.Predicate + ` AND error_group_id = @groupID
 		GROUP BY error_group_id, service, name`
@@ -46,7 +46,7 @@ func (r *Repository) ErrorGroupTraceRows(ctx context.Context, tenantID int64, st
 		       s.timestamp                      AS timestamp,
 		       s.duration_nano / 1000000.0      AS duration_ms,
 		       s.status_code_string             AS status_code
-		FROM optikk.spans s
+		FROM optikk.error_events s
 		PREWHERE s.tenant_id = @tenantID AND s.timestamp >= @start AND s.timestamp < @end
 		     AND ` + errorgroups.QualifiedPredicate("s") + ` AND s.error_group_id = @groupID
 		WHERE 1=1 ` + paginationFilter + `
@@ -69,7 +69,7 @@ func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, tenantID int6
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       count()                            AS count
-		FROM optikk.spans
+		FROM optikk.error_events
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		     AND ` + errorgroups.Predicate + ` AND error_group_id = @groupID
 		GROUP BY bucket_at
@@ -100,7 +100,7 @@ func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, tenantID
 		       s.environment               AS environment,
 		       s.pod                       AS pod,
 		       s.host                      AS host
-		FROM optikk.spans s
+		FROM optikk.error_events s
 		PREWHERE s.tenant_id = @tenantID AND s.timestamp >= @start AND s.timestamp < @end
 		     AND ` + errorgroups.QualifiedPredicate("s") + ` AND s.error_group_id = @groupID
 		ORDER BY s.timestamp DESC, s.span_id DESC
@@ -133,7 +133,7 @@ func (r *Repository) ErrorGroupFacetRowsAll(ctx context.Context, tenantID int64,
 				''
 			) as value,
 			count() as cnt
-		FROM optikk.spans
+		FROM optikk.error_events
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		     AND ` + errorgroups.Predicate + ` AND error_group_id = @groupID
 		GROUP BY GROUPING SETS (
@@ -158,7 +158,7 @@ func (r *Repository) ErrorHotspotRows(ctx context.Context, tenantID int64, start
 		       argMax(name, (timestamp, span_id)) AS operation_name,
 		       error_group_id,
 		       count()                   AS error_count
-		FROM optikk.spans
+		FROM optikk.error_events
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		     AND ` + errorgroups.Predicate + `
 		WHERE name != ''

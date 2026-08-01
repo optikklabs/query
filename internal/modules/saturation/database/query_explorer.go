@@ -1,7 +1,6 @@
 package database
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
@@ -24,9 +23,6 @@ func (r *queryPatternsRequest) BindTenant(tenantID int64) error {
 	r.TenantID = tenantID
 	if err := filterutil.ValidateTimeRange(&r.StartTime, &r.EndTime); err != nil {
 		return err
-	}
-	if r.EndTime-r.StartTime > filterutil.RawRetentionMs {
-		return errors.New("filters: span data is retained for 15 days")
 	}
 	return nil
 }

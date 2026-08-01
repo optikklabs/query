@@ -21,7 +21,7 @@ func millisToTime(ms int64) time.Time { return time.UnixMilli(ms) }
 
 // Error groups are always read from the error spans themselves, so span- and
 // root-level predicates both apply to the same row — no trace-level CTE.
-const errorSpanScan = `FROM optikk.spans
+const errorSpanScan = `FROM optikk.error_events
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND ` + errorgroups.Predicate + `
 		WHERE 1=1`
 

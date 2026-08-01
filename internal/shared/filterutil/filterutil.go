@@ -10,7 +10,6 @@ import (
 )
 
 const MaxTimeRangeMs int64 = 30 * 24 * 60 * 60 * 1000
-const RawRetentionMs int64 = 15 * 24 * 60 * 60 * 1000
 
 type AttrFilter struct {
 	Key   string `json:"key"`

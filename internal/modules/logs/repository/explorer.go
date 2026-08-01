@@ -16,9 +16,10 @@ import (
 func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, cur models.Cursor) ([]models.LogRow, error) {
 	prewhere, where, args := filter.BuildClauses(f)
 	if !cur.IsZero() {
-		where += ` AND (timestamp, log_id) < (@curTs, @curLid)`
+		prewhere += ` AND (ts_bucket, timestamp) <= (@curBucket, @curTs)`
+		where += ` AND (ts_bucket, timestamp, log_id) < (@curBucket, @curTs, @curLid)`
 		args = append(args,
-
+			clickhouse.Named("curBucket", uint32((cur.Timestamp.Unix()/300)*300)),
 			clickhouse.DateNamed("curTs", cur.Timestamp, clickhouse.NanoSeconds),
 			clickhouse.Named("curLid", cur.LogID),
 		)

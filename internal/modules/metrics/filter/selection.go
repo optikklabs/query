@@ -27,7 +27,7 @@ func BuildSelection(f Filters) (fromTable, where, selectCols, groupByCols string
 }
 
 func rollupTable(startMs, endMs int64, step string) string {
-	return timebucket.RollupTableForRange(startMs, BucketDurationSeconds(startMs, endMs, step))
+	return timebucket.RollupTableForGrain(BucketDurationSeconds(startMs, endMs, step))
 }
 
 func seriesColumn(key string) string {
@@ -62,9 +62,6 @@ func BucketDurationSeconds(startMs, endMs int64, step string) int64 {
 		default:
 			grain = 86400
 		}
-	}
-	if step == "" {
-		grain = max(grain, timebucket.AvailableRollupGrain(startMs, grain))
 	}
 	return grain
 }

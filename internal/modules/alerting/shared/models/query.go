@@ -35,8 +35,6 @@ type MetricQuery struct {
 	WindowSec int `json:"windowSec"`
 }
 
-const MaxExactMetricSumWindowSec = 47 * 60 * 60
-
 type APMQuery struct {
 	Service  string `json:"service"`
 	Resource string `json:"resource,omitempty"`

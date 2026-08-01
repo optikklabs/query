@@ -43,9 +43,10 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 	args := c.Args
 
 	if cur, _ := DecodeCursor(req.Cursor); !cur.IsZero() {
-		where += ` AND (timestamp, span_id) < (@curStart, @curSpanID)`
+		where += ` AND (timestamp, trace_id, span_id) < (@curStart, @curTraceID, @curSpanID)`
 		args = append(args,
 			clickhouse.DateNamed("curStart", time.Unix(0, int64(cur.StartNs)), clickhouse.NanoSeconds),
+			clickhouse.Named("curTraceID", cur.TraceID),
 			clickhouse.Named("curSpanID", cur.SpanID),
 		)
 	}
@@ -63,7 +64,7 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 				if(response_status_code = '0', '', response_status_code)    AS root_http_status,
 				http_route                                                  AS root_endpoint,
 				environment                                                 AS environment
-		FROM optikk.spans_root ` + prewhere + ` ` + where + ` ORDER BY timestamp DESC, span_id DESC LIMIT @pgLimit`
+		FROM optikk.spans_root ` + prewhere + ` ` + where + ` ORDER BY timestamp DESC, trace_id DESC, span_id DESC LIMIT @pgLimit`
 
 	var rows []traceIndexRowDTO
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "traces.Query", &rows, query, args...); err != nil {

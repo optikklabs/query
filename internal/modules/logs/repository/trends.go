@@ -25,14 +25,12 @@ type TrendRow struct {
 }
 
 func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow, error) {
-	prewhere, where, args := filter.BuildClauses(f)
-
+	source, args := aggregateSource(f, "severity_bucket", "severity_bucket", "severity_bucket")
 	query := `
-	SELECT count()                       AS total,
-	       countIf(severity_bucket >= 4) AS errors,
-	       countIf(severity_bucket = 3)  AS warns
-	FROM optikk.logs
-	` + prewhere + ` ` + where
+	SELECT sum(log_count)                         AS total,
+	       sumIf(log_count, severity_bucket >= 4) AS errors,
+	       sumIf(log_count, severity_bucket = 3)  AS warns
+	FROM ` + source
 
 	var row SummaryRow
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Summary",
@@ -40,18 +38,17 @@ func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow,
 }
 
 func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, error) {
-	prewhere, where, args := filter.BuildClauses(f)
 	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
-
+	source, args := aggregateSource(f, "toStartOfMinute(timestamp) AS timestamp, severity_bucket",
+		"timestamp, severity_bucket", "timestamp, severity_bucket")
 	query := `
-	SELECT ` + grainSQL + ` AS time_bucket,
-	       count()                       AS total,
-	       countIf(severity_bucket >= 4) AS error,
-	       countIf(severity_bucket = 3)  AS warn,
-	       countIf(severity_bucket = 2)  AS info,
-	       countIf(severity_bucket <= 1) AS debug
-	FROM optikk.logs
-	` + prewhere + ` ` + where + `
+	SELECT ` + grainSQL + `                        AS time_bucket,
+	       sum(log_count)                         AS total,
+	       sumIf(log_count, severity_bucket >= 4) AS error,
+	       sumIf(log_count, severity_bucket = 3)  AS warn,
+	       sumIf(log_count, severity_bucket = 2)  AS info,
+	       sumIf(log_count, severity_bucket <= 1) AS debug
+	FROM ` + source + `
 	GROUP BY time_bucket
 	ORDER BY time_bucket ASC`
 

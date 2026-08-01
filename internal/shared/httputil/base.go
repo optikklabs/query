@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	types "github.com/optikklabs/query/internal/shared/contracts"
@@ -154,11 +153,7 @@ func ParsePageSize(r *http.Request, key string, fallback int) int {
 	return size
 }
 
-// Allowance for client clocks slightly ahead of the server.
-const rangeClockSkewMs = 60 * 1000
-
 func ParseRange(r *http.Request) (startMs, endMs int64, err error) {
-	now := time.Now().UnixMilli()
 	end := ParseInt64Param(r, "endTime", 0)
 	if end <= 0 {
 		end = ParseInt64Param(r, "end", 0)
@@ -167,14 +162,8 @@ func ParseRange(r *http.Request) (startMs, endMs int64, err error) {
 	if start <= 0 {
 		start = ParseInt64Param(r, "start", 0)
 	}
-	if end <= 0 {
-		end = now
-	}
-	if start <= 0 {
-		start = end - (7 * 24 * 3600 * 1000)
-	}
-	if maxEnd := now + rangeClockSkewMs; end > maxEnd {
-		end = maxEnd
+	if start <= 0 || end <= 0 {
+		return 0, 0, errors.New("start and end time params are required")
 	}
 	if end-start > filterutil.MaxTimeRangeMs {
 		return 0, 0, errors.New("time range must not exceed 30 days")

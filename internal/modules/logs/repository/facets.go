@@ -16,7 +16,7 @@ type DimRow struct {
 	Count uint64 `ch:"cnt"`
 }
 
-func buildFacetQuery(prewhere, where string) string {
+func buildFacetQuery(source string) string {
 	return `SELECT
 			multiIf(
 				grouping(service) = 0, 'service',
@@ -32,8 +32,8 @@ func buildFacetQuery(prewhere, where string) string {
 				grouping(environment) = 0, environment,
 				''
 			) AS value,
-			count() AS cnt
-		FROM optikk.logs ` + prewhere + ` ` + where + `
+			sum(log_count) AS cnt
+		FROM ` + source + `
 		GROUP BY GROUPING SETS (
 			(service),
 			(host),
@@ -46,10 +46,10 @@ func buildFacetQuery(prewhere, where string) string {
 }
 
 func (r *Repository) Facets(ctx context.Context, f filter.Filters) ([]DimRow, error) {
-	prewhere, where, args := filter.BuildClauses(f)
+	const columns = "service, host, pod, environment"
+	source, args := aggregateSource(f, columns, columns, columns)
 	args = append(args, clickhouse.Named("facetLimit", uint64(facetTopN)))
-
-	query := buildFacetQuery(prewhere, where)
+	query := buildFacetQuery(source)
 
 	var rows []DimRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "logsFacets.Compute",

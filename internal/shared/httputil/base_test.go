@@ -29,3 +29,32 @@ func TestParseIDParam(t *testing.T) {
 		})
 	}
 }
+
+func TestParseRangeRequiresExplicitBounds(t *testing.T) {
+	for _, target := range []string{
+		"/",
+		"/?startTime=1000",
+		"/?endTime=2000",
+	} {
+		req := httptest.NewRequest("GET", target, nil)
+		if _, _, err := ParseRange(req); err == nil {
+			t.Fatalf("ParseRange(%q) unexpectedly accepted an implicit bound", target)
+		}
+	}
+}
+
+func TestParseRangeAcceptsExplicitAliases(t *testing.T) {
+	for _, target := range []string{
+		"/?startTime=1000&endTime=2000",
+		"/?start=1000&end=2000",
+	} {
+		req := httptest.NewRequest("GET", target, nil)
+		start, end, err := ParseRange(req)
+		if err != nil {
+			t.Fatalf("ParseRange(%q): %v", target, err)
+		}
+		if start != 1000 || end != 2000 {
+			t.Fatalf("ParseRange(%q) = (%d, %d), want (1000, 2000)", target, start, end)
+		}
+	}
+}

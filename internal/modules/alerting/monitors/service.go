@@ -174,9 +174,6 @@ func validateMetricQuery(query *models.MetricQuery) error {
 	default:
 		return errorcode.ValidationError{Msg: "unsupported metric aggregation"}
 	}
-	if query.Aggregation == "sum" && query.WindowSec > models.MaxExactMetricSumWindowSec {
-		return errorcode.ValidationError{Msg: "metric sum window exceeds exact raw retention"}
-	}
 	return nil
 }
 

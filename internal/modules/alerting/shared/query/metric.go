@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -22,9 +21,6 @@ func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, q model
 		return ScalarResult{}, nil
 	}
 	windowSec := monitorWindowSec(q.Metric.WindowSec)
-	if q.Metric.Aggregation == "sum" && windowSec > models.MaxExactMetricSumWindowSec {
-		return ScalarResult{}, fmt.Errorf("metric sum window exceeds exact raw retention")
-	}
 	windowMs := windowSec * 1000
 	startMs, endMs := completeWindow(now, windowSec, timebucket.RollupGrainSeconds(windowMs))
 
@@ -67,9 +63,6 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q model
 	}
 	endMs := now.UnixMilli()
 	startMs := endMs - windowMs
-	if q.Metric.Aggregation == "sum" && windowMs > models.MaxExactMetricSumWindowSec*1000 {
-		return nil, fmt.Errorf("metric sum window exceeds exact raw retention")
-	}
 
 	sourceStart := startMs
 	if q.Metric.Aggregation == "sum" {

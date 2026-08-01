@@ -2,10 +2,79 @@ package filter
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 )
+
+func TestSupportsStats(t *testing.T) {
+	compatible := Filters{
+		Services:          []string{"checkout"},
+		Hosts:             []string{"host-a"},
+		Pods:              []string{"pod-a"},
+		Containers:        []string{"container-a"},
+		Environments:      []string{"production"},
+		Severities:        []string{"ERROR"},
+		ExcludeServices:   []string{"worker"},
+		ExcludeHosts:      []string{"host-b"},
+		ExcludeSeverities: []string{"DEBUG"},
+	}
+	if !SupportsStats(compatible) {
+		t.Fatal("promoted dimensions and severity filters must use the log rollup")
+	}
+
+	for name, mutate := range map[string]func(*Filters){
+		"trace id":    func(f *Filters) { f.TraceID = "trace" },
+		"span id":     func(f *Filters) { f.SpanID = "span" },
+		"body search": func(f *Filters) { f.Search = "timeout" },
+		"attribute":   func(f *Filters) { f.Attributes = []AttrFilter{{Key: "user.id", Value: "42"}} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := compatible
+			mutate(&f)
+			if SupportsStats(f) {
+				t.Fatalf("%s is not represented in logs_stats_1m", name)
+			}
+		})
+	}
+}
+
+func TestBuildStatsClausesUsesOnlyCompleteMinutesFromRollup(t *testing.T) {
+	f := Filters{
+		TenantID: 7,
+		StartMs:  70_000,
+		EndMs:    190_000,
+		Services: []string{"checkout"},
+	}
+	clauses, ok := BuildStatsClauses(f)
+	if !ok {
+		t.Fatal("expected range with a complete minute to use the rollup")
+	}
+
+	for _, want := range []string{
+		"timestamp >= @rollupStart AND timestamp < @rollupEnd",
+		"timestamp < @rollupStart OR timestamp >= @rollupEnd",
+		"service IN @services",
+	} {
+		if !strings.Contains(clauses.RawPrewhere+clauses.RollupPrewhere, want) {
+			t.Errorf("missing %q from stats clauses", want)
+		}
+	}
+	if strings.Contains(clauses.RawPrewhere+clauses.RollupPrewhere, "now()") {
+		t.Fatal("stats routing must not depend on wall-clock time")
+	}
+	if len(clauses.Args) == 0 {
+		t.Fatal("stats query lost its bound arguments")
+	}
+}
+
+func TestBuildStatsClausesDoesNotApproximateSubMinuteRange(t *testing.T) {
+	_, ok := BuildStatsClauses(Filters{TenantID: 1, StartMs: 1_000, EndMs: 59_000})
+	if ok {
+		t.Fatal("sub-minute range has no complete rollup bucket")
+	}
+}
 
 // Golden contract for the logs attribute-filter SQL. Every case pins the
 // exact clause string and args; do not change these without a schema change.

@@ -26,6 +26,7 @@ type Trace struct {
 
 type TraceCursor struct {
 	StartNs uint64 `json:"s"`
+	TraceID string `json:"t"`
 	SpanID  string `json:"p"`
 }
 

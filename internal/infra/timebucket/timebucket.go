@@ -53,23 +53,8 @@ func FloorMsToBucket(ms, bucketSec int64) int64 {
 	return ms - ms%(bucketSec*1000)
 }
 
-func AvailableRollupGrain(startMs, grainSec int64) int64 {
-	age := time.Since(time.UnixMilli(startMs))
-	if grainSec < 300 && age > 7*24*time.Hour {
-		grainSec = 300
-	}
-	if grainSec < 3600 && age > 14*24*time.Hour {
-		grainSec = 3600
-	}
-	return grainSec
-}
-
-func RollupTableForRange(startMs, grainSec int64) string {
-	return RollupTableForGrain(AvailableRollupGrain(startMs, grainSec))
-}
-
 func MetricsRollup(startMs, endMs int64) string {
-	return RollupTableForRange(startMs, int64(DisplayGrain(endMs-startMs).Seconds()))
+	return RollupTableForGrain(int64(DisplayGrain(endMs - startMs).Seconds()))
 }
 
 func RollupGrainSeconds(windowMs int64) int64 {
@@ -84,7 +69,7 @@ func RollupGrainSeconds(windowMs int64) int64 {
 }
 
 func SpanStatsRollup(startMs, endMs int64) string {
-	switch AvailableRollupGrain(startMs, int64(DisplayGrain(endMs-startMs).Seconds())) {
+	switch int64(DisplayGrain(endMs - startMs).Seconds()) {
 	case 60:
 		return "optikk.span_stats_1m"
 	case 300:
@@ -95,8 +80,7 @@ func SpanStatsRollup(startMs, endMs int64) string {
 }
 
 func DisplayGrainForRange(startMs, endMs int64) time.Duration {
-	grain := int64(DisplayGrain(endMs - startMs).Seconds())
-	return time.Duration(AvailableRollupGrain(startMs, grain)) * time.Second
+	return DisplayGrain(endMs - startMs)
 }
 
 func DisplayGrainSQLForRange(startMs, endMs int64) string {
