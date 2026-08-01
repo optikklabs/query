@@ -62,19 +62,17 @@ var (
 // the maps are shared by every query context and must never be mutated.
 func budgetSettings(b config.QueryBudget) clickhouse.Settings {
 	return clickhouse.Settings{
-		"max_execution_time":              b.MaxExecutionTime,
-		"max_rows_to_read":                b.MaxRowsToRead,
-		"max_memory_usage":                b.MaxMemoryUsage,
-		"max_result_rows":                 b.MaxResultRows,
-		"result_overflow_mode":            "throw",
-		"read_overflow_mode":              "throw",
-		"optimize_read_in_order":          1,
-		"use_query_cache":                 1,
-		"query_cache_ttl":                 60,
-		"query_cache_share_between_users": 0,
-		"use_query_condition_cache":       1,
-		"max_threads":                     b.MaxThreads,
-		"priority":                        b.Priority,
+		"max_execution_time":        b.MaxExecutionTime,
+		"max_rows_to_read":          b.MaxRowsToRead,
+		"max_memory_usage":          b.MaxMemoryUsage,
+		"max_result_rows":           b.MaxResultRows,
+		"result_overflow_mode":      "throw",
+		"read_overflow_mode":        "throw",
+		"optimize_read_in_order":    1,
+		"use_query_cache":           0,
+		"use_query_condition_cache": 1,
+		"max_threads":               b.MaxThreads,
+		"priority":                  b.Priority,
 	}
 }
 

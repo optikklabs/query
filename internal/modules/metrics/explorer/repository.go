@@ -152,15 +152,15 @@ func (r *Repository) ResolveMetricKinds(
 	// near either boundary.
 	query := `
 		SELECT metric_name,
-		       argMax(temporality, (timestamp, fingerprint))  AS temporality,
-		       argMax(is_monotonic, (timestamp, fingerprint)) AS is_monotonic,
-		       argMax(metric_type, (timestamp, fingerprint))  AS metric_type,
-		       uniqExact((temporality, is_monotonic, metric_type)) AS variants
-		FROM optikk.metrics_series
-		PREWHERE tenant_id     = @tenantID
-		     AND metric_name IN @metricNames
-		     AND timestamp >= @start - INTERVAL 6 HOUR
-		     AND timestamp < @end + INTERVAL 6 HOUR
+		       argMax(ms.temporality, (ms.timestamp, ms.fingerprint))  AS temporality,
+		       argMax(ms.is_monotonic, (ms.timestamp, ms.fingerprint)) AS is_monotonic,
+		       argMax(ms.metric_type, (ms.timestamp, ms.fingerprint))  AS metric_type,
+		       uniqExact((ms.temporality, ms.is_monotonic, ms.metric_type)) AS variants
+		FROM optikk.metrics_series AS ms
+		PREWHERE ms.tenant_id     = @tenantID
+		     AND ms.metric_name IN @metricNames
+		     AND ms.timestamp >= @start - INTERVAL 6 HOUR
+		     AND ms.timestamp < @end + INTERVAL 6 HOUR
 		GROUP BY metric_name`
 	args := []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
