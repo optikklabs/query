@@ -101,7 +101,7 @@ func (r *Repository) ExplorerSummaryRow(ctx context.Context, req models.Overview
 	args = append(args, clickhouse.DateNamed("newSince", millisToTime(newSinceMs), clickhouse.MilliSeconds))
 
 	query := `
-		SELECT toUInt64OrZero(sum(cnt))        AS total_errors,
+		SELECT sum(cnt)                        AS total_errors,
 		       count()                         AS active_issues,
 		       countIf(first_occ >= @newSince) AS new_issues,
 		       uniqExact(service)              AS services_affected
