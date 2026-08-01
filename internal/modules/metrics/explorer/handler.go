@@ -20,21 +20,12 @@ func (h *Handler) ListMetricNames(w http.ResponseWriter, r *http.Request) {
 	}
 	search := r.URL.Query().Get("search")
 
-	results, err := h.Service.ListMetricNames(r.Context(), tenantID, startMs, endMs, search)
+	entries, err := h.Service.ListMetricNames(r.Context(), tenantID, startMs, endMs, search)
 	if err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to list metric names", err)
 		return
 	}
 
-	entries := make([]FEMetricNameEntry, len(results))
-	for i, r := range results {
-		entries[i] = FEMetricNameEntry{
-			Name:        r.MetricName,
-			Type:        r.MetricType,
-			Unit:        r.Unit,
-			Description: r.Description,
-		}
-	}
 	modulecommon.RespondOK(w, FEMetricNamesResponse{Metrics: entries})
 }
 

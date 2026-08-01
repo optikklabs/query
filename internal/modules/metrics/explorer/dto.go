@@ -7,25 +7,14 @@ type metricNameDTO struct {
 	MetricType  string `ch:"metric_type"`
 	Unit        string `ch:"unit"`
 	Description string `ch:"description"`
+	Temporality string `ch:"temporality"`
+	IsMonotonic bool   `ch:"is_monotonic"`
+	Variants    uint64 `ch:"variants"`
 }
 
 type tagValueDTO struct {
 	TagValue string `ch:"tag_value"`
 	Count    uint64 `ch:"count"`
-}
-
-type tagKeyValueDTO struct {
-	TagKey   string `ch:"tag_key"`
-	TagValue string `ch:"tag_value"`
-	Count    uint64 `ch:"count"`
-}
-
-type metricKindDTO struct {
-	MetricName  string `ch:"metric_name"`
-	Temporality string `ch:"temporality"`
-	IsMonotonic bool   `ch:"is_monotonic"`
-	MetricType  string `ch:"metric_type"`
-	Variants    uint64 `ch:"variants"`
 }
 
 type timeseriesPointDTO struct {

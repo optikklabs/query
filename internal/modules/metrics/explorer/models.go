@@ -1,12 +1,5 @@
 package explorer
 
-type MetricNameResult struct {
-	MetricName  string `json:"metricName"`
-	MetricType  string `json:"metricType"`
-	Unit        string `json:"unit"`
-	Description string `json:"description"`
-}
-
 type TagValueResult struct {
 	TagValue string `json:"tagValue"`
 	Count    uint64 `json:"count"`
@@ -22,6 +15,8 @@ type FEMetricNameEntry struct {
 	Type        string `json:"type"`
 	Unit        string `json:"unit,omitempty"`
 	Description string `json:"description,omitempty"`
+	Temporality string `json:"temporality"`
+	IsMonotonic bool   `json:"isMonotonic"`
 }
 
 type FEMetricNamesResponse struct {

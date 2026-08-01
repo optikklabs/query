@@ -19,18 +19,24 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) ListMetricNames(ctx context.Context, tenantID, startMs, endMs int64, search string) ([]MetricNameResult, error) {
+func (s *Service) ListMetricNames(ctx context.Context, tenantID, startMs, endMs int64, search string) ([]FEMetricNameEntry, error) {
 	rows, err := s.repo.ListMetricNames(ctx, tenantID, startMs, endMs, search)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]MetricNameResult, len(rows))
+	out := make([]FEMetricNameEntry, len(rows))
 	for i, row := range rows {
-		out[i] = MetricNameResult{
-			MetricName:  row.MetricName,
-			MetricType:  normalizeMetricType(row.MetricType),
+		metricType := normalizeMetricType(row.MetricType)
+		if metricType == "" {
+			return nil, fmt.Errorf("unsupported metric type %q", row.MetricType)
+		}
+		out[i] = FEMetricNameEntry{
+			Name:        row.MetricName,
+			Type:        metricType,
 			Unit:        row.Unit,
 			Description: row.Description,
+			Temporality: row.Temporality,
+			IsMonotonic: row.IsMonotonic,
 		}
 	}
 	return out, nil
@@ -57,6 +63,11 @@ func (s *Service) ListTagValues(ctx context.Context, tenantID, startMs, endMs in
 	return out, nil
 }
 
+var staticResourceKeys = []string{
+	"service", "host", "pod", "container", "environment", "k8s_namespace",
+	"k8s.node.name", "cloud.provider", "cloud.account.id", "cloud.region", "cloud.platform",
+}
+
 func (s *Service) ListTags(ctx context.Context, tenantID, startMs, endMs int64, metricName, tagKey string) ([]FETagEntry, error) {
 	if tagKey != "" {
 		values, err := s.ListTagValues(ctx, tenantID, startMs, endMs, metricName, tagKey)
@@ -70,60 +81,76 @@ func (s *Service) ListTags(ctx context.Context, tenantID, startMs, endMs int64, 
 		return []FETagEntry{{Key: tagKey, Values: vals}}, nil
 	}
 
-	rows, err := s.repo.ListTagValuesAllKeys(ctx, tenantID, startMs, endMs, metricName)
+	dynamicKeys, err := s.repo.ListMetricTagKeys(ctx, tenantID, startMs, endMs, metricName)
 	if err != nil {
 		return nil, err
 	}
 
-	valuesByKey := make(map[string][]string)
-	for _, row := range rows {
-		valuesByKey[row.TagKey] = append(valuesByKey[row.TagKey], row.TagValue)
+	keySet := make(map[string]struct{}, len(staticResourceKeys)+len(dynamicKeys))
+	for _, k := range staticResourceKeys {
+		keySet[k] = struct{}{}
 	}
-	// Static resource keys always appear, even with no values in range.
-	for _, static := range []string{"service", "host", "pod", "container", "environment", "k8s_namespace",
-		"k8s.node.name", "cloud.provider", "cloud.account.id", "cloud.region", "cloud.platform"} {
-		if _, ok := valuesByKey[static]; !ok {
-			valuesByKey[static] = []string{}
+	for _, k := range dynamicKeys {
+		if k != "" {
+			keySet[k] = struct{}{}
 		}
 	}
 
-	keys := make([]string, 0, len(valuesByKey))
-	for key := range valuesByKey {
+	keys := make([]string, 0, len(keySet))
+	for key := range keySet {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 
 	tags := make([]FETagEntry, len(keys))
 	for i, key := range keys {
-		tags[i] = FETagEntry{Key: key, Values: valuesByKey[key]}
+		tags[i] = FETagEntry{Key: key, Values: []string{}}
 	}
 	return tags, nil
 }
 
 func (s *Service) Query(ctx context.Context, tenantID int64, req FEQueryRequest) (*FEQueryResponse, error) {
 	type preparedQuery struct {
-		request FEMetricQuery
-		filter  filter.Filters
-		result  FEQueryResult
+		request    FEMetricQuery
+		filter     filter.Filters
+		metricType string
+		result     FEQueryResult
 	}
 	prepared := make([]preparedQuery, len(req.Queries))
 	metricNames := make([]string, 0, len(req.Queries))
 	seenMetrics := make(map[string]struct{}, len(req.Queries))
 	for i, feq := range req.Queries {
-		f := convertFEQuery(tenantID, req.StartTime, req.EndTime, req.Step, feq)
-		if err := f.Validate(); err != nil {
-			return nil, fmt.Errorf("query %q: %w", feq.ID, err)
+		queryFilter := convertFEQuery(tenantID, req.StartTime, req.EndTime, req.Step, feq)
+		if err := queryFilter.Validate(); err != nil {
+			return nil, errorcode.ValidationError{Msg: fmt.Sprintf("query %q: %v", feq.ID, err)}
 		}
-		prepared[i] = preparedQuery{request: feq, filter: f}
-		if _, seen := seenMetrics[f.MetricName]; !seen {
-			seenMetrics[f.MetricName] = struct{}{}
-			metricNames = append(metricNames, f.MetricName)
+		prepared[i] = preparedQuery{request: feq, filter: queryFilter}
+		if _, seen := seenMetrics[feq.MetricName]; !seen {
+			seenMetrics[feq.MetricName] = struct{}{}
+			metricNames = append(metricNames, feq.MetricName)
 		}
 	}
 
-	kinds, err := s.repo.ResolveSeriesKinds(ctx, tenantID, req.StartTime, req.EndTime, metricNames)
+	kinds, err := s.repo.ResolveMetricKinds(ctx, tenantID, req.StartTime, req.EndTime, metricNames)
 	if err != nil {
-		return nil, fmt.Errorf("resolve metric types: %w", err)
+		return nil, fmt.Errorf("resolve metric metadata: %w", err)
+	}
+	for i := range prepared {
+		query := &prepared[i]
+		kind, found := kinds[query.filter.MetricName]
+		if !found {
+			return nil, errorcode.ValidationError{Msg: fmt.Sprintf("query %q: metric metadata is unavailable", query.request.ID)}
+		}
+		cumulative, histogram, err := resolveMetricKind(kind)
+		if err != nil {
+			return nil, errorcode.ValidationError{Msg: fmt.Sprintf("query %q: %v", query.request.ID, err)}
+		}
+		if err := validateAggregationForMode(query.filter.Aggregation, cumulative, histogram); err != nil {
+			return nil, errorcode.ValidationError{Msg: fmt.Sprintf("query %q: %v", query.request.ID, err)}
+		}
+		query.filter.Cumulative = cumulative
+		query.filter.Histogram = histogram
+		query.metricType = kind.MetricType
 	}
 
 	group, groupCtx := errgroup.WithContext(ctx)
@@ -131,35 +158,22 @@ func (s *Service) Query(ctx context.Context, tenantID int64, req FEQueryRequest)
 	for i := range prepared {
 		group.Go(func() error {
 			query := &prepared[i]
-			kind, found := kinds[query.filter.MetricName]
-			var kindPtr *metricKindDTO
-			if found {
-				kindPtr = &kind
-			}
-			if err := validateAggregationForKind(kindPtr, query.filter.Aggregation); err != nil {
-				return errorcode.ValidationError{Msg: fmt.Sprintf("query %q: %v", query.request.ID, err)}
-			}
-			query.filter.Cumulative, query.filter.Histogram = resolveSeriesFlags(kindPtr)
-			if query.filter.Cumulative && query.filter.StartMs < time.Now().Add(-48*time.Hour).UnixMilli() {
+			queryFilter := query.filter
+
+			if queryFilter.Cumulative && queryFilter.StartMs < time.Now().Add(-48*time.Hour).UnixMilli() {
 				return errorcode.ValidationError{Msg: fmt.Sprintf("query %q: exact cumulative data is retained for 48 hours", query.request.ID)}
 			}
-			metricType := ""
-			if kindPtr != nil {
-				metricType = kindPtr.MetricType
-			}
-			fillZero := shouldZeroFill(
-				metricType, query.filter.Aggregation, query.filter.Cumulative,
-			)
 
-			rows, err := s.repo.QueryRollupSeries(groupCtx, query.filter)
+			rows, err := s.repo.QueryRollupSeries(groupCtx, queryFilter)
 			if err != nil {
 				return fmt.Errorf("query %q: %w", query.request.ID, err)
 			}
 
-			points := applyAggregation(rows, query.filter.Aggregation, query.filter.StartMs, query.filter.EndMs, query.filter.Step, query.filter.Cumulative, query.filter.Histogram)
+			fillZero := shouldZeroFill(query.metricType, queryFilter.Aggregation, queryFilter.Cumulative)
+			points := applyAggregation(rows, queryFilter.Aggregation, queryFilter.StartMs, queryFilter.EndMs, queryFilter.Step, queryFilter.Cumulative, queryFilter.Histogram)
 			query.result = buildGroupedColumnarResult(
-				rows, points, query.request.GroupBy,
-				query.filter.StartMs, query.filter.EndMs, query.filter.Step, fillZero,
+				rows, points, queryFilter.GroupBy,
+				queryFilter.StartMs, queryFilter.EndMs, queryFilter.Step, fillZero,
 			)
 			return nil
 		})

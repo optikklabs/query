@@ -21,12 +21,14 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func (r *Repository) ListMetricNames(ctx context.Context, tenantID, startMs, endMs int64, search string) ([]metricNameDTO, error) {
 	query := `
 		SELECT metric_name,
-		       argMax(metric_type, (timestamp, fingerprint)) AS metric_type,
-		       argMax(unit, (timestamp, fingerprint))        AS unit,
-		       argMax(description, (timestamp, fingerprint)) AS description
+		       argMax(metric_type, (timestamp, fingerprint))  AS metric_type,
+		       argMax(unit, (timestamp, fingerprint))         AS unit,
+		       argMax(description, (timestamp, fingerprint))  AS description,
+		       argMax(temporality, (timestamp, fingerprint))  AS temporality,
+		       argMax(is_monotonic, (timestamp, fingerprint)) AS is_monotonic
 		FROM optikk.metrics_series
 		PREWHERE tenant_id = @tenantID
-		     AND timestamp >= @start - INTERVAL 1 HOUR AND timestamp < @end
+		     AND timestamp >= @start AND timestamp < @end
 		WHERE metric_name ILIKE @search
 		GROUP BY metric_name
 		ORDER BY metric_name
@@ -54,7 +56,7 @@ func (r *Repository) ListResourceTagValues(ctx context.Context, tenantID, startM
 		       uniqExact(fingerprint) AS count
 		FROM optikk.metrics_series
 		PREWHERE tenant_id     = @tenantID
-		     AND timestamp >= @start - INTERVAL 1 HOUR AND timestamp < @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND metric_name = @metricName
 		WHERE ` + col + ` != ''
 		GROUP BY tag_value
@@ -80,7 +82,7 @@ func (r *Repository) ListAttributeTagValues(ctx context.Context, tenantID, start
 		       uniqExact(fingerprint) AS count
 		FROM optikk.metrics_series
 		PREWHERE tenant_id     = @tenantID
-		     AND timestamp >= @start - INTERVAL 1 HOUR AND timestamp < @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND metric_name = @metricName
 		WHERE ` + col + ` != ''
 		GROUP BY tag_value
@@ -100,31 +102,15 @@ func (r *Repository) ListAttributeTagValues(ctx context.Context, tenantID, start
 	return rows, nil
 }
 
-func (r *Repository) ListTagValuesAllKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]tagKeyValueDTO, error) {
+func (r *Repository) ListMetricTagKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]string, error) {
 	query := `
-		SELECT kv.1    AS tag_key,
-		       kv.2    AS tag_value,
-		       uniqExact(fingerprint) AS count
+		SELECT DISTINCT arrayJoin(mapKeys(attributes)) AS tag_key
 		FROM optikk.metrics_series
-		ARRAY JOIN arrayConcat(
-		    CAST(attributes, 'Array(Tuple(String, String))'),
-		    [('service', toString(service)), ('host', toString(host)),
-		     ('pod', toString(pod)), ('container', toString(container)),
-		     ('environment', toString(environment)), ('k8s_namespace', toString(k8s_namespace)),
-		     ('k8s.node.name', resource_attributes['k8s.node.name']),
-		     ('cloud.provider', resource_attributes['cloud.provider']),
-		     ('cloud.account.id', resource_attributes['cloud.account.id']),
-		     ('cloud.region', resource_attributes['cloud.region']),
-		     ('cloud.platform', resource_attributes['cloud.platform'])]
-		) AS kv
 		PREWHERE tenant_id     = @tenantID
-		     AND timestamp >= @start - INTERVAL 1 HOUR AND timestamp < @end
+		     AND timestamp >= @start AND timestamp < @end
 		     AND metric_name = @metricName
-		WHERE kv.2 != ''
-		GROUP BY tag_key, tag_value
-		ORDER BY tag_key, count DESC, tag_value ASC
-		LIMIT 100 BY tag_key
-		LIMIT 20000`
+		ORDER BY tag_key
+		LIMIT 200`
 
 	args := []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
@@ -132,8 +118,8 @@ func (r *Repository) ListTagValuesAllKeys(ctx context.Context, tenantID, startMs
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricName", metricName),
 	}
-	var rows []tagKeyValueDTO
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListTagValuesAllKeys", &rows, query, args...); err != nil {
+	var rows []string
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListMetricTagKeys", &rows, query, args...); err != nil {
 		return nil, err
 	}
 	return rows, nil
@@ -152,24 +138,29 @@ func seriesResourceColumn(canonical string) string {
 	return canonical
 }
 
-func (r *Repository) ResolveSeriesKinds(
+func (r *Repository) ResolveMetricKinds(
 	ctx context.Context,
 	tenantID, startMs, endMs int64,
 	metricNames []string,
-) (map[string]metricKindDTO, error) {
+) (map[string]metricNameDTO, error) {
 	if len(metricNames) == 0 {
-		return map[string]metricKindDTO{}, nil
+		return map[string]metricNameDTO{}, nil
 	}
+
+	// metrics_series replaces metadata within six-hour identity buckets. Widen
+	// the requested range so the surviving representative still classifies data
+	// near either boundary.
 	query := `
 		SELECT metric_name,
-		       argMax(ms.temporality, (timestamp, fingerprint))  AS temporality,
-		       argMax(ms.is_monotonic, (timestamp, fingerprint)) AS is_monotonic,
-		       argMax(ms.metric_type, (timestamp, fingerprint))  AS metric_type,
-		       uniqExact((ms.temporality, ms.is_monotonic, ms.metric_type)) AS variants
-		FROM optikk.metrics_series AS ms
+		       argMax(temporality, (timestamp, fingerprint))  AS temporality,
+		       argMax(is_monotonic, (timestamp, fingerprint)) AS is_monotonic,
+		       argMax(metric_type, (timestamp, fingerprint))  AS metric_type,
+		       uniqExact((temporality, is_monotonic, metric_type)) AS variants
+		FROM optikk.metrics_series
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name IN @metricNames
-		     AND timestamp >= @start - INTERVAL 1 HOUR AND timestamp < @end
+		     AND timestamp >= @start - INTERVAL 6 HOUR
+		     AND timestamp < @end + INTERVAL 6 HOUR
 		GROUP BY metric_name`
 	args := []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
@@ -177,11 +168,13 @@ func (r *Repository) ResolveSeriesKinds(
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricNames", metricNames),
 	}
-	var rows []metricKindDTO
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.ResolveSeriesKinds", &rows, query, args...); err != nil {
+
+	var rows []metricNameDTO
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.ResolveMetricKinds", &rows, query, args...); err != nil {
 		return nil, err
 	}
-	kinds := make(map[string]metricKindDTO, len(rows))
+
+	kinds := make(map[string]metricNameDTO, len(rows))
 	for _, row := range rows {
 		kinds[row.MetricName] = row
 	}
@@ -193,31 +186,32 @@ func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([
 	if f.Cumulative {
 		f.StartMs = displayStart - int64(time.Hour/time.Millisecond)
 	}
+
 	fromTable, where, selectCols, groupByCols, filterArgs := filter.BuildSelection(f)
 
-	var query string
+	var sql string
 	switch {
 	case f.Histogram && strings.HasPrefix(f.Aggregation, "p"):
-		query = histogramQuantileQuery(fromTable, where, selectCols, groupByCols)
+		sql = histogramQuantileSQL(fromTable, where, selectCols, groupByCols)
 	case f.Cumulative:
-		fromTable = "optikk.metrics"
-		query = cumulativeRollupQuery(fromTable, where, selectCols, groupByCols, len(f.GroupBy) > 0)
+		sql = cumulativeRollupSQL("optikk.metrics", where, selectCols, groupByCols, len(f.GroupBy) > 0)
 	default:
-		query = deltaRollupQuery(fromTable, where, selectCols, groupByCols)
+		sql = deltaRollupSQL(fromTable, where, selectCols, groupByCols)
 	}
 
 	args := append(metricArgs(f), filterArgs...)
 	if f.Cumulative {
 		args = append(args, clickhouse.Named("displayStart", time.UnixMilli(displayStart)))
 	}
+
 	var rows []timeseriesPointDTO
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.QueryRollupSeries", &rows, query, args...); err != nil {
+	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.QueryRollupSeries", &rows, sql, args...); err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
-func deltaRollupQuery(fromTable, where, selectCols, groupByCols string) string {
+func deltaRollupSQL(fromTable, where, selectCols, groupByCols string) string {
 	return `
 		SELECT ` + selectCols + `,
 		       sum(val_sum)    AS val_sum,
@@ -235,7 +229,7 @@ func deltaRollupQuery(fromTable, where, selectCols, groupByCols string) string {
 		SETTINGS max_execution_time = 30`
 }
 
-func histogramQuantileQuery(fromTable, where, selectCols, groupByCols string) string {
+func histogramQuantileSQL(fromTable, where, selectCols, groupByCols string) string {
 	return `
 		SELECT ` + selectCols + `,
 		       quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(latency_state) AS quantiles
@@ -248,35 +242,40 @@ func histogramQuantileQuery(fromTable, where, selectCols, groupByCols string) st
 		SETTINGS max_execution_time = 30`
 }
 
-func cumulativeRollupQuery(fromTable, where, selectCols, groupByCols string, grouped bool) string {
+func cumulativeRollupSQL(fromTable, where, selectCols, groupByCols string, grouped bool) string {
 	resultCols := "bucket_at"
 	if grouped {
 		resultCols += ", group_values"
 	}
-	perSeries := `
-		SELECT fingerprint, timestamp AS sample_at, ` + selectCols + `,
-		       max(value) AS cval
-		FROM ` + fromTable + `
-		PREWHERE tenant_id     = @tenantID
-		     AND metric_name = @metricName
-		     AND timestamp >= @start AND timestamp < @end` + where + `
-		GROUP BY fingerprint, sample_at, ` + groupByCols + ``
-
-	increase := `
-		SELECT ` + resultCols + `,
-		       if(row_number() OVER w = 1, 0,
-		          if(cval < lagInFrame(cval) OVER w, cval,
-		             cval - lagInFrame(cval) OVER w)) AS increase
-		FROM (` + perSeries + `)
-		WINDOW w AS (PARTITION BY fingerprint ORDER BY sample_at)`
-
 	return `
+		WITH
+		per_series AS (
+			SELECT fingerprint, timestamp AS sample_at, ` + selectCols + `,
+			       max(value) AS cval
+			FROM ` + fromTable + `
+			PREWHERE tenant_id     = @tenantID
+			     AND metric_name = @metricName
+			     AND timestamp >= @start AND timestamp < @end` + where + `
+			GROUP BY fingerprint, sample_at, ` + groupByCols + `
+		),
+		increases AS (
+			SELECT ` + resultCols + `,
+			       if(row_number() OVER w = 1, 0,
+			          if(cval < lagInFrame(cval) OVER w, cval,
+			             cval - lagInFrame(cval) OVER w)) AS increase
+			FROM per_series
+			WINDOW w AS (
+				PARTITION BY fingerprint
+				ORDER BY sample_at
+				ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+			)
+		)
 		SELECT ` + resultCols + `,
 		       sum(increase) AS val_sum,
 		       toUInt64(0)   AS val_count,
 		       toFloat64(0)  AS val_min,
 		       toFloat64(0)  AS val_max
-		FROM (` + increase + `)
+		FROM increases
 		GROUP BY ` + resultCols + `
 		HAVING bucket_at >= @displayStart
 		ORDER BY bucket_at ASC

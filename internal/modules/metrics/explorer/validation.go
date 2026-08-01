@@ -52,10 +52,6 @@ func validateQueryRequest(req FEQueryRequest) error {
 		if len(query.Where) > maxFiltersPerQuery {
 			return fmt.Errorf("query %q: at most %d filters are allowed", query.ID, maxFiltersPerQuery)
 		}
-		converted := convertFEQuery(0, req.StartTime, req.EndTime, req.Step, query)
-		if err := converted.Validate(); err != nil {
-			return fmt.Errorf("query %q: %w", query.ID, err)
-		}
 	}
 	return nil
 }

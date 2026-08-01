@@ -11,19 +11,16 @@ import (
 )
 
 func normalizeMetricType(t string) string {
-	switch strings.ToLower(t) {
-	case "gauge":
-		return "gauge"
+	normalized := strings.ToLower(t)
+	switch normalized {
+	case "gauge", "histogram", "summary":
+		return normalized
 	case "sum":
 		return "counter"
-	case "histogram":
-		return "histogram"
 	case "exponentialhistogram":
 		return "exponential_histogram"
-	case "summary":
-		return "summary"
 	default:
-		return "gauge"
+		return ""
 	}
 }
 
@@ -109,70 +106,62 @@ func quantileFor(qs []float64, aggregation string) float64 {
 	return 0
 }
 
-func convertFEQuery(tenantID, startMs, endMs int64, step string, feq FEMetricQuery) filter.Filters {
-	tags := make([]filter.TagFilter, 0, len(feq.Where))
-	for _, w := range feq.Where {
+func convertFEQuery(tenantID, startMs, endMs int64, step string, query FEMetricQuery) filter.Filters {
+	tags := make([]filter.TagFilter, 0, len(query.Where))
+	for _, item := range query.Where {
 		tags = append(tags, filter.TagFilter{
-			Key:      w.Key,
-			Operator: filterutil.MapOperator(w.Operator),
-			Values:   filterutil.ExtractValues(w.Value),
+			Key:      item.Key,
+			Operator: filterutil.MapOperator(item.Operator),
+			Values:   filterutil.ExtractValues(item.Value),
 		})
 	}
+
 	return filter.Filters{
 		TenantID:    tenantID,
 		StartMs:     startMs,
 		EndMs:       endMs,
-		MetricName:  feq.MetricName,
-		Aggregation: feq.Aggregation,
+		MetricName:  query.MetricName,
+		Aggregation: query.Aggregation,
 		Step:        step,
-		GroupBy:     feq.GroupBy,
+		GroupBy:     query.GroupBy,
 		Tags:        tags,
 	}
 }
 
-func resolveSeriesFlags(kind *metricKindDTO) (cumulative, histogram bool) {
-	if kind == nil {
-		return false, false
+func resolveMetricKind(kind metricNameDTO) (cumulative, histogram bool, err error) {
+	if kind.Variants != 1 {
+		return false, false, fmt.Errorf("metric name has incompatible series types")
 	}
-	cumulative = kind.Temporality == "Cumulative" && kind.IsMonotonic
-	t := strings.ToLower(kind.MetricType)
-	histogram = t == "histogram" || t == "exponentialhistogram" || t == "summary"
-	return cumulative, histogram
+
+	switch normalizeMetricType(kind.MetricType) {
+	case "summary":
+		return false, false, fmt.Errorf("summary metrics are not safely aggregatable")
+	case "histogram", "exponential_histogram":
+		if kind.Temporality == "Cumulative" {
+			return false, false, fmt.Errorf("cumulative distributions are not safely aggregatable")
+		}
+		return false, true, nil
+	case "counter":
+		return kind.Temporality == "Cumulative" && kind.IsMonotonic, false, nil
+	case "gauge":
+		return false, false, nil
+	default:
+		return false, false, fmt.Errorf("unsupported metric type %q", kind.MetricType)
+	}
 }
 
-func validateAggregationForKind(kind *metricKindDTO, agg string) error {
-	if kind == nil {
-		return nil
+func validateAggregationForMode(aggregation string, cumulative, histogram bool) error {
+	if cumulative && aggregation != "sum" && aggregation != "rate" {
+		return fmt.Errorf("%s is not supported for cumulative counters", aggregation)
 	}
-	if kind.Variants > 1 {
-		return fmt.Errorf("metric name has incompatible series types")
-	}
-	t := strings.ToLower(kind.MetricType)
-	if kind.Temporality == "Cumulative" && kind.IsMonotonic && agg != "sum" && agg != "rate" {
-		return fmt.Errorf("%s is not supported for cumulative counters", agg)
-	}
-	if t == "summary" {
-		return fmt.Errorf("summary metrics are not safely aggregatable")
-	}
-	if (t == "histogram" || t == "exponentialhistogram") && kind.Temporality == "Cumulative" {
-		return fmt.Errorf("cumulative distributions are not safely aggregatable")
-	}
-	if (t == "histogram" || t == "exponentialhistogram") && (agg == "min" || agg == "max") {
-		return fmt.Errorf("%s is not retained for distribution metrics", agg)
+	if histogram && (aggregation == "min" || aggregation == "max") {
+		return fmt.Errorf("%s is not retained for distribution metrics", aggregation)
 	}
 	return nil
 }
 
 func shouldZeroFill(metricType, aggregation string, cumulative bool) bool {
-	mt := strings.ToLower(metricType)
-	switch {
-	case mt == "sum" || cumulative:
-		return true
-	case aggregation == "count" || aggregation == "rate":
-		return true
-	default:
-		return false
-	}
+	return strings.EqualFold(metricType, "sum") || cumulative || aggregation == "count" || aggregation == "rate"
 }
 
 func mapPointsToAxis(points []TimeseriesPoint, tsIndex map[int64]int, length int) []*float64 {
