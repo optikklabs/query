@@ -118,11 +118,15 @@ func (r *Repository) ListMetricTagKeys(ctx context.Context, tenantID, startMs, e
 		clickhouse.Named("end", time.UnixMilli(endMs)),
 		clickhouse.Named("metricName", metricName),
 	}
-	var rows []string
+	var rows []tagKeyDTO
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListMetricTagKeys", &rows, query, args...); err != nil {
 		return nil, err
 	}
-	return rows, nil
+	keys := make([]string, len(rows))
+	for i, row := range rows {
+		keys[i] = row.TagKey
+	}
+	return keys, nil
 }
 
 var seriesResourceKeys = map[string]string{

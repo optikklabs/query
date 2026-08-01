@@ -17,6 +17,10 @@ type tagValueDTO struct {
 	Count    uint64 `ch:"count"`
 }
 
+type tagKeyDTO struct {
+	TagKey string `ch:"tag_key"`
+}
+
 type timeseriesPointDTO struct {
 	BucketAt    time.Time `ch:"bucket_at"`
 	GroupValues []string  `ch:"group_values"`

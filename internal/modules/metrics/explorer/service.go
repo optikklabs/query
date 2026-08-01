@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"time"
 
 	"github.com/optikklabs/query/internal/modules/metrics/filter"
 	"github.com/optikklabs/query/internal/shared/errorcode"
@@ -150,7 +149,6 @@ func (s *Service) resolveMetricKinds(ctx context.Context, tenantID int64, req Qu
 	if err != nil {
 		return fmt.Errorf("resolve metric metadata: %w", err)
 	}
-	retentionCutoff := time.Now().Add(-48 * time.Hour).UnixMilli()
 	for i := range prepared {
 		query := &prepared[i]
 		kind, found := kinds[query.filter.MetricName]
@@ -163,9 +161,6 @@ func (s *Service) resolveMetricKinds(ctx context.Context, tenantID int64, req Qu
 		}
 		if err := validateAggregationForMode(query.filter.Aggregation, cumulative, histogram); err != nil {
 			return errorcode.ValidationError{Msg: fmt.Sprintf("query %q: %v", query.request.ID, err)}
-		}
-		if cumulative && query.filter.StartMs < retentionCutoff {
-			return errorcode.ValidationError{Msg: fmt.Sprintf("query %q: exact cumulative data is retained for 48 hours", query.request.ID)}
 		}
 		query.filter.Cumulative = cumulative
 		query.filter.Histogram = histogram
