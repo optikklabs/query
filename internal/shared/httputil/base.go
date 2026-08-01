@@ -123,6 +123,15 @@ func ParseInt64Param(r *http.Request, key string, fallback int64) int64 {
 	return fallback
 }
 
+func ParseIDParam(w http.ResponseWriter, r *http.Request, key string) (int64, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, key), 10, 64)
+	if err != nil || id <= 0 {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid "+key, nil)
+		return 0, false
+	}
+	return id, true
+}
+
 const MaxPageSize = 200
 
 func ParseIntParam(r *http.Request, key string, fallback int) int {

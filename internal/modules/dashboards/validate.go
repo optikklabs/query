@@ -8,17 +8,27 @@ import (
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
-func validateWidget(req CreateWidgetRequest) error {
-	if !isValidPanelType(req.PanelType) {
-		return errorcode.ValidationError{Msg: fmt.Sprintf("panel_type %q is not a supported dashboard panel", req.PanelType)}
+func validateWidget(spec json.RawMessage) (querySpecProbe, error) {
+	var probe querySpecProbe
+	if err := json.Unmarshal(spec, &probe); err != nil {
+		return probe, errorcode.ValidationError{Msg: "spec must be a valid panel spec object"}
 	}
-	if lv := strings.TrimSpace(req.LayoutVariant); lv != "" && !isValidLayoutVariant(lv) {
-		return errorcode.ValidationError{Msg: fmt.Sprintf("layout_variant %q is not supported", lv)}
+	if !isValidPanelType(probe.PanelType) {
+		return probe, errorcode.ValidationError{Msg: fmt.Sprintf("panel_type %q is not a supported dashboard panel", probe.PanelType)}
 	}
-	if err := validateLayout(req.Layout); err != nil {
-		return err
+	if !isValidLayoutVariant(probe.LayoutVariant) {
+		return probe, errorcode.ValidationError{Msg: fmt.Sprintf("layout_variant %q is not supported", probe.LayoutVariant)}
 	}
-	return validateQuery(req.Spec)
+	if err := validateLayout(probe.Layout); err != nil {
+		return probe, err
+	}
+	if probe.Query == nil {
+		return probe, errorcode.ValidationError{Msg: "spec.query is required"}
+	}
+	if probe.Query.Kind != "metrics" {
+		return probe, errorcode.ValidationError{Msg: fmt.Sprintf("spec.query.kind %q is not supported; expected \"metrics\"", probe.Query.Kind)}
+	}
+	return probe, validateBuilderQuery(probe.Query.Queries)
 }
 
 type layoutProbe struct {
@@ -56,24 +66,14 @@ type builderQueryProbe struct {
 }
 
 type querySpecProbe struct {
-	Query *struct {
+	Title         string          `json:"title"`
+	PanelType     string          `json:"panelType"`
+	LayoutVariant string          `json:"layoutVariant"`
+	Layout        json.RawMessage `json:"layout"`
+	Query         *struct {
 		Kind    string              `json:"kind"`
 		Queries []builderQueryProbe `json:"queries"`
 	} `json:"query"`
-}
-
-func validateQuery(spec json.RawMessage) error {
-	var probe querySpecProbe
-	if err := json.Unmarshal(spec, &probe); err != nil {
-		return errorcode.ValidationError{Msg: "spec must be a valid panel spec object"}
-	}
-	if probe.Query == nil {
-		return errorcode.ValidationError{Msg: "spec.query is required"}
-	}
-	if probe.Query.Kind != "metrics" {
-		return errorcode.ValidationError{Msg: fmt.Sprintf("spec.query.kind %q is not supported; expected \"metrics\"", probe.Query.Kind)}
-	}
-	return validateBuilderQuery(probe.Query.Queries)
 }
 
 func validateBuilderQuery(queries []builderQueryProbe) error {

@@ -26,7 +26,7 @@ func (h *Handler) ListMetricNames(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	modulecommon.RespondOK(w, FEMetricNamesResponse{Metrics: entries})
+	modulecommon.RespondOK(w, MetricNamesResponse{Metrics: entries})
 }
 
 func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
@@ -47,11 +47,11 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 		modulecommon.RespondServiceError(w, r, err, "Failed to list tags")
 		return
 	}
-	modulecommon.RespondOK(w, FETagsResponse{Tags: tags})
+	modulecommon.RespondOK(w, TagsResponse{Tags: tags})
 }
 
 func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
-	var req FEQueryRequest
+	var req QueryRequest
 	if err := modulecommon.DecodeJSON(r, &req); err != nil {
 		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "Invalid request body", nil)
 		return

@@ -58,9 +58,11 @@ func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexR
 			duration_nano                                              AS duration_ns,
 			service                                                    AS root_service,
 			name                                                       AS root_operation,
-			status_code_string                                         AS root_status,
-			http_method                                                AS root_http_method,
-			response_status_code                                       AS root_http_status
+				status_code_string                                         AS root_status,
+				http_method                                                AS root_http_method,
+				if(response_status_code = '0', '', response_status_code)    AS root_http_status,
+				http_route                                                  AS root_endpoint,
+				environment                                                 AS environment
 		FROM optikk.spans_root ` + prewhere + ` ` + where + ` ORDER BY timestamp DESC, span_id DESC LIMIT @pgLimit`
 
 	var rows []traceIndexRowDTO

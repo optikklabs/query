@@ -7,17 +7,17 @@ import (
 )
 
 func TestConvertFEQuery(t *testing.T) {
-	query := FEMetricQuery{
+	query := MetricQuery{
 		MetricName:  "http.server.duration",
 		Aggregation: "p95",
 		GroupBy:     []string{"service.name"},
-		Where: []FEFilter{
+		Where: []Filter{
 			{Key: "environment", Operator: "eq", Value: "production"},
 			{Key: "http.method", Operator: "not_in", Value: []any{"GET", "HEAD"}},
 		},
 	}
 
-	f := convertFEQuery(42, 1_000, 61_000, "1m", query)
+	f := toFilter(42, 1_000, 61_000, "1m", query)
 
 	if f.TenantID != 42 || f.StartMs != 1_000 || f.EndMs != 61_000 || f.Step != "1m" {
 		t.Fatalf("request envelope was not copied: %+v", f)
@@ -103,7 +103,7 @@ func TestCumulativeValueSupportsSumAndRate(t *testing.T) {
 
 func TestConvertedFilterUsesCommonValidationDefaults(t *testing.T) {
 	start := time.Now().UnixMilli()
-	f := convertFEQuery(42, start, start+60_000, "1m", FEMetricQuery{MetricName: "cpu.utilization"})
+	f := toFilter(42, start, start+60_000, "1m", MetricQuery{MetricName: "cpu.utilization"})
 	if err := f.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}

@@ -63,16 +63,12 @@ type DashboardPageListResponse struct {
 }
 
 type WidgetResponse struct {
-	ID            int64           `json:"id"`
-	PageID        int64           `json:"pageId"`
-	Title         string          `json:"title,omitempty"`
-	PanelType     string          `json:"panelType"`
-	LayoutVariant string          `json:"layoutVariant,omitempty"`
-	Spec          json.RawMessage `json:"spec"`
-	Layout        json.RawMessage `json:"layout"`
-	Position      int             `json:"position"`
-	CreatedAt     time.Time       `json:"createdAt"`
-	UpdatedAt     *time.Time      `json:"updatedAt,omitempty"`
+	ID        int64           `json:"id"`
+	PageID    int64           `json:"pageId"`
+	Spec      json.RawMessage `json:"spec"`
+	Position  int             `json:"position"`
+	CreatedAt time.Time       `json:"createdAt"`
+	UpdatedAt *time.Time      `json:"updatedAt,omitempty"`
 }
 
 type DashboardPageDetailResponse struct {
@@ -114,19 +110,8 @@ func toPageResponse(row DashboardPageRow) DashboardPageResponse {
 
 func toWidgetResponse(row DashboardRow) WidgetResponse {
 	out := WidgetResponse{
-		ID:        row.ID,
-		PageID:    row.PageID,
-		PanelType: row.PanelType,
-		Spec:      json.RawMessage(row.SpecJSON),
-		Layout:    json.RawMessage(row.LayoutJSON),
-		Position:  row.Position,
-		CreatedAt: row.CreatedAt,
-	}
-	if row.Title.Valid {
-		out.Title = row.Title.String
-	}
-	if row.LayoutVariant.Valid {
-		out.LayoutVariant = row.LayoutVariant.String
+		ID: row.ID, PageID: row.PageID, Spec: json.RawMessage(row.SpecJSON),
+		Position: row.Position, CreatedAt: row.CreatedAt,
 	}
 	if row.UpdatedAt.Valid {
 		t := row.UpdatedAt.Time

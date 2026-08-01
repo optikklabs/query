@@ -39,6 +39,8 @@ type traceIndexRowDTO struct {
 	RootStatus     string    `ch:"root_status"`
 	RootHTTPMethod string    `ch:"root_http_method"`
 	RootHTTPStatus string    `ch:"root_http_status"`
+	RootEndpoint   string    `ch:"root_endpoint"`
+	Environment    string    `ch:"environment"`
 }
 
 type traceAggRow struct {

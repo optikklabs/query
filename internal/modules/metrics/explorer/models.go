@@ -10,7 +10,7 @@ type TimeseriesPoint struct {
 	Value       float64
 }
 
-type FEMetricNameEntry struct {
+type MetricNameEntry struct {
 	Name        string `json:"name"`
 	Type        string `json:"type"`
 	Unit        string `json:"unit,omitempty"`
@@ -19,50 +19,50 @@ type FEMetricNameEntry struct {
 	IsMonotonic bool   `json:"isMonotonic"`
 }
 
-type FEMetricNamesResponse struct {
-	Metrics []FEMetricNameEntry `json:"metrics"`
+type MetricNamesResponse struct {
+	Metrics []MetricNameEntry `json:"metrics"`
 }
 
-type FETagEntry struct {
+type TagEntry struct {
 	Key    string   `json:"key"`
 	Values []string `json:"values"`
 }
 
-type FETagsResponse struct {
-	Tags []FETagEntry `json:"tags"`
+type TagsResponse struct {
+	Tags []TagEntry `json:"tags"`
 }
 
-type FEFilter struct {
+type Filter struct {
 	Key      string `json:"key"`
 	Operator string `json:"operator"`
 	Value    any    `json:"value"`
 }
 
-type FEMetricQuery struct {
-	ID          string     `json:"id"`
-	Aggregation string     `json:"aggregation"`
-	MetricName  string     `json:"metricName"`
-	Where       []FEFilter `json:"where"`
-	GroupBy     []string   `json:"groupBy,omitempty"`
+type MetricQuery struct {
+	ID          string   `json:"id"`
+	Aggregation string   `json:"aggregation"`
+	MetricName  string   `json:"metricName"`
+	Where       []Filter `json:"where"`
+	GroupBy     []string `json:"groupBy,omitempty"`
 }
 
-type FEQueryRequest struct {
-	StartTime int64           `json:"startTime"`
-	EndTime   int64           `json:"endTime"`
-	Step      string          `json:"step"`
-	Queries   []FEMetricQuery `json:"queries"`
+type QueryRequest struct {
+	StartTime int64         `json:"startTime"`
+	EndTime   int64         `json:"endTime"`
+	Step      string        `json:"step"`
+	Queries   []MetricQuery `json:"queries"`
 }
 
-type FESeries struct {
+type Series struct {
 	Tags   map[string]string `json:"tags"`
 	Values []*float64        `json:"values"`
 }
 
-type FEQueryResult struct {
-	Timestamps []int64    `json:"timestamps"`
-	Series     []FESeries `json:"series"`
+type QueryResult struct {
+	Timestamps []int64  `json:"timestamps"`
+	Series     []Series `json:"series"`
 }
 
-type FEQueryResponse struct {
-	Results map[string]FEQueryResult `json:"results"`
+type QueryResponse struct {
+	Results map[string]QueryResult `json:"results"`
 }

@@ -184,21 +184,22 @@ func buildPageArgs(tenantID, userID int64, req CreatePageRequest) (pageInsertArg
 }
 
 func buildWidgetArgs(tenantID, pageID int64, req CreateWidgetRequest) (widgetInsertArgs, error) {
-	if err := validateWidget(req); err != nil {
+	spec, err := validateWidget(req.Spec)
+	if err != nil {
 		return widgetInsertArgs{}, err
 	}
 	args := widgetInsertArgs{
 		PageID:     pageID,
 		TenantID:   tenantID,
-		PanelType:  req.PanelType,
+		PanelType:  spec.PanelType,
 		SpecJSON:   []byte(req.Spec),
-		LayoutJSON: []byte(req.Layout),
+		LayoutJSON: []byte(spec.Layout),
 		Position:   req.Position,
 	}
-	if title := strings.TrimSpace(req.Title); title != "" {
+	if title := strings.TrimSpace(spec.Title); title != "" {
 		args.Title = sql.NullString{Valid: true, String: title}
 	}
-	if lv := strings.TrimSpace(req.LayoutVariant); lv != "" {
+	if lv := strings.TrimSpace(spec.LayoutVariant); lv != "" {
 		args.LayoutVariant = sql.NullString{Valid: true, String: lv}
 	}
 	return args, nil

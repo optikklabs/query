@@ -94,10 +94,10 @@ type Summary struct {
 }
 
 type TrendBucket struct {
-	TimeBucket string `json:"timeBucket"`
-	Total      uint64 `json:"total"`
-	Error      uint64 `json:"error"`
-	Warn       uint64 `json:"warn"`
-	Info       uint64 `json:"info"`
-	Debug      uint64 `json:"debug"`
+	TimeBucketMs int64  `json:"timeBucketMs"`
+	Total        uint64 `json:"total"`
+	Error        uint64 `json:"error"`
+	Warn         uint64 `json:"warn"`
+	Info         uint64 `json:"info"`
+	Debug        uint64 `json:"debug"`
 }

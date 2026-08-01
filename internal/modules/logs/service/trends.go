@@ -29,12 +29,12 @@ func mapTrend(rows []repository.TrendRow) []models.TrendBucket {
 	out := make([]models.TrendBucket, len(rows))
 	for i, r := range rows {
 		out[i] = models.TrendBucket{
-			TimeBucket: r.TimeBucket.UTC().Format("2006-01-02 15:04:05"),
-			Total:      r.Total,
-			Error:      r.Error,
-			Warn:       r.Warn,
-			Info:       r.Info,
-			Debug:      r.Debug,
+			TimeBucketMs: r.TimeBucket.UnixMilli(),
+			Total:        r.Total,
+			Error:        r.Error,
+			Warn:         r.Warn,
+			Info:         r.Info,
+			Debug:        r.Debug,
 		}
 	}
 	return out

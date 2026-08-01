@@ -2,7 +2,8 @@ package service
 
 import (
 	"context"
-	"math"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -500,7 +501,7 @@ func p95From(qs []float64) float64 {
 	if len(qs) == 0 {
 		return 0
 	}
-	return sanitizeQuantile(spanstats.LatencyP95.At(qs, spanstats.P95))
+	return httputil.SanitizeFloat(spanstats.LatencyP95.At(qs, spanstats.P95))
 }
 
 func quantiles(qs []float64) [5]float64 {
@@ -509,16 +510,9 @@ func quantiles(qs []float64) [5]float64 {
 		return out
 	}
 	for i := range out {
-		out[i] = sanitizeQuantile(qs[i])
+		out[i] = httputil.SanitizeFloat(qs[i])
 	}
 	return out
-}
-
-func sanitizeQuantile(value float64) float64 {
-	if math.IsNaN(value) || math.IsInf(value, 0) {
-		return 0
-	}
-	return value
 }
 
 // sortByFirstSeen sorts deployment rows by FirstSeen ascending, breaking ties
@@ -534,12 +528,7 @@ func sortByFirstSeen(rows []models.RawDeploymentRow) {
 
 // sortedKeys returns the keys of a set in sorted order.
 func sortedKeys(set map[string]struct{}) []string {
-	keys := make([]string, 0, len(set))
-	for k := range set {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
+	return slices.Sorted(maps.Keys(set))
 }
 
 // laterOf returns whichever of a or b is later.

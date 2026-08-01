@@ -72,7 +72,7 @@ func (s *Service) QueryErrorOverview(ctx context.Context, req models.OverviewReq
 
 	trend := make([]models.TrendBucket, len(trendRows))
 	for i, row := range trendRows {
-		trend[i] = models.TrendBucket{TimeBucket: row.TimeBucket, Errors: int64(row.Errors)}
+		trend[i] = models.TrendBucket{TimeBucketMs: row.TimeBucket.UnixMilli(), Errors: int64(row.Errors)}
 	}
 
 	return models.OverviewResponse{

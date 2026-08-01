@@ -14,12 +14,8 @@ type CreatePageRequest struct {
 type UpdatePageRequest = CreatePageRequest
 
 type CreateWidgetRequest struct {
-	Title         string          `json:"title,omitempty"`
-	PanelType     string          `json:"panelType" validate:"required"`
-	LayoutVariant string          `json:"layoutVariant,omitempty"`
-	Spec          json.RawMessage `json:"spec" validate:"required"`
-	Layout        json.RawMessage `json:"layout" validate:"required"`
-	Position      int             `json:"position"`
+	Spec     json.RawMessage `json:"spec" validate:"required"`
+	Position int             `json:"position"`
 }
 
 type UpdateWidgetRequest = CreateWidgetRequest

@@ -106,7 +106,7 @@ func quantileFor(qs []float64, aggregation string) float64 {
 	return 0
 }
 
-func convertFEQuery(tenantID, startMs, endMs int64, step string, query FEMetricQuery) filter.Filters {
+func toFilter(tenantID, startMs, endMs int64, step string, query MetricQuery) filter.Filters {
 	tags := make([]filter.TagFilter, 0, len(query.Where))
 	for _, item := range query.Where {
 		tags = append(tags, filter.TagFilter{
@@ -175,11 +175,11 @@ func mapPointsToAxis(points []TimeseriesPoint, tsIndex map[int64]int, length int
 	return values
 }
 
-func buildColumnarResult(points []TimeseriesPoint, startMs, endMs int64, step string, fillZero bool) FEQueryResult {
+func buildColumnarResult(points []TimeseriesPoint, startMs, endMs int64, step string, fillZero bool) QueryResult {
 	bucketSec := filter.BucketDurationSeconds(startMs, endMs, step)
 	timestamps := timebucket.BuildDenseTimestamps(startMs, endMs, bucketSec)
 	if len(timestamps) == 0 {
-		return FEQueryResult{Timestamps: []int64{}, Series: []FESeries{}}
+		return QueryResult{Timestamps: []int64{}, Series: []Series{}}
 	}
 
 	tsIndex := make(map[int64]int, len(timestamps))
@@ -192,9 +192,9 @@ func buildColumnarResult(points []TimeseriesPoint, startMs, endMs int64, step st
 		timebucket.ZeroFillGaps(values)
 	}
 
-	return FEQueryResult{
+	return QueryResult{
 		Timestamps: timestamps,
-		Series:     []FESeries{{Tags: map[string]string{}, Values: values}},
+		Series:     []Series{{Tags: map[string]string{}, Values: values}},
 	}
 }
 
@@ -205,7 +205,7 @@ func buildGroupedColumnarResult(
 	startMs, endMs int64,
 	step string,
 	fillZero bool,
-) FEQueryResult {
+) QueryResult {
 	if len(groupKeys) == 0 {
 		return buildColumnarResult(points, startMs, endMs, step, fillZero)
 	}
@@ -213,7 +213,7 @@ func buildGroupedColumnarResult(
 	bucketSec := filter.BucketDurationSeconds(startMs, endMs, step)
 	timestamps := timebucket.BuildDenseTimestamps(startMs, endMs, bucketSec)
 	if len(timestamps) == 0 || len(rows) == 0 {
-		return FEQueryResult{Timestamps: timestamps, Series: []FESeries{}}
+		return QueryResult{Timestamps: timestamps, Series: []Series{}}
 	}
 
 	tsIndex := make(map[int64]int, len(timestamps))
@@ -238,16 +238,16 @@ func buildGroupedColumnarResult(
 	}
 	sort.Strings(keys)
 
-	series := make([]FESeries, 0, len(keys))
+	series := make([]Series, 0, len(keys))
 	for _, key := range keys {
 		group := groups[key]
 		values := mapPointsToAxis(group.points, tsIndex, len(timestamps))
 		if fillZero {
 			timebucket.ZeroFillGaps(values)
 		}
-		series = append(series, FESeries{Tags: group.tags, Values: values})
+		series = append(series, Series{Tags: group.tags, Values: values})
 	}
-	return FEQueryResult{Timestamps: timestamps, Series: series}
+	return QueryResult{Timestamps: timestamps, Series: series}
 }
 
 func groupIdentity(values []string) string {

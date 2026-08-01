@@ -32,26 +32,26 @@ type ServiceREDMetric struct {
 }
 
 type ServicePerformancePoint struct {
-	Timestamp    time.Time `json:"timestamp"    ch:"timestamp"`
-	RPS          float64   `json:"rps"          ch:"rps"`
-	RequestCount uint64    `json:"requestCount"`
-	ErrorCount   uint64    `json:"errorCount"`
-	ErrorRate    float64   `json:"errorRate"`
+	TimestampMs  int64   `json:"timestampMs"`
+	RPS          float64 `json:"rps"`
+	RequestCount uint64  `json:"requestCount"`
+	ErrorCount   uint64  `json:"errorCount"`
+	ErrorRate    float64 `json:"errorRate"`
 }
 
 type StatusTimeSeriesPoint struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Status2xx   float64   `json:"status2xx"`
-	Status4xx   float64   `json:"status4xx"`
-	Status5xx   float64   `json:"status5xx"`
-	StatusOther float64   `json:"statusOther"`
+	TimestampMs int64   `json:"timestampMs"`
+	Status2xx   float64 `json:"status2xx"`
+	Status4xx   float64 `json:"status4xx"`
+	Status5xx   float64 `json:"status5xx"`
+	StatusOther float64 `json:"statusOther"`
 }
 
 type LatencyPercentilesPoint struct {
-	Timestamp time.Time `json:"timestamp"`
-	P50Ms     float64   `json:"p50Ms"`
-	P95Ms     float64   `json:"p95Ms"`
-	P99Ms     float64   `json:"p99Ms"`
+	TimestampMs int64   `json:"timestampMs"`
+	P50Ms       float64 `json:"p50Ms"`
+	P95Ms       float64 `json:"p95Ms"`
+	P99Ms       float64 `json:"p99Ms"`
 }
 
 // EndpointRateSeries is the columnar per-endpoint RED time series, carrying
@@ -81,33 +81,31 @@ type EndpointRateEntry struct {
 	P99Ms         []*float64 `json:"p99Ms"`
 }
 
+type REDMetrics struct {
+	RPS        float64 `json:"rps"`
+	ErrorRate  float64 `json:"errorRate"`
+	ErrorCount int64   `json:"errorCount"`
+	TotalCount int64   `json:"totalCount"`
+	P50Ms      float64 `json:"p50Ms"`
+	P95Ms      float64 `json:"p95Ms"`
+	P99Ms      float64 `json:"p99Ms"`
+}
+
 type TopEndpoint struct {
-	OperationName string  `json:"operationName"`
-	ServiceName   string  `json:"serviceName"`
-	SpanKind      string  `json:"spanKind"`
-	HTTPRoute     string  `json:"httpRoute"`
-	HTTPMethod    string  `json:"httpMethod"`
-	RPCSystem     string  `json:"rpcSystem"`
-	RPS           float64 `json:"rps"`
-	ErrorRate     float64 `json:"errorRate"`
-	ErrorCount    int64   `json:"errorCount"`
-	TotalCount    int64   `json:"totalCount"`
-	P50Ms         float64 `json:"p50Ms"`
-	P95Ms         float64 `json:"p95Ms"`
-	P99Ms         float64 `json:"p99Ms"`
+	OperationName string `json:"operationName"`
+	ServiceName   string `json:"serviceName"`
+	SpanKind      string `json:"spanKind"`
+	HTTPRoute     string `json:"httpRoute"`
+	HTTPMethod    string `json:"httpMethod"`
+	RPCSystem     string `json:"rpcSystem"`
+	REDMetrics
 }
 
 type TopDBQuery struct {
-	OperationName string  `json:"operationName"`
-	ServiceName   string  `json:"serviceName"`
-	DBSystem      string  `json:"dbSystem"`
-	RPS           float64 `json:"rps"`
-	ErrorRate     float64 `json:"errorRate"`
-	ErrorCount    int64   `json:"errorCount"`
-	TotalCount    int64   `json:"totalCount"`
-	P50Ms         float64 `json:"p50Ms"`
-	P95Ms         float64 `json:"p95Ms"`
-	P99Ms         float64 `json:"p99Ms"`
+	OperationName string `json:"operationName"`
+	ServiceName   string `json:"serviceName"`
+	DBSystem      string `json:"dbSystem"`
+	REDMetrics
 }
 
 type OperationBaseline struct {
@@ -134,8 +132,8 @@ type ServiceSummaryResponse struct {
 }
 
 type SaturationTimeSeriesPoint struct {
-	Timestamp time.Time `json:"timestamp"`
-	Value     float64   `json:"value"`
+	TimestampMs int64   `json:"timestampMs"`
+	Value       float64 `json:"value"`
 }
 
 // RequestRateSeries is the columnar per-service request-rate time series.

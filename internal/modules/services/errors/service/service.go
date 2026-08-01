@@ -28,7 +28,7 @@ func (s *Service) GetServiceErrorRate(ctx context.Context, tenantID int64, start
 		func(t time.Time, row models.RawServiceRateRow, _ bool) models.TimeSeriesPoint {
 			total, errs := int64(row.RequestCount), int64(row.ErrorCount)
 			return models.TimeSeriesPoint{
-				Timestamp:    t,
+				TimestampMs:  t.UnixMilli(),
 				RequestCount: total,
 				ErrorCount:   errs,
 				ErrorRate:    metrics.ComputeErrorRate(errs, total),
@@ -184,7 +184,7 @@ func (s *Service) GetErrorGroupTimeseries(ctx context.Context, tenantID int64, s
 	return timebucket.FillGaps(startMs, endMs, grain, raw,
 		func(r models.RawTimeBucketCountRow) time.Time { return r.BucketAt },
 		func(t time.Time, row models.RawTimeBucketCountRow, _ bool) models.TimeSeriesPoint {
-			return models.TimeSeriesPoint{Timestamp: t, ErrorCount: int64(row.Count)}
+			return models.TimeSeriesPoint{TimestampMs: t.UnixMilli(), ErrorCount: int64(row.Count)}
 		}), nil
 }
 

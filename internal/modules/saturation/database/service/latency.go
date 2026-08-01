@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 
-	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
 	"github.com/optikklabs/query/internal/modules/saturation/database/models"
 	"github.com/optikklabs/query/internal/modules/saturation/database/repository"
@@ -22,11 +21,11 @@ func foldLatency(rows []repository.LatencyRaw) []models.LatencyTimeSeries {
 	for i, r := range rows {
 		p50, p95, p99 := float64(r.P50Ms), float64(r.P95Ms), float64(r.P99Ms)
 		out[i] = models.LatencyTimeSeries{
-			TimeBucket: timebucket.FormatDisplayBucket(r.BucketAt),
-			GroupBy:    r.GroupBy,
-			P50Ms:      &p50,
-			P95Ms:      &p95,
-			P99Ms:      &p99,
+			TimeBucketMs: r.BucketAt.UnixMilli(),
+			GroupBy:      r.GroupBy,
+			P50Ms:        &p50,
+			P95Ms:        &p95,
+			P99Ms:        &p99,
 		}
 	}
 	return out

@@ -15,6 +15,8 @@ type Trace struct {
 	RootStatus     string   `json:"rootStatus,omitempty"`
 	RootHTTPMethod string   `json:"rootHttpMethod,omitempty"`
 	RootHTTPStatus string   `json:"rootHttpStatus,omitempty"`
+	RootEndpoint   string   `json:"rootEndpoint,omitempty"`
+	Environment    string   `json:"environment,omitempty"`
 	SpanCount      uint32   `json:"spanCount"`
 	HasError       bool     `json:"hasError"`
 	ErrorCount     uint32   `json:"errorCount"`
@@ -54,9 +56,9 @@ type Facets struct {
 }
 
 type TrendBucket struct {
-	TimeBucket string `json:"timeBucket"`
-	Total      uint64 `json:"total"`
-	Errors     uint64 `json:"errors"`
+	TimeBucketMs int64  `json:"timeBucketMs"`
+	Total        uint64 `json:"total"`
+	Errors       uint64 `json:"errors"`
 }
 
 type Suggestion = filterutil.Suggestion

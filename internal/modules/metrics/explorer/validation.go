@@ -17,7 +17,7 @@ var validSteps = map[string]bool{
 	"": true, "1m": true, "5m": true, "15m": true, "1h": true, "1d": true,
 }
 
-func validateQueryRequest(req FEQueryRequest) error {
+func validateQueryRequest(req QueryRequest) error {
 	if req.StartTime <= 0 || req.EndTime <= 0 {
 		return errors.New("startTime and endTime are required")
 	}

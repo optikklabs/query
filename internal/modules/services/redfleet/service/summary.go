@@ -99,8 +99,8 @@ func (s *Service) GetServiceSaturationTimeSeries(ctx context.Context, f filter.F
 				}
 			}
 			return models.SaturationTimeSeriesPoint{
-				Timestamp: t,
-				Value:     httputil.SanitizeFloat(val),
+				TimestampMs: t.UnixMilli(),
+				Value:       httputil.SanitizeFloat(val),
 			}
 		}), nil
 }

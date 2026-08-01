@@ -15,17 +15,17 @@ type DatastoreSystemRow struct {
 }
 
 type LatencyTimeSeries struct {
-	TimeBucket string   `json:"timeBucket"`
-	GroupBy    string   `json:"groupBy"`
-	P50Ms      *float64 `json:"p50Ms"`
-	P95Ms      *float64 `json:"p95Ms"`
-	P99Ms      *float64 `json:"p99Ms"`
+	TimeBucketMs int64    `json:"timeBucketMs"`
+	GroupBy      string   `json:"groupBy"`
+	P50Ms        *float64 `json:"p50Ms"`
+	P95Ms        *float64 `json:"p95Ms"`
+	P99Ms        *float64 `json:"p99Ms"`
 }
 
 type OpsTimeSeries struct {
-	TimeBucket string   `json:"timeBucket"`
-	GroupBy    string   `json:"groupBy"`
-	OpsPerSec  *float64 `json:"opsPerSec"`
+	TimeBucketMs int64    `json:"timeBucketMs"`
+	GroupBy      string   `json:"groupBy"`
+	OpsPerSec    *float64 `json:"opsPerSec"`
 }
 
 type SlowQueryPattern struct {
@@ -70,11 +70,11 @@ type QuerySummary struct {
 }
 
 type QueryTimeseriesPoint struct {
-	TimeBucket string   `json:"timeBucket"`
-	CallCount  int64    `json:"callCount"`
-	ErrorCount int64    `json:"errorCount"`
-	AvgMs      *float64 `json:"avgMs"`
-	P99Ms      *float64 `json:"p99Ms"`
+	TimeBucketMs int64    `json:"timeBucketMs"`
+	CallCount    int64    `json:"callCount"`
+	ErrorCount   int64    `json:"errorCount"`
+	AvgMs        *float64 `json:"avgMs"`
+	P99Ms        *float64 `json:"p99Ms"`
 }
 
 type QueryExecution struct {

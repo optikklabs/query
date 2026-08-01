@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
 	"github.com/optikklabs/query/internal/modules/saturation/database/models"
 )
@@ -65,11 +64,11 @@ func (s *Service) GetTimeseries(ctx context.Context, tenantID, startMs, endMs in
 	for i, r := range rows {
 		avg, p99 := r.AvgMs, float64(r.P99Ms)
 		out[i] = models.QueryTimeseriesPoint{
-			TimeBucket: timebucket.FormatDisplayBucket(r.BucketAt),
-			CallCount:  int64(r.CallCount),
-			ErrorCount: int64(r.ErrorCount),
-			AvgMs:      &avg,
-			P99Ms:      &p99,
+			TimeBucketMs: r.BucketAt.UnixMilli(),
+			CallCount:    int64(r.CallCount),
+			ErrorCount:   int64(r.ErrorCount),
+			AvgMs:        &avg,
+			P99Ms:        &p99,
 		}
 	}
 	return out, nil

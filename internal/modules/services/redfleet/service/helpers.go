@@ -67,25 +67,15 @@ func computeFleetTotals(total *models.REDMetricsRow, serviceCount int, startMs, 
 }
 
 func toTopDBQuery(row models.TopDBQueryRow, durationSec float64) models.TopDBQuery {
-	total := int64(row.TotalCount)
-	errs := int64(row.ErrorCount)
 	return models.TopDBQuery{
 		OperationName: row.OperationName,
 		ServiceName:   row.ServiceName,
 		DBSystem:      row.DBSystem,
-		RPS:           float64(total) / durationSec,
-		ErrorRate:     metrics.PercentageInt(errs, total),
-		ErrorCount:    errs,
-		TotalCount:    total,
-		P50Ms:         httputil.SanitizeFloat(float64(row.P50Ms)),
-		P95Ms:         httputil.SanitizeFloat(float64(row.P95Ms)),
-		P99Ms:         httputil.SanitizeFloat(float64(row.P99Ms)),
+		REDMetrics:    redMetrics(row.TotalCount, row.ErrorCount, row.P50Ms, row.P95Ms, row.P99Ms, durationSec),
 	}
 }
 
 func toTopEndpoint(row models.TopEndpointRow, durationSec float64) models.TopEndpoint {
-	total := int64(row.TotalCount)
-	errs := int64(row.ErrorCount)
 	return models.TopEndpoint{
 		OperationName: row.OperationName,
 		ServiceName:   row.ServiceName,
@@ -93,13 +83,15 @@ func toTopEndpoint(row models.TopEndpointRow, durationSec float64) models.TopEnd
 		HTTPRoute:     row.HTTPRoute,
 		HTTPMethod:    row.HTTPMethod,
 		RPCSystem:     row.RPCSystem,
-		RPS:           float64(total) / durationSec,
-		ErrorRate:     metrics.PercentageInt(errs, total),
-		ErrorCount:    errs,
-		TotalCount:    total,
-		P50Ms:         httputil.SanitizeFloat(float64(row.P50Ms)),
-		P95Ms:         httputil.SanitizeFloat(float64(row.P95Ms)),
-		P99Ms:         httputil.SanitizeFloat(float64(row.P99Ms)),
+		REDMetrics:    redMetrics(row.TotalCount, row.ErrorCount, row.P50Ms, row.P95Ms, row.P99Ms, durationSec),
+	}
+}
+
+func redMetrics(total, errors uint64, p50, p95, p99 float32, durationSec float64) models.REDMetrics {
+	return models.REDMetrics{
+		RPS: float64(total) / durationSec, ErrorRate: metrics.Percentage(errors, total),
+		ErrorCount: int64(errors), TotalCount: int64(total),
+		P50Ms: httputil.SanitizeFloat(float64(p50)), P95Ms: httputil.SanitizeFloat(float64(p95)), P99Ms: httputil.SanitizeFloat(float64(p99)),
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/cursor"
-	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -117,6 +116,8 @@ func mapTrace(d traceIndexRowDTO, agg traceAggRow, ok bool) Trace {
 		RootStatus:     d.RootStatus,
 		RootHTTPMethod: d.RootHTTPMethod,
 		RootHTTPStatus: d.RootHTTPStatus,
+		RootEndpoint:   d.RootEndpoint,
+		Environment:    d.Environment,
 		SpanCount:      1,
 		ServiceSet:     []string{d.RootService},
 	}
@@ -178,9 +179,9 @@ func (s *Service) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBuck
 	out := make([]TrendBucket, len(rows))
 	for i, r := range rows {
 		out[i] = TrendBucket{
-			TimeBucket: timebucket.FormatDisplayBucket(r.TimeBucket),
-			Total:      r.Total,
-			Errors:     r.Errors,
+			TimeBucketMs: r.TimeBucket.UnixMilli(),
+			Total:        r.Total,
+			Errors:       r.Errors,
 		}
 	}
 	return out, nil

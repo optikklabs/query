@@ -48,7 +48,7 @@ func (s *Service) GetRequestAndErrorRateTimeSeries(ctx context.Context, f filter
 	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
 		func(r models.RequestRateRawRow) time.Time { return r.BucketAt },
 		func(t time.Time, row models.RequestRateRawRow, ok bool) models.ServicePerformancePoint {
-			pt := models.ServicePerformancePoint{Timestamp: t}
+			pt := models.ServicePerformancePoint{TimestampMs: t.UnixMilli()}
 			if ok {
 				pt.RequestCount = row.RequestCount
 				pt.ErrorCount = row.ErrorCount
@@ -99,7 +99,7 @@ func (s *Service) GetStatusTimeSeries(ctx context.Context, f filter.Filters) ([]
 	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
 		func(r models.StatusBucketRow) time.Time { return r.BucketAt },
 		func(t time.Time, row models.StatusBucketRow, ok bool) models.StatusTimeSeriesPoint {
-			pt := models.StatusTimeSeriesPoint{Timestamp: t}
+			pt := models.StatusTimeSeriesPoint{TimestampMs: t.UnixMilli()}
 			if ok {
 				pt.Status2xx = float64(row.Status2xx) / grainSec
 				pt.Status4xx = float64(row.Status4xx) / grainSec
@@ -120,7 +120,7 @@ func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f filter.
 	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
 		func(r models.LatencyPercentilesRow) time.Time { return r.BucketAt },
 		func(t time.Time, row models.LatencyPercentilesRow, ok bool) models.LatencyPercentilesPoint {
-			pt := models.LatencyPercentilesPoint{Timestamp: t}
+			pt := models.LatencyPercentilesPoint{TimestampMs: t.UnixMilli()}
 			if ok {
 				pt.P50Ms = httputil.SanitizeFloat(float64(row.P50Ms))
 				pt.P95Ms = httputil.SanitizeFloat(float64(row.P95Ms))
@@ -141,6 +141,10 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Filte
 	if err != nil {
 		return models.EndpointRateSeries{}, err
 	}
+	return buildEndpointRateSeries(rows, f, limit), nil
+}
+
+func buildEndpointRateSeries(rows []models.EndpointRateRow, f filter.Filters, limit int) models.EndpointRateSeries {
 	if limit <= 0 {
 		limit = defaultEndpointSeriesLimit
 	}
@@ -185,7 +189,10 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Filte
 				return cell{}
 			}
 			errRate := metrics.Percentage(row.ErrorCount, row.RequestCount)
-			p99 := httputil.SanitizeFloat(spanstats.LatencyP99.At(row.QS, spanstats.P99))
+			var p99 float64
+			if len(row.QS) > 0 {
+				p99 = httputil.SanitizeFloat(spanstats.LatencyP99.At(row.QS, spanstats.P99))
+			}
 			return cell{
 				rps:     float64(row.RequestCount) / grainSec,
 				count:   row.RequestCount,
@@ -237,9 +244,7 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Filte
 		}
 		out.Series[i] = entry
 	}
-	// FillGapsKeyed returns endpoints in first-encounter order, which is the
-	// arbitrary order of the earliest bucket. Rank by volume so the chart
-	// legend reads busiest-first and colors stay stable across refreshes.
+	// Keep legend order and colors stable across refreshes.
 	sort.SliceStable(out.Series, func(i, j int) bool {
 		li, lj := seriesLoad(out.Series[i].RPS), seriesLoad(out.Series[j].RPS)
 		if li != lj {
@@ -247,10 +252,9 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Filte
 		}
 		return out.Series[i].OperationName < out.Series[j].OperationName
 	})
-	return out, nil
+	return out
 }
 
-// topEndpointRows keeps the rows of the busiest `limit` named endpoints.
 func topEndpointRows(rows []models.EndpointRateRow, limit int) []models.EndpointRateRow {
 	volume := make(map[string]uint64)
 	for _, row := range rows {

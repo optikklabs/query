@@ -71,12 +71,12 @@ type ErrorFacetGroup struct {
 }
 
 type TimeSeriesPoint struct {
-	ServiceName  string    `json:"serviceName"`
-	Timestamp    time.Time `json:"timestamp"`
-	RequestCount int64     `json:"requestCount"`
-	ErrorCount   int64     `json:"errorCount"`
-	ErrorRate    float64   `json:"errorRate"`
-	AvgLatency   float64   `json:"avgLatency"`
+	ServiceName  string  `json:"serviceName"`
+	TimestampMs  int64   `json:"timestampMs"`
+	RequestCount int64   `json:"requestCount"`
+	ErrorCount   int64   `json:"errorCount"`
+	ErrorRate    float64 `json:"errorRate"`
+	AvgLatency   float64 `json:"avgLatency"`
 }
 
 type ErrorHotspotCell struct {
@@ -137,8 +137,8 @@ type Summary struct {
 }
 
 type TrendBucket struct {
-	TimeBucket time.Time `json:"timeBucket"`
-	Errors     int64     `json:"errors"`
+	TimeBucketMs int64 `json:"timeBucketMs"`
+	Errors       int64 `json:"errors"`
 }
 
 type FacetBucket struct {

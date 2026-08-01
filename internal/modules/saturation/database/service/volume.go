@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 
-	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
 	"github.com/optikklabs/query/internal/modules/saturation/database/models"
 	"github.com/optikklabs/query/internal/modules/saturation/database/repository"
@@ -21,7 +20,7 @@ func mapOpsRate(rows []repository.OpsRaw) []models.OpsTimeSeries {
 	out := make([]models.OpsTimeSeries, len(rows))
 	for i, r := range rows {
 		rate := r.OpsPerSec
-		out[i] = models.OpsTimeSeries{TimeBucket: timebucket.FormatDisplayBucket(r.TimeBucket), GroupBy: r.GroupBy, OpsPerSec: &rate}
+		out[i] = models.OpsTimeSeries{TimeBucketMs: r.TimeBucket.UnixMilli(), GroupBy: r.GroupBy, OpsPerSec: &rate}
 	}
 	return out
 }

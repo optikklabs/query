@@ -9,10 +9,6 @@ import (
 
 const BucketSeconds int64 = 300
 
-func FormatDisplayBucket(t time.Time) string {
-	return t.UTC().Format("2006-01-02 15:04:05")
-}
-
 func DisplayGrain(windowMs int64) time.Duration {
 	sec := GrainSecondsFor(displayGrainLadder, windowMs/1000)
 	return time.Duration(sec) * time.Second
