@@ -104,9 +104,12 @@ func (r *Repository) ExplorerSummaryRow(ctx context.Context, req models.Overview
 		SELECT sum(cnt)                        AS total_errors,
 		       count()                         AS active_issues,
 		       countIf(first_occ >= @newSince) AS new_issues,
-		       uniqExact(service)              AS services_affected
+		       uniqExact(service_any)          AS services_affected
 		FROM (
-		    SELECT min(service)   AS service,
+		    -- Do not alias this aggregate back to service: ClickHouse expands
+		    -- SELECT aliases in WHERE and can turn a service filter into an
+		    -- illegal aggregate predicate.
+		    SELECT min(service)   AS service_any,
 		           count()        AS cnt,
 		           min(timestamp) AS first_occ
 		    ` + scan + `

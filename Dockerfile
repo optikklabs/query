@@ -1,5 +1,5 @@
 # ---------- Build Stage ----------
-FROM golang:1.26-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
@@ -10,8 +10,9 @@ RUN go mod download
 
 COPY . .
 
+ARG TARGETOS
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -ldflags="-s -w" -o query ./cmd/query
 
 # ---------- Runtime Stage ----------
@@ -30,4 +31,3 @@ EXPOSE 19090 19091
 USER 65534:65534
 
 ENTRYPOINT ["./query"]
-
