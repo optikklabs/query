@@ -23,14 +23,10 @@ type Completer interface {
 type Service struct {
 	keys      KeyResolver
 	completer Completer
-	sem       chan struct{}
 }
 
-func NewService(keys KeyResolver, completer Completer, concurrency int) *Service {
-	if concurrency <= 0 {
-		concurrency = 4
-	}
-	return &Service{keys: keys, completer: completer, sem: make(chan struct{}, concurrency)}
+func NewService(keys KeyResolver, completer Completer) *Service {
+	return &Service{keys: keys, completer: completer}
 }
 
 var validProvider = map[string]struct{}{"openai": {}, "anthropic": {}, "mistral": {}}
@@ -48,13 +44,6 @@ func (s *Service) Complete(ctx context.Context, tenantID int64, req CompleteRequ
 	apiKey, err := s.keys.ResolveKey(ctx, tenantID, req.Provider)
 	if err != nil {
 		return CompleteResponse{}, err
-	}
-
-	select {
-	case s.sem <- struct{}{}:
-		defer func() { <-s.sem }()
-	case <-ctx.Done():
-		return CompleteResponse{}, ctx.Err()
 	}
 
 	start := time.Now()

@@ -8,8 +8,8 @@ type Module struct {
 	handler *Handler
 }
 
-func NewModule(keys KeyResolver, completer Completer, concurrency int) *Module {
-	return &Module{handler: NewHandler(NewService(keys, completer, concurrency))}
+func NewModule(keys KeyResolver, completer Completer) *Module {
+	return &Module{handler: NewHandler(NewService(keys, completer))}
 }
 
 func (m *Module) Name() string { return "llm.playground" }

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +14,7 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	"github.com/optikklabs/query/internal/modules/alerting/shared/query"
 	tmpl "github.com/optikklabs/query/internal/modules/alerting/shared/template"
+	"golang.org/x/sync/errgroup"
 )
 
 type Service struct {
@@ -41,19 +41,15 @@ func (s *Service) Tick(ctx context.Context, now time.Time) error {
 	if len(due) == 0 {
 		return nil
 	}
-	sem := make(chan struct{}, s.concurrency)
-	var wg sync.WaitGroup
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(s.concurrency)
 	for _, m := range due {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func() {
-			defer wg.Done()
-			defer func() { <-sem }()
-			s.evalOne(ctx, m, now)
-		}()
+		g.Go(func() error {
+			s.evalOne(groupCtx, m, now)
+			return nil
+		})
 	}
-	wg.Wait()
-	return nil
+	return g.Wait()
 }
 
 func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {

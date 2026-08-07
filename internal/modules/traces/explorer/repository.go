@@ -158,10 +158,16 @@ func (r *Repository) QueryTrend(ctx context.Context, req TrendRequest) ([]trendR
 
 func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs int64, field, prefix string, limit int) ([]suggestionRow, error) {
 	column := scalarFieldExpr(field)
+	table, count := timebucket.SpanStatsRollup(startMs, endMs), "sum(request_count)"
+	if field == "operation" {
+		column = "span_name"
+	} else if field == "http_status" {
+		table, count = "optikk.spans", "count()"
+	}
 	query := `
 		SELECT ` + column + `        AS value,
-		       count()               AS count
-		FROM optikk.spans
+		       ` + count + `          AS count
+		FROM ` + table + `
 		PREWHERE tenant_id = @tenantID AND timestamp >= @startMs AND timestamp < @endMs
 		WHERE ` + column + ` != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)

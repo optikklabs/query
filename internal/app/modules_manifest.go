@@ -43,7 +43,6 @@ import (
 
 func configuredModules(
 	nativeQuerier clickhouse.Conn,
-	appConfig AppConfig,
 	infraDeps *Infra,
 ) []Module {
 
@@ -74,7 +73,7 @@ func configuredModules(
 		llm_datasets.NewModule(infraDeps.DB, providerKeySvc, llmProviders),
 		llm_evaluators.NewModule(infraDeps.DB, nativeQuerier),
 		llm_providerkeys.NewModule(providerKeySvc),
-		llm_playground.NewModule(providerKeySvc, llmProviders, appConfig.ExpensiveQueryConcurrency()),
+		llm_playground.NewModule(providerKeySvc, llmProviders),
 		services_errors.NewModule(nativeQuerier),
 		services_redfleet.NewModule(nativeQuerier),
 		saturation_database.NewModule(nativeQuerier),

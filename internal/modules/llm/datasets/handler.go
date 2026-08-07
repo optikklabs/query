@@ -38,7 +38,7 @@ func (h *Handler) RunExperiment(w http.ResponseWriter, r *http.Request) {
 		respondErr(w, r, err)
 		return
 	}
-	httputil.RespondOK(w, res)
+	httputil.RespondAccepted(w, res)
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {

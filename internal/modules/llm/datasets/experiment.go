@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/modules/llm/providerkeys"
 	"github.com/optikklabs/query/internal/shared/errorcode"
+	"golang.org/x/sync/errgroup"
 )
 
 func IsProviderUnavailable(err error) bool {
@@ -21,6 +24,7 @@ func IsProviderUnavailable(err error) bool {
 const (
 	maxRunItems   = 50
 	runBudget     = 5 * time.Minute
+	itemWorkers   = 4
 	exactMatchKey = "exact_match"
 )
 
@@ -45,10 +49,44 @@ type ExperimentService struct {
 	repo      *Repository
 	keys      KeyResolver
 	completer Completer
+	ctx       context.Context
+	cancel    context.CancelFunc
+	jobs      errgroup.Group
 }
 
 func NewExperimentService(repo *Repository, keys KeyResolver, completer Completer) *ExperimentService {
-	return &ExperimentService{repo: repo, keys: keys, completer: completer}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &ExperimentService{
+		repo: repo, keys: keys, completer: completer,
+		ctx: ctx, cancel: cancel,
+	}
+}
+
+type experimentJob struct {
+	tenantID int64
+	runID    int64
+	req      RunExperimentRequest
+	apiKey   string
+	items    []itemRow
+}
+
+func (s *ExperimentService) Stop() error {
+	s.cancel()
+	return s.jobs.Wait()
+}
+
+func (s *ExperimentService) executeJob(job experimentJob) {
+	ctx, cancel := context.WithTimeout(s.ctx, runBudget)
+	err := s.execute(ctx, job)
+	cancel()
+	if err != nil {
+		slog.Error("llm experiment failed", slog.Int64("run_id", job.runID), slog.Any("error", err))
+		failCtx, failCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_ = s.repo.FinalizeRun(failCtx, job.runID, RunFinal{
+			Status: "failed", Error: sql.NullString{Valid: true, String: truncate(err.Error(), 1000)},
+		})
+		failCancel()
+	}
 }
 
 func (s *ExperimentService) Run(ctx context.Context, tenantID, datasetID int64, req RunExperimentRequest) (RunDetail, error) {
@@ -93,50 +131,59 @@ func (s *ExperimentService) Run(ctx context.Context, tenantID, datasetID int64, 
 		return RunDetail{}, err
 	}
 
-	runCtx, cancel := context.WithTimeout(ctx, runBudget)
-	defer cancel()
-	s.execute(runCtx, tenantID, runID, req, apiKey, items)
+	job := experimentJob{tenantID: tenantID, runID: runID, req: req, apiKey: apiKey, items: items}
+	s.jobs.Go(func() error {
+		s.executeJob(job)
+		return nil
+	})
 	return s.getRun(ctx, tenantID, runID)
 }
 
-func (s *ExperimentService) execute(ctx context.Context, tenantID, runID int64, req RunExperimentRequest, apiKey string, items []itemRow) {
+type completedItem struct {
+	row    RunItemInsert
+	cost   float64
+	score  float64
+	scored bool
+	failed bool
+}
+
+func (s *ExperimentService) execute(ctx context.Context, job experimentJob) error {
+	results := make([]completedItem, len(job.items))
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(itemWorkers)
+	for i, item := range job.items {
+		g.Go(func() error {
+			results[i] = s.completeItem(groupCtx, job, item)
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	var totalCost, totalLatency, totalScore float64
 	var scored, failed int
-
-	for _, item := range items {
-		messages := buildMessages(req.SystemPrompt, item.InputJSON)
-		start := time.Now()
-		result, err := s.completer.Complete(ctx, req.Provider, apiKey, llmproviders.CompletionRequest{
-			Model: req.Model, Messages: messages, Temperature: req.Temperature, MaxTokens: req.MaxTokens,
-		})
-		latency := int(time.Since(start).Milliseconds())
-		ri := RunItemInsert{RunID: runID, TenantID: tenantID, DatasetItemID: item.ID, LatencyMs: latency}
-		if err != nil {
-			ri.Error = sql.NullString{Valid: true, String: truncate(err.Error(), 1000)}
-			ri.ScoresJSON = []byte("{}")
-			_ = s.repo.InsertRunItem(ctx, ri)
+	for _, result := range results {
+		if err := s.repo.InsertRunItem(ctx, result.row); err != nil {
+			return fmt.Errorf("insert run item: %w", err)
+		}
+		if result.failed {
 			failed++
 			continue
 		}
-		cost := pricing.CostOf(req.Model, uint64(result.InputTokens), uint64(result.OutputTokens))
-		out, _ := json.Marshal(map[string]any{"output": result.Output,
-			"inputTokens": result.InputTokens, "outputTokens": result.OutputTokens})
-		ri.OutputJSON = out
-		ri.CostUsd = cost
-		scores := map[string]float64{}
-		if score, has := exactMatch(item.ExpectedOutputJSON, result.Output); has {
-			scores[exactMatchKey] = score
-			totalScore += score
+		totalCost += result.cost
+		totalLatency += float64(result.row.LatencyMs)
+		if result.scored {
+			totalScore += result.score
 			scored++
 		}
-		ri.ScoresJSON = mustJSON(scores)
-		_ = s.repo.InsertRunItem(ctx, ri)
-		totalCost += cost
-		totalLatency += float64(latency)
 	}
 
 	final := RunFinal{Status: "completed", TotalCostUsd: totalCost}
-	if n := len(items); n > 0 {
+	if n := len(job.items); n > 0 {
 		final.AvgLatencyMs = totalLatency / float64(n)
 	}
 	avgScores := map[string]float64{}
@@ -144,11 +191,36 @@ func (s *ExperimentService) execute(ctx context.Context, tenantID, runID int64, 
 		avgScores[exactMatchKey] = totalScore / float64(scored)
 	}
 	final.AvgScoresJSON = mustJSON(avgScores)
-	if failed == len(items) {
+	if failed == len(job.items) {
 		final.Status = "failed"
 		final.Error = sql.NullString{Valid: true, String: "all items failed"}
 	}
-	_ = s.repo.FinalizeRun(ctx, runID, final)
+	return s.repo.FinalizeRun(ctx, job.runID, final)
+}
+
+func (s *ExperimentService) completeItem(ctx context.Context, job experimentJob, item itemRow) completedItem {
+	start := time.Now()
+	result, err := s.completer.Complete(ctx, job.req.Provider, job.apiKey, llmproviders.CompletionRequest{
+		Model: job.req.Model, Messages: buildMessages(job.req.SystemPrompt, item.InputJSON),
+		Temperature: job.req.Temperature, MaxTokens: job.req.MaxTokens,
+	})
+	row := RunItemInsert{
+		RunID: job.runID, TenantID: job.tenantID, DatasetItemID: item.ID,
+		LatencyMs: int(time.Since(start).Milliseconds()), ScoresJSON: []byte("{}"),
+	}
+	if err != nil {
+		row.Error = sql.NullString{Valid: true, String: truncate(err.Error(), 1000)}
+		return completedItem{row: row, failed: true}
+	}
+	cost := pricing.CostOf(job.req.Model, uint64(result.InputTokens), uint64(result.OutputTokens))
+	row.OutputJSON, _ = json.Marshal(map[string]any{"output": result.Output,
+		"inputTokens": result.InputTokens, "outputTokens": result.OutputTokens})
+	row.CostUsd = cost
+	score, scored := exactMatch(item.ExpectedOutputJSON, result.Output)
+	if scored {
+		row.ScoresJSON = mustJSON(map[string]float64{exactMatchKey: score})
+	}
+	return completedItem{row: row, cost: cost, score: score, scored: scored}
 }
 
 func (s *ExperimentService) getRun(ctx context.Context, tenantID, runID int64) (RunDetail, error) {

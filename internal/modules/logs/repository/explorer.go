@@ -58,39 +58,28 @@ func IsSuggestableScalarField(field string) bool {
 
 func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs int64, field, prefix string, limit int) ([]models.Suggestion, error) {
 	if field == "severity_text" {
-		return r.suggestSeverity(ctx, tenantID, startMs, endMs, prefix, limit)
+		return r.suggestScalar(ctx, "suggest.SuggestSeverity", tenantID, startMs, endMs, "upper(severity_text)", prefix, limit)
 	}
 	column, ok := suggestResourceColumns[field]
 	if !ok {
 		return nil, nil
 	}
-	query := `
-		SELECT ` + column + `        AS value,
-		       count()               AS count
-		FROM optikk.logs
-		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND ts_bucket BETWEEN @startBucket AND @endBucket
-		WHERE value != ''
-		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
-		GROUP BY value
-		ORDER BY count DESC, value ASC
-		LIMIT @limit`
-	return r.runSuggest(ctx, "suggest.SuggestResource", query, suggestArgs(tenantID, startMs, endMs, prefix, limit))
+	return r.suggestScalar(ctx, "suggest.SuggestResource", tenantID, startMs, endMs, column, prefix, limit)
 }
 
-func (r *Repository) suggestSeverity(ctx context.Context, tenantID, startMs, endMs int64, prefix string, limit int) ([]models.Suggestion, error) {
-	const query = `
-		SELECT upper(severity_text)  AS value,
-		       count()               AS count
-		FROM optikk.logs
-		PREWHERE tenant_id = @tenantID
-		     AND timestamp >= @start AND timestamp < @end
-		     AND ts_bucket BETWEEN @startBucket AND @endBucket
+func (r *Repository) suggestScalar(ctx context.Context, op string, tenantID, startMs, endMs int64, column, prefix string, limit int) ([]models.Suggestion, error) {
+	source, args := aggregateSource(filter.Filters{TenantID: tenantID, StartMs: startMs, EndMs: endMs},
+		column+" AS value", column+" AS value", "value")
+	query := `
+		SELECT value, sum(log_count) AS count
+		FROM ` + source + `
 		WHERE value != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
 		ORDER BY count DESC, value ASC
 		LIMIT @limit`
-	return r.runSuggest(ctx, "suggest.SuggestSeverity", query, suggestArgs(tenantID, startMs, endMs, prefix, limit))
+	args = append(args, clickhouse.Named("prefix", prefix), clickhouse.Named("limit", uint64(limit)))
+	return r.runSuggest(ctx, op, query, args)
 }
 
 func (r *Repository) SuggestAttribute(ctx context.Context, tenantID, startMs, endMs int64, attrKey, prefix string, limit int) ([]models.Suggestion, error) {

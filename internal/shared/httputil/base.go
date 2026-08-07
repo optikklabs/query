@@ -69,6 +69,10 @@ func RespondOK(w http.ResponseWriter, data any) {
 	WriteJSON(w, http.StatusOK, types.Success(data))
 }
 
+func RespondAccepted(w http.ResponseWriter, data any) {
+	WriteJSON(w, http.StatusAccepted, types.Success(data))
+}
+
 func RespondErrorWithCause(w http.ResponseWriter, r *http.Request, status int, code, msg string, err error) {
 	// Budget violations are client-fixable: remap to a typed 422 so the
 	// UI can prompt narrowing instead of showing a generic 500.

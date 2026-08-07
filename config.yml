@@ -4,7 +4,6 @@ server:
   port: "19090"
   metrics_port: "19091"
   allowed_origins: "http://localhost:3000,http://localhost:5173"
-  expensive_query_concurrency: 2
 
 mysql:
   host: "127.0.0.1"

@@ -5,18 +5,10 @@ import (
 )
 
 type ServerConfig struct {
-	Port                      string `yaml:"port"`
-	MetricsPort               string `yaml:"metrics_port"`
-	AllowedOrigins            string `yaml:"allowed_origins"`
-	DebugAPILogs              bool   `yaml:"debug_api_logs"`
-	ExpensiveQueryConcurrency int    `yaml:"expensive_query_concurrency"`
-}
-
-func (c Config) ExpensiveQueryConcurrency() int {
-	if n := c.Server.ExpensiveQueryConcurrency; n > 0 {
-		return n
-	}
-	return 2
+	Port           string `yaml:"port"`
+	MetricsPort    string `yaml:"metrics_port"`
+	AllowedOrigins string `yaml:"allowed_origins"`
+	DebugAPILogs   bool   `yaml:"debug_api_logs"`
 }
 
 func (c Config) MetricsPort() string {

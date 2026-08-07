@@ -2,11 +2,13 @@ package datasets
 
 import (
 	"database/sql"
+
 	"github.com/go-chi/chi/v5"
 )
 
 type Module struct {
-	handler *Handler
+	handler    *Handler
+	experiment *ExperimentService
 }
 
 func NewModule(sqlDB *sql.DB, keys KeyResolver, completer Completer) *Module {
@@ -15,10 +17,19 @@ func NewModule(sqlDB *sql.DB, keys KeyResolver, completer Completer) *Module {
 	if keys != nil && completer != nil {
 		experiment = NewExperimentService(repo, keys, completer)
 	}
-	return &Module{handler: NewHandler(NewService(repo), experiment)}
+	return &Module{handler: NewHandler(NewService(repo), experiment), experiment: experiment}
 }
 
 func (m *Module) Name() string { return "llm.datasets" }
+
+func (m *Module) Start() {}
+
+func (m *Module) Stop() error {
+	if m.experiment != nil {
+		return m.experiment.Stop()
+	}
+	return nil
+}
 
 func (m *Module) RegisterRoutes(v1 chi.Router) {
 	v1.Route("/llm/datasets", func(r chi.Router) {

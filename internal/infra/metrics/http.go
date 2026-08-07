@@ -36,19 +36,4 @@ var (
 		Name:      "api_rate_limited_total",
 		Help:      "Total HTTP requests rate limited, labeled by tenant_id.",
 	}, []string{"tenant_id"})
-
-	QueryInFlight = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "optikk",
-		Subsystem: "query",
-		Name:      "in_flight_requests",
-		Help:      "Telemetry queries currently executing, by workload class.",
-	}, []string{"workload"})
-
-	QueryWaitDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "optikk",
-		Subsystem: "query",
-		Name:      "wait_duration_seconds",
-		Help:      "Time spent waiting for telemetry query capacity, by workload class.",
-		Buckets:   httpBuckets,
-	}, []string{"workload"})
 )

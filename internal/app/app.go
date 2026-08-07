@@ -27,7 +27,7 @@ func New(cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize infrastructure: %w", err)
 	}
 
-	modules := configuredModules(infraDeps.CH, cfg, infraDeps)
+	modules := configuredModules(infraDeps.CH, infraDeps)
 
 	return &App{
 		Config:  cfg,
