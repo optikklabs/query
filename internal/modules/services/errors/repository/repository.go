@@ -33,7 +33,7 @@ func (r *Repository) ServiceErrorRateRows(ctx context.Context, tenantID int64, s
 	clause, clauseArgs := serviceClause(serviceName)
 	query := `
 		SELECT service                                           AS service_name,
-		       ` + timebucket.DisplayGrainSQLForRange(startMs, endMs) + ` AS bucket_at,
+		       ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `,
 		       ` + spanstats.DurationSum + `

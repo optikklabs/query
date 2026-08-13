@@ -50,7 +50,7 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f filter.Filters) (
 func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f filter.Filters) ([]models.RequestRateRawRow, error) {
 	where, args := filter.BuildClauses(f)
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQLForRange(f.StartMs, f.EndMs) + ` AS bucket_at,
+		SELECT ` + timebucket.DisplayGrainSQL(f.EndMs-f.StartMs) + ` AS bucket_at,
 		       ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `
 		FROM ` + timebucket.SpanStatsRollup(f.StartMs, f.EndMs) + `
@@ -65,7 +65,7 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f fil
 
 func (r *Repository) GetStatusTimeSeries(ctx context.Context, f filter.Filters) ([]models.StatusBucketRow, error) {
 	where, args := filter.BuildClauses(f)
-	grainSQL := timebucket.DisplayGrainSQLForRange(f.StartMs, f.EndMs)
+	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	query := `
 		SELECT ` + grainSQL + ` AS bucket_at,
 		       sumIf(request_count, http_status_bucket = '2xx') AS s2xx,
@@ -84,7 +84,7 @@ func (r *Repository) GetStatusTimeSeries(ctx context.Context, f filter.Filters) 
 
 func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f filter.Filters) ([]models.LatencyPercentilesRow, error) {
 	where, args := filter.BuildClauses(f)
-	grainSQL := timebucket.DisplayGrainSQLForRange(f.StartMs, f.EndMs)
+	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	query := `
 		SELECT ` + grainSQL + ` AS bucket_at,
 		       ` + spanstats.LatencyP50P95P99.SQL() + `
@@ -114,7 +114,7 @@ func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Fi
 // Split out so the generated SQL can be exercised without a database.
 func buildREDByEndpointQuery(f filter.Filters) (string, []any) {
 	where, args := filter.BuildClauses(f)
-	grainSQL := timebucket.DisplayGrainSQLForRange(f.StartMs, f.EndMs)
+	grainSQL := timebucket.DisplayGrainSQL(f.EndMs - f.StartMs)
 	rollup := timebucket.SpanStatsRollup(f.StartMs, f.EndMs)
 	query := `
 		SELECT ` + grainSQL + ` AS bucket_at,
@@ -133,7 +133,7 @@ func buildREDByEndpointQuery(f filter.Filters) (string, []any) {
 func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f filter.Filters) ([]models.ServiceRequestRateRow, error) {
 	where, args := filter.BuildClauses(f)
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQLForRange(f.StartMs, f.EndMs) + ` AS bucket_at,
+		SELECT ` + timebucket.DisplayGrainSQL(f.EndMs-f.StartMs) + ` AS bucket_at,
 		       service            AS service_name,
 		       ` + spanstats.Requests + `
 		FROM ` + timebucket.SpanStatsRollup(f.StartMs, f.EndMs) + `

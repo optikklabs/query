@@ -34,7 +34,7 @@ func (r *Repository) QuerySeries(
 	}
 
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQLForRange(startMs, endMs) + ` AS time_bucket,
+		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS time_bucket,
 		       ` + def.LabelSQL + ` AS series,
 		       ` + valueExpr + ` AS value
 		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `

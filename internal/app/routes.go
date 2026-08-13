@@ -24,10 +24,11 @@ func (a *App) Router() http.Handler {
 func (a *App) setupGlobalMiddleware(r chi.Router) {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.ErrorRecovery())
-	r.Use(chimw.RealIP)
+	// Traefik is the sole public proxy. Read the address it appends to XFF
+	// without trusting any client-supplied entries earlier in the chain.
+	r.Use(chimw.ClientIPFromXFFTrustedProxies(1))
 	r.Use(middleware.HTTPMetricsMiddleware())
 	r.Use(middleware.CORSMiddleware(a.Config.Server.AllowedOrigins))
-	r.Use(middleware.BodyLimitMiddleware(10 * 1024 * 1024))
 }
 
 func (a *App) setupHealthRoutes(r chi.Router) {
@@ -39,7 +40,6 @@ func (a *App) setupHealthRoutes(r chi.Router) {
 func (a *App) setupAPIRoutes(r chi.Router) {
 	r.Route(httputil.APIV1Base, func(r chi.Router) {
 		r.Use(middleware.TenantMiddleware(a.Infra.Tokens))
-		r.Use(middleware.PublicAuthRateLimit(5, 10))
 		r.Use(middleware.TenantRateLimit(100, 200))
 		for _, mod := range a.Modules {
 			mod.RegisterRoutes(r)

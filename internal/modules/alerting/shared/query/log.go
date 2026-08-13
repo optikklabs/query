@@ -16,6 +16,8 @@ type LogBackend struct {
 	db clickhouse.Conn
 }
 
+const logBucketSeconds int64 = 300
+
 func NewLogBackend(db clickhouse.Conn) *LogBackend { return &LogBackend{db: db} }
 
 func (b *LogBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, _ models.Conditions, now time.Time) (ScalarResult, error) {
@@ -95,8 +97,8 @@ func logArgs(tenantID int64, queryText string, startMs, endMs int64) []any {
 }
 
 func logBucketBounds(startMs, endMs int64) (time.Time, time.Time) {
-	return time.UnixMilli(timebucket.FloorMsToBucket(startMs, timebucket.BucketSeconds)),
-		time.UnixMilli(timebucket.FloorMsToBucket(endMs, timebucket.BucketSeconds))
+	return time.UnixMilli(timebucket.FloorMsToBucket(startMs, logBucketSeconds)),
+		time.UnixMilli(timebucket.FloorMsToBucket(endMs, logBucketSeconds))
 }
 
 type logCountRow struct {

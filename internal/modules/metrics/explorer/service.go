@@ -58,7 +58,7 @@ func (s *Service) ListTagValues(ctx context.Context, tenantID, startMs, endMs in
 	}
 	out := make([]TagValueResult, len(rows))
 	for i, row := range rows {
-		out[i] = TagValueResult{TagValue: row.TagValue, Count: row.Count}
+		out[i] = TagValueResult(row)
 	}
 	return out, nil
 }

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	types "github.com/optikklabs/query/internal/shared/contracts"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/filterutil"
@@ -27,6 +28,9 @@ func URLParamLower(r *http.Request, key string) string {
 }
 
 func ClientIP(r *http.Request) string {
+	if ip := middleware.GetClientIP(r.Context()); ip != "" {
+		return ip
+	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr

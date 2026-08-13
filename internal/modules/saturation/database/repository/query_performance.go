@@ -152,7 +152,7 @@ func (r *Repository) GetQuerySeriesPoints(
 		args = append(args, clickhouse.Named("collection", collection))
 	}
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQLForRange(startMs, endMs) + ` AS bucket_at,
+		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       query_hash,
 		       arrayMap(x -> toFloat32(x), quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state)) AS qs,
 		       sum(request_count) / @bucketGrainSec AS ops_per_sec

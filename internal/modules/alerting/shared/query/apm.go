@@ -91,8 +91,7 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 	out := make([]Point, 0, len(rows))
 	bucketSec := int64(timebucket.DisplayGrain(windowMs).Seconds())
 	for _, r := range rows {
-		var p99 float64
-		p99 = spanstats.LatencyP99.At(r.QS, spanstats.P99)
+		p99 := spanstats.LatencyP99.At(r.QS, spanstats.P99)
 		row := apmAggRow{RequestCount: r.RequestCount, ErrorCount: r.ErrorCount, P99: p99}
 		out = append(out, Point{BucketMs: r.Bucket.UnixMilli(), Value: apmTrackValue(q.APM.Track, row, bucketSec)})
 	}

@@ -18,6 +18,17 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: sqlx.NewDb(db, "mysql")}
 }
 
+func requireAffected(res sql.Result) error {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *Repository) CreateChannel(ctx context.Context, row models.ChannelRow) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.CreateChannel", `
 		INSERT INTO optikk.notification_channels
@@ -39,11 +50,7 @@ func (r *Repository) UpdateChannel(ctx context.Context, id, tenantID int64, row 
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	return requireAffected(res)
 }
 
 func (r *Repository) DeleteChannel(ctx context.Context, id, tenantID int64) error {
@@ -52,11 +59,7 @@ func (r *Repository) DeleteChannel(ctx context.Context, id, tenantID int64) erro
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	return requireAffected(res)
 }
 
 const channelCols = `id, tenant_id, type, name, config_json, status,
@@ -140,11 +143,7 @@ func (r *Repository) UpdatePolicy(ctx context.Context, id, tenantID int64, row m
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	return requireAffected(res)
 }
 
 func (r *Repository) DeletePolicy(ctx context.Context, id, tenantID int64) error {
@@ -153,11 +152,7 @@ func (r *Repository) DeletePolicy(ctx context.Context, id, tenantID int64) error
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	return requireAffected(res)
 }
 
 func (r *Repository) ListPolicies(ctx context.Context, tenantID int64) ([]models.PolicyRow, error) {
@@ -191,11 +186,7 @@ func (r *Repository) UpdateTemplate(ctx context.Context, id, tenantID int64, row
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	return requireAffected(res)
 }
 
 func (r *Repository) DeleteTemplate(ctx context.Context, id, tenantID int64) error {
@@ -204,11 +195,7 @@ func (r *Repository) DeleteTemplate(ctx context.Context, id, tenantID int64) err
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	return requireAffected(res)
 }
 
 func (r *Repository) ListTemplates(ctx context.Context, tenantID int64) ([]models.TemplateRow, error) {

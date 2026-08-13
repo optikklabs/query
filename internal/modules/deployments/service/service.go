@@ -352,7 +352,7 @@ func buildTrafficResponse(
 ) models.TrafficResponse {
 	startMs := comparison.Window.BaselineStart.UnixMilli()
 	endMs := comparison.Window.CurrentEnd.UnixMilli()
-	grain := timebucket.DisplayGrainForRange(startMs, endMs)
+	grain := timebucket.DisplayGrain(endMs - startMs)
 
 	versions, buckets, series := timebucket.FillGapsKeyed(
 		startMs, endMs, grain, rows,
@@ -409,13 +409,7 @@ func buildErrorChangesResponse(
 		Resolved: make([]models.ErrorChange, 0, len(rows)),
 	}
 	for _, row := range rows {
-		change := models.ErrorChange{
-			GroupID:       row.GroupID,
-			OperationName: row.OperationName,
-			ExceptionType: row.ExceptionType,
-			CurrentCount:  row.CurrentCount,
-			BaselineCount: row.BaselineCount,
-		}
+		change := models.ErrorChange(row)
 		switch {
 		case row.CurrentCount > 0 && row.BaselineCount == 0:
 			out.New = append(out.New, change)

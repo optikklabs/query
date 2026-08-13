@@ -87,9 +87,8 @@ func (r *Repository) TrafficRows(
 	comparison models.Context,
 ) ([]models.RawTrafficRow, error) {
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQLForRange(
-		comparison.Window.BaselineStart.UnixMilli(),
-		comparison.Window.CurrentEnd.UnixMilli(),
+		SELECT ` + timebucket.DisplayGrainSQL(
+		comparison.Window.CurrentEnd.UnixMilli()-comparison.Window.BaselineStart.UnixMilli(),
 	) + ` AS bucket_at,
 		       service_version,
 		       ` + spanstats.Requests + `

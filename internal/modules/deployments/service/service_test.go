@@ -9,21 +9,21 @@ import (
 
 var (
 	t0 = time.Date(2026, 7, 30, 22, 0, 0, 0, time.UTC)
-	t1 = t0.Add(1 * time.Hour)  // next deployment at T0+1h
-	t2 = t0.Add(2 * time.Hour)  // picker end or third deploy
+	t1 = t0.Add(1 * time.Hour) // next deployment at T0+1h
+	t2 = t0.Add(2 * time.Hour) // picker end or third deploy
 )
 
 func ms(t time.Time) int64 { return t.UnixMilli() }
 
-func makeRows(service, env string, versions ...struct {
+func makeRows(versions ...struct {
 	version   string
 	firstSeen time.Time
 }) []models.RawDeploymentRow {
 	rows := make([]models.RawDeploymentRow, len(versions))
 	for i, v := range versions {
 		rows[i] = models.RawDeploymentRow{
-			Service:     service,
-			Environment: env,
+			Service:     "svc",
+			Environment: "prod",
 			Version:     v.version,
 			FirstSeen:   v.firstSeen,
 		}
@@ -44,7 +44,7 @@ func ver(version string, firstSeen time.Time) struct {
 func TestFindContext_PickerClampsWindowStart(t *testing.T) {
 	// Deployment v1.0 at T0, v1.1 at T1. Picker range starts at T0+30m.
 	// The current window should be [T0+30m, T1], not [T0, T1].
-	rows := makeRows("svc", "prod", ver("1.0.0", t0), ver("1.1.0", t1))
+	rows := makeRows(ver("1.0.0", t0), ver("1.1.0", t1))
 	pickerStart := t0.Add(30 * time.Minute)
 
 	req := models.DetailRequest{
@@ -85,7 +85,7 @@ func TestFindContext_PickerClampsWindowStart(t *testing.T) {
 
 func TestFindContext_PickerBeforeFirstSeen(t *testing.T) {
 	// Picker starts before the deployment — window should start at FirstSeen.
-	rows := makeRows("svc", "prod", ver("1.0.0", t0), ver("1.1.0", t1))
+	rows := makeRows(ver("1.0.0", t0), ver("1.1.0", t1))
 	pickerStart := t0.Add(-1 * time.Hour) // 1h before first seen
 
 	req := models.DetailRequest{
@@ -116,7 +116,7 @@ func TestFindContext_PickerBeforeFirstSeen(t *testing.T) {
 
 func TestFindContext_LastDeploymentUsesPickerEnd(t *testing.T) {
 	// Only one deployment, no next deployment — window end should be pickerEnd.
-	rows := makeRows("svc", "prod", ver("1.0.0", t0))
+	rows := makeRows(ver("1.0.0", t0))
 	pickerEnd := t0.Add(15 * time.Minute)
 
 	req := models.DetailRequest{
@@ -151,7 +151,7 @@ func TestFindContext_LastDeploymentUsesPickerEnd(t *testing.T) {
 }
 
 func TestFindContext_NotFound(t *testing.T) {
-	rows := makeRows("svc", "prod", ver("1.0.0", t0))
+	rows := makeRows(ver("1.0.0", t0))
 
 	req := models.DetailRequest{
 		ListRequest:    models.ListRequest{TenantID: 1, StartMs: ms(t0), EndMs: ms(t2)},
@@ -169,7 +169,7 @@ func TestFindContext_NotFound(t *testing.T) {
 
 func TestFindContext_NoTrafficWindow(t *testing.T) {
 	// Picker range ends at or before FirstSeen — no valid window.
-	rows := makeRows("svc", "prod", ver("1.0.0", t0))
+	rows := makeRows(ver("1.0.0", t0))
 
 	req := models.DetailRequest{
 		ListRequest: models.ListRequest{
@@ -190,7 +190,7 @@ func TestFindContext_NoTrafficWindow(t *testing.T) {
 }
 
 func TestFindContext_BaselineVersion(t *testing.T) {
-	rows := makeRows("svc", "prod",
+	rows := makeRows(
 		ver("1.0.0", t0),
 		ver("1.1.0", t1),
 	)
@@ -218,7 +218,7 @@ func TestFindContext_BaselineVersion(t *testing.T) {
 
 func TestFindContext_NoBaseline(t *testing.T) {
 	// First deployment has no baseline.
-	rows := makeRows("svc", "prod", ver("1.0.0", t0))
+	rows := makeRows(ver("1.0.0", t0))
 
 	req := models.DetailRequest{
 		ListRequest:    models.ListRequest{TenantID: 1, StartMs: ms(t0), EndMs: ms(t2)},

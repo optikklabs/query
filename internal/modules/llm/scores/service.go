@@ -55,7 +55,7 @@ func (s *Service) Names(ctx context.Context, tenantID, startMs, endMs int64) (Sc
 	}
 	names := make([]ScoreName, len(rows))
 	for i, r := range rows {
-		names[i] = ScoreName{Name: r.Name, DataType: r.DataType}
+		names[i] = ScoreName(r)
 	}
 	return ScoreNamesResponse{Names: names}, nil
 }
@@ -67,7 +67,7 @@ func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (
 	}
 	out := make([]ScoreSummary, len(rows))
 	for i, r := range rows {
-		out[i] = ScoreSummary{Name: r.Name, DataType: r.DataType, Count: r.Count, Mean: r.Mean}
+		out[i] = ScoreSummary(r)
 	}
 	return ScoreSummaryResponse{Summaries: out}, nil
 }

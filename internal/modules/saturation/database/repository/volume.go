@@ -21,7 +21,7 @@ func (r *Repository) GetOpsBySystem(ctx context.Context, tenantID, startMs, endM
 	filterWhere, filterArgs := filter.BuildMetricsClauses(f)
 
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQLForRange(startMs, endMs) + ` AS time_bucket,
+		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS time_bucket,
 		       db_system                                        AS group_by,
 		       sum(request_count) / @bucketGrainSec             AS ops_per_sec
 		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `

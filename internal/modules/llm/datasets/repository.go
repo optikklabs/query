@@ -82,8 +82,8 @@ func (r *Repository) AddItems(ctx context.Context, tenantID, datasetID int64, it
 			INSERT INTO optikk.llm_dataset_items
 			  (dataset_id, tenant_id, input_json, expected_output_json, metadata_json, created_at)
 			VALUES (?, ?, ?, ?, ?, ?)`,
-			datasetID, tenantID, rawOrDefault(it.Input, "{}"),
-			nullableRaw(it.ExpectedOutput), rawOrDefault(it.Metadata, "{}"), now); err != nil {
+			datasetID, tenantID, rawOrEmptyObject(it.Input),
+			nullableRaw(it.ExpectedOutput), rawOrEmptyObject(it.Metadata), now); err != nil {
 			return 0, err
 		}
 	}
@@ -135,9 +135,9 @@ func (r *Repository) DatasetExists(ctx context.Context, tenantID, id int64) (boo
 	return n > 0, err
 }
 
-func rawOrDefault(raw []byte, def string) []byte {
+func rawOrEmptyObject(raw []byte) []byte {
 	if len(raw) == 0 {
-		return []byte(def)
+		return []byte("{}")
 	}
 	return raw
 }

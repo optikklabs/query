@@ -51,7 +51,7 @@ func (s *Service) Overview(ctx context.Context, tenantID, startMs, endMs int64) 
 
 	return OverviewResponse{
 		Summary:             s.summaryFromUsage(logs, spans, metrics, active, top, startMs, endMs),
-		Cost:                s.costFromUsage(logs, spans, metrics, startMs, endMs),
+		Cost:                s.costFromUsage(logs, spans, metrics, endMs),
 		TimeseriesByType:    timeseriesByType(logs, spans, metrics, dates, idx),
 		TimeseriesByService: timeseriesByServiceRows(usage.dailyLogs, usage.dailySpans, dates, idx),
 		Services: servicesFromUsage(

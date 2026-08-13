@@ -35,12 +35,7 @@ type openAIChatResponse struct {
 }
 
 func (c *openAIClient) Complete(ctx context.Context, apiKey string, req CompletionRequest) (CompletionResult, error) {
-	body, err := json.Marshal(openAIChatRequest{
-		Model:       req.Model,
-		Messages:    req.Messages,
-		Temperature: req.Temperature,
-		MaxTokens:   req.MaxTokens,
-	})
+	body, err := json.Marshal(openAIChatRequest(req))
 	if err != nil {
 		return CompletionResult{}, err
 	}

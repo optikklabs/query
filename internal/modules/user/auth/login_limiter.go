@@ -7,8 +7,8 @@ import (
 )
 
 // loginAttempts locks out repeated failed logins per (email, IP) to slow
-// credential stuffing. Distinct from the per-IP middleware rate limit, which
-// throttles request volume regardless of outcome.
+// credential stuffing. Distinct from Traefik's per-IP rate limit, which
+// throttles request volume regardless of outcome at the network edge.
 type loginAttempts struct {
 	mu      sync.Mutex
 	entries map[string]attempt

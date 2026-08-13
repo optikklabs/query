@@ -23,7 +23,7 @@ type LatencyRaw struct {
 func (r *Repository) GetLatencyBySystem(ctx context.Context, tenantID, startMs, endMs int64, f filter.Filters) ([]LatencyRaw, error) {
 	filterWhere, filterArgs := filter.BuildMetricsClauses(f)
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQLForRange(startMs, endMs) + ` AS bucket_at,
+		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       db_system                                        AS group_by,
 		       arrayMap(x -> toFloat32(x), quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state)) AS qs
 		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `

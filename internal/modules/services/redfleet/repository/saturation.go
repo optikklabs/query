@@ -56,7 +56,7 @@ func (r *Repository) GetServiceSaturationTimeSeries(
 ) ([]models.SaturationPointRow, error) {
 	query := saturationCTEs(startMs, endMs) + `
 		SELECT
-		    ` + timebucket.DisplayGrainSQLForRange(startMs, endMs) + ` AS bucket_at,
+		    ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		    sum(val_sum) / sum(val_count) AS value
 		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID

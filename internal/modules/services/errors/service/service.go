@@ -43,7 +43,7 @@ func fillServicePoints(
 	startMs, endMs int64, serviceName string, raw []models.RawServiceRateRow,
 	point func(t time.Time, row models.RawServiceRateRow, ok bool) models.TimeSeriesPoint,
 ) []models.TimeSeriesPoint {
-	grain := timebucket.DisplayGrainForRange(startMs, endMs)
+	grain := timebucket.DisplayGrain(endMs - startMs)
 	at := func(r models.RawServiceRateRow) time.Time { return r.BucketAt }
 
 	if serviceName != "" {
@@ -163,13 +163,7 @@ func (s *Service) GetErrorGroupTraces(ctx context.Context, tenantID int64, start
 	})
 	traces := make([]models.ErrorGroupTrace, len(raw))
 	for i, row := range raw {
-		traces[i] = models.ErrorGroupTrace{
-			TraceID:    row.TraceID,
-			SpanID:     row.SpanID,
-			Timestamp:  row.Timestamp,
-			DurationMs: row.DurationMs,
-			StatusCode: row.StatusCode,
-		}
+		traces[i] = models.ErrorGroupTrace(row)
 	}
 	return models.PaginatedErrorTraces{Results: traces, PageInfo: pageInfo}, nil
 }

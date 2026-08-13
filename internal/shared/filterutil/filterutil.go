@@ -108,7 +108,7 @@ type SuggestionRow struct {
 func MapSuggestionRows(rows []SuggestionRow) []Suggestion {
 	out := make([]Suggestion, len(rows))
 	for i, row := range rows {
-		out[i] = Suggestion{Value: row.Value, Count: row.Count}
+		out[i] = Suggestion(row)
 	}
 	return out
 }

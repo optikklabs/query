@@ -45,7 +45,7 @@ func (r *Repository) CreateRun(ctx context.Context, in RunInsert) (int64, error)
 		   status, item_count, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)`,
 		in.DatasetID, in.TenantID, in.Name, in.Provider, in.Model, in.PromptVersionID,
-		rawOrDefault(in.ParamsJSON, "{}"), in.ItemCount, time.Now().UTC())
+		rawOrEmptyObject(in.ParamsJSON), in.ItemCount, time.Now().UTC())
 	if err != nil {
 		return 0, err
 	}
@@ -58,7 +58,7 @@ func (r *Repository) InsertRunItem(ctx context.Context, in RunItemInsert) error 
 		  (run_id, tenant_id, dataset_item_id, output_json, latency_ms, cost_usd, scores_json, error, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		in.RunID, in.TenantID, in.DatasetItemID, nullableRaw(in.OutputJSON),
-		in.LatencyMs, in.CostUsd, rawOrDefault(in.ScoresJSON, "{}"), in.Error, time.Now().UTC())
+		in.LatencyMs, in.CostUsd, rawOrEmptyObject(in.ScoresJSON), in.Error, time.Now().UTC())
 	return err
 }
 
@@ -68,7 +68,7 @@ func (r *Repository) FinalizeRun(ctx context.Context, runID int64, f RunFinal) e
 		   SET status = ?, avg_scores_json = ?, total_cost_usd = ?, avg_latency_ms = ?,
 		       error = ?, completed_at = ?
 		 WHERE id = ?`,
-		f.Status, rawOrDefault(f.AvgScoresJSON, "{}"), f.TotalCostUsd, f.AvgLatencyMs,
+		f.Status, rawOrEmptyObject(f.AvgScoresJSON), f.TotalCostUsd, f.AvgLatencyMs,
 		f.Error, time.Now().UTC(), runID)
 	return err
 }

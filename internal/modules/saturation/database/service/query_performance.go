@@ -77,7 +77,7 @@ func (s *Service) GetQueryPerformanceSeries(
 		return models.QueryPerformanceResponse{}, err
 	}
 	response := models.QueryPerformanceResponse{
-		BucketSizeSeconds: int64(timebucket.DisplayGrainForRange(startMs, endMs).Seconds()),
+		BucketSizeSeconds: int64(timebucket.DisplayGrain(endMs - startMs).Seconds()),
 		Series:            make([]models.QueryPerformanceSeries, len(queries)),
 		Truncated:         truncated,
 	}

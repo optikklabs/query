@@ -2,11 +2,46 @@ package httputil
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
+
+func TestClientIPTrustsOnlyTraefikXFFEntry(t *testing.T) {
+	router := chi.NewRouter()
+	router.Use(middleware.ClientIPFromXFFTrustedProxies(1))
+	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, ClientIP(r))
+	})
+
+	for _, tc := range []struct {
+		name       string
+		xff        string
+		remoteAddr string
+		want       string
+	}{
+		{name: "proxy address", xff: "203.0.113.9", remoteAddr: "10.0.0.2:1234", want: "203.0.113.9"},
+		{name: "spoofed prefix", xff: "192.0.2.1, 203.0.113.9", remoteAddr: "10.0.0.2:1234", want: "203.0.113.9"},
+		{name: "direct fallback", remoteAddr: "198.51.100.4:1234", want: "198.51.100.4"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.RemoteAddr = tc.remoteAddr
+			if tc.xff != "" {
+				req.Header.Set("X-Forwarded-For", tc.xff)
+			}
+			resp := httptest.NewRecorder()
+			router.ServeHTTP(resp, req)
+			if got := resp.Body.String(); got != tc.want {
+				t.Fatalf("ClientIP() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestParseIDParam(t *testing.T) {
 	for _, tc := range []struct {

@@ -7,20 +7,21 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 )
 
-const BucketSeconds int64 = 300
-
 func DisplayGrain(windowMs int64) time.Duration {
-	sec := GrainSecondsFor(displayGrainLadder, windowMs/1000)
-	return time.Duration(sec) * time.Second
+	return time.Duration(displayGrainSeconds(windowMs)) * time.Second
 }
 
-const MaxBucketPoints int64 = 300
+const maxBucketPoints int64 = 300
 
 var displayGrainLadder = []int64{60, 300, 3600, 86400}
 
-func GrainSecondsFor(ladder []int64, windowSeconds int64) int64 {
+func displayGrainSeconds(windowMs int64) int64 {
+	return grainSecondsFor(displayGrainLadder, windowMs/1000)
+}
+
+func grainSecondsFor(ladder []int64, windowSeconds int64) int64 {
 	for _, g := range ladder {
-		if windowSeconds/g <= MaxBucketPoints {
+		if windowSeconds/g <= maxBucketPoints {
 			return g
 		}
 	}
@@ -28,14 +29,14 @@ func GrainSecondsFor(ladder []int64, windowSeconds int64) int64 {
 }
 
 func DisplayGrainSQL(windowMs int64) string {
-	return GrainSQL(int64(DisplayGrain(windowMs).Seconds()))
+	return GrainSQL(displayGrainSeconds(windowMs))
 }
 
 func RollupTableForGrain(grainSec int64) string {
-	switch {
-	case grainSec < 300:
+	switch rollupGrainSeconds(grainSec) {
+	case 60:
 		return "optikk.metrics_1m_v2"
-	case grainSec < 3600:
+	case 300:
 		return "optikk.metrics_5m_v2"
 	default:
 		return "optikk.metrics_1h_v2"
@@ -54,14 +55,18 @@ func FloorMsToBucket(ms, bucketSec int64) int64 {
 }
 
 func MetricsRollup(startMs, endMs int64) string {
-	return RollupTableForGrain(int64(DisplayGrain(endMs - startMs).Seconds()))
+	return RollupTableForGrain(displayGrainSeconds(endMs - startMs))
 }
 
 func RollupGrainSeconds(windowMs int64) int64 {
-	switch grain := int64(DisplayGrain(windowMs).Seconds()); {
-	case grain < 300:
+	return rollupGrainSeconds(displayGrainSeconds(windowMs))
+}
+
+func rollupGrainSeconds(grainSec int64) int64 {
+	switch {
+	case grainSec < 300:
 		return 60
-	case grain < 3600:
+	case grainSec < 3600:
 		return 300
 	default:
 		return 3600
@@ -69,7 +74,7 @@ func RollupGrainSeconds(windowMs int64) int64 {
 }
 
 func SpanStatsRollup(startMs, endMs int64) string {
-	switch int64(DisplayGrain(endMs - startMs).Seconds()) {
+	switch RollupGrainSeconds(endMs - startMs) {
 	case 60:
 		return "optikk.span_stats_1m"
 	case 300:
@@ -79,20 +84,8 @@ func SpanStatsRollup(startMs, endMs int64) string {
 	}
 }
 
-func DisplayGrainForRange(startMs, endMs int64) time.Duration {
-	return DisplayGrain(endMs - startMs)
-}
-
-func DisplayGrainSQLForRange(startMs, endMs int64) string {
-	return GrainSQL(int64(DisplayGrainForRange(startMs, endMs).Seconds()))
-}
-
 func WithBucketGrainSec(args []any, startMs, endMs int64) []any {
-	sec := int64(DisplayGrainForRange(startMs, endMs).Seconds())
-	if sec <= 0 {
-		sec = 60
-	}
-	return append(args, clickhouse.Named("bucketGrainSec", sec))
+	return append(args, clickhouse.Named("bucketGrainSec", displayGrainSeconds(endMs-startMs)))
 }
 
 func DenseBuckets(startMs, endMs int64, grain time.Duration) []time.Time {

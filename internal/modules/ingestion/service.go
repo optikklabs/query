@@ -133,7 +133,7 @@ func (s *Service) summaryFromUsage(
 
 func (s *Service) costFromUsage(
 	logs, spans, metrics []dateCountRow,
-	startMs, endMs int64,
+	endMs int64,
 ) CostResponse {
 	var logsBytes, spansBytes, metricSamples uint64
 	for _, row := range logs {
