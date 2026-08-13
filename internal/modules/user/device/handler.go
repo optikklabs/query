@@ -8,7 +8,7 @@ import (
 	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	"github.com/optikklabs/query/internal/shared/errorcode"
-	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
+	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
 type Handler struct {
@@ -26,13 +26,13 @@ func (h *Handler) DeviceCode(w http.ResponseWriter, r *http.Request) {
 		shared.RespondServiceError(w, r, err, "Failed to start device authorization")
 		return
 	}
-	modulecommon.RespondOK(w, resp)
+	httputil.RespondOK(w, resp)
 }
 
 func (h *Handler) DeviceToken(w http.ResponseWriter, r *http.Request) {
 	var req DeviceTokenRequest
-	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "device_code is required", nil)
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "device_code is required", nil)
 		return
 	}
 
@@ -40,13 +40,13 @@ func (h *Handler) DeviceToken(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		h.Tokens.SetRefreshCookie(w, refresh)
-		modulecommon.RespondOK(w, DeviceTokenResponse{Status: "complete", Session: &session})
+		httputil.RespondOK(w, DeviceTokenResponse{Status: "complete", Session: &session})
 	case errors.Is(err, ErrDeviceAuthPending):
-		modulecommon.RespondOK(w, DeviceTokenResponse{Status: "authorization_pending"})
+		httputil.RespondOK(w, DeviceTokenResponse{Status: "authorization_pending"})
 	case errors.Is(err, ErrDeviceSlowDown):
-		modulecommon.RespondOK(w, DeviceTokenResponse{Status: "slow_down"})
+		httputil.RespondOK(w, DeviceTokenResponse{Status: "slow_down"})
 	case errors.Is(err, ErrDeviceExpired):
-		modulecommon.RespondOK(w, DeviceTokenResponse{Status: "expired_token"})
+		httputil.RespondOK(w, DeviceTokenResponse{Status: "expired_token"})
 	default:
 		shared.RespondServiceError(w, r, err, "Failed to poll device token")
 	}
@@ -54,15 +54,15 @@ func (h *Handler) DeviceToken(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeviceApprove(w http.ResponseWriter, r *http.Request) {
 	var req DeviceApproveRequest
-	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "user_code is required", nil)
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "user_code is required", nil)
 		return
 	}
 
 	userCode := strings.ToUpper(strings.TrimSpace(req.UserCode))
-	if err := h.Service.ApproveDeviceCode(r.Context(), userCode, modulecommon.Tenant(r).UserID); err != nil {
+	if err := h.Service.ApproveDeviceCode(r.Context(), userCode, httputil.Tenant(r).UserID); err != nil {
 		shared.RespondServiceError(w, r, err, "Failed to approve device")
 		return
 	}
-	modulecommon.RespondOK(w, shared.MessageResponse{Message: "Device approved. Return to your terminal."})
+	httputil.RespondOK(w, shared.MessageResponse{Message: "Device approved. Return to your terminal."})
 }

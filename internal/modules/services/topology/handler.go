@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
+	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
 type Handler struct {
@@ -13,7 +13,7 @@ type Handler struct {
 
 func (h *Handler) GetTopology(w http.ResponseWriter, r *http.Request) {
 	service := r.URL.Query().Get("service")
-	modulecommon.HandleRangeQuery(w, r, "Failed to build service topology", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+	httputil.HandleRangeQuery(w, r, "Failed to build service topology", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetTopology(ctx, tenantID, startMs, endMs, service)
 	})
 }

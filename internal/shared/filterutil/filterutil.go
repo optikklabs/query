@@ -53,7 +53,7 @@ func ValidateAttrs(attrs []AttrFilter) error {
 			}
 		case "regex":
 			if _, err := regexp.Compile(af.Value); err != nil {
-				return fmt.Errorf("filters: attribute %q: invalid regex: %v", af.Key, err)
+				return fmt.Errorf("filters: attribute %q: invalid regex: %w", af.Key, err)
 			}
 		}
 	}

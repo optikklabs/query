@@ -2,12 +2,10 @@ package users
 
 import (
 	"net/http"
-	"strconv"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	"github.com/optikklabs/query/internal/shared/errorcode"
-	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
+	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
 type Handler struct {
@@ -19,15 +17,15 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	tenant := modulecommon.Tenant(r)
+	tenant := httputil.Tenant(r)
 	if tenant.TenantID == 0 {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return
 	}
 
 	var req CreateUserRequest
-	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "email and name are required", nil)
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "email and name are required", nil)
 		return
 	}
 
@@ -36,25 +34,24 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		shared.RespondServiceError(w, r, err, "Failed to create user")
 		return
 	}
-	modulecommon.RespondOK(w, user)
+	httputil.RespondOK(w, user)
 }
 
 func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
-	tenant := modulecommon.Tenant(r)
+	tenant := httputil.Tenant(r)
 	if tenant.TenantID == 0 {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return
 	}
 
-	userID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || userID <= 0 {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "A valid user id is required", nil)
+	userID, ok := httputil.ParseIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var req UpdateRoleRequest
-	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "role is required", nil)
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "role is required", nil)
 		return
 	}
 
@@ -63,13 +60,13 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		shared.RespondServiceError(w, r, err, "Failed to update user role")
 		return
 	}
-	modulecommon.RespondOK(w, user)
+	httputil.RespondOK(w, user)
 }
 
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	tenant := modulecommon.Tenant(r)
+	tenant := httputil.Tenant(r)
 	if tenant.TenantID == 0 {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return
 	}
 
@@ -78,19 +75,18 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		shared.RespondServiceError(w, r, err, "Failed to list users")
 		return
 	}
-	modulecommon.RespondOK(w, users)
+	httputil.RespondOK(w, users)
 }
 
 func (h *Handler) RemoveUser(w http.ResponseWriter, r *http.Request) {
-	tenant := modulecommon.Tenant(r)
+	tenant := httputil.Tenant(r)
 	if tenant.TenantID == 0 {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return
 	}
 
-	userID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || userID <= 0 {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "A valid user id is required", nil)
+	userID, ok := httputil.ParseIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -98,5 +94,5 @@ func (h *Handler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		shared.RespondServiceError(w, r, err, "Failed to remove user")
 		return
 	}
-	modulecommon.RespondOK(w, shared.MessageResponse{Message: "User deactivated"})
+	httputil.RespondOK(w, shared.MessageResponse{Message: "User deactivated"})
 }

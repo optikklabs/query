@@ -110,7 +110,7 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest) (SignupResult, 
 
 	if s.verificationRequired {
 		if err := s.sender.SendVerification(ctx, normalized.email, secrets.verificationToken); err != nil {
-			return SignupResult{}, fmt.Errorf("Failed to send verification email: %w", err)
+			return SignupResult{}, fmt.Errorf("failed to send verification email: %w", err)
 		}
 		slog.InfoContext(ctx, "AUTH_EVENT signup_success",
 			slog.Int64("user_id", user.ID), slog.Int64("tenant_id", user.TenantID), slog.String("email", user.Email))
@@ -134,10 +134,10 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) (auth.LoginR
 	}
 	apiKey, err := shared.GenerateAPIKey()
 	if err != nil {
-		return auth.LoginResponse{}, "", "", fmt.Errorf("Failed to create API key: %w", err)
+		return auth.LoginResponse{}, "", "", fmt.Errorf("failed to create API key: %w", err)
 	}
 	if err := s.repo.RotateTenantAPIKey(ctx, user.TenantID, apiKey); err != nil {
-		return auth.LoginResponse{}, "", "", fmt.Errorf("Failed to activate account: %w", err)
+		return auth.LoginResponse{}, "", "", fmt.Errorf("failed to activate account: %w", err)
 	}
 	session, refresh, err := s.issuer.IssueTokens(ctx, user)
 	if err != nil {
@@ -149,13 +149,13 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) (auth.LoginR
 func (s *Service) prepareSignupSecrets(password string) (signupSecrets, error) {
 	hash, err := shared.HashPassword(password)
 	if err != nil {
-		return signupSecrets{}, fmt.Errorf("Failed to hash password: %w", err)
+		return signupSecrets{}, fmt.Errorf("failed to hash password: %w", err)
 	}
 	secrets := signupSecrets{passwordHash: hash}
 	if !s.verificationRequired {
 		apiKey, err := shared.GenerateAPIKey()
 		if err != nil {
-			return signupSecrets{}, fmt.Errorf("Failed to generate api key: %w", err)
+			return signupSecrets{}, fmt.Errorf("failed to generate api key: %w", err)
 		}
 		secrets.apiKey = apiKey
 		return secrets, nil
@@ -164,12 +164,12 @@ func (s *Service) prepareSignupSecrets(password string) (signupSecrets, error) {
 	// rotates it); until then store an unusable revoked sentinel.
 	sentinel, err := shared.GenerateRevokedKey()
 	if err != nil {
-		return signupSecrets{}, fmt.Errorf("Failed to generate api key: %w", err)
+		return signupSecrets{}, fmt.Errorf("failed to generate api key: %w", err)
 	}
 	secrets.apiKey = sentinel
 	token, err := shared.GenerateDeviceCode()
 	if err != nil {
-		return signupSecrets{}, fmt.Errorf("Failed to generate verification token: %w", err)
+		return signupSecrets{}, fmt.Errorf("failed to generate verification token: %w", err)
 	}
 	sum := sha256.Sum256([]byte(token))
 	secrets.verificationToken = token
@@ -197,7 +197,7 @@ func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, sec
 		return user, nil
 	}
 	if !IsDuplicateEmail(err) {
-		return shared.AuthUser{}, fmt.Errorf("Failed to create account: %w", err)
+		return shared.AuthUser{}, fmt.Errorf("failed to create account: %w", err)
 	}
 
 	user, updateErr := s.repo.UpdateUnverifiedTenantAndAdmin(ctx, signupRow)
@@ -205,7 +205,7 @@ func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, sec
 		if errors.Is(updateErr, ErrAlreadyVerified) {
 			return shared.AuthUser{}, errorcode.ConflictError{Msg: "An account with this email already exists"}
 		}
-		return shared.AuthUser{}, fmt.Errorf("Failed to update unverified account: %w", updateErr)
+		return shared.AuthUser{}, fmt.Errorf("failed to update unverified account: %w", updateErr)
 	}
 	return user, nil
 }

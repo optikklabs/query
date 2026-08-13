@@ -80,11 +80,11 @@ func (s *Service) issueTokens(ctx context.Context, user shared.AuthUser, familyI
 
 	raw, hash, err := token.GenerateRefreshToken()
 	if err != nil {
-		return LoginResponse{}, "", fmt.Errorf("Failed to issue refresh token: %w", err)
+		return LoginResponse{}, "", fmt.Errorf("failed to issue refresh token: %w", err)
 	}
 	expiresAt := time.Now().UTC().Add(s.tokens.RefreshTTL())
 	if err := s.repo.InsertRefreshToken(ctx, user.ID, familyID, hash, expiresAt); err != nil {
-		return LoginResponse{}, "", fmt.Errorf("Failed to issue refresh token: %w", err)
+		return LoginResponse{}, "", fmt.Errorf("failed to issue refresh token: %w", err)
 	}
 
 	return LoginResponse{AuthContextResponse: response, AccessToken: access}, raw, nil
@@ -99,7 +99,7 @@ func (s *Service) signAccess(user shared.AuthUser, tenantID int64) (string, erro
 		TenantIDs:       []int64{tenantID},
 	})
 	if err != nil {
-		return "", fmt.Errorf("Failed to issue access token: %w", err)
+		return "", fmt.Errorf("failed to issue access token: %w", err)
 	}
 	return access, nil
 }
@@ -180,7 +180,7 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 
 			return nil
 		}
-		return fmt.Errorf("Failed to lookup user: %w", err)
+		return fmt.Errorf("failed to lookup user: %w", err)
 	}
 
 	hash := ""
@@ -190,11 +190,11 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 
 	resetToken, err := s.tokens.SignPasswordReset(user.ID, hash)
 	if err != nil {
-		return fmt.Errorf("Failed to generate reset token: %w", err)
+		return fmt.Errorf("failed to generate reset token: %w", err)
 	}
 
 	if err := s.sender.SendPasswordReset(ctx, user.Email, resetToken); err != nil {
-		return fmt.Errorf("Failed to send password reset email: %w", err)
+		return fmt.Errorf("failed to send password reset email: %w", err)
 	}
 
 	slog.InfoContext(ctx, "AUTH_EVENT forgot_password_requested", slog.Int64("user_id", user.ID))
@@ -228,11 +228,11 @@ func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPasswor
 
 	newHash, err := shared.HashPassword(newPassword)
 	if err != nil {
-		return fmt.Errorf("Failed to hash password: %w", err)
+		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	if err := s.repo.UpdatePasswordAndRevokeSessions(ctx, userID, newHash); err != nil {
-		return fmt.Errorf("Failed to update password and revoke existing sessions: %w", err)
+		return fmt.Errorf("failed to update password and revoke existing sessions: %w", err)
 	}
 
 	slog.InfoContext(ctx, "AUTH_EVENT password_reset_success", slog.Int64("user_id", userID))
@@ -246,7 +246,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, currentPassw
 
 	user, err := s.repo.FindAuthUserByID(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("Failed to lookup user: %w", err)
+		return fmt.Errorf("failed to lookup user: %w", err)
 	}
 
 	if !shared.PasswordIsValid(user.PasswordHash, currentPassword) {
@@ -255,11 +255,11 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, currentPassw
 
 	newHash, err := shared.HashPassword(newPassword)
 	if err != nil {
-		return fmt.Errorf("Failed to hash password: %w", err)
+		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	if err := s.repo.UpdatePasswordAndRevokeSessions(ctx, userID, newHash); err != nil {
-		return fmt.Errorf("Failed to update password and revoke existing sessions: %w", err)
+		return fmt.Errorf("failed to update password and revoke existing sessions: %w", err)
 	}
 
 	slog.InfoContext(ctx, "AUTH_EVENT password_changed", slog.Int64("user_id", userID))

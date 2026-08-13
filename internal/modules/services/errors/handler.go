@@ -10,7 +10,7 @@ import (
 	"github.com/optikklabs/query/internal/modules/services/errors/service"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 
-	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
+	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
 type ErrorHandler struct {
@@ -19,53 +19,53 @@ type ErrorHandler struct {
 
 func (h *ErrorHandler) GetServiceErrorRate(w http.ResponseWriter, r *http.Request) {
 	serviceName := r.URL.Query().Get("serviceName")
-	modulecommon.HandleRangeQuery(w, r, "Failed to query service error rate", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+	httputil.HandleRangeQuery(w, r, "Failed to query service error rate", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetServiceErrorRate(ctx, tenantID, startMs, endMs, serviceName)
 	})
 }
 
 func (h *ErrorHandler) QueryErrorGroups(w http.ResponseWriter, r *http.Request) {
 	var req models.GroupsRequest
-	if !modulecommon.BindFiltered(w, r, &req) {
+	if !httputil.BindFiltered(w, r, &req) {
 		return
 	}
 	resp, err := h.Service.QueryErrorGroups(r.Context(), req)
 	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error groups", err)
+		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error groups", err)
 		return
 	}
-	modulecommon.RespondOK(w, resp)
+	httputil.RespondOK(w, resp)
 }
 
 func (h *ErrorHandler) QueryErrorFacets(w http.ResponseWriter, r *http.Request) {
 	var req models.FacetsRequest
-	if !modulecommon.BindFiltered(w, r, &req) {
+	if !httputil.BindFiltered(w, r, &req) {
 		return
 	}
 	resp, err := h.Service.QueryErrorFacets(r.Context(), req)
 	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error facets", err)
+		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error facets", err)
 		return
 	}
-	modulecommon.RespondOK(w, resp)
+	httputil.RespondOK(w, resp)
 }
 
 func (h *ErrorHandler) QueryErrorOverview(w http.ResponseWriter, r *http.Request) {
 	var req models.OverviewRequest
-	if !modulecommon.BindFiltered(w, r, &req) {
+	if !httputil.BindFiltered(w, r, &req) {
 		return
 	}
 	resp, err := h.Service.QueryErrorOverview(r.Context(), req)
 	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error overview", err)
+		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error overview", err)
 		return
 	}
-	modulecommon.RespondOK(w, resp)
+	httputil.RespondOK(w, resp)
 }
 
 func (h *ErrorHandler) GetErrorGroupDetail(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "groupId")
-	modulecommon.HandleRangeQuery(w, r, "Failed to query error group detail", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+	httputil.HandleRangeQuery(w, r, "Failed to query error group detail", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetErrorGroupDetail(ctx, tenantID, startMs, endMs, groupID)
 	})
 }
@@ -73,13 +73,13 @@ func (h *ErrorHandler) GetErrorGroupDetail(w http.ResponseWriter, r *http.Reques
 const maxTracesLimit = 20
 
 func (h *ErrorHandler) GetErrorGroupTraces(w http.ResponseWriter, r *http.Request) {
-	tenantID := modulecommon.Tenant(r).TenantID
+	tenantID := httputil.Tenant(r).TenantID
 	groupID := chi.URLParam(r, "groupId")
-	limit := modulecommon.ParseIntParam(r, "limit", maxTracesLimit)
+	limit := httputil.ParseIntParam(r, "limit", maxTracesLimit)
 	if limit < 1 || limit > maxTracesLimit {
 		limit = maxTracesLimit
 	}
-	startMs, endMs, ok := modulecommon.ParseRequiredRange(w, r)
+	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
@@ -92,35 +92,35 @@ func (h *ErrorHandler) GetErrorGroupTraces(w http.ResponseWriter, r *http.Reques
 
 	traces, err := h.Service.GetErrorGroupTraces(r.Context(), tenantID, startMs, endMs, groupID, limit, cur)
 	if err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error group traces", err)
+		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error group traces", err)
 		return
 	}
-	modulecommon.RespondOK(w, traces)
+	httputil.RespondOK(w, traces)
 }
 
 func (h *ErrorHandler) GetErrorGroupTimeseries(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "groupId")
-	modulecommon.HandleRangeQuery(w, r, "Failed to query error group timeseries", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+	httputil.HandleRangeQuery(w, r, "Failed to query error group timeseries", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetErrorGroupTimeseries(ctx, tenantID, startMs, endMs, groupID)
 	})
 }
 
 func (h *ErrorHandler) GetErrorGroupLatestOccurrence(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "groupId")
-	modulecommon.HandleRangeQuery(w, r, "Failed to query error group latest occurrence", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+	httputil.HandleRangeQuery(w, r, "Failed to query error group latest occurrence", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetErrorGroupLatestOccurrence(ctx, tenantID, startMs, endMs, groupID)
 	})
 }
 
 func (h *ErrorHandler) GetErrorGroupFacets(w http.ResponseWriter, r *http.Request) {
 	groupID := chi.URLParam(r, "groupId")
-	modulecommon.HandleRangeQuery(w, r, "Failed to query error group facets", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+	httputil.HandleRangeQuery(w, r, "Failed to query error group facets", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetErrorGroupFacets(ctx, tenantID, startMs, endMs, groupID)
 	})
 }
 
 func (h *ErrorHandler) GetErrorHotspot(w http.ResponseWriter, r *http.Request) {
-	modulecommon.HandleRangeQuery(w, r, "Failed to query error hotspot", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
+	httputil.HandleRangeQuery(w, r, "Failed to query error hotspot", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetErrorHotspot(ctx, tenantID, startMs, endMs)
 	})
 }

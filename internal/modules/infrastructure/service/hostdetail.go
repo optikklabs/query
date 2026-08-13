@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"math"
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
@@ -92,10 +91,11 @@ func aboutFromMeta(meta repository.HostMetaRow) *models.HostAbout {
 func foldKPIs(rows []repository.KPIRow, out *models.HostOverview) {
 	var cpuIdle, cpuPlain, memUsed, memPlain *float64
 	for _, row := range rows {
-		v := row.Value
-		if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+		nv := infraconsts.NormalizeUtilization(row.Value)
+		if nv == nil {
 			continue
 		}
+		v := *nv
 		switch row.MetricName {
 		case infraconsts.MetricSystemCPUUtilization:
 			switch row.State {
@@ -112,9 +112,8 @@ func foldKPIs(rows []repository.KPIRow, out *models.HostOverview) {
 				memPlain = ptr(v)
 			}
 		case infraconsts.MetricSystemFilesystemUtil:
-			pct := toPercent(v)
-			if out.DiskPct == nil || pct > *out.DiskPct {
-				out.DiskPct = ptr(pct)
+			if out.DiskPct == nil || v > *out.DiskPct {
+				out.DiskPct = ptr(v)
 			}
 		case infraconsts.MetricSystemCPULoadAvg1m:
 			out.Load1m = ptr(v)
@@ -128,20 +127,15 @@ func foldKPIs(rows []repository.KPIRow, out *models.HostOverview) {
 	}
 
 	if cpuIdle != nil {
-		out.CPUPct = ptr(toPercent(1 - *cpuIdle))
+		if nv := infraconsts.NormalizeUtilization(1 - *cpuIdle); nv != nil {
+			out.CPUPct = nv
+		}
 	} else if cpuPlain != nil {
-		out.CPUPct = ptr(toPercent(*cpuPlain))
+		out.CPUPct = cpuPlain
 	}
 	if memUsed != nil {
-		out.MemoryPct = ptr(toPercent(*memUsed))
+		out.MemoryPct = memUsed
 	} else if memPlain != nil {
-		out.MemoryPct = ptr(toPercent(*memPlain))
+		out.MemoryPct = memPlain
 	}
-}
-
-func toPercent(v float64) float64 {
-	if v <= infraconsts.PercentageThreshold {
-		return v * infraconsts.PercentageMultiplier
-	}
-	return v
 }

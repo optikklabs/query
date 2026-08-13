@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"math"
 
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
@@ -21,8 +20,7 @@ func (s *Service) GetAvgMemory(ctx context.Context, tenantID int64, startMs, end
 	return models.MetricValue{Value: *avg}, nil
 }
 
-func (s *Service) GetMemoryByInstance(ctx context.Context, tenantID int64, host, pod, container, serviceName string, startMs, endMs int64) (*float64, error) {
-	_ = container
+func (s *Service) GetMemoryByInstance(ctx context.Context, tenantID int64, host, pod, serviceName string, startMs, endMs int64) (*float64, error) {
 	rows, err := s.repo.QueryMemoryUtilizationForInstance(ctx, tenantID, startMs, endMs, host, pod, serviceName)
 	if err != nil {
 		return nil, err
@@ -37,16 +35,13 @@ func foldMemoryMetricRows(rows []repository.MemoryMetricNameRow) *float64 {
 	}
 	var values []float64
 	if v, ok := by[infraconsts.MetricSystemMemoryUtilization]; ok {
-		if !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 {
-			if v <= infraconsts.PercentageThreshold {
-				v = v * infraconsts.PercentageMultiplier
-			}
-			values = append(values, v)
+		if nv := infraconsts.NormalizeUtilization(v); nv != nil {
+			values = append(values, *nv)
 		}
 	}
 	if max := by[infraconsts.MetricJVMMemoryMax]; max > 0 {
 		used := by[infraconsts.MetricJVMMemoryUsed]
 		values = append(values, infraconsts.PercentageMultiplier*used/max)
 	}
-	return averageFloats(values)
+	return infraconsts.AverageUtilization(values)
 }

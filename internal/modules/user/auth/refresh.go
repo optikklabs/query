@@ -90,7 +90,7 @@ func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginRes
 		if errors.Is(err, sql.ErrNoRows) {
 			return LoginResponse{}, "", &notUsableError{reason: "unknown_token"}
 		}
-		return LoginResponse{}, "", fmt.Errorf("Failed to look up refresh token: %w", err)
+		return LoginResponse{}, "", fmt.Errorf("failed to look up refresh token: %w", err)
 	}
 
 	if time.Now().UTC().After(stored.ExpiresAt) {
@@ -111,7 +111,7 @@ func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginRes
 		if errors.Is(err, sql.ErrNoRows) {
 			return LoginResponse{}, "", &notUsableError{reason: "user_inactive"}
 		}
-		return LoginResponse{}, "", fmt.Errorf("Failed to load user for refresh: %w", err)
+		return LoginResponse{}, "", fmt.Errorf("failed to load user for refresh: %w", err)
 	}
 
 	authUser := shared.AuthUser{
@@ -136,11 +136,11 @@ func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginRes
 	if rotate {
 		raw, newHash, err := token.GenerateRefreshToken()
 		if err != nil {
-			return LoginResponse{}, "", fmt.Errorf("Failed to issue refresh token: %w", err)
+			return LoginResponse{}, "", fmt.Errorf("failed to issue refresh token: %w", err)
 		}
 		expiresAt := time.Now().UTC().Add(s.tokens.RefreshTTL())
 		if err := s.repo.RotateRefreshToken(ctx, hash, user.ID, stored.FamilyID, newHash, expiresAt); err != nil {
-			return LoginResponse{}, "", fmt.Errorf("Failed to rotate refresh token: %w", err)
+			return LoginResponse{}, "", fmt.Errorf("failed to rotate refresh token: %w", err)
 		}
 		newRefresh = raw
 	}

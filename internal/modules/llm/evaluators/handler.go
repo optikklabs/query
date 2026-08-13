@@ -2,9 +2,6 @@ package evaluators
 
 import (
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
@@ -29,6 +26,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondOK(w, map[string]any{"items": res})
 }
 
+
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req UpsertRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
@@ -45,7 +43,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r)
+	id, ok := httputil.ParseIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -63,7 +61,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r)
+	id, ok := httputil.ParseIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -72,15 +70,6 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.RespondOK(w, map[string]any{"deleted": id})
-}
-
-func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id <= 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid id", nil)
-		return 0, false
-	}
-	return id, true
 }
 
 func respondErr(w http.ResponseWriter, r *http.Request, err error) {

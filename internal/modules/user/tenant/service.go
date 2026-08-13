@@ -31,7 +31,7 @@ func (s *Service) IngestionEndpoints() IngestionEndpointsResponse {
 func (s *Service) RotateAPIKey(ctx context.Context, tenantID int64) (TenantResponse, error) {
 	apiKey, err := shared.GenerateAPIKey()
 	if err != nil {
-		return TenantResponse{}, fmt.Errorf("Failed to generate api key: %w", err)
+		return TenantResponse{}, fmt.Errorf("failed to generate api key: %w", err)
 	}
 	resp, err := s.setTenantAPIKey(ctx, tenantID, apiKey)
 	if err != nil {
@@ -44,18 +44,18 @@ func (s *Service) RotateAPIKey(ctx context.Context, tenantID int64) (TenantRespo
 func (s *Service) RevokeAPIKey(ctx context.Context, tenantID int64) (TenantResponse, error) {
 	sentinel, err := shared.GenerateRevokedKey()
 	if err != nil {
-		return TenantResponse{}, fmt.Errorf("Failed to revoke api key: %w", err)
+		return TenantResponse{}, fmt.Errorf("failed to revoke api key: %w", err)
 	}
 	return s.setTenantAPIKey(ctx, tenantID, sentinel)
 }
 
 func (s *Service) setTenantAPIKey(ctx context.Context, tenantID int64, apiKey string) (TenantResponse, error) {
 	if err := s.repo.UpdateTenantAPIKey(ctx, tenantID, shared.HashAPIKey(apiKey), shared.APIKeyPrefix(apiKey)); err != nil {
-		return TenantResponse{}, fmt.Errorf("Failed to update api key: %w", err)
+		return TenantResponse{}, fmt.Errorf("failed to update api key: %w", err)
 	}
 	tenant, err := s.repo.FindTenantByID(ctx, tenantID)
 	if err != nil {
-		return TenantResponse{}, fmt.Errorf("Failed to load tenant: %w", err)
+		return TenantResponse{}, fmt.Errorf("failed to load tenant: %w", err)
 	}
 	return toTenantResponse(tenant), nil
 }
@@ -72,11 +72,11 @@ func toTenantResponse(tenant shared.TenantRecord) TenantResponse {
 
 func (s *Service) DeactivateTenant(ctx context.Context, tenantID int64) (TenantResponse, error) {
 	if err := s.repo.DeactivateTenant(ctx, tenantID); err != nil {
-		return TenantResponse{}, fmt.Errorf("Failed to update tenant status: %w", err)
+		return TenantResponse{}, fmt.Errorf("failed to update tenant status: %w", err)
 	}
 	tenant, err := s.repo.FindTenantByID(ctx, tenantID)
 	if err != nil {
-		return TenantResponse{}, fmt.Errorf("Failed to load tenant: %w", err)
+		return TenantResponse{}, fmt.Errorf("failed to load tenant: %w", err)
 	}
 	return toTenantResponse(tenant), nil
 }

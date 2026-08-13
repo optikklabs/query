@@ -68,5 +68,5 @@ func foldCPUMetricRows(rows []repository.CPUMetricNameRow) *float64 {
 	if v, ok := byMetric[infraconsts.MetricProcessCPUUsage]; ok {
 		add(v)
 	}
-	return averageFloats(values)
+	return infraconsts.AverageUtilization(values)
 }

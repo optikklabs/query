@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/optikklabs/query/internal/shared/errorcode"
-	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
+	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
 // UnauthorizedError marks failed authentication; HTTP maps it to 401.
@@ -27,10 +27,10 @@ func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fail
 	)
 	switch {
 	case errors.As(err, &ua):
-		modulecommon.RespondErrorWithCause(w, r, http.StatusUnauthorized, errorcode.Unauthorized, ua.Msg, nil)
+		httputil.RespondErrorWithCause(w, r, http.StatusUnauthorized, errorcode.Unauthorized, ua.Msg, nil)
 	case errors.As(err, &te):
-		modulecommon.RespondErrorWithCause(w, r, http.StatusPaymentRequired, errorcode.TrialExpired, te.Msg, nil)
+		httputil.RespondErrorWithCause(w, r, http.StatusPaymentRequired, errorcode.TrialExpired, te.Msg, nil)
 	default:
-		modulecommon.RespondServiceError(w, r, err, failMsg)
+		httputil.RespondServiceError(w, r, err, failMsg)
 	}
 }

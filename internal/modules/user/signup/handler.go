@@ -7,7 +7,7 @@ import (
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	"github.com/optikklabs/query/internal/shared/errorcode"
-	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
+	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
 type Handler struct {
@@ -21,8 +21,8 @@ func NewHandler(service *Service, tokens *token.Service) *Handler {
 
 func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	var req SignupRequest
-	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid signup request", nil)
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid signup request", nil)
 		return
 	}
 
@@ -33,19 +33,19 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 	if response.Session != nil {
 		h.Tokens.SetRefreshCookie(w, response.RefreshToken)
-		modulecommon.RespondOK(w, struct {
+		httputil.RespondOK(w, struct {
 			auth.LoginResponse
 			APIKey string `json:"apiKey"`
 		}{*response.Session, response.APIKey})
 		return
 	}
-	modulecommon.RespondOK(w, SignupResponse{Message: response.Message})
+	httputil.RespondOK(w, SignupResponse{Message: response.Message})
 }
 
 func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req VerifyEmailRequest
-	if err := modulecommon.DecodeJSON(r, &req); err != nil {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid verification request", nil)
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid verification request", nil)
 		return
 	}
 	response, refresh, apiKey, err := h.Service.VerifyEmail(r.Context(), req.Token)
@@ -54,7 +54,7 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Tokens.SetRefreshCookie(w, refresh)
-	modulecommon.RespondOK(w, struct {
+	httputil.RespondOK(w, struct {
 		auth.LoginResponse
 		APIKey string `json:"apiKey"`
 	}{response, apiKey})

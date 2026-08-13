@@ -3,9 +3,6 @@ package providerkeys
 import (
 	"errors"
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
@@ -42,9 +39,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id <= 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid id", nil)
+	id, ok := httputil.ParseIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 	if err := h.svc.Delete(r.Context(), httputil.Tenant(r).TenantID, id); err != nil {

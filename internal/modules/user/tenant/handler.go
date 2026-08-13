@@ -5,7 +5,7 @@ import (
 
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	"github.com/optikklabs/query/internal/shared/errorcode"
-	modulecommon "github.com/optikklabs/query/internal/shared/httputil"
+	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
 type Handler struct {
@@ -17,15 +17,15 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) IngestionEndpoints(w http.ResponseWriter, r *http.Request) {
-	if modulecommon.Tenant(r).TenantID == 0 {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
+	if httputil.Tenant(r).TenantID == 0 {
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return
 	}
-	modulecommon.RespondOK(w, h.Service.IngestionEndpoints())
+	httputil.RespondOK(w, h.Service.IngestionEndpoints())
 }
 
 func (h *Handler) RotateAPIKey(w http.ResponseWriter, r *http.Request) {
-	tenant := modulecommon.Tenant(r)
+	tenant := httputil.Tenant(r)
 	if !h.requireTenantAdmin(w, r, tenant.TenantID, tenant.UserRole) {
 		return
 	}
@@ -34,11 +34,11 @@ func (h *Handler) RotateAPIKey(w http.ResponseWriter, r *http.Request) {
 		shared.RespondServiceError(w, r, err, "Unable to rotate api key")
 		return
 	}
-	modulecommon.RespondOK(w, resp)
+	httputil.RespondOK(w, resp)
 }
 
 func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
-	tenant := modulecommon.Tenant(r)
+	tenant := httputil.Tenant(r)
 	if !h.requireTenantAdmin(w, r, tenant.TenantID, tenant.UserRole) {
 		return
 	}
@@ -47,23 +47,23 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		shared.RespondServiceError(w, r, err, "Unable to revoke api key")
 		return
 	}
-	modulecommon.RespondOK(w, resp)
+	httputil.RespondOK(w, resp)
 }
 
 func (h *Handler) requireTenantAdmin(w http.ResponseWriter, r *http.Request, tenantID int64, role string) bool {
 	if tenantID == 0 {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
 		return false
 	}
 	if role != "admin" {
-		modulecommon.RespondErrorWithCause(w, r, http.StatusForbidden, errorcode.Forbidden, "Only tenant admins can manage this resource", nil)
+		httputil.RespondErrorWithCause(w, r, http.StatusForbidden, errorcode.Forbidden, "Only tenant admins can manage this resource", nil)
 		return false
 	}
 	return true
 }
 
 func (h *Handler) DeactivateTenant(w http.ResponseWriter, r *http.Request) {
-	tenant := modulecommon.Tenant(r)
+	tenant := httputil.Tenant(r)
 	if !h.requireTenantAdmin(w, r, tenant.TenantID, tenant.UserRole) {
 		return
 	}
@@ -72,5 +72,5 @@ func (h *Handler) DeactivateTenant(w http.ResponseWriter, r *http.Request) {
 		shared.RespondServiceError(w, r, err, "Unable to deactivate tenant")
 		return
 	}
-	modulecommon.RespondOK(w, resp)
+	httputil.RespondOK(w, resp)
 }
