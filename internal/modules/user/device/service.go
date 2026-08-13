@@ -75,7 +75,7 @@ func (s *Service) PollDeviceToken(ctx context.Context, deviceCode string) (auth.
 
 	user, err := s.repo.FindActiveUserByID(ctx, *record.UserID)
 	if err != nil {
-		return auth.LoginResponse{}, "", shared.UnauthorizedError{Msg: "Approved user is no longer active"}
+		return auth.LoginResponse{}, "", errorcode.UnauthorizedError{Msg: "Approved user is no longer active"}
 	}
 	if err := s.repo.ConsumeDeviceCode(ctx, deviceCode, now); err != nil {
 		return auth.LoginResponse{}, "", fmt.Errorf("failed to consume device code: %w", err)

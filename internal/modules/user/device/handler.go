@@ -23,7 +23,7 @@ func NewHandler(service *Service, tokens *token.Service) *Handler {
 func (h *Handler) DeviceCode(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.Service.StartDeviceAuth(r.Context())
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to start device authorization")
+		httputil.RespondServiceError(w, r, err, "Failed to start device authorization")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -48,7 +48,7 @@ func (h *Handler) DeviceToken(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, ErrDeviceExpired):
 		httputil.RespondOK(w, DeviceTokenResponse{Status: "expired_token"})
 	default:
-		shared.RespondServiceError(w, r, err, "Failed to poll device token")
+		httputil.RespondServiceError(w, r, err, "Failed to poll device token")
 	}
 }
 
@@ -61,7 +61,7 @@ func (h *Handler) DeviceApprove(w http.ResponseWriter, r *http.Request) {
 
 	userCode := strings.ToUpper(strings.TrimSpace(req.UserCode))
 	if err := h.Service.ApproveDeviceCode(r.Context(), userCode, httputil.Tenant(r).UserID); err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to approve device")
+		httputil.RespondServiceError(w, r, err, "Failed to approve device")
 		return
 	}
 	httputil.RespondOK(w, shared.MessageResponse{Message: "Device approved. Return to your terminal."})

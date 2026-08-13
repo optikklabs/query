@@ -2,9 +2,6 @@ package datasets
 
 import (
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
@@ -24,7 +21,7 @@ func (h *Handler) RunExperiment(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondErrorWithCause(w, r, http.StatusServiceUnavailable, errorcode.Unavailable, "experiments require provider keys to be configured", nil)
 		return
 	}
-	id, ok := parseID(w, r, "id")
+	id, ok := httputil.ParseIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -51,7 +48,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r, "id")
+	id, ok := httputil.ParseIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -79,7 +76,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r, "id")
+	id, ok := httputil.ParseIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -91,7 +88,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AddItems(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r, "id")
+	id, ok := httputil.ParseIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -109,7 +106,7 @@ func (h *Handler) AddItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetRun(w http.ResponseWriter, r *http.Request) {
-	runID, ok := parseID(w, r, "runId")
+	runID, ok := httputil.ParseIDParam(w, r, "runId")
 	if !ok {
 		return
 	}
@@ -121,14 +118,6 @@ func (h *Handler) GetRun(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondOK(w, res)
 }
 
-func parseID(w http.ResponseWriter, r *http.Request, key string) (int64, bool) {
-	id, err := strconv.ParseInt(chi.URLParam(r, key), 10, 64)
-	if err != nil || id <= 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid "+key, nil)
-		return 0, false
-	}
-	return id, true
-}
 
 func respondErr(w http.ResponseWriter, r *http.Request, err error) {
 	if IsProviderUnavailable(err) {

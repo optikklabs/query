@@ -102,12 +102,14 @@ func RespondErrorWithCause(w http.ResponseWriter, r *http.Request, status int, c
 }
 
 // RespondServiceError maps the shared service error kinds (validation,
-// not-found, conflict) to HTTP responses; other errors become failMsg 500s.
+// not-found, conflict, unauthorized, trial-expired) to HTTP responses; other errors become failMsg 500s.
 func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, failMsg string) {
 	var (
 		nf errorcode.NotFoundError
 		cf errorcode.ConflictError
 		ve errorcode.ValidationError
+		ua errorcode.UnauthorizedError
+		te errorcode.TrialExpiredError
 	)
 	switch {
 	case errors.As(err, &nf):
@@ -116,6 +118,10 @@ func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fail
 		RespondErrorWithCause(w, r, http.StatusConflict, errorcode.Conflict, cf.Msg, nil)
 	case errors.As(err, &ve):
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, ve.Msg, nil)
+	case errors.As(err, &ua):
+		RespondErrorWithCause(w, r, http.StatusUnauthorized, errorcode.Unauthorized, ua.Msg, nil)
+	case errors.As(err, &te):
+		RespondErrorWithCause(w, r, http.StatusPaymentRequired, errorcode.TrialExpired, te.Msg, nil)
 	default:
 		RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, failMsg, err)
 	}

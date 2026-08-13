@@ -3,7 +3,6 @@ package tenant
 import (
 	"net/http"
 
-	"github.com/optikklabs/query/internal/modules/user/shared"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
@@ -31,7 +30,7 @@ func (h *Handler) RotateAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.Service.RotateAPIKey(r.Context(), tenant.TenantID)
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Unable to rotate api key")
+		httputil.RespondServiceError(w, r, err, "Unable to rotate api key")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -44,7 +43,7 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.Service.RevokeAPIKey(r.Context(), tenant.TenantID)
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Unable to revoke api key")
+		httputil.RespondServiceError(w, r, err, "Unable to revoke api key")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -69,7 +68,7 @@ func (h *Handler) DeactivateTenant(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.Service.DeactivateTenant(r.Context(), tenant.TenantID)
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Unable to deactivate tenant")
+		httputil.RespondServiceError(w, r, err, "Unable to deactivate tenant")
 		return
 	}
 	httputil.RespondOK(w, resp)

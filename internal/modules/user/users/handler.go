@@ -31,7 +31,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.Service.CreateUser(r.Context(), req, tenant.TenantID)
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to create user")
+		httputil.RespondServiceError(w, r, err, "Failed to create user")
 		return
 	}
 	httputil.RespondOK(w, user)
@@ -57,7 +57,7 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.Service.SetUserRole(r.Context(), userID, tenant.TenantID, req.Role)
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to update user role")
+		httputil.RespondServiceError(w, r, err, "Failed to update user role")
 		return
 	}
 	httputil.RespondOK(w, user)
@@ -72,7 +72,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, err := h.Service.ListUsers(r.Context(), tenant.TenantID)
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to list users")
+		httputil.RespondServiceError(w, r, err, "Failed to list users")
 		return
 	}
 	httputil.RespondOK(w, users)
@@ -91,7 +91,7 @@ func (h *Handler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Service.RemoveUser(r.Context(), userID, tenant.TenantID); err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to remove user")
+		httputil.RespondServiceError(w, r, err, "Failed to remove user")
 		return
 	}
 	httputil.RespondOK(w, shared.MessageResponse{Message: "User deactivated"})

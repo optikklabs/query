@@ -154,7 +154,7 @@ func (s *Service) tenantForUser(ctx context.Context, tenantID int64) (AuthTenant
 	}
 	if !tenant.Active {
 		if tenant.AccountStatus == "suspended" {
-			return AuthTenantSummary{}, shared.TrialExpiredError{Msg: "Your free trial has ended. Add a payment method to resume."}
+			return AuthTenantSummary{}, errorcode.TrialExpiredError{Msg: "Your free trial has ended. Add a payment method to resume."}
 		}
 		return AuthTenantSummary{}, errorcode.ValidationError{Msg: "Account has no active tenant"}
 	}
@@ -208,12 +208,12 @@ func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPasswor
 
 	userID, err := s.tokens.ExtractSubjectWithoutVerify(tokenStr)
 	if err != nil {
-		return shared.UnauthorizedError{Msg: "Invalid reset token"}
+		return errorcode.UnauthorizedError{Msg: "Invalid reset token"}
 	}
 
 	user, err := s.repo.FindAuthUserByID(ctx, userID)
 	if err != nil {
-		return shared.UnauthorizedError{Msg: "Invalid reset token"}
+		return errorcode.UnauthorizedError{Msg: "Invalid reset token"}
 	}
 
 	hash := ""
@@ -223,7 +223,7 @@ func (s *Service) ResetPassword(ctx context.Context, tokenStr string, newPasswor
 
 	verifiedUserID, err := s.tokens.ParsePasswordReset(tokenStr, hash)
 	if err != nil || verifiedUserID != userID {
-		return shared.UnauthorizedError{Msg: "Invalid or expired reset token"}
+		return errorcode.UnauthorizedError{Msg: "Invalid or expired reset token"}
 	}
 
 	newHash, err := shared.HashPassword(newPassword)

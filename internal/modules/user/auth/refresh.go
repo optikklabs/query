@@ -10,6 +10,7 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/shared"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 type notUsableError struct {
@@ -80,7 +81,7 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 		slog.Int("candidates", len(refreshTokens)),
 		slog.Any("reasons", reasons),
 		slog.String("ip", clientIP))
-	return LoginResponse{}, "", shared.UnauthorizedError{Msg: "Invalid or expired refresh token"}
+	return LoginResponse{}, "", errorcode.UnauthorizedError{Msg: "Invalid or expired refresh token"}
 }
 
 func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginResponse, string, error) {

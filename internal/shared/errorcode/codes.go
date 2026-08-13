@@ -33,6 +33,16 @@ type ConflictError struct{ Msg string }
 
 func (e ConflictError) Error() string { return e.Msg }
 
+// UnauthorizedError marks failed authentication; HTTP maps it to 401.
+type UnauthorizedError struct{ Msg string }
+
+func (e UnauthorizedError) Error() string { return e.Msg }
+
+// TrialExpiredError marks suspended tenants; HTTP maps it to 402.
+type TrialExpiredError struct{ Msg string }
+
+func (e TrialExpiredError) Error() string { return e.Msg }
+
 const (
 	Internal    = "INTERNAL_ERROR"
 	QueryFailed = "QUERY_FAILED"

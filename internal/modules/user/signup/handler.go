@@ -5,7 +5,6 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/auth"
-	"github.com/optikklabs/query/internal/modules/user/shared"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
@@ -28,7 +27,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.Service.Signup(r.Context(), req)
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to create account")
+		httputil.RespondServiceError(w, r, err, "Failed to create account")
 		return
 	}
 	if response.Session != nil {
@@ -50,7 +49,7 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	}
 	response, refresh, apiKey, err := h.Service.VerifyEmail(r.Context(), req.Token)
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Unable to verify email")
+		httputil.RespondServiceError(w, r, err, "Unable to verify email")
 		return
 	}
 	h.Tokens.SetRefreshCookie(w, refresh)

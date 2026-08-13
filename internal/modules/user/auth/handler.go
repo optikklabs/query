@@ -31,7 +31,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	response, refresh, err := h.Service.Login(r.Context(), req, httputil.ClientIP(r))
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to login")
+		httputil.RespondServiceError(w, r, err, "Failed to login")
 		return
 	}
 	h.Tokens.SetRefreshCookie(w, refresh)
@@ -50,7 +50,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	response, newRefresh, err := h.Service.Refresh(r.Context(), candidates, httputil.ClientIP(r))
 	if err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to refresh token")
+		httputil.RespondServiceError(w, r, err, "Failed to refresh token")
 		return
 	}
 	if newRefresh != "" {
@@ -72,7 +72,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Service.ForgotPassword(r.Context(), req.Email); err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to process forgot password request")
+		httputil.RespondServiceError(w, r, err, "Failed to process forgot password request")
 		return
 	}
 	httputil.RespondOK(w, shared.MessageResponse{Message: "If your email is registered, a password reset link has been sent."})
@@ -85,7 +85,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Service.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to reset password")
+		httputil.RespondServiceError(w, r, err, "Failed to reset password")
 		return
 	}
 	httputil.RespondOK(w, shared.MessageResponse{Message: "Password has been successfully reset."})
@@ -104,7 +104,7 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Service.ChangePassword(r.Context(), tenant.UserID, req.CurrentPassword, req.NewPassword); err != nil {
-		shared.RespondServiceError(w, r, err, "Failed to change password")
+		httputil.RespondServiceError(w, r, err, "Failed to change password")
 		return
 	}
 	httputil.RespondOK(w, shared.MessageResponse{Message: "Password changed successfully."})
