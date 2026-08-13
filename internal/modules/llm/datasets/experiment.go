@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -12,14 +11,11 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/llmproviders"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
-	"github.com/optikklabs/query/internal/modules/llm/providerkeys"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	"golang.org/x/sync/errgroup"
 )
 
-func IsProviderUnavailable(err error) bool {
-	return errors.Is(err, providerkeys.ErrNoEncryption) || errors.Is(err, providerkeys.ErrNotFound)
-}
+
 
 const (
 	maxRunItems   = 50

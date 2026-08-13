@@ -24,6 +24,10 @@ var (
 	ErrNoEncryption = errors.New("provider key encryption is not configured")
 )
 
+func IsUnavailable(err error) bool {
+	return errors.Is(err, ErrNoEncryption) || errors.Is(err, ErrNotFound)
+}
+
 var validProvider = map[string]struct{}{
 	"openai": {}, "anthropic": {}, "mistral": {},
 }

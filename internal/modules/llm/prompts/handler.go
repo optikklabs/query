@@ -28,7 +28,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	res, err := h.svc.Get(r.Context(), httputil.Tenant(r).TenantID, chi.URLParam(r, "name"))
 	if err != nil {
-		respondErr(w, r, err)
+		httputil.RespondServiceError(w, r, err, "prompt request failed")
 		return
 	}
 	httputil.RespondOK(w, res)
@@ -43,7 +43,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
 	res, err := h.svc.Create(r.Context(), tenant.TenantID, tenant.UserID, req)
 	if err != nil {
-		respondErr(w, r, err)
+		httputil.RespondServiceError(w, r, err, "prompt request failed")
 		return
 	}
 	httputil.RespondOK(w, res)
@@ -58,7 +58,7 @@ func (h *Handler) CreateVersion(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
 	res, err := h.svc.AddVersion(r.Context(), tenant.TenantID, tenant.UserID, chi.URLParam(r, "name"), req)
 	if err != nil {
-		respondErr(w, r, err)
+		httputil.RespondServiceError(w, r, err, "prompt request failed")
 		return
 	}
 	httputil.RespondOK(w, res)
@@ -77,12 +77,8 @@ func (h *Handler) UpdateVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.svc.SetVersionStatus(r.Context(), httputil.Tenant(r).TenantID, chi.URLParam(r, "name"), version, req)
 	if err != nil {
-		respondErr(w, r, err)
+		httputil.RespondServiceError(w, r, err, "prompt request failed")
 		return
 	}
 	httputil.RespondOK(w, res)
-}
-
-func respondErr(w http.ResponseWriter, r *http.Request, err error) {
-	httputil.RespondServiceError(w, r, err, "prompt request failed")
 }

@@ -2,13 +2,11 @@ package playground
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/llmproviders"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
-	"github.com/optikklabs/query/internal/modules/llm/providerkeys"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
@@ -65,6 +63,4 @@ func (s *Service) Complete(ctx context.Context, tenantID int64, req CompleteRequ
 	}, nil
 }
 
-func IsUnavailable(err error) bool {
-	return errors.Is(err, providerkeys.ErrNoEncryption) || errors.Is(err, providerkeys.ErrNotFound)
-}
+

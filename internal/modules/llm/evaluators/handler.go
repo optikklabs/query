@@ -36,7 +36,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
 	res, err := h.svc.Create(r.Context(), tenant.TenantID, tenant.UserID, req)
 	if err != nil {
-		respondErr(w, r, err)
+		httputil.RespondServiceError(w, r, err, "evaluator request failed")
 		return
 	}
 	httputil.RespondOK(w, res)
@@ -54,7 +54,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.svc.Update(r.Context(), httputil.Tenant(r).TenantID, id, req)
 	if err != nil {
-		respondErr(w, r, err)
+		httputil.RespondServiceError(w, r, err, "evaluator request failed")
 		return
 	}
 	httputil.RespondOK(w, res)
@@ -66,12 +66,9 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Delete(r.Context(), httputil.Tenant(r).TenantID, id); err != nil {
-		respondErr(w, r, err)
+		httputil.RespondServiceError(w, r, err, "evaluator request failed")
 		return
 	}
 	httputil.RespondOK(w, map[string]any{"deleted": id})
 }
 
-func respondErr(w http.ResponseWriter, r *http.Request, err error) {
-	httputil.RespondServiceError(w, r, err, "evaluator request failed")
-}
