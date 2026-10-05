@@ -74,7 +74,7 @@ func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {
 	if m.RenotifyEverySec.Valid {
 		renotify = m.RenotifyEverySec.Int64
 	}
-	decision := expr.Decide(state, m, cond, res.Value, res.HasData, renotify, now)
+	decision := expr.Decide(state, cond, res.Value, res.HasData, renotify, now)
 
 	args := buildUpdateArgs(m, state, decision, res, now)
 	if err := s.repo.UpdateState(ctx, args); err != nil {
@@ -105,6 +105,7 @@ func nextEvalOnly(m models.MonitorRow, state models.MonitorStateRow, now time.Ti
 		NewStatus:          status,
 		LastEvaluatedAt:    now,
 		NextEvaluationAt:   now.Add(time.Duration(m.EvalEverySec) * time.Second),
+		NoDataSince:        state.NoDataSince,
 		IncrementEvalCount: true,
 	}
 }
@@ -120,6 +121,7 @@ func buildUpdateArgs(m models.MonitorRow, state models.MonitorStateRow, d expr.D
 		NewStatus:          d.NewStatus,
 		LastEvaluatedAt:    now,
 		NextEvaluationAt:   now.Add(time.Duration(m.EvalEverySec) * time.Second),
+		NoDataSince:        d.NoDataSince,
 		IncrementEvalCount: true,
 	}
 	if res.HasData {

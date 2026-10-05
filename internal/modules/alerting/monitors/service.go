@@ -200,10 +200,11 @@ func validateConditions(c models.Conditions) error {
 	if c.AlertThreshold == nil {
 		return errorcode.ValidationError{Msg: "conditions.alertThreshold is required"}
 	}
+	if c.NoDataAfterSec < 0 {
+		return errorcode.ValidationError{Msg: "conditions.noDataAfterSec must not be negative"}
+	}
 	switch c.NoDataAs {
-	case "no_data", "alert", "ok":
-	case "":
-
+	case "no_data", "alert", "ok", "":
 	default:
 		return errorcode.ValidationError{Msg: "conditions.noDataAs must be no_data, alert, or ok"}
 	}

@@ -6,7 +6,6 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
-	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
@@ -79,18 +78,6 @@ func (r *Repository) Insert(ctx context.Context, s scoreInsert) error {
 		s.Service, s.Environment, s.Name, s.DataType, s.Value, s.StringValue, s.Comment)
 }
 
-func (r *Repository) Names(ctx context.Context, tenantID, startMs, endMs int64) ([]nameRow, error) {
-	query := `
-		SELECT name, argMax(data_type, (timestamp, trace_id, span_id)) AS data_type
-		FROM ` + scoresTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		GROUP BY name
-		ORDER BY name`
-	var rows []nameRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.scores.Names", &rows, query,
-		chargs.RangeArgs(tenantID, startMs, endMs)...)
-}
-
 func (r *Repository) Summary(ctx context.Context, tenantID, startMs, endMs int64) ([]summaryRow, error) {
 	query := `
 		SELECT name, argMax(data_type, (timestamp, trace_id, span_id)) AS data_type,
@@ -102,31 +89,4 @@ func (r *Repository) Summary(ctx context.Context, tenantID, startMs, endMs int64
 	var rows []summaryRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.scores.Summary", &rows, query,
 		chargs.RangeArgs(tenantID, startMs, endMs)...)
-}
-
-func (r *Repository) Timeseries(ctx context.Context, tenantID, startMs, endMs int64, name string) ([]bucketRow, error) {
-	query := `
-		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       avg(value) AS mean
-		FROM ` + scoresTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		WHERE name = @name
-		GROUP BY bucket_at
-		ORDER BY bucket_at ASC`
-	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("name", name))
-	var rows []bucketRow
-	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "llm.scores.Timeseries", &rows, query, args...)
-}
-
-func (r *Repository) Distribution(ctx context.Context, tenantID, startMs, endMs int64, name string) ([]histRow, error) {
-	query := `
-		SELECT least(toUInt8(value * 10), 9) AS bucket, count() AS cnt
-		FROM ` + scoresTable + `
-		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		WHERE name = @name AND data_type = 'numeric'
-		GROUP BY bucket
-		ORDER BY bucket ASC`
-	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("name", name))
-	var rows []histRow
-	return rows, dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "llm.scores.Distribution", &rows, query, args...)
 }

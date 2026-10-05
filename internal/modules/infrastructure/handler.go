@@ -21,37 +21,10 @@ func (h *Handler) GetAvgCPU(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) GetCPUByInstance(w http.ResponseWriter, r *http.Request) {
-	httputil.HandleRangeQuery(w, r, "Failed to query CPU by instance", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.Service.GetCPUByInstance(ctx, tenantID, startMs, endMs)
-	})
-}
-
 func (h *Handler) GetAvgMemory(w http.ResponseWriter, r *http.Request) {
 	httputil.HandleRangeQuery(w, r, "Failed to query avg memory", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetAvgMemory(ctx, tenantID, startMs, endMs)
 	})
-}
-
-func (h *Handler) GetMemoryByInstance(w http.ResponseWriter, r *http.Request) {
-	tenantID := httputil.Tenant(r).TenantID
-	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	host := r.URL.Query().Get("host")
-	pod := r.URL.Query().Get("pod")
-	serviceName := r.URL.Query().Get("serviceName")
-	if serviceName == "" {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "serviceName is required", nil)
-		return
-	}
-	resp, err := h.Service.GetMemoryByInstance(r.Context(), tenantID, host, pod, serviceName, startMs, endMs)
-	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query memory by instance", err)
-		return
-	}
-	httputil.RespondOK(w, resp)
 }
 
 func (h *Handler) GetHosts(w http.ResponseWriter, r *http.Request) {

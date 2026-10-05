@@ -32,13 +32,13 @@ type UpdateStateArgs struct {
 	NextEvaluationAt   time.Time
 	TriggeredAt        sql.NullTime
 	LastNotifiedAt     sql.NullTime
+	NoDataSince        sql.NullTime
 	IncrementEvalCount bool
 }
 
 const claimLease = 5 * time.Minute
 
 func (r *Repository) ClaimDue(ctx context.Context, claimID string, now time.Time, limit int) ([]DueMonitor, error) {
-
 	const claim = `
 		UPDATE optikk.monitor_state
 		   SET claimed_by = ?, claimed_until = ?
@@ -73,7 +73,8 @@ func (r *Repository) ClaimDue(ctx context.Context, claimID string, now time.Time
 		  s.last_notified_at  AS s_last_notified_at,
 		  s.evaluation_count  AS s_evaluation_count,
 		  s.acked_by_user_id  AS s_acked_by_user_id,
-		  s.acked_at          AS s_acked_at
+		  s.acked_at          AS s_acked_at,
+		  s.no_data_since     AS s_no_data_since
 		FROM optikk.monitors m
 		JOIN optikk.monitor_state s ON s.monitor_id = m.id
 		WHERE s.claimed_by = ?
@@ -102,6 +103,7 @@ type dueRow struct {
 	SEvaluationCount  sql.NullInt64   `db:"s_evaluation_count"`
 	SAckedByUserID    sql.NullInt64   `db:"s_acked_by_user_id"`
 	SAckedAt          sql.NullTime    `db:"s_acked_at"`
+	SNoDataSince      sql.NullTime    `db:"s_no_data_since"`
 }
 
 func (r dueRow) toDue() DueMonitor {
@@ -115,6 +117,7 @@ func (r dueRow) toDue() DueMonitor {
 		EvaluationCount: r.SEvaluationCount.Int64,
 		AckedByUserID:   r.SAckedByUserID,
 		AckedAt:         r.SAckedAt,
+		NoDataSince:     r.SNoDataSince,
 	}
 	if r.SNextEvaluationAt.Valid {
 		state.NextEvaluationAt = r.SNextEvaluationAt.Time
@@ -123,12 +126,11 @@ func (r dueRow) toDue() DueMonitor {
 }
 
 func (r *Repository) UpdateState(ctx context.Context, args UpdateStateArgs) error {
-
 	q := `
 		UPDATE optikk.monitor_state
 		   SET status = ?, current_value = ?, last_evaluated_at = ?, next_evaluation_at = ?,
 		       triggered_at = ?, last_notified_at = COALESCE(?, last_notified_at),
-		       evaluation_count = evaluation_count + ?,
+		       no_data_since = ?, evaluation_count = evaluation_count + ?,
 		       claimed_by = NULL, claimed_until = NULL
 		 WHERE monitor_id = ? AND status = ?
 	`
@@ -138,7 +140,7 @@ func (r *Repository) UpdateState(ctx context.Context, args UpdateStateArgs) erro
 	}
 	_, err := dbutil.ExecSQL(ctx, r.db, "evaluator.UpdateState", q,
 		args.NewStatus, args.CurrentValue, args.LastEvaluatedAt, args.NextEvaluationAt,
-		args.TriggeredAt, args.LastNotifiedAt, incr,
+		args.TriggeredAt, args.LastNotifiedAt, args.NoDataSince, incr,
 		args.MonitorID, args.PrevStatus)
 	return err
 }

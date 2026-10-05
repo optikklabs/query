@@ -48,7 +48,3 @@ const (
 	QueryFailed = "QUERY_FAILED"
 	Unavailable = "SERVICE_UNAVAILABLE"
 )
-
-const (
-	NoData = "NO_DATA"
-)

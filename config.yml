@@ -10,7 +10,7 @@ mysql:
   port: "13306"
   database: optikk
   user: root
-  password: "localdev"                                                            
+  password: "localdev"
   max_open_conns: 50
   max_idle_conns: 25
 
@@ -19,22 +19,14 @@ clickhouse:
   port: "19000"
   database: optikk
   user: default
-  password: "localdev"                                                                 
+  password: "localdev"
   secure: false
-                                                                     
+
   max_open_conns: 12
   max_idle_conns: 6
-                                                   
-alerting:
-  kafka:
-    enabled: false
-    broker_list: "127.0.0.1:9092"
-    topic_prefix: optikk.ingest
-    consumer_group: optikk-query-alerting
-    max_poll_records: 1000
 
 auth:
-  jwt_secret: ""                                                  
+  jwt_secret: ""
   access_ttl_ms: 900000
   refresh_ttl_ms: 604800000
   refresh_cookie_name: optikk_refresh

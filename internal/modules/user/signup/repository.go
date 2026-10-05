@@ -137,7 +137,6 @@ func (r *Repository) UpdateUnverifiedTenantAndAdmin(ctx context.Context, signup 
 	err = tx.QueryRowContext(ctx, `SELECT id, tenant_id FROM users WHERE email=? AND active=0 FOR UPDATE`, signup.Email).Scan(&uID, &tID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-
 			return shared.AuthUser{}, ErrAlreadyVerified
 		}
 		return shared.AuthUser{}, err

@@ -48,18 +48,6 @@ func (s *Service) Create(ctx context.Context, tenantID int64, req CreateScoreReq
 
 func IsValidationError(err error) bool { return errors.Is(err, errInvalidScore) }
 
-func (s *Service) Names(ctx context.Context, tenantID, startMs, endMs int64) (ScoreNamesResponse, error) {
-	rows, err := s.repo.Names(ctx, tenantID, startMs, endMs)
-	if err != nil {
-		return ScoreNamesResponse{}, err
-	}
-	names := make([]ScoreName, len(rows))
-	for i, r := range rows {
-		names[i] = ScoreName(r)
-	}
-	return ScoreNamesResponse{Names: names}, nil
-}
-
 func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (ScoreSummaryResponse, error) {
 	rows, err := s.repo.Summary(ctx, tenantID, startMs, endMs)
 	if err != nil {
@@ -70,39 +58,4 @@ func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (
 		out[i] = ScoreSummary(r)
 	}
 	return ScoreSummaryResponse{Summaries: out}, nil
-}
-
-func (s *Service) Timeseries(ctx context.Context, tenantID, startMs, endMs int64, name string) (ScoreTimeseriesResponse, error) {
-	rows, err := s.repo.Timeseries(ctx, tenantID, startMs, endMs, name)
-	if err != nil {
-		return ScoreTimeseriesResponse{}, err
-	}
-	points := make([]Point, len(rows))
-	for i, r := range rows {
-		points[i] = Point{T: r.BucketAt.UnixMilli(), Value: r.Mean}
-	}
-	return ScoreTimeseriesResponse{Name: name, Points: points}, nil
-}
-
-var bucketLabels = [10]string{
-	"0.0–0.1", "0.1–0.2", "0.2–0.3", "0.3–0.4", "0.4–0.5",
-	"0.5–0.6", "0.6–0.7", "0.7–0.8", "0.8–0.9", "0.9–1.0",
-}
-
-func (s *Service) Distribution(ctx context.Context, tenantID, startMs, endMs int64, name string) (ScoreDistributionResponse, error) {
-	rows, err := s.repo.Distribution(ctx, tenantID, startMs, endMs, name)
-	if err != nil {
-		return ScoreDistributionResponse{}, err
-	}
-	counts := [10]uint64{}
-	for _, r := range rows {
-		if int(r.Bucket) < len(counts) {
-			counts[r.Bucket] = r.Count
-		}
-	}
-	buckets := make([]DistributionBucket, len(bucketLabels))
-	for i, label := range bucketLabels {
-		buckets[i] = DistributionBucket{Label: label, Count: counts[i]}
-	}
-	return ScoreDistributionResponse{Name: name, Buckets: buckets}, nil
 }

@@ -57,4 +57,3 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	httputil.RespondOK(w, map[string]any{"deleted": id})
 }
-

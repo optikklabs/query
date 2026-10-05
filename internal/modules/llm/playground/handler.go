@@ -39,4 +39,3 @@ func (h *Handler) Complete(w http.ResponseWriter, r *http.Request) {
 	}
 	httputil.RespondOK(w, res)
 }
-

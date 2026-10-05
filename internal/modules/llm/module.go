@@ -26,11 +26,7 @@ func (m *llmModule) configure(db clickhouse.Conn) {
 func (m *llmModule) RegisterRoutes(group chi.Router) {
 	h := m.handler
 	group.Get("/llm/overview", h.Overview)
-	group.Get("/llm/apps", h.Apps)
 	group.Get("/llm/models", h.Models)
-	group.Get("/llm/pricing", h.Pricing)
-	group.Get("/llm/timeseries", h.Timeseries)
-	group.Get("/llm/cost/breakdown", h.CostBreakdown)
 	group.Post("/llm/traces/query", h.TracesQuery)
 	group.Get("/llm/traces/{traceId}", h.TraceDetail)
 	group.Get("/llm/traces/{traceId}/spans/{spanId}/io", h.SpanIO)

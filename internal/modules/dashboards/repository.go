@@ -114,10 +114,7 @@ func (r *Repository) ListPages(ctx context.Context, tenantID int64, q ListPagesQ
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	offset := q.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(q.Offset, 0)
 	listArgs := append(append([]any{}, args...), limit, offset)
 	listSQL := fmt.Sprintf(`SELECT %s WHERE %s
 		ORDER BY p.is_favorite DESC, p.updated_at DESC, p.created_at DESC, p.id DESC

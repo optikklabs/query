@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"database/sql"
+
 	"github.com/go-chi/chi/v5"
 
 	"github.com/optikklabs/query/internal/modules/alerting/dispatch"
@@ -27,7 +28,6 @@ func (m *Module) RegisterRoutes(v1 chi.Router) {
 		r.Route("/channels", func(r chi.Router) {
 			r.Get("/", m.handler.ListChannels)
 			r.Post("/", m.handler.CreateChannel)
-			r.Get("/{id}", m.handler.GetChannel)
 			r.Put("/{id}", m.handler.UpdateChannel)
 			r.Delete("/{id}", m.handler.DeleteChannel)
 			r.Post("/{id}/test", m.handler.TestChannel)

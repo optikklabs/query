@@ -1,12 +1,6 @@
 package app
 
-import (
-	"database/sql"
-
-	"github.com/go-chi/chi/v5"
-)
-
-type SQLDB = sql.DB
+import "github.com/go-chi/chi/v5"
 
 type Module interface {
 	Name() string

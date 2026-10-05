@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"slices"
 )
 
 type MonitorQuery struct {
@@ -12,7 +13,7 @@ type MonitorQuery struct {
 	Log    *LogQuery    `json:"log,omitempty"`
 }
 
-func (q *MonitorQuery) Scan(value interface{}) error {
+func (q *MonitorQuery) Scan(value any) error {
 	if value == nil {
 		return nil
 	}
@@ -53,7 +54,7 @@ type NotifyTargets struct {
 	ChannelIDs []int64 `json:"channelIds"`
 }
 
-func (n *NotifyTargets) Scan(value interface{}) error {
+func (n *NotifyTargets) Scan(value any) error {
 	if value == nil {
 		return nil
 	}
@@ -73,19 +74,9 @@ var SupportedMonitorTypes = []string{"metric", "apm", "log"}
 var SupportedPriorities = []string{"P1", "P2", "P3", "P4"}
 
 func IsValidType(t string) bool {
-	for _, v := range SupportedMonitorTypes {
-		if v == t {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(SupportedMonitorTypes, t)
 }
 
 func IsValidPriority(p string) bool {
-	for _, v := range SupportedPriorities {
-		if v == p {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(SupportedPriorities, p)
 }

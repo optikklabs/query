@@ -10,8 +10,7 @@ CREATE TABLE IF NOT EXISTS optikk.monitor_state
      evaluation_count     BIGINT NOT NULL DEFAULT 0,
      acked_by_user_id     BIGINT NULL,
      acked_at             DATETIME NULL,
-                                                                         
-                                                                            
+     no_data_since        DATETIME NULL,
      claimed_by           CHAR(36) NULL,
      claimed_until        DATETIME NULL,
      INDEX idx_ms_due (next_evaluation_at, claimed_until),

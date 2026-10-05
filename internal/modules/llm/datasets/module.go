@@ -40,5 +40,4 @@ func (m *Module) RegisterRoutes(v1 chi.Router) {
 		r.Post("/{id}/items", m.handler.AddItems)
 		r.Post("/{id}/runs", m.handler.RunExperiment)
 	})
-	v1.Get("/llm/runs/{runId}", m.handler.GetRun)
 }

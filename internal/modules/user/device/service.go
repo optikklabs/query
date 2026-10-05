@@ -61,7 +61,6 @@ func (s *Service) PollDeviceToken(ctx context.Context, deviceCode string) (auth.
 
 	now := time.Now().UTC()
 	if status := evaluateDeviceCode(record, now); status != nil {
-
 		if !errors.Is(status, ErrDeviceSlowDown) {
 			if err := s.repo.TouchDeviceCodePolled(ctx, deviceCode, now); err != nil {
 				slog.WarnContext(ctx, "AUTH_EVENT device_poll_touch_failed", slog.Any("error", err))

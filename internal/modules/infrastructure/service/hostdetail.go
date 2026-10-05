@@ -100,29 +100,29 @@ func foldKPIs(rows []repository.KPIRow, out *models.HostOverview) {
 		case infraconsts.MetricSystemCPUUtilization:
 			switch row.State {
 			case "idle":
-				cpuIdle = ptr(v)
+				cpuIdle = new(v)
 			case "":
-				cpuPlain = ptr(v)
+				cpuPlain = new(v)
 			}
 		case infraconsts.MetricSystemMemoryUtilization:
 			switch row.State {
 			case "used":
-				memUsed = ptr(v)
+				memUsed = new(v)
 			case "":
-				memPlain = ptr(v)
+				memPlain = new(v)
 			}
 		case infraconsts.MetricSystemFilesystemUtil:
 			if out.DiskPct == nil || v > *out.DiskPct {
-				out.DiskPct = ptr(v)
+				out.DiskPct = new(v)
 			}
 		case infraconsts.MetricSystemCPULoadAvg1m:
-			out.Load1m = ptr(v)
+			out.Load1m = new(v)
 		case infraconsts.MetricSystemCPULoadAvg5m:
-			out.Load5m = ptr(v)
+			out.Load5m = new(v)
 		case infraconsts.MetricSystemCPULoadAvg15m:
-			out.Load15m = ptr(v)
+			out.Load15m = new(v)
 		case infraconsts.MetricSystemProcessCount:
-			out.ProcessCount = ptr(v)
+			out.ProcessCount = new(v)
 		}
 	}
 

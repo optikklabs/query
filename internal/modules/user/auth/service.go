@@ -105,7 +105,6 @@ func (s *Service) signAccess(user shared.AuthUser, tenantID int64) (string, erro
 }
 
 func (s *Service) Logout(ctx context.Context, tenant contracts.TenantContext, refreshTokens []string, clientIP string) shared.MessageResponse {
-
 	for _, refreshToken := range refreshTokens {
 		if refreshToken == "" {
 			continue
@@ -177,7 +176,6 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 	user, err := s.repo.FindActiveUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-
 			return nil
 		}
 		return fmt.Errorf("failed to lookup user: %w", err)

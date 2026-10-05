@@ -148,7 +148,7 @@ const selectMonitorCols = `
 const selectStateCols = `
   s.monitor_id, s.status, s.current_value, s.last_evaluated_at,
   s.next_evaluation_at, s.triggered_at, s.last_notified_at,
-  s.evaluation_count, s.acked_by_user_id, s.acked_at
+  s.evaluation_count, s.acked_by_user_id, s.acked_at, s.no_data_since
 `
 
 func (r *Repository) GetByID(ctx context.Context, id, tenantID int64) (models.MonitorRow, models.MonitorStateRow, error) {
@@ -180,6 +180,7 @@ type monitorWithState struct {
 	StateEvaluationCount  sql.NullInt64   `db:"evaluation_count"`
 	StateAckedByUserID    sql.NullInt64   `db:"acked_by_user_id"`
 	StateAckedAt          sql.NullTime    `db:"acked_at"`
+	StateNoDataSince      sql.NullTime    `db:"no_data_since"`
 }
 
 func (m monitorWithState) toRows() (models.MonitorRow, models.MonitorStateRow, error) {
@@ -197,6 +198,7 @@ func (m monitorWithState) toRows() (models.MonitorRow, models.MonitorStateRow, e
 		state.EvaluationCount = m.StateEvaluationCount.Int64
 		state.AckedByUserID = m.StateAckedByUserID
 		state.AckedAt = m.StateAckedAt
+		state.NoDataSince = m.StateNoDataSince
 	}
 	return m.MonitorRow, state, nil
 }
@@ -240,10 +242,7 @@ func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]m
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	offset := q.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(q.Offset, 0)
 	args = append(args, limit, offset)
 
 	query := fmt.Sprintf(`

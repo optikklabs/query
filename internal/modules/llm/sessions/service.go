@@ -1,6 +1,10 @@
 package sessions
 
-import "context"
+import (
+	"context"
+
+	"golang.org/x/sync/errgroup"
+)
 
 type Service struct {
 	repo *Repository
@@ -65,11 +69,30 @@ func (s *Service) Query(ctx context.Context, tenantID int64, req SessionsQueryRe
 }
 
 func (s *Service) Detail(ctx context.Context, tenantID int64, sessionID string, startMs, endMs int64) (SessionDetailResponse, error) {
-	rows, err := s.repo.Detail(ctx, tenantID, sessionID, startMs, endMs)
-	if err != nil {
+	var (
+		rows     []turnRow
+		identity identityRow
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		var err error
+		rows, err = s.repo.Detail(gctx, tenantID, sessionID, startMs, endMs)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		identity, err = s.repo.Identity(gctx, tenantID, sessionID, startMs, endMs)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return SessionDetailResponse{}, err
 	}
-	resp := SessionDetailResponse{SessionID: sessionID, Turns: make([]Turn, len(rows))}
+	resp := SessionDetailResponse{
+		SessionID: sessionID,
+		Service:   identity.Service,
+		UserID:    identity.UserID,
+		Turns:     make([]Turn, len(rows)),
+	}
 	for i, r := range rows {
 		resp.Turns[i] = Turn{
 			TraceID:    r.TraceID,

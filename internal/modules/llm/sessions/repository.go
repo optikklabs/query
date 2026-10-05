@@ -9,7 +9,13 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-const durationMsSQL = "dateDiff('millisecond', min(timestamp), max(timestamp + toIntervalNanosecond(duration_nano)))"
+const (
+	durationMsSQL = "dateDiff('millisecond', min(timestamp), max(timestamp + toIntervalNanosecond(duration_nano)))"
+	// Shared by the list and detail queries so a session shows the same
+	// service and user in both places.
+	serviceSQL = "arrayElement(topK(1)(service), 1)"
+	userIDSQL  = "argMaxIf(llm_user_id, (timestamp, span_id), llm_user_id != '')"
+)
 
 type Repository struct {
 	db clickhouse.Conn
@@ -22,8 +28,8 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func (r *Repository) TopSessions(ctx context.Context, tenantID, startMs, endMs int64, limit int) ([]sessionRow, error) {
 	query := `
 		SELECT llm_session_id AS session_id,
-		       arrayElement(topK(1)(service), 1) AS service,
-		       argMaxIf(llm_user_id, (timestamp, span_id), llm_user_id != '') AS user_id,
+		       ` + serviceSQL + ` AS service,
+		       ` + userIDSQL + ` AS user_id,
 		       argMinIf(substring(gen_ai_prompt, 1, 140), (timestamp, span_id), gen_ai_prompt != '') AS preview,
 		       uniqExact(trace_id) AS turns,
 		       ` + durationMsSQL + ` AS duration_ms,
@@ -42,7 +48,6 @@ func (r *Repository) TopSessions(ctx context.Context, tenantID, startMs, endMs i
 }
 
 func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int64) (overviewRow, error) {
-
 	query := `
 		SELECT count()      AS sessions,
 		       sum(turns)    AS turns,
@@ -93,4 +98,16 @@ func (r *Repository) Detail(ctx context.Context, tenantID int64, sessionID strin
 	args = append(args, clickhouse.Named("sessionID", sessionID))
 	var rows []turnRow
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.sessions.Detail", &rows, query, args...)
+}
+
+func (r *Repository) Identity(ctx context.Context, tenantID int64, sessionID string, startMs, endMs int64) (identityRow, error) {
+	query := `
+		SELECT ` + serviceSQL + ` AS service,
+		       ` + userIDSQL + ` AS user_id
+		FROM optikk.spans
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
+		WHERE is_gen_ai AND llm_session_id = @sessionID`
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("sessionID", sessionID))
+	var row identityRow
+	return row, dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "llm.sessions.Identity", &row, query, args...)
 }

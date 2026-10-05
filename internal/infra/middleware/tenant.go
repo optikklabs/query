@@ -3,6 +3,7 @@ package middleware
 import (
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -133,10 +134,5 @@ func authorizedForTenant(tenantIDs []int64, defaultTenantID, requestedTenantID i
 	if len(tenantIDs) == 0 {
 		return defaultTenantID == requestedTenantID
 	}
-	for _, tenantID := range tenantIDs {
-		if tenantID == requestedTenantID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(tenantIDs, requestedTenantID)
 }

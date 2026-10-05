@@ -125,21 +125,3 @@ func (h *Handler) AddItems(w http.ResponseWriter, r *http.Request) {
 	}
 	httputil.RespondOK(w, map[string]any{"added": added})
 }
-
-func (h *Handler) GetRun(w http.ResponseWriter, r *http.Request) {
-	runID, ok := httputil.ParseIDParam(w, r, "runId")
-	if !ok {
-		return
-	}
-	res, err := h.svc.GetRun(r.Context(), httputil.Tenant(r).TenantID, runID)
-	if err != nil {
-		if providerkeys.IsUnavailable(err) {
-			httputil.RespondErrorWithCause(w, r, http.StatusServiceUnavailable, errorcode.Unavailable, "no provider key configured for this provider", nil)
-		} else {
-			httputil.RespondServiceError(w, r, err, "dataset request failed")
-		}
-		return
-	}
-	httputil.RespondOK(w, res)
-}
-

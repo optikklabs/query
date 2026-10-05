@@ -25,7 +25,6 @@ func (m *module) RegisterRoutes(group chi.Router) {
 	h := m.handler
 	group.Get("/saturation/datastores/systems", h.GetDatastoreSystems)
 	group.Get("/saturation/database/latency/by-system", h.GetLatencyBySystem)
-	group.Get("/saturation/database/ops/by-system", h.GetOpsBySystem)
 	group.Get("/saturation/database/query-performance/catalogue", h.GetQueryPerformanceCatalogue)
 	group.Get("/saturation/database/query-performance/series", h.GetQueryPerformanceSeries)
 	group.Post("/database/queries/query", h.QueryPatterns)

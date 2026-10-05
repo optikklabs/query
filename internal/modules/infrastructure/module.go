@@ -22,14 +22,8 @@ func (m *module) Name() string { return "infrastructure" }
 
 func (m *module) RegisterRoutes(group chi.Router) {
 	h := m.handler
-	group.Route("/infrastructure/cpu", func(r chi.Router) {
-		r.Get("/avg", h.GetAvgCPU)
-		r.Get("/by-instance", h.GetCPUByInstance)
-	})
-	group.Route("/infrastructure/memory", func(r chi.Router) {
-		r.Get("/avg", h.GetAvgMemory)
-		r.Get("/by-instance", h.GetMemoryByInstance)
-	})
+	group.Get("/infrastructure/cpu/avg", h.GetAvgCPU)
+	group.Get("/infrastructure/memory/avg", h.GetAvgMemory)
 	group.Get("/infrastructure/hosts", h.GetHosts)
 	group.Get("/infrastructure/hosts/{host}/overview", h.GetHostOverview)
 	group.Get("/infrastructure/hosts/{host}/series", h.GetHostSeries)

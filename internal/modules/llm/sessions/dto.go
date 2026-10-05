@@ -71,6 +71,11 @@ type sessionScoreRow struct {
 	Mean      float64 `ch:"mean"`
 }
 
+type identityRow struct {
+	Service string `ch:"service"`
+	UserID  string `ch:"user_id"`
+}
+
 type turnRow struct {
 	TraceID    string    `ch:"trace_id"`
 	Start      time.Time `ch:"start_ts"`

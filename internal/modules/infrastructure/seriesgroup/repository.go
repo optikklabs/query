@@ -29,7 +29,6 @@ func (r *Repository) QuerySeries(
 ) ([]Point, error) {
 	valueExpr := "if(sum(val_count) = 0, 0, sum(val_sum) / sum(val_count))"
 	if def.Agg == Rate {
-
 		valueExpr = "sum(if(temporality = 'Delta', val_sum, greatest(val_max - val_min, 0))) / @bucketGrainSec"
 	}
 

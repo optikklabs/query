@@ -22,10 +22,9 @@ type Filters struct {
 	Environments []string `json:"environments,omitempty"`
 	Severities   []string `json:"severities,omitempty"`
 
-	TraceID    string `json:"traceId,omitempty"`
-	SpanID     string `json:"spanId,omitempty"`
-	Search     string `json:"search,omitempty"`
-	SearchMode string `json:"searchMode,omitempty"`
+	TraceID string `json:"traceId,omitempty"`
+	SpanID  string `json:"spanId,omitempty"`
+	Search  string `json:"search,omitempty"`
 
 	ExcludeServices   []string `json:"excludeServices,omitempty"`
 	ExcludeHosts      []string `json:"excludeHosts,omitempty"`
@@ -40,8 +39,6 @@ func (f *Filters) Validate() error {
 	}
 	return filterutil.ValidateAttrs(f.Attributes)
 }
-
-var ValidateAttrs = filterutil.ValidateAttrs
 
 func BuildClauses(f Filters) (prewhere, where string, args []any) {
 	startBucket := uint32((f.StartMs / 1000) / 300 * 300)
@@ -84,7 +81,6 @@ func BuildClauses(f Filters) (prewhere, where string, args []any) {
 		args = append(args, clickhouse.Named("spanID", f.SpanID))
 	}
 	if f.Search != "" {
-
 		where += ` AND lowerUTF8(body) LIKE @search`
 		args = append(args, clickhouse.Named("search", filterutil.LikeSubstringPattern(f.Search)))
 	}

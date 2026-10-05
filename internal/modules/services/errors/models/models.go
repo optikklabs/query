@@ -245,10 +245,6 @@ type ErrorGroupsCursor struct {
 	GroupID    string `json:"id"`
 }
 
-func (c ErrorGroupsCursor) IsZero() bool {
-	return c.ErrorCount == 0 && c.GroupID == ""
-}
-
 type ErrorTracesCursor struct {
 	Timestamp time.Time `json:"ts"`
 	SpanID    string    `json:"sid"`

@@ -68,7 +68,7 @@ var scopeColumns = map[string]string{
 
 func CompileScope(signal string, scope models.Scope, args []any) (string, []any, error) {
 	allowed := scopeColumns[signal]
-	var clause string
+	var clause strings.Builder
 	for i, tag := range scope.Tags {
 		key, value := strings.TrimSpace(tag.Key), strings.TrimSpace(tag.Value)
 		column := scopeAliases[key]
@@ -79,10 +79,10 @@ func CompileScope(signal string, scope models.Scope, args []any) (string, []any,
 			return "", nil, fmt.Errorf("scope %q requires a value", key)
 		}
 		bind := "scope" + strconv.Itoa(i)
-		clause += " AND " + column + " = @" + bind
+		clause.WriteString(" AND " + column + " = @" + bind)
 		args = append(args, clickhouse.Named(bind, value))
 	}
-	return clause, args, nil
+	return clause.String(), args, nil
 }
 
 func monitorWindowSec(v int) int64 {

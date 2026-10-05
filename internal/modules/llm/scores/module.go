@@ -23,8 +23,5 @@ func (m *scoresModule) configure(db clickhouse.Conn) {
 
 func (m *scoresModule) RegisterRoutes(group chi.Router) {
 	group.Post("/llm/scores", m.handler.Create)
-	group.Get("/llm/scores/names", m.handler.Names)
 	group.Get("/llm/scores/summary", m.handler.Summary)
-	group.Get("/llm/scores/timeseries", m.handler.Timeseries)
-	group.Get("/llm/scores/distribution", m.handler.Distribution)
 }

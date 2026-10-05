@@ -138,5 +138,4 @@ type apmSeriesRow struct {
 	RequestCount uint64    `ch:"request_total"`
 	ErrorCount   uint64    `ch:"error_total"`
 	QS           []float64 `ch:"qs"`
-	P99          float64   `ch:"p99"`
 }

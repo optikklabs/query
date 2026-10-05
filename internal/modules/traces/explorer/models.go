@@ -21,7 +21,6 @@ type Trace struct {
 	HasError       bool     `json:"hasError"`
 	ErrorCount     uint32   `json:"errorCount"`
 	ServiceSet     []string `json:"serviceSet,omitempty"`
-	Truncated      bool     `json:"truncated,omitempty"`
 }
 
 type TraceCursor struct {

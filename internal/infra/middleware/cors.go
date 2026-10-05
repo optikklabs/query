@@ -7,7 +7,7 @@ import (
 
 func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 	origins := make([]string, 0, 8)
-	for _, o := range strings.Split(allowedOrigins, ",") {
+	for o := range strings.SplitSeq(allowedOrigins, ",") {
 		origin := strings.TrimSpace(o)
 		if origin == "" {
 			continue

@@ -26,7 +26,6 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondOK(w, map[string]any{"items": res})
 }
 
-
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req UpsertRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {
@@ -71,4 +70,3 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	httputil.RespondOK(w, map[string]any{"deleted": id})
 }
-

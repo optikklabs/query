@@ -45,7 +45,6 @@ func configuredModules(
 	nativeQuerier clickhouse.Conn,
 	infraDeps *Infra,
 ) []Module {
-
 	authService := user_auth.NewService(user_auth.NewRepository(infraDeps.DB), infraDeps.Tokens, infraDeps.Config.Email)
 	deviceService := user_device.NewService(user_device.NewRepository(infraDeps.DB), authService)
 	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService, infraDeps.Config.Email)

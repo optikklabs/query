@@ -16,7 +16,6 @@ type module struct {
 func (m *module) Name() string { return "user-users" }
 
 func (m *module) RegisterRoutes(group chi.Router) {
-
 	group.Group(func(r chi.Router) {
 		r.Use(middleware.RequireAdmin)
 		r.Post("/users", m.handler.CreateUser)

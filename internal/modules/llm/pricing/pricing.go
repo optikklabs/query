@@ -22,20 +22,6 @@ var table = map[string]modelPrice{
 	"text-embedding-3-large": {In: 0.13, Out: 0},
 }
 
-type Entry struct {
-	Model string  `json:"model"`
-	In    float64 `json:"inPer1M"`
-	Out   float64 `json:"outPer1M"`
-}
-
-func Table() []Entry {
-	out := make([]Entry, 0, len(table))
-	for m, p := range table {
-		out = append(out, Entry{Model: m, In: p.In, Out: p.Out})
-	}
-	return out
-}
-
 func Args() []any {
 	models := make([]string, 0, len(table))
 	in := make([]float64, 0, len(table))

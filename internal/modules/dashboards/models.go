@@ -122,7 +122,7 @@ func toWidgetResponse(row DashboardRow) WidgetResponse {
 
 func initials(name string) string {
 	var out []rune
-	for _, field := range strings.Fields(name) {
+	for field := range strings.FieldsSeq(name) {
 		for _, r := range field {
 			out = append(out, unicode.ToUpper(r))
 			break

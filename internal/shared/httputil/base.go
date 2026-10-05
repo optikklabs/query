@@ -157,10 +157,7 @@ func ParseIntParam(r *http.Request, key string, fallback int) int {
 }
 
 func ParsePageSize(r *http.Request, key string, fallback int) int {
-	size := ParseIntParam(r, key, fallback)
-	if size > MaxPageSize {
-		size = MaxPageSize
-	}
+	size := min(ParseIntParam(r, key, fallback), MaxPageSize)
 	if size <= 0 {
 		size = fallback
 	}

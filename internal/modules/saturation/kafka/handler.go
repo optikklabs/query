@@ -42,7 +42,7 @@ func (h *Handler) GetTopology(w http.ResponseWriter, r *http.Request) {
 
 func parseServices(raw string) []string {
 	out := make([]string, 0, strings.Count(raw, ",")+1)
-	for _, s := range strings.Split(raw, ",") {
+	for s := range strings.SplitSeq(raw, ",") {
 		if s = strings.TrimSpace(s); s != "" {
 			out = append(out, s)
 		}

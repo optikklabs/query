@@ -42,6 +42,7 @@ type MonitorStateRow struct {
 	EvaluationCount  int64           `db:"evaluation_count"`
 	AckedByUserID    sql.NullInt64   `db:"acked_by_user_id"`
 	AckedAt          sql.NullTime    `db:"acked_at"`
+	NoDataSince      sql.NullTime    `db:"no_data_since"`
 }
 
 type MonitorEventRow struct {
@@ -62,7 +63,7 @@ type Scope struct {
 	Tags []ScopeTag `json:"tags,omitempty"`
 }
 
-func (s *Scope) Scan(value interface{}) error {
+func (s *Scope) Scan(value any) error {
 	b, ok := value.([]byte)
 	if !ok {
 		return errors.New("type assertion to []byte failed")
@@ -90,7 +91,7 @@ type Conditions struct {
 	MinSample *int   `json:"minSample,omitempty"`
 }
 
-func (c *Conditions) Scan(value interface{}) error {
+func (c *Conditions) Scan(value any) error {
 	b, ok := value.([]byte)
 	if !ok {
 		return errors.New("type assertion to []byte failed")
@@ -104,7 +105,7 @@ func (c Conditions) Value() (driver.Value, error) {
 
 type Tags []string
 
-func (t *Tags) Scan(value interface{}) error {
+func (t *Tags) Scan(value any) error {
 	if value == nil {
 		*t = nil
 		return nil

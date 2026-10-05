@@ -117,8 +117,7 @@ func (s *Service) SignPasswordReset(userID int64, passwordHash string) (string, 
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 		},
 	}
-	secret := append(s.secret, []byte(passwordHash)...)
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.resetSecret(passwordHash))
 }
 
 func (s *Service) ParsePasswordReset(raw string, passwordHash string) (int64, error) {
@@ -129,7 +128,7 @@ func (s *Service) ParsePasswordReset(raw string, passwordHash string) (int64, er
 		jwt.WithExpirationRequired(),
 	)
 
-	secret := append(s.secret, []byte(passwordHash)...)
+	secret := s.resetSecret(passwordHash)
 	_, err := parser.ParseWithClaims(raw, &claims, func(t *jwt.Token) (any, error) {
 		return secret, nil
 	})
@@ -145,6 +144,16 @@ func (s *Service) ParsePasswordReset(raw string, passwordHash string) (int64, er
 		return 0, fmt.Errorf("invalid token subject")
 	}
 	return userID, nil
+}
+
+// resetSecret keys reset tokens to the current password hash, so a token stops
+// verifying once the password changes. It always allocates: appending to
+// s.secret directly could write into its spare capacity, which is shared by
+// concurrent requests.
+func (s *Service) resetSecret(passwordHash string) []byte {
+	secret := make([]byte, 0, len(s.secret)+len(passwordHash))
+	secret = append(secret, s.secret...)
+	return append(secret, passwordHash...)
 }
 
 func (s *Service) ExtractSubjectWithoutVerify(raw string) (int64, error) {

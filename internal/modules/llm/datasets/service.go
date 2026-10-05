@@ -94,22 +94,6 @@ func (s *Service) AddItems(ctx context.Context, tenantID, datasetID int64, req A
 	return s.repo.AddItems(ctx, tenantID, datasetID, req.Items)
 }
 
-func (s *Service) GetRun(ctx context.Context, tenantID, runID int64) (RunDetail, error) {
-	run, err := s.repo.GetRun(ctx, tenantID, runID)
-	if err != nil {
-		return RunDetail{}, mapNotFound(err)
-	}
-	items, err := s.repo.ListRunItems(ctx, runID)
-	if err != nil {
-		return RunDetail{}, err
-	}
-	detail := RunDetail{RunSummary: toRunSummary(run)}
-	for _, it := range items {
-		detail.Items = append(detail.Items, toRunItem(it))
-	}
-	return detail, nil
-}
-
 func toSummary(row datasetRow) DatasetSummary {
 	sum := DatasetSummary{
 		ID:        row.ID,

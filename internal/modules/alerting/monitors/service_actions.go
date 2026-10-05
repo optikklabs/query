@@ -71,7 +71,7 @@ func (s *Service) Test(ctx context.Context, tenantID, id int64, queries query.Re
 	if row.RenotifyEverySec.Valid {
 		renotify = row.RenotifyEverySec.Int64
 	}
-	d := expr.Decide(state, row, cond, res.Value, res.HasData, renotify, time.Now().UTC())
+	d := expr.Decide(state, cond, res.Value, res.HasData, renotify, time.Now().UTC())
 	threshold := 0.0
 	if cond.AlertThreshold != nil {
 		threshold = *cond.AlertThreshold

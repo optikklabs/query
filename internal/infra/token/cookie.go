@@ -19,10 +19,6 @@ type cookieOpts struct {
 	sameSite http.SameSite
 }
 
-func (s *Service) RefreshCookieName() string {
-	return s.cookie.name
-}
-
 func (s *Service) RefreshCookieValues(r *http.Request) []string {
 	var values []string
 	for _, c := range r.Cookies() {

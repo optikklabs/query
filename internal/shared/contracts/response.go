@@ -12,12 +12,11 @@ type APIResponse struct {
 }
 
 type ErrorDetail struct {
-	Code        string            `json:"code"`
-	Message     string            `json:"message"`
-	Timestamp   time.Time         `json:"timestamp"`
-	Path        string            `json:"path,omitempty"`
-	RequestID   string            `json:"requestId,omitempty"`
-	FieldErrors map[string]string `json:"fieldErrors,omitempty"`
+	Code      string    `json:"code"`
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp"`
+	Path      string    `json:"path,omitempty"`
+	RequestID string    `json:"requestId,omitempty"`
 }
 
 // PageInfo describes cursor-based pagination state for list endpoints.

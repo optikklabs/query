@@ -27,7 +27,6 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, en
 		return nil
 	})
 	g.Go(func() error {
-
 		c, err := s.repo.GetActiveConnectionsBySystem(gctx, tenantID, startMs, endMs)
 		if err == nil {
 			conns = c
@@ -55,6 +54,7 @@ func mapDatastoreSystems(spanRows []repository.SystemSummaryRaw, conns map[strin
 			P95LatencyMs:      float64(r.P95Ms),
 			ErrorRate:         safeRatioPct(errorCount, queryCount),
 			ActiveConnections: conns[r.DBSystem],
+			Region:            r.Region,
 			LastSeen:          r.LastSeen.Format(time.RFC3339),
 		})
 	}

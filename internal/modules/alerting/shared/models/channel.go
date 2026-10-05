@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"slices"
 	"time"
 )
 
@@ -51,10 +52,5 @@ type SlackWebhookConfig struct {
 var ChannelTypes = []string{"slack"}
 
 func IsValidChannelType(t string) bool {
-	for _, v := range ChannelTypes {
-		if v == t {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ChannelTypes, t)
 }

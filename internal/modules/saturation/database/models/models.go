@@ -10,7 +10,7 @@ type DatastoreSystemRow struct {
 	P95LatencyMs      float64 `json:"p95LatencyMs"`
 	ErrorRate         float64 `json:"errorRate"`
 	ActiveConnections int64   `json:"activeConnections"`
-	ServerHint        string  `json:"serverHint"`
+	Region            string  `json:"region"`
 	LastSeen          string  `json:"lastSeen"`
 }
 
@@ -20,12 +20,6 @@ type LatencyTimeSeries struct {
 	P50Ms        *float64 `json:"p50Ms"`
 	P95Ms        *float64 `json:"p95Ms"`
 	P99Ms        *float64 `json:"p99Ms"`
-}
-
-type OpsTimeSeries struct {
-	TimeBucketMs int64    `json:"timeBucketMs"`
-	GroupBy      string   `json:"groupBy"`
-	OpsPerSec    *float64 `json:"opsPerSec"`
 }
 
 type QueryPerformanceCollection struct {

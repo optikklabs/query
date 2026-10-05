@@ -8,7 +8,6 @@ type ServerConfig struct {
 	Port           string `yaml:"port"`
 	MetricsPort    string `yaml:"metrics_port"`
 	AllowedOrigins string `yaml:"allowed_origins"`
-	DebugAPILogs   bool   `yaml:"debug_api_logs"`
 }
 
 func (c Config) MetricsPort() string {

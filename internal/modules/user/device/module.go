@@ -16,7 +16,6 @@ type module struct {
 func (m *module) Name() string { return "user-device" }
 
 func (m *module) RegisterRoutes(group chi.Router) {
-
 	group.Post("/auth/device/code", m.handler.DeviceCode)
 	group.Post("/auth/device/token", m.handler.DeviceToken)
 	group.Post("/auth/device/approve", m.handler.DeviceApprove)

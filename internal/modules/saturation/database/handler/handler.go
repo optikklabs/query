@@ -37,12 +37,6 @@ func (h *Handler) GetLatencyBySystem(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) GetOpsBySystem(w http.ResponseWriter, r *http.Request) {
-	httputil.HandleRangeQuery(w, r, "Failed to query ops by system", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.service.GetOpsBySystem(ctx, tenantID, startMs, endMs, filter.ParseFilters(r))
-	})
-}
-
 func parseHash(w http.ResponseWriter, r *http.Request) (string, bool) {
 	values := r.URL.Query()["hash"]
 	if len(values) != 1 || !queryHashPattern.MatchString(strings.TrimSpace(values[0])) {

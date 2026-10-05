@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
@@ -15,19 +14,6 @@ type Handler struct {
 
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
-}
-
-func (h *Handler) Apps(w http.ResponseWriter, r *http.Request) {
-	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	resp, err := h.svc.Apps(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs)
-	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM apps", err)
-		return
-	}
-	httputil.RespondOK(w, resp)
 }
 
 func (h *Handler) Models(w http.ResponseWriter, r *http.Request) {
@@ -43,10 +29,6 @@ func (h *Handler) Models(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondOK(w, resp)
 }
 
-func (h *Handler) Pricing(w http.ResponseWriter, r *http.Request) {
-	httputil.RespondOK(w, map[string]any{"models": pricing.Table()})
-}
-
 func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
 	if !ok {
@@ -55,52 +37,6 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.svc.Overview(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs)
 	if err != nil {
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM overview", err)
-		return
-	}
-	httputil.RespondOK(w, resp)
-}
-
-var timeseriesMetrics = map[string]struct{}{
-	"tokens_by_vendor": {},
-	"latency":          {},
-	"spend":            {},
-}
-
-func (h *Handler) Timeseries(w http.ResponseWriter, r *http.Request) {
-	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	metric := r.URL.Query().Get("metric")
-	if _, valid := timeseriesMetrics[metric]; !valid {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "metric must be one of tokens_by_vendor, latency, spend", nil)
-		return
-	}
-	resp, err := h.svc.Timeseries(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs, metric)
-	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM timeseries", err)
-		return
-	}
-	httputil.RespondOK(w, resp)
-}
-
-func (h *Handler) CostBreakdown(w http.ResponseWriter, r *http.Request) {
-	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	groupBy := r.URL.Query().Get("groupBy")
-	switch groupBy {
-	case "":
-		groupBy = "service"
-	case "service", "vendor", "model":
-	default:
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "groupBy must be one of service, vendor, model", nil)
-		return
-	}
-	resp, err := h.svc.CostBreakdown(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs, groupBy)
-	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM cost breakdown", err)
 		return
 	}
 	httputil.RespondOK(w, resp)

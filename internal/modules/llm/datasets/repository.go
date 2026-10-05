@@ -146,5 +146,5 @@ func nullableRaw(raw []byte) any {
 	if len(raw) == 0 {
 		return nil
 	}
-	return []byte(raw)
+	return raw
 }

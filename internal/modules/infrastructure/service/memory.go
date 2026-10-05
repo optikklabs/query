@@ -20,14 +20,6 @@ func (s *Service) GetAvgMemory(ctx context.Context, tenantID int64, startMs, end
 	return models.MetricValue{Value: *avg}, nil
 }
 
-func (s *Service) GetMemoryByInstance(ctx context.Context, tenantID int64, host, pod, serviceName string, startMs, endMs int64) (*float64, error) {
-	rows, err := s.repo.QueryMemoryUtilizationForInstance(ctx, tenantID, startMs, endMs, host, pod, serviceName)
-	if err != nil {
-		return nil, err
-	}
-	return foldMemoryMetricRows(rows), nil
-}
-
 func foldMemoryMetricRows(rows []repository.MemoryMetricNameRow) *float64 {
 	by := make(map[string]float64, len(rows))
 	for _, r := range rows {

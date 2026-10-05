@@ -32,19 +32,6 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondOK(w, map[string]bool{"ok": true})
 }
 
-func (h *Handler) Names(w http.ResponseWriter, r *http.Request) {
-	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	resp, err := h.svc.Names(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs)
-	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query score names", err)
-		return
-	}
-	httputil.RespondOK(w, resp)
-}
-
 func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
 	if !ok {
@@ -53,42 +40,6 @@ func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.svc.Summary(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs)
 	if err != nil {
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query score summary", err)
-		return
-	}
-	httputil.RespondOK(w, resp)
-}
-
-func (h *Handler) Timeseries(w http.ResponseWriter, r *http.Request) {
-	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	name := r.URL.Query().Get("name")
-	if name == "" {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "name is required", nil)
-		return
-	}
-	resp, err := h.svc.Timeseries(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs, name)
-	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query score timeseries", err)
-		return
-	}
-	httputil.RespondOK(w, resp)
-}
-
-func (h *Handler) Distribution(w http.ResponseWriter, r *http.Request) {
-	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
-	name := r.URL.Query().Get("name")
-	if name == "" {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "name is required", nil)
-		return
-	}
-	resp, err := h.svc.Distribution(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs, name)
-	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query score distribution", err)
 		return
 	}
 	httputil.RespondOK(w, resp)

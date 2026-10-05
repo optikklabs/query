@@ -9,5 +9,3 @@ type Service struct {
 }
 
 func NewService(repo *repository.Repository) *Service { return &Service{repo: repo} }
-
-func ptr(v float64) *float64 { return &v }

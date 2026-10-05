@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"database/sql"
 	"time"
 
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
@@ -11,14 +12,28 @@ type Decision struct {
 	Transition   bool
 	ShouldNotify bool
 	IsRecovery   bool
+	// NoDataSince is when the current data gap began; invalid while data flows.
+	NoDataSince sql.NullTime
 }
 
-func Decide(prev models.MonitorStateRow, m models.MonitorRow, cond models.Conditions, value float64, hasData bool, renotifyEverySec int64, now time.Time) Decision {
+func Decide(prev models.MonitorStateRow, cond models.Conditions, value float64, hasData bool, renotifyEverySec int64, now time.Time) Decision {
 	prevStatus := prev.Status
 	if prevStatus == "" {
 		prevStatus = "no_data"
 	}
-	newStatus := classify(prevStatus, cond, value, hasData)
+	noDataSince := sql.NullTime{}
+	if !hasData {
+		noDataSince = prev.NoDataSince
+		if !noDataSince.Valid {
+			noDataSince = sql.NullTime{Valid: true, Time: now}
+		}
+	}
+	// A data gap shorter than NoDataAfterSec holds the current status instead
+	// of applying NoDataAs, so a late or sparse series does not flap.
+	newStatus := prevStatus
+	if hasData || now.Sub(noDataSince.Time) >= time.Duration(cond.NoDataAfterSec)*time.Second {
+		newStatus = classify(prevStatus, cond, value, hasData)
+	}
 	transition := newStatus != prevStatus
 
 	notify := false
@@ -42,6 +57,7 @@ func Decide(prev models.MonitorStateRow, m models.MonitorRow, cond models.Condit
 		Transition:   transition,
 		ShouldNotify: notify,
 		IsRecovery:   isRecovery,
+		NoDataSince:  noDataSince,
 	}
 }
 

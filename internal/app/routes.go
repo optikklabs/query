@@ -32,9 +32,9 @@ func (a *App) setupGlobalMiddleware(r chi.Router) {
 }
 
 func (a *App) setupHealthRoutes(r chi.Router) {
-	r.Get("/health", a.healthLive)
-	r.Get("/health/live", a.healthLive)
-	r.Get("/health/ready", a.healthReady)
+	r.Get("/health", a.health)
+	r.Get("/health/live", a.health)
+	r.Get("/health/ready", a.health)
 }
 
 func (a *App) setupAPIRoutes(r chi.Router) {

@@ -55,7 +55,7 @@ func TestParseIDParam(t *testing.T) {
 		t.Run(tc.value, func(t *testing.T) {
 			route := chi.NewRouteContext()
 			route.URLParams.Add("id", tc.value)
-			req := httptest.NewRequest("GET", "/", nil)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, route))
 			got, ok := ParseIDParam(httptest.NewRecorder(), req, "id")
 			if got != tc.want || ok != tc.ok {
@@ -71,7 +71,7 @@ func TestParseRangeRequiresExplicitBounds(t *testing.T) {
 		"/?startTime=1000",
 		"/?endTime=2000",
 	} {
-		req := httptest.NewRequest("GET", target, nil)
+		req := httptest.NewRequest(http.MethodGet, target, nil)
 		if _, _, err := ParseRange(req); err == nil {
 			t.Fatalf("ParseRange(%q) unexpectedly accepted an implicit bound", target)
 		}
@@ -83,7 +83,7 @@ func TestParseRangeAcceptsExplicitAliases(t *testing.T) {
 		"/?startTime=1000&endTime=2000",
 		"/?start=1000&end=2000",
 	} {
-		req := httptest.NewRequest("GET", target, nil)
+		req := httptest.NewRequest(http.MethodGet, target, nil)
 		start, end, err := ParseRange(req)
 		if err != nil {
 			t.Fatalf("ParseRange(%q): %v", target, err)

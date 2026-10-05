@@ -114,13 +114,11 @@ func resolveConfigFilePath(p string) (string, error) {
 }
 
 func setDefaults(v *viper.Viper) {
-
 	v.SetDefault("environment", "")
 
 	v.SetDefault("server.port", "")
 	v.SetDefault("server.metrics_port", "19091")
 	v.SetDefault("server.allowed_origins", "")
-	v.SetDefault("server.debug_api_logs", false)
 	v.SetDefault("mysql.host", "")
 	v.SetDefault("mysql.port", "")
 	v.SetDefault("mysql.database", "")
@@ -177,5 +175,4 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("billing.gb_price_usd", 0.10)
 	v.SetDefault("billing.metric_million_samples_price_usd", 0.10)
 	v.SetDefault("billing.monthly_record_commitment", 5_000_000_000)
-
 }

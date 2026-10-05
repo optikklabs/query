@@ -69,9 +69,7 @@ func (a *App) addMetricsServerActor(g *run.Group) {
 	g.Add(func() error {
 		return srv.ListenAndServe()
 	}, func(error) {
-		shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(shutCtx)
+		shutdownServer(srv, "metrics")
 	})
 }
 
@@ -110,10 +108,16 @@ func (a *App) addHTTPServerActor(g *run.Group) {
 	g.Add(func() error {
 		return srv.ListenAndServe()
 	}, func(error) {
-		shutCtx, c := context.WithTimeout(context.Background(), 10*time.Second)
-		defer c()
-		srv.Shutdown(shutCtx)
+		shutdownServer(srv, "http")
 	})
+}
+
+func shutdownServer(srv *http.Server, name string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Warn("server shutdown incomplete", slog.String("server", name), slog.Any("error", err))
+	}
 }
 
 func normalizeRunError(err error) error {

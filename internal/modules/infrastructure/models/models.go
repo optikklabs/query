@@ -8,14 +8,6 @@ type MetricValue struct {
 	Value float64 `json:"value"`
 }
 
-type CPUInstanceMetric struct {
-	Host        string   `json:"host"`
-	Pod         string   `json:"pod"`
-	Container   string   `json:"container"`
-	ServiceName string   `json:"serviceName"`
-	Value       *float64 `json:"value"`
-}
-
 type FleetPod struct {
 	PodName      string   `json:"podName"`
 	Host         string   `json:"host"`

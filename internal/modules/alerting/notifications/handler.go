@@ -27,20 +27,6 @@ func (h *Handler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondOK(w, res)
 }
 
-func (h *Handler) GetChannel(w http.ResponseWriter, r *http.Request) {
-	t := httputil.Tenant(r)
-	id, ok := httputil.ParseIDParam(w, r, "id")
-	if !ok {
-		return
-	}
-	res, err := h.Service.GetChannel(r.Context(), t.TenantID, id)
-	if err != nil {
-		httputil.RespondServiceError(w, r, err, "request failed")
-		return
-	}
-	httputil.RespondOK(w, res)
-}
-
 func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
 	var req CreateChannelRequest

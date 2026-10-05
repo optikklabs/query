@@ -62,5 +62,3 @@ func (s *Service) Complete(ctx context.Context, tenantID int64, req CompleteRequ
 		CostUsd:      pricing.CostOf(req.Model, uint64(result.InputTokens), uint64(result.OutputTokens)),
 	}, nil
 }
-
-

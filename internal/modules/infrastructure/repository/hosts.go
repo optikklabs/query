@@ -29,7 +29,6 @@ type HostSpansRow struct {
 }
 
 func (r *Repository) QueryHostUtilization(ctx context.Context, tenantID, startMs, endMs int64) ([]HostMetricRow, error) {
-
 	query := `
 		SELECT
 		    host,

@@ -2,6 +2,7 @@ package dashboards
 
 import (
 	"database/sql"
+
 	"github.com/go-chi/chi/v5"
 )
 

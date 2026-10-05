@@ -166,7 +166,7 @@ func findContext(rows []models.RawDeploymentRow, req models.DetailRequest) (mode
 		Window:      window,
 	}
 	if target > 0 {
-		out.BaselineVersion = pointer(candidates[target-1].Version)
+		out.BaselineVersion = new(candidates[target-1].Version)
 	}
 	return out, nil
 }
@@ -312,8 +312,8 @@ func attachDeltas(item *models.Deployment, previous models.RawDeploymentRow) {
 	previousErrorRate := metrics.Percentage(previous.Errors, previous.Requests)
 	previousP95 := p95From(previous.QS)
 	item.PreviousVersion = &previousVersion
-	item.ErrorRateDelta = pointer(item.ErrorRate - previousErrorRate)
-	item.P95DeltaMs = pointer(item.P95Ms - previousP95)
+	item.ErrorRateDelta = new(item.ErrorRate - previousErrorRate)
+	item.P95DeltaMs = new(item.P95Ms - previousP95)
 }
 
 func sumRequests(group []models.RawDeploymentRow) uint64 {
@@ -436,9 +436,9 @@ func buildDimensionDiffResponse(
 		if hasBaseline {
 			baseline := redValues(row.BaselineRequests, row.BaselineErrors, row.BaselineQS)
 			results[i].Baseline = &baseline
-			results[i].RequestDelta = pointer(float64(current.Requests) - float64(baseline.Requests))
-			results[i].ErrorRateDelta = pointer(current.ErrorRate - baseline.ErrorRate)
-			results[i].P95DeltaMs = pointer(current.P95Ms - baseline.P95Ms)
+			results[i].RequestDelta = new(float64(current.Requests) - float64(baseline.Requests))
+			results[i].ErrorRateDelta = new(current.ErrorRate - baseline.ErrorRate)
+			results[i].P95DeltaMs = new(current.P95Ms - baseline.P95Ms)
 		}
 	}
 	return models.DimensionDiffResponse{Context: comparison, Results: results}
@@ -470,10 +470,10 @@ func compareMetric(current, baseline float64, hasBaseline bool) models.MetricCom
 	}
 	baseline = httputil.SanitizeFloat(baseline)
 	delta := httputil.SanitizeFloat(out.Current - baseline)
-	out.Baseline = pointer(baseline)
-	out.Delta = pointer(delta)
+	out.Baseline = new(baseline)
+	out.Delta = new(delta)
 	if baseline != 0 {
-		out.DeltaPercent = pointer(httputil.SanitizeFloat(delta / baseline * 100))
+		out.DeltaPercent = new(httputil.SanitizeFloat(delta / baseline * 100))
 	}
 	return out
 }
@@ -531,8 +531,4 @@ func laterOf(a, b time.Time) time.Time {
 		return b
 	}
 	return a
-}
-
-func pointer[T any](value T) *T {
-	return &value
 }

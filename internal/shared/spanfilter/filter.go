@@ -33,9 +33,8 @@ type Filters struct {
 	ExcludeStatuses []string `json:"excludeStatuses,omitempty"`
 
 	// Search matches the span name; Message matches the span status message.
-	Search     string `json:"search,omitempty"`
-	SearchMode string `json:"searchMode,omitempty"`
-	Message    string `json:"message,omitempty"`
+	Search  string `json:"search,omitempty"`
+	Message string `json:"message,omitempty"`
 
 	Attributes []AttrFilter `json:"attributes,omitempty"`
 }
@@ -46,8 +45,6 @@ func (f *Filters) Validate() error {
 	}
 	return filterutil.ValidateAttrs(f.Attributes)
 }
-
-var ValidateAttrs = filterutil.ValidateAttrs
 
 type Clauses struct {
 	Resource string
@@ -92,7 +89,6 @@ func BuildClauses(f Filters) Clauses {
 	)
 
 	if f.Search != "" {
-
 		c.Span += ` AND positionCaseInsensitive(name, @search) > 0`
 		c.Args = append(c.Args, clickhouse.Named("search", f.Search))
 	}
