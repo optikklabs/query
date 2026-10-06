@@ -3,8 +3,9 @@ package llm
 import (
 	"context"
 
-	"github.com/optikklabs/query/internal/shared/metrics"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 func (s *Service) Models(ctx context.Context, tenantID, startMs, endMs int64) (ModelsResponse, error) {

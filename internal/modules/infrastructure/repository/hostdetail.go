@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
@@ -71,7 +72,8 @@ func (r *Repository) QueryHostMeta(ctx context.Context, tenantID int64, host str
 		clickhouse.Named("systemMetricNames", seriesdefs.Host.MetricNames()),
 	)
 	var row HostMetaRow
-	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "hostdetail.QueryHostMeta", &row, query, args...)
+	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "hostdetail.QueryHostMeta", &row, query, args...)
+	return row, err
 }
 
 var kpiMetricNames = []string{
@@ -100,5 +102,6 @@ func (r *Repository) QueryKPIs(ctx context.Context, tenantID int64, host string,
 	args := chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), kpiMetricNames)
 	args = append(args, clickhouse.Named("host", host))
 	var rows []KPIRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hostdetail.QueryKPIs", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hostdetail.QueryKPIs", &rows, query, args...)
+	return rows, err
 }

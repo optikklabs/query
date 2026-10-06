@@ -3,6 +3,7 @@ package deployments
 import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/go-chi/chi/v5"
+
 	"github.com/optikklabs/query/internal/modules/deployments/repository"
 	"github.com/optikklabs/query/internal/modules/deployments/service"
 )

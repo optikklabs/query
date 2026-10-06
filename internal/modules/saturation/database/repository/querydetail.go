@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
@@ -67,7 +68,8 @@ func (r *Repository) GetServices(ctx context.Context, tenantID, startMs, endMs i
 
 	args := append(hashArgs(tenantID, startMs, endMs, hash), filterArgs...)
 	var rows []ServiceRaw
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetServices", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetServices", &rows, query, args...)
+	return rows, err
 }
 
 type TimeseriesRaw struct {
@@ -92,7 +94,8 @@ func (r *Repository) GetTimeseries(ctx context.Context, tenantID, startMs, endMs
 
 	args := append(hashArgs(tenantID, startMs, endMs, hash), filterArgs...)
 	var rows []TimeseriesRaw
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetTimeseries", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetTimeseries", &rows, query, args...)
+	return rows, err
 }
 
 type ExecutionRaw struct {
@@ -124,5 +127,6 @@ func (r *Repository) GetExecutions(ctx context.Context, tenantID, startMs, endMs
 	args := append(hashArgs(tenantID, startMs, endMs, hash), clickhouse.Named("qLimit", uint64(limit)))
 	args = append(args, filterArgs...)
 	var rows []ExecutionRaw
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetExecutions", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetExecutions", &rows, query, args...)
+	return rows, err
 }

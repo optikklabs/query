@@ -71,13 +71,13 @@ func CmpSQL(op string) string {
 }
 
 // Limit resolves a requested page size: 0 (unset) means def, and anything
-// outside [1, max] is a validation error.
-func Limit(v, def, max int) (int, error) {
+// outside [1, maxLimit] is a validation error.
+func Limit(v, def, maxLimit int) (int, error) {
 	switch {
 	case v == 0:
 		return def, nil
-	case v < 0 || v > max:
-		return 0, errorcode.ValidationError{Msg: fmt.Sprintf("limit must be between 1 and %d", max)}
+	case v < 0 || v > maxLimit:
+		return 0, errorcode.ValidationError{Msg: fmt.Sprintf("limit must be between 1 and %d", maxLimit)}
 	default:
 		return v, nil
 	}

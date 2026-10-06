@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
 	"github.com/optikklabs/query/internal/infra/metrics"
 )
 

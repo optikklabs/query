@@ -9,6 +9,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 
 	"github.com/jmoiron/sqlx"
+
 	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 )
@@ -74,7 +75,7 @@ func (r *Repository) CreateTenantWithAdmin(ctx context.Context, signup tenantAdm
 		}
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err := tx.Commit(); err != nil {
 		return shared.AuthUser{}, err
 	}
 	return shared.AuthUser{
@@ -104,7 +105,7 @@ func (r *Repository) ConsumeVerification(ctx context.Context, tokenHash string) 
 	if _, err = tx.ExecContext(ctx, `UPDATE users SET active=1 WHERE id=?`, user.ID); err != nil {
 		return shared.AuthUser{}, err
 	}
-	if err = tx.Commit(); err != nil {
+	if err := tx.Commit(); err != nil {
 		return shared.AuthUser{}, err
 	}
 	return user, nil
@@ -158,7 +159,7 @@ func (r *Repository) UpdateUnverifiedTenantAndAdmin(ctx context.Context, signup 
 		}
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err := tx.Commit(); err != nil {
 		return shared.AuthUser{}, err
 	}
 	return shared.AuthUser{

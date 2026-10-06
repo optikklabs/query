@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 

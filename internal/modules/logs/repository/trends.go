@@ -33,8 +33,9 @@ func (r *Repository) Summary(ctx context.Context, f filter.Filters) (SummaryRow,
 	FROM ` + source
 
 	var row SummaryRow
-	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Summary",
+	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Summary",
 		&row, query, args...)
+	return row, err
 }
 
 func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, error) {
@@ -53,6 +54,7 @@ func (r *Repository) Trend(ctx context.Context, f filter.Filters) ([]TrendRow, e
 	ORDER BY time_bucket ASC`
 
 	var rows []TrendRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Trend",
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "logsTrends.Trend",
 		&rows, query, args...)
+	return rows, err
 }

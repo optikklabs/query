@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
@@ -50,7 +51,8 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startM
 
 	args := chargs.RangeArgs(tenantID, startMs, endMs)
 	var rows []SystemSummaryRaw
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "datastoreSystems.GetSystemSummariesRaw", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "datastoreSystems.GetSystemSummariesRaw", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) GetActiveConnectionsBySystem(ctx context.Context, tenantID, startMs, endMs int64) (map[string]int64, error) {

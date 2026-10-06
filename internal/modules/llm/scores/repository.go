@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
@@ -86,6 +87,7 @@ func (r *Repository) Summary(ctx context.Context, tenantID, startMs, endMs int64
 		GROUP BY name
 		ORDER BY cnt DESC, name ASC`
 	var rows []summaryRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.scores.Summary", &rows, query,
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.scores.Summary", &rows, query,
 		chargs.RangeArgs(tenantID, startMs, endMs)...)
+	return rows, err
 }

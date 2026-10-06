@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/jmoiron/sqlx"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/sqljson"

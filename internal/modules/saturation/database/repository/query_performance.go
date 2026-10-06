@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
@@ -83,9 +84,9 @@ func (r *Repository) GetQueryCatalogue(
 		GROUP BY query_hash
 		ORDER BY call_count DESC, query_hash ASC
 		LIMIT @queryLimit`
-	args := append(baseArgs, clickhouse.Named("queryLimit", uint64(MaxCatalogueQueries)))
 	var queries []QueryOptionRaw
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "queryperformance.GetQueries", &queries, queriesQuery, args...); err != nil {
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "queryperformance.GetQueries", &queries, queriesQuery,
+		append(baseArgs, clickhouse.Named("queryLimit", uint64(MaxCatalogueQueries)))...); err != nil {
 		return nil, nil, err
 	}
 	return collections, queries, nil
@@ -164,5 +165,6 @@ func (r *Repository) GetQuerySeriesPoints(
 		ORDER BY bucket_at, query_hash`
 	args = timebucket.WithBucketGrainSec(args, startMs, endMs)
 	var rows []QuerySeriesPointRaw
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "queryperformance.GetSeries", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "queryperformance.GetSeries", &rows, query, args...)
+	return rows, err
 }

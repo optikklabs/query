@@ -9,10 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/optikklabs/query/internal/infra/llmproviders"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/shared/errorcode"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -81,7 +82,7 @@ func (s *ExperimentService) executeJob(job experimentJob) {
 	slog.Error("llm experiment failed", slog.Int64("run_id", job.runID), slog.Any("error", err))
 	// The run context may be the reason it failed, so record the failure on
 	// a fresh one.
-	failCtx, failCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	failCtx, failCancel := context.WithTimeout(context.WithoutCancel(s.ctx), 10*time.Second)
 	defer failCancel()
 	if err := s.repo.FinalizeRun(failCtx, job.runID, RunFinal{Status: "failed", Error: errorText(err)}); err != nil {
 		slog.Error("llm experiment: mark run failed", slog.Int64("run_id", job.runID), slog.Any("error", err))
@@ -131,7 +132,7 @@ func (s *ExperimentService) Run(ctx context.Context, tenantID, datasetID int64, 
 	}
 
 	job := experimentJob{tenantID: tenantID, runID: runID, req: req, apiKey: apiKey, items: items}
-	s.jobs.Go(func() error {
+	s.jobs.Go(func() error { //nolint:contextcheck // the job outlives the request; it runs on the service lifetime context
 		s.executeJob(job)
 		return nil
 	})

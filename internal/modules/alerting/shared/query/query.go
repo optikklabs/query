@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
@@ -54,7 +55,8 @@ func (r *Repository) QueryPodMeta(ctx context.Context, tenantID int64, pod strin
 		clickhouse.Named("podMetricNames", seriesdefs.Pod.MetricNames()),
 	)
 	var row PodMetaRow
-	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "containerdetail.QueryPodMeta", &row, query, args...)
+	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "containerdetail.QueryPodMeta", &row, query, args...)
+	return row, err
 }
 
 func (r *Repository) QueryPodRED(ctx context.Context, tenantID int64, pod string, startMs, endMs int64) (PodREDRow, error) {
@@ -73,5 +75,6 @@ func (r *Repository) QueryPodRED(ctx context.Context, tenantID int64, pod string
 		clickhouse.Named("pod", pod),
 	)
 	var row PodREDRow
-	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "containerdetail.QueryPodRED", &row, query, args...)
+	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "containerdetail.QueryPodRED", &row, query, args...)
+	return row, err
 }

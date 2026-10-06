@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
@@ -46,7 +47,8 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, tenantID, startMs
 
 	args := chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), utilizationMetricNames)
 	var rows []HostMetricRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hosts.QueryHostUtilization", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hosts.QueryHostUtilization", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) QueryHostSpans(
@@ -72,8 +74,9 @@ func (r *Repository) QueryHostSpans(
 		clickhouse.Named("unknownHost", unknownHost),
 	)
 	var rows []HostSpansRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hosts.QueryHostSpans",
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hosts.QueryHostSpans",
 		&rows, query, args...)
+	return rows, err
 }
 
 var utilizationMetricNames = slices.Concat(infraconsts.CPUMetrics, infraconsts.MemoryMetrics, infraconsts.DiskMetrics)

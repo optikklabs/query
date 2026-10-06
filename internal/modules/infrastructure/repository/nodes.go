@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
@@ -62,7 +63,8 @@ func (r *Repository) QueryInfrastructureNodes(ctx context.Context, tenantID int6
 		clickhouse.Named("maxNodes", uint64(MaxNodes)),
 	)
 	var rows []NodeAggregateRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "nodes.QueryInfrastructureNodes", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "nodes.QueryInfrastructureNodes", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, tenantID int64, startMs, endMs int64) (NodeSummaryRow, error) {
@@ -84,7 +86,8 @@ func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, tenantI
 		clickhouse.Named("degradedPct", infraconsts.DegradedErrorPct),
 		clickhouse.Named("unhealthyPct", infraconsts.UnhealthyErrorPct))
 	var row NodeSummaryRow
-	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "nodes.QueryInfrastructureNodeSummary", &row, query, args...)
+	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "nodes.QueryInfrastructureNodeSummary", &row, query, args...)
+	return row, err
 }
 
 func (r *Repository) QueryInfrastructureNodeServices(ctx context.Context, tenantID int64, host string, startMs, endMs int64) ([]NodeServiceAggregateRow, error) {
@@ -110,5 +113,6 @@ func (r *Repository) QueryInfrastructureNodeServices(ctx context.Context, tenant
 		clickhouse.Named("maxServices", uint64(MaxServices)),
 	)
 	var rows []NodeServiceAggregateRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "nodes.QueryInfrastructureNodeServices", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "nodes.QueryInfrastructureNodeServices", &rows, query, args...)
+	return rows, err
 }

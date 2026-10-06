@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/optikklabs/query/internal/modules/deployments/models"
 	"github.com/optikklabs/query/internal/modules/deployments/service"
 	"github.com/optikklabs/query/internal/shared/httputil"

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/services/redfleet/filter"
@@ -63,8 +64,9 @@ func (r *Repository) GetRequestAndErrorRateTimeSeries(ctx context.Context, f fil
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 	var rows []models.RequestRateRawRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetRequestAndErrorRateTimeSeries",
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetRequestAndErrorRateTimeSeries",
 		&rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) GetStatusTimeSeries(ctx context.Context, f filter.Filters) ([]models.StatusBucketRow, error) {
@@ -82,8 +84,9 @@ func (r *Repository) GetStatusTimeSeries(ctx context.Context, f filter.Filters) 
 		GROUP BY bucket_at
 		ORDER BY bucket_at ASC`
 	var rows []models.StatusBucketRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetStatusTimeSeries",
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetStatusTimeSeries",
 		&rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f filter.Filters) ([]models.LatencyPercentilesRow, error) {
@@ -111,8 +114,9 @@ func (r *Repository) GetLatencyPercentilesTimeSeries(ctx context.Context, f filt
 func (r *Repository) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Filters) ([]models.EndpointRateRow, error) {
 	query, args := buildREDByEndpointQuery(f)
 	var rows []models.EndpointRateRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetREDByEndpointTimeSeries",
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetREDByEndpointTimeSeries",
 		&rows, query, args...)
+	return rows, err
 }
 
 // Split out so the generated SQL can be exercised without a database.
@@ -146,6 +150,7 @@ func (r *Repository) GetRequestRateTimeSeries(ctx context.Context, f filter.Filt
 		GROUP BY bucket_at, service_name
 		ORDER BY bucket_at ASC`
 	var rows []models.ServiceRequestRateRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetRequestRateTimeSeries",
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetRequestRateTimeSeries",
 		&rows, query, args...)
+	return rows, err
 }

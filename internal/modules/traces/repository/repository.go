@@ -2,6 +2,7 @@ package repository
 
 import (
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 

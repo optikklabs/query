@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/shared/chargs"
@@ -237,9 +238,10 @@ func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID str
 		clickhouse.Named("ioMaxChars", uint64(traceSpanIOMaxChars)),
 		clickhouse.Named("maxSpans", uint64(traceSpansMaxRows)),
 	)
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.TraceSpans", &rows, query,
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.TraceSpans", &rows, query,
 		args...,
 	)
+	return rows, err
 }
 
 // TraceSpanIO fetches the untruncated prompt/completion for a single span,
@@ -275,5 +277,6 @@ func (r *Repository) ScoresForTraces(ctx context.Context, tenantID, startMs, end
 		ORDER BY timestamp ASC, trace_id ASC, name ASC, span_id ASC`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("traceIDs", traceIDs))
 	var rows []traceScoreRow
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.ScoresForTraces", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.ScoresForTraces", &rows, query, args...)
+	return rows, err
 }

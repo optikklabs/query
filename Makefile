@@ -1,4 +1,4 @@
-.PHONY: build run fmt vet lint
+.PHONY: build run fmt vet lint test vulncheck
 
 DEV_JWT_SECRET ?= optikk-local-development-secret-change-before-deploy
 # base64 of 32 bytes; local-only, like DEV_JWT_SECRET.
@@ -13,10 +13,16 @@ run:
 	go run ./cmd/query
 
 fmt:
-	gofmt -w .
+	golangci-lint fmt ./...
 
 vet:
 	go vet ./...
 
 lint:
 	golangci-lint run ./...
+
+test:
+	go test -race ./...
+
+vulncheck:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...

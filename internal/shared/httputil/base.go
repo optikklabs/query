@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
 	types "github.com/optikklabs/query/internal/shared/contracts"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/filterutil"
@@ -52,7 +53,8 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 	if err != nil {
 		slog.Error("failed to encode json response", slog.Any("error", err))
 		status = http.StatusInternalServerError
-		body, _ = json.Marshal(types.Failure(errorcode.Internal, "failed to encode response", "", w.Header().Get("X-Request-Id")))
+		body, _ = json.Marshal(types.Failure( //nolint:errchkjson // a failure envelope carries only strings and times
+			errorcode.Internal, "failed to encode response", "", w.Header().Get("X-Request-Id")))
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -229,12 +231,12 @@ func QueryBool(w http.ResponseWriter, r *http.Request, key string) (*bool, bool)
 
 // QueryLimit reads the optional limit query param under filterutil.Limit's
 // rules, answering 400 when it is out of range.
-func QueryLimit(w http.ResponseWriter, r *http.Request, def, max int) (int, bool) {
+func QueryLimit(w http.ResponseWriter, r *http.Request, def, maxLimit int) (int, bool) {
 	raw, ok := QueryInt(w, r, "limit", 0)
 	if !ok {
 		return 0, false
 	}
-	limit, err := filterutil.Limit(raw, def, max)
+	limit, err := filterutil.Limit(raw, def, maxLimit)
 	if err != nil {
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, err.Error(), nil)
 		return 0, false

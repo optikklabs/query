@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/services/errors/models"
@@ -55,7 +56,8 @@ func (r *Repository) ExplorerGroupRows(ctx context.Context, req models.GroupsReq
 		LIMIT @pgLimit`
 
 	var rows []models.RawErrorGroupRow
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerGroups", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerGroups", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) ExplorerFacetRows(ctx context.Context, req models.FacetsRequest) ([]models.RawFacetDimRow, error) {
@@ -84,7 +86,8 @@ func (r *Repository) ExplorerFacetRows(ctx context.Context, req models.FacetsReq
 		LIMIT 20 BY dim`
 
 	var rows []models.RawFacetDimRow
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerFacets", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerFacets", &rows, query, args...)
+	return rows, err
 }
 
 // ExplorerSummaryRow aggregates over groups, not spans, so "active"/"new"
@@ -125,5 +128,6 @@ func (r *Repository) ExplorerTrendRows(ctx context.Context, req models.OverviewR
 		ORDER BY time_bucket ASC`
 
 	var rows []models.RawTrendRow
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerTrend", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "errors.ExplorerTrend", &rows, query, args...)
+	return rows, err
 }

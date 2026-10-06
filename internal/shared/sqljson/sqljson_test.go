@@ -4,7 +4,7 @@ import "testing"
 
 func TestStringListRoundTrip(t *testing.T) {
 	v, err := StringList(nil).Value()
-	if err != nil || string(v.([]byte)) != "[]" {
+	if b, ok := v.([]byte); err != nil || !ok || string(b) != "[]" {
 		t.Fatalf("nil list stored as %q, %v; want []", v, err)
 	}
 

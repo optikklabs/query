@@ -14,7 +14,7 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{Service: service}
 }
 
-func (h *Handler) IngestionEndpoints(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) IngestionEndpoints(w http.ResponseWriter, _ *http.Request) {
 	httputil.RespondOK(w, h.Service.IngestionEndpoints())
 }
 

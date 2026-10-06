@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )

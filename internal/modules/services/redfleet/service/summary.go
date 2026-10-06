@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/modules/services/redfleet/filter"
 	"github.com/optikklabs/query/internal/modules/services/redfleet/models"
 	"github.com/optikklabs/query/internal/shared/httputil"
-	"golang.org/x/sync/errgroup"
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 var summaryMetrics = []string{
@@ -49,27 +51,19 @@ func (s *Service) GetServiceSummary(ctx context.Context, f filter.Filters) (mode
 		return models.ServiceSummaryResponse{}, err
 	}
 
-	var redRow *models.REDMetricsRow
+	resp := models.ServiceSummaryResponse{ServiceName: serviceName}
+	resp.CPUUtilization, resp.MemoryUtilization, resp.DiskUtilization = extractSaturationAverages(sats)
 	if len(redRows) > 0 {
-		redRow = &redRows[0]
+		row := redRows[0]
+		resp.RequestCount = int64(row.TotalCount)
+		resp.ErrorCount = int64(row.ErrorCount)
+		resp.RPS = httputil.SanitizeFloat(float64(resp.RequestCount) / windowSeconds(f))
+		resp.ErrorRate = httputil.SanitizeFloat(metrics.Percentage(resp.ErrorCount, resp.RequestCount))
+		resp.P50Ms = httputil.SanitizeFloat(float64(row.P50Ms))
+		resp.P95Ms = httputil.SanitizeFloat(float64(row.P95Ms))
+		resp.P99Ms = httputil.SanitizeFloat(float64(row.P99Ms))
 	}
-
-	cpuVal, memVal, diskVal := extractSaturationAverages(sats)
-	reqCount, errCount, rps, errRate, p50, p95, p99 := extractREDMetrics(redRow, windowSeconds(f))
-
-	return models.ServiceSummaryResponse{
-		ServiceName:       serviceName,
-		RequestCount:      reqCount,
-		ErrorCount:        errCount,
-		RPS:               httputil.SanitizeFloat(rps),
-		ErrorRate:         httputil.SanitizeFloat(errRate),
-		P50Ms:             p50,
-		P95Ms:             p95,
-		P99Ms:             p99,
-		CPUUtilization:    cpuVal,
-		MemoryUtilization: memVal,
-		DiskUtilization:   diskVal,
-	}, nil
+	return resp, nil
 }
 
 // GetServiceSaturationTimeSeries is the service's mean CPU utilization per

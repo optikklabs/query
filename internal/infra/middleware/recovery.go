@@ -13,7 +13,7 @@ import (
 func ErrorRecovery() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer func() {
+			defer func() { //nolint:contextcheck // WriteJSON logs encode failures without a request; it has no ctx to pass
 				recovered := recover()
 				if recovered == nil {
 					return
@@ -22,7 +22,7 @@ func ErrorRecovery() func(http.Handler) http.Handler {
 				if err, ok := recovered.(error); ok && errors.Is(err, http.ErrAbortHandler) {
 					panic(recovered)
 				}
-				slog.Error("panic recovered",
+				slog.ErrorContext(r.Context(), "panic recovered",
 					slog.Any("error", recovered),
 					slog.String("method", r.Method),
 					slog.String("path", r.URL.Path),

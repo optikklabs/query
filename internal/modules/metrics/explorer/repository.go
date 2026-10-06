@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/metrics/filter"
 	"github.com/optikklabs/query/internal/shared/chargs"
@@ -39,7 +40,8 @@ func (r *Repository) ListMetricNames(ctx context.Context, tenantID, startMs, end
 		clickhouse.Named("search", filterutil.LikeSubstringPattern(search)),
 	)
 	var rows []metricNameDTO
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListMetricNames", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListMetricNames", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) ListResourceTagValues(ctx context.Context, tenantID, startMs, endMs int64, metricName, canonical string) ([]tagValueDTO, error) {
@@ -62,7 +64,8 @@ func (r *Repository) ListResourceTagValues(ctx context.Context, tenantID, startM
 		clickhouse.Named("metricName", metricName),
 	)
 	var rows []tagValueDTO
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListResourceTagValues", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListResourceTagValues", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) ListAttributeTagValues(ctx context.Context, tenantID, startMs, endMs int64, metricName, tagKey string) ([]tagValueDTO, error) {
@@ -83,7 +86,8 @@ func (r *Repository) ListAttributeTagValues(ctx context.Context, tenantID, start
 		clickhouse.Named("metricName", metricName),
 	)
 	var rows []tagValueDTO
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListAttributeTagValues", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListAttributeTagValues", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) ListMetricTagKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]string, error) {
@@ -187,7 +191,8 @@ func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([
 	}
 
 	var rows []timeseriesPointDTO
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.QueryRollupSeries", &rows, sql, args...)
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.QueryRollupSeries", &rows, sql, args...)
+	return rows, err
 }
 
 func deltaRollupSQL(fromTable, where, selectCols, groupByCols string) string {

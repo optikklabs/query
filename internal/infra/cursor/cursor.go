@@ -11,7 +11,7 @@ import (
 // Encode serializes a cursor struct; cursors hold only plain fields, so
 // marshaling cannot fail.
 func Encode[T any](cur T) string {
-	b, _ := json.Marshal(cur)
+	b, _ := json.Marshal(cur) //nolint:errchkjson // cursor types are flat structs of strings, numbers and times
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
@@ -36,7 +36,7 @@ var ErrInvalid = errorcode.ValidationError{Msg: "invalid cursor"}
 // page), or ErrInvalid.
 func Decode[T any](raw string) (*T, error) {
 	if raw == "" {
-		return nil, nil
+		return nil, nil //nolint:nilnil // a nil cursor is the documented first page
 	}
 	b, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil {

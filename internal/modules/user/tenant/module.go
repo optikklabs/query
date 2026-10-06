@@ -2,6 +2,7 @@ package tenant
 
 import (
 	"github.com/go-chi/chi/v5"
+
 	"github.com/optikklabs/query/internal/infra/middleware"
 )
 

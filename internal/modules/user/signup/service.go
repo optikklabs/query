@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/url"
 	"strings"
@@ -195,10 +196,10 @@ func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, sec
 	return user, nil
 }
 
-func (s *ResendVerificationSender) SendVerification(ctx context.Context, to, token string) error {
-	verifyURL := s.verifyBaseURL + "?token=" + url.QueryEscape(token)
-	html := "<p>Verify your account by opening <a href=\"" + verifyURL + "\">this link</a>. This link expires in 24 hours.</p>"
-	return s.mailer.Send(ctx, to, "Verify your Optikk email", html)
+func (s *ResendVerificationSender) SendVerification(ctx context.Context, to, verifyToken string) error {
+	verifyURL := s.verifyBaseURL + "?token=" + url.QueryEscape(verifyToken)
+	body := `<p>Verify your account by opening <a href="` + html.EscapeString(verifyURL) + `">this link</a>. This link expires in 24 hours.</p>`
+	return s.mailer.Send(ctx, to, "Verify your Optikk email", body)
 }
 
 func normalizeSignup(req SignupRequest) (normalizedSignup, error) {

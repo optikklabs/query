@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
@@ -76,8 +77,9 @@ func (r *Repository) DailySignals(ctx context.Context, tenantID, startMs, endMs 
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("signals", []string{"logs", "spans", "metrics"}))
 	var rows []signalDateCountRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db,
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db,
 		"ingestion.DailySignals", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) ServiceUsage(
@@ -99,8 +101,9 @@ func (r *Repository) ServiceUsage(
 		chargs.Millis("currentStart", currentStartMs),
 		clickhouse.Named("signals", []string{"logs", "spans"}))
 	var rows []serviceUsageRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db,
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db,
 		"ingestion.ServiceUsage", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) MetricCardinality(ctx context.Context, tenantID, startMs, endMs int64) ([]metricCardinalityRow, error) {
@@ -112,9 +115,10 @@ func (r *Repository) MetricCardinality(ctx context.Context, tenantID, startMs, e
 	GROUP BY GROUPING SETS ((metric_name), ())
 	ORDER BY is_total DESC, c DESC, name ASC`
 	var rows []metricCardinalityRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db,
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db,
 		"ingestion.MetricCardinality", &rows, query,
 		chargs.RangeArgs(tenantID, startMs, endMs)...)
+	return rows, err
 }
 
 func (r *Repository) ServiceTimeseries(ctx context.Context, tenantID, startMs, endMs int64) ([]svcCountRow, error) {
@@ -125,5 +129,6 @@ func (r *Repository) ServiceTimeseries(ctx context.Context, tenantID, startMs, e
 	GROUP BY svc
 	ORDER BY c DESC, svc ASC`
 	var rows []svcCountRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "ingestion.ServiceTimeseries", &rows, query, chargs.RangeArgs(tenantID, startMs, endMs)...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "ingestion.ServiceTimeseries", &rows, query, chargs.RangeArgs(tenantID, startMs, endMs)...)
+	return rows, err
 }

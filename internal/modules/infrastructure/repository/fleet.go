@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
@@ -47,5 +48,6 @@ func (r *Repository) QueryFleetPods(ctx context.Context, tenantID int64, startMs
 		clickhouse.Named("hostFilter", host),
 	)
 	var rows []FleetPodAggregateRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "fleet.QueryFleetPods", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "fleet.QueryFleetPods", &rows, query, args...)
+	return rows, err
 }

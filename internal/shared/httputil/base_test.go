@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -31,7 +32,7 @@ func TestClientIPTrustsOnlyTraefikXFFEntry(t *testing.T) {
 		{name: "direct fallback", remoteAddr: "198.51.100.4:1234", want: "198.51.100.4"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 			req.RemoteAddr = tc.remoteAddr
 			if tc.xff != "" {
 				req.Header.Set("X-Forwarded-For", tc.xff)
@@ -57,7 +58,7 @@ func TestParseIDParam(t *testing.T) {
 		t.Run(tc.value, func(t *testing.T) {
 			route := chi.NewRouteContext()
 			route.URLParams.Add("id", tc.value)
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, route))
 			got, ok := ParseIDParam(httptest.NewRecorder(), req, "id")
 			if got != tc.want || ok != tc.ok {
@@ -78,7 +79,7 @@ func TestParseRangeRejectsInvalidWindows(t *testing.T) {
 		"/?startTime=1&endTime=2592000002",
 		"/?startTime=abc&endTime=2000",
 	} {
-		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req := httptest.NewRequest(http.MethodGet, target, http.NoBody)
 		if _, _, err := parseRange(req, filterutil.MaxTimeRangeMs); err == nil {
 			t.Fatalf("parseRange(%q) unexpectedly accepted the window", target)
 		}
@@ -86,7 +87,7 @@ func TestParseRangeRejectsInvalidWindows(t *testing.T) {
 }
 
 func TestParseRangeAcceptsValidWindow(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/?startTime=1000&endTime=2000", nil)
+	req := httptest.NewRequest(http.MethodGet, "/?startTime=1000&endTime=2000", http.NoBody)
 	start, end, err := parseRange(req, filterutil.MaxTimeRangeMs)
 	if err != nil {
 		t.Fatalf("parseRange: %v", err)

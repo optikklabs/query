@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/shared/chargs"
@@ -44,7 +45,8 @@ func (r *Repository) TopSessions(ctx context.Context, tenantID, startMs, endMs i
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	args = append(args, clickhouse.Named("limit", uint64(limit)))
 	var rows []sessionRow
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.sessions.TopSessions", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.sessions.TopSessions", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int64) (overviewRow, error) {
@@ -64,7 +66,8 @@ func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int6
 		)`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var row overviewRow
-	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "llm.sessions.Overview", &row, query, args...)
+	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "llm.sessions.Overview", &row, query, args...)
+	return row, err
 }
 
 func (r *Repository) MeanScoreBySession(ctx context.Context, tenantID, startMs, endMs int64, sessionIDs []string) ([]sessionScoreRow, error) {
@@ -77,7 +80,8 @@ func (r *Repository) MeanScoreBySession(ctx context.Context, tenantID, startMs, 
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("sessionIDs", sessionIDs))
 	var rows []sessionScoreRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.sessions.MeanScoreBySession", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.sessions.MeanScoreBySession", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) Detail(ctx context.Context, tenantID int64, sessionID string, startMs, endMs int64) ([]turnRow, error) {
@@ -97,7 +101,8 @@ func (r *Repository) Detail(ctx context.Context, tenantID int64, sessionID strin
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	args = append(args, clickhouse.Named("sessionID", sessionID))
 	var rows []turnRow
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.sessions.Detail", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.sessions.Detail", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) Identity(ctx context.Context, tenantID int64, sessionID string, startMs, endMs int64) (identityRow, error) {
@@ -109,5 +114,6 @@ func (r *Repository) Identity(ctx context.Context, tenantID int64, sessionID str
 		WHERE is_gen_ai AND llm_session_id = @sessionID`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("sessionID", sessionID))
 	var row identityRow
-	return row, dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "llm.sessions.Identity", &row, query, args...)
+	err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "llm.sessions.Identity", &row, query, args...)
+	return row, err
 }

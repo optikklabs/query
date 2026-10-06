@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/services/errors/models"
@@ -44,5 +45,6 @@ func (r *Repository) ServiceErrorRateRows(ctx context.Context, tenantID int64, s
 		ORDER BY bucket_at ASC`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clauseArgs...)
 	var rows []models.RawServiceRateRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ServiceErrorRate", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ServiceErrorRate", &rows, query, args...)
+	return rows, err
 }

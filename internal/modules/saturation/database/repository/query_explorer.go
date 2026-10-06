@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
 	"github.com/optikklabs/query/internal/shared/chargs"
@@ -59,7 +60,8 @@ func (r *Repository) QueryPatterns(
 		LIMIT @qLimit`
 
 	var rows []PatternRaw
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "database.QueryPatterns", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "database.QueryPatterns", &rows, query, args...)
+	return rows, err
 }
 
 func buildExplorerClauses(f filter.ExplorerFilters, cursor *QueryPatternsCursor) (string, string, []any) {

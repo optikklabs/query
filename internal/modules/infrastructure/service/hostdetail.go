@@ -6,12 +6,13 @@ import (
 
 	"github.com/optikklabs/query/internal/shared/nullable"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
 	"github.com/optikklabs/query/internal/modules/infrastructure/repository"
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesdefs"
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
-	"golang.org/x/sync/errgroup"
 )
 
 func (s *Service) GetHostSeries(ctx context.Context, tenantID int64, host, metricID string, startMs, endMs int64) ([]models.SeriesPoint, error) {

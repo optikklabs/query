@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
@@ -38,7 +39,8 @@ func (r *Repository) ModelUsage(ctx context.Context, tenantID, startMs, endMs in
 		ORDER BY cost DESC, model ASC`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var rows []modelUsageRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.ModelUsage", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.ModelUsage", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) OverviewWindows(ctx context.Context, tenantID, startMs, endMs int64) ([]overviewWindowRow, error) {
@@ -57,7 +59,8 @@ func (r *Repository) OverviewWindows(ctx context.Context, tenantID, startMs, end
 		GROUP BY is_current`
 	args := append(overviewArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var rows []overviewWindowRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.OverviewWindows", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.OverviewWindows", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) OverviewSeries(ctx context.Context, tenantID, startMs, endMs int64) ([]overviewSeriesRow, error) {
@@ -75,7 +78,8 @@ func (r *Repository) OverviewSeries(ctx context.Context, tenantID, startMs, endM
 		ORDER BY bucket_at ASC`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var rows []overviewSeriesRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.OverviewSeries", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.OverviewSeries", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) TraceCounts(ctx context.Context, tenantID, startMs, endMs int64) ([]traceCountRow, error) {
@@ -88,8 +92,9 @@ func (r *Repository) TraceCounts(ctx context.Context, tenantID, startMs, endMs i
 		WHERE is_gen_ai
 		GROUP BY is_current`
 	var rows []traceCountRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.TraceCounts", &rows, query,
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.TraceCounts", &rows, query,
 		overviewArgs(tenantID, startMs, endMs)...)
+	return rows, err
 }
 
 func overviewArgs(tenantID, startMs, endMs int64) []any {

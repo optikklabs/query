@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/filterutil"

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
 	"github.com/optikklabs/query/internal/shared/chargs"
@@ -34,7 +35,8 @@ func (r *Repository) TopUsers(ctx context.Context, tenantID, startMs, endMs int6
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	args = append(args, clickhouse.Named("limit", uint64(limit)))
 	var rows []userRow
-	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.users.TopUsers", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.users.TopUsers", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int64) (overviewRow, error) {
@@ -47,7 +49,8 @@ func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int6
 		WHERE is_gen_ai AND llm_user_id != ''`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var row overviewRow
-	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.Overview", &row, query, args...)
+	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.Overview", &row, query, args...)
+	return row, err
 }
 
 func (r *Repository) MeanScoreByUser(ctx context.Context, tenantID, startMs, endMs int64, userIDs []string) ([]userScoreRow, error) {
@@ -60,7 +63,8 @@ func (r *Repository) MeanScoreByUser(ctx context.Context, tenantID, startMs, end
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("userIDs", userIDs))
 	var rows []userScoreRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.MeanScoreByUser", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.MeanScoreByUser", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) LowScoreUserCount(ctx context.Context, tenantID, startMs, endMs int64, threshold float64) (uint64, error) {

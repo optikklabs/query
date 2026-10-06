@@ -6,9 +6,10 @@ import (
 	"maps"
 	"slices"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/optikklabs/query/internal/modules/metrics/filter"
 	"github.com/optikklabs/query/internal/shared/errorcode"
-	"golang.org/x/sync/errgroup"
 )
 
 type Service struct {

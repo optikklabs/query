@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
@@ -51,8 +52,9 @@ func (r *Repository) GetServiceSaturationAggs(
 		GROUP BY metric_name`
 
 	var rows []models.ServiceMetricRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetServiceSaturationAggs",
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetServiceSaturationAggs",
 		&rows, query, saturationArgs(tenantID, startMs, endMs, serviceName, metricNames)...)
+	return rows, err
 }
 
 func (r *Repository) GetServiceSaturationTimeSeries(
@@ -71,6 +73,7 @@ func (r *Repository) GetServiceSaturationTimeSeries(
 		ORDER BY bucket_at ASC`
 
 	var rows []models.SaturationPointRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetServiceSaturationTimeSeries",
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetServiceSaturationTimeSeries",
 		&rows, query, saturationArgs(tenantID, startMs, endMs, serviceName, metricNames)...)
+	return rows, err
 }

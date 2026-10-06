@@ -115,19 +115,3 @@ func extractSaturationAverages(sats []models.ServiceMetricRow) (cpu, mem, disk *
 	}
 	return infraconsts.Mean(cpuValues), mem, disk
 }
-
-func extractREDMetrics(redRow *models.REDMetricsRow, durationSec float64) (reqCount, errCount int64, rps, errRate, p50, p95, p99 float64) {
-	if redRow == nil {
-		return
-	}
-
-	reqCount = int64(redRow.TotalCount)
-	errCount = int64(redRow.ErrorCount)
-	rps = float64(reqCount) / durationSec
-	errRate = metrics.Percentage(errCount, reqCount)
-	p50 = httputil.SanitizeFloat(float64(redRow.P50Ms))
-	p95 = httputil.SanitizeFloat(float64(redRow.P95Ms))
-	p99 = httputil.SanitizeFloat(float64(redRow.P99Ms))
-
-	return
-}

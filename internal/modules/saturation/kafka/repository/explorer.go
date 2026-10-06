@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/kafka/filter"
@@ -50,7 +51,8 @@ func (r *Repository) QueryTopicThroughput(ctx context.Context, tenantID, startMs
 		ORDER BY bytes_per_sec DESC, topic ASC
 		LIMIT 200`
 	rows := make([]models.TopicThroughputRow, 0)
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicThroughput", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryTopicThroughput", &rows, query, args...)
+	return rows, err
 }
 
 var groupPartitionMetrics = []string{"kafka.consumer_group.lag", "kafka.consumer_group.members"}
@@ -72,5 +74,6 @@ func (r *Repository) QueryGroupPartitions(ctx context.Context, tenantID, startMs
 		ORDER BY assigned_partitions DESC, consumer_group ASC
 		LIMIT 200`
 	rows := make([]models.GroupPartitionsRow, 0)
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryGroupPartitions", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "kafka.QueryGroupPartitions", &rows, query, args...)
+	return rows, err
 }

@@ -40,9 +40,9 @@ func (a *App) Start(ctx context.Context) error {
 	a.startBackgroundModules()
 
 	var g run.Group
-	runAddContextCancelActor(&g, ctx)
-	a.addHTTPServerActor(&g)
-	a.addMetricsServerActor(&g)
+	runAddContextCancelActor(ctx, &g)
+	a.addHTTPServerActor(ctx, &g)
+	a.addMetricsServerActor(ctx, &g)
 
 	err := g.Run()
 	a.stopBackgroundModules()
@@ -53,7 +53,7 @@ func (a *App) Start(ctx context.Context) error {
 	return normalizeRunError(err)
 }
 
-func (a *App) addMetricsServerActor(g *run.Group) {
+func (a *App) addMetricsServerActor(ctx context.Context, g *run.Group) {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(
 		prometheus.DefaultGatherer,
@@ -69,7 +69,7 @@ func (a *App) addMetricsServerActor(g *run.Group) {
 	g.Add(func() error {
 		return srv.ListenAndServe()
 	}, func(error) {
-		shutdownServer(srv, "metrics")
+		shutdownServer(ctx, srv, "metrics")
 	})
 }
 
@@ -91,13 +91,13 @@ func (a *App) stopBackgroundModules() {
 	}
 }
 
-func runAddContextCancelActor(g *run.Group, ctx context.Context) {
+func runAddContextCancelActor(ctx context.Context, g *run.Group) {
 	ctx, cancel := context.WithCancel(ctx)
 	g.Add(func() error { <-ctx.Done(); return ctx.Err() },
 		func(error) { cancel() })
 }
 
-func (a *App) addHTTPServerActor(g *run.Group) {
+func (a *App) addHTTPServerActor(ctx context.Context, g *run.Group) {
 	srv := &http.Server{
 		Addr:         ":" + a.Config.Server.Port,
 		Handler:      a.Router(),
@@ -108,15 +108,17 @@ func (a *App) addHTTPServerActor(g *run.Group) {
 	g.Add(func() error {
 		return srv.ListenAndServe()
 	}, func(error) {
-		shutdownServer(srv, "http")
+		shutdownServer(ctx, srv, "http")
 	})
 }
 
-func shutdownServer(srv *http.Server, name string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// shutdownServer drains srv within a fixed budget. It runs after ctx is
+// cancelled, so it keeps ctx's values but not its cancellation.
+func shutdownServer(ctx context.Context, srv *http.Server, name string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		slog.Warn("server shutdown incomplete", slog.String("server", name), slog.Any("error", err))
+		slog.WarnContext(ctx, "server shutdown incomplete", slog.String("server", name), slog.Any("error", err))
 	}
 }
 

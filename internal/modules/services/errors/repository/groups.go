@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/services/errors/models"
@@ -60,7 +61,8 @@ func (r *Repository) ErrorGroupTraceRows(ctx context.Context, tenantID int64, st
 		ORDER BY s.timestamp DESC, s.span_id ASC
 		LIMIT @limit`
 	var rows []models.RawErrorGroupTraceRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupTraces", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupTraces", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]models.RawTimeBucketCountRow, error) {
@@ -77,7 +79,8 @@ func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, tenantID int6
 		clickhouse.Named("groupID", groupID),
 	)
 	var rows []models.RawTimeBucketCountRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupTimeseries", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupTimeseries", &rows, query, args...)
+	return rows, err
 }
 
 // ErrorGroupLatestOccurrenceRow returns sql.ErrNoRows when the group has no
@@ -144,7 +147,8 @@ func (r *Repository) ErrorGroupFacetRowsAll(ctx context.Context, tenantID int64,
 		clickhouse.Named("groupID", groupID),
 	)
 	var rows []models.RawFacetDimRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupFacetAll", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupFacetAll", &rows, query, args...)
+	return rows, err
 }
 
 func (r *Repository) ErrorHotspotRows(ctx context.Context, tenantID int64, startMs, endMs int64) ([]models.RawErrorHotspotRow, error) {
@@ -162,5 +166,6 @@ func (r *Repository) ErrorHotspotRows(ctx context.Context, tenantID int64, start
 		LIMIT 2 BY service`
 	args := chargs.RangeArgs(tenantID, startMs, endMs)
 	var rows []models.RawErrorHotspotRow
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorHotspot", &rows, query, args...)
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorHotspot", &rows, query, args...)
+	return rows, err
 }

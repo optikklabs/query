@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/jmoiron/sqlx"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 )

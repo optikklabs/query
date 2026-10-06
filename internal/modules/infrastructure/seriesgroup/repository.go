@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/chargs"
@@ -48,6 +49,7 @@ func (r *Repository) QuerySeries(
 	args = timebucket.WithBucketGrainSec(args, startMs, endMs)
 	args = append(args, clickhouse.Named("scopeVal", scopeVal))
 	var rows []Point
-	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "seriesgroup.QuerySeries."+scopeCol,
+	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "seriesgroup.QuerySeries."+scopeCol,
 		&rows, query, args...)
+	return rows, err
 }
