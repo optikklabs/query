@@ -12,7 +12,13 @@ func (s *Service) Facets(ctx context.Context, f filter.Filters) (models.Facets, 
 	if err != nil {
 		return models.Facets{}, err
 	}
-	fc := models.Facets{Severity: models.SeverityLabels}
+	fc := models.Facets{
+		Severity:    models.SeverityLabels,
+		Service:     []models.FacetValue{},
+		Host:        []models.FacetValue{},
+		Pod:         []models.FacetValue{},
+		Environment: []models.FacetValue{},
+	}
 	for _, r := range rows {
 		fv := models.FacetValue{Value: r.Value, Count: r.Count}
 		switch r.Dim {

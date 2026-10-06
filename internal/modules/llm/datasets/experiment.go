@@ -114,7 +114,7 @@ func (s *ExperimentService) Run(ctx context.Context, tenantID, datasetID int64, 
 		return RunDetail{}, errorcode.ValidationError{Msg: "dataset has no items to run"}
 	}
 	if len(items) > maxRunItems {
-		items = items[:maxRunItems]
+		return RunDetail{}, errorcode.ValidationError{Msg: fmt.Sprintf("dataset has %d items; experiments run at most %d", len(items), maxRunItems)}
 	}
 	apiKey, err := s.keys.ResolveKey(ctx, tenantID, req.Provider)
 	if err != nil {

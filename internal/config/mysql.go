@@ -19,7 +19,7 @@ type MySQLConfig struct {
 
 // MySQLDriverConfig builds the driver connection settings. ClientFoundRows
 // makes RowsAffected count matched rows, so an UPDATE that rewrites identical
-// values is not mistaken for a missing row.
+// values is not mistaken for a missing row. Sessions run in UTC.
 func (c Config) MySQLDriverConfig() (*mysql.Config, error) {
 	cfg := mysql.NewConfig()
 	cfg.User = c.MySQL.User
@@ -32,6 +32,9 @@ func (c Config) MySQLDriverConfig() (*mysql.Config, error) {
 	cfg.ReadTimeout = 30 * time.Second
 	cfg.WriteTimeout = 30 * time.Second
 	cfg.ClientFoundRows = true
+	// NOW() and CURRENT_TIMESTAMP defaults must agree with the UTC times the
+	// app writes, whatever the server's timezone.
+	cfg.Params = map[string]string{"time_zone": "'+00:00'"}
 	if err := cfg.Apply(mysql.Charset("utf8mb4", "")); err != nil {
 		return nil, err
 	}

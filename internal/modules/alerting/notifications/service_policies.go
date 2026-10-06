@@ -19,8 +19,7 @@ func (s *Service) CreatePolicy(ctx context.Context, tenantID int64, req CreatePo
 	if err != nil {
 		return PolicyResponse{}, err
 	}
-	row.ID = id
-	return toPolicyResponse(row), nil
+	return s.getPolicy(ctx, tenantID, id)
 }
 
 func (s *Service) UpdatePolicy(ctx context.Context, tenantID, id int64, req UpdatePolicyRequest) (PolicyResponse, error) {
@@ -28,8 +27,15 @@ func (s *Service) UpdatePolicy(ctx context.Context, tenantID, id int64, req Upda
 	if err != nil {
 		return PolicyResponse{}, err
 	}
-	row.ID = id
 	if err := s.repo.UpdatePolicy(ctx, id, tenantID, row); err != nil {
+		return PolicyResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
+	}
+	return s.getPolicy(ctx, tenantID, id)
+}
+
+func (s *Service) getPolicy(ctx context.Context, tenantID, id int64) (PolicyResponse, error) {
+	row, err := s.repo.GetPolicy(ctx, id, tenantID)
+	if err != nil {
 		return PolicyResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return toPolicyResponse(row), nil

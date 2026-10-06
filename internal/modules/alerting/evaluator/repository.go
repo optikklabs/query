@@ -7,6 +7,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/modules/alerting/shared/channels"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
@@ -53,8 +54,8 @@ func (r *Repository) ClaimDue(ctx context.Context, claimID string, now time.Time
 	if err != nil {
 		return nil, err
 	}
-	if n, err := res.RowsAffected(); err == nil && n == 0 {
-		return nil, nil
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return nil, err
 	}
 
 	query := `SELECT ` + models.MonitorWithStateColumns + `
@@ -68,12 +69,13 @@ func (r *Repository) ClaimDue(ctx context.Context, claimID string, now time.Time
 	}
 	out := make([]DueMonitor, 0, len(rows))
 	for _, row := range rows {
-		m, state := row.Split()
-		out = append(out, DueMonitor{Monitor: m, State: state})
+		out = append(out, DueMonitor{Monitor: row.MonitorRow, State: row.MonitorStateRow})
 	}
 	return out, nil
 }
 
+// UpdateState applies args only while the stored status is still
+// args.PrevStatus, returning sql.ErrNoRows when another evaluation won.
 func (r *Repository) UpdateState(ctx context.Context, args UpdateStateArgs) error {
 	const q = `
 		UPDATE optikk.monitor_state
@@ -87,11 +89,10 @@ func (r *Repository) UpdateState(ctx context.Context, args UpdateStateArgs) erro
 	if args.IncrementEvalCount {
 		incr = 1
 	}
-	_, err := dbutil.ExecSQL(ctx, r.db, "evaluator.UpdateState", q,
+	return dbutil.ExecMatched(ctx, r.db, "evaluator.UpdateState", q,
 		args.NewStatus, args.CurrentValue, args.LastEvaluatedAt, args.NextEvaluationAt,
 		args.TriggeredAt, args.LastNotifiedAt, args.NoDataSince, incr,
 		args.MonitorID, args.PrevStatus)
-	return err
 }
 
 func (r *Repository) InsertEvent(ctx context.Context, e models.MonitorEventRow) error {
@@ -104,35 +105,9 @@ func (r *Repository) InsertEvent(ctx context.Context, e models.MonitorEventRow) 
 }
 
 func (r *Repository) GetChannelsByIDs(ctx context.Context, tenantID int64, ids []int64) ([]models.ChannelRow, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	q, args, err := sqlx.In(`
-		SELECT id, tenant_id, type, name, config_json, status,
-		       last_used_at, last_delivery_at, last_error_text, created_at, updated_at
-		  FROM optikk.notification_channels
-		 WHERE tenant_id = ? AND id IN (?)
-	`, tenantID, ids)
-	if err != nil {
-		return nil, err
-	}
-	q = r.db.Rebind(q)
-	var rows []models.ChannelRow
-	if err := dbutil.SelectSQL(ctx, r.db, "evaluator.GetChannelsByIDs", &rows, q, args...); err != nil {
-		return nil, err
-	}
-	return rows, nil
+	return channels.ByIDs(ctx, r.db, tenantID, ids)
 }
 
-func (r *Repository) MarkChannelDelivered(ctx context.Context, id int64, at time.Time, errText sql.NullString) error {
-	status := "ok"
-	if errText.Valid && errText.String != "" {
-		status = "warn"
-	}
-	_, err := dbutil.ExecSQL(ctx, r.db, "evaluator.MarkChannelDelivered", `
-		UPDATE optikk.notification_channels
-		   SET last_used_at = ?, last_delivery_at = ?, last_error_text = ?, status = ?
-		 WHERE id = ?
-	`, at, at, errText, status, id)
-	return err
+func (r *Repository) MarkChannelDelivered(ctx context.Context, id int64, at time.Time, deliveryErr error) error {
+	return channels.MarkDelivered(ctx, r.db, id, at, deliveryErr)
 }

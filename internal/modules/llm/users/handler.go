@@ -3,7 +3,6 @@ package users
 import (
 	"net/http"
 
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -22,7 +21,7 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.Overview(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM users overview", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query LLM users overview")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -33,13 +32,9 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
-	if req.StartTime <= 0 || req.EndTime <= 0 || req.StartTime >= req.EndTime {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required", nil)
-		return
-	}
 	resp, err := h.svc.Query(r.Context(), httputil.Tenant(r).TenantID, req)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM users", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query LLM users")
 		return
 	}
 	httputil.RespondOK(w, resp)

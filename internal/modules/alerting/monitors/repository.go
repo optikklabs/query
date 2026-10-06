@@ -10,6 +10,7 @@ import (
 
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 type Repository struct {
@@ -95,7 +96,7 @@ func (r *Repository) Delete(ctx context.Context, id, tenantID int64) error {
 
 const monitorWithStateFrom = `
 	  FROM optikk.monitors m
-	  LEFT JOIN optikk.monitor_state s ON s.monitor_id = m.id`
+	  JOIN optikk.monitor_state s ON s.monitor_id = m.id`
 
 func (r *Repository) GetByID(ctx context.Context, id, tenantID int64) (models.MonitorRow, models.MonitorStateRow, error) {
 	var row models.MonitorWithStateRow
@@ -106,8 +107,7 @@ func (r *Repository) GetByID(ctx context.Context, id, tenantID int64) (models.Mo
 	if err != nil {
 		return models.MonitorRow{}, models.MonitorStateRow{}, err
 	}
-	m, state := row.Split()
-	return m, state, nil
+	return row.MonitorRow, row.MonitorStateRow, nil
 }
 
 func monitorListWhere(tenantID int64, q ListQuery) (string, []any) {
@@ -121,13 +121,11 @@ func monitorListWhere(tenantID int64, q ListQuery) (string, []any) {
 		where = append(where, "m.priority = ?")
 		args = append(args, q.Priority)
 	}
-	switch q.Status {
-	case "":
-	case "no_data":
-		where = append(where, "(s.status IS NULL OR s.status = 'no_data')")
-	default:
-		where = append(where, "s.status = ?")
-		args = append(args, q.Status)
+	if len(q.Statuses) > 0 {
+		where = append(where, "s.status IN (?"+strings.Repeat(", ?", len(q.Statuses)-1)+")")
+		for _, s := range q.Statuses {
+			args = append(args, s)
+		}
 	}
 	if q.Muted != nil {
 		if *q.Muted {
@@ -138,18 +136,14 @@ func monitorListWhere(tenantID int64, q ListQuery) (string, []any) {
 	}
 	if q.Search != "" {
 		where = append(where, "m.name LIKE ?")
-		args = append(args, "%"+q.Search+"%")
+		args = append(args, filterutil.LikeSubstringPattern(q.Search))
 	}
 	return strings.Join(where, " AND "), args
 }
 
 func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]models.MonitorWithStateRow, error) {
 	where, args := monitorListWhere(tenantID, q)
-	limit := q.Limit
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	args = append(args, limit, max(q.Offset, 0))
+	args = append(args, q.Limit, q.Offset)
 
 	var rows []models.MonitorWithStateRow
 	err := dbutil.SelectSQL(ctx, r.db, "monitors.List", &rows,
@@ -168,7 +162,7 @@ func (r *Repository) Count(ctx context.Context, tenantID int64, q ListQuery) (St
 		       COALESCE(SUM(s.status = 'alert'), 0) AS alert,
 		       COALESCE(SUM(s.status = 'warn'), 0) AS warn,
 		       COALESCE(SUM(s.status = 'ok'), 0) AS ok,
-		       COALESCE(SUM(s.status IS NULL OR s.status = 'no_data'), 0) AS no_data,
+		       COALESCE(SUM(s.status = 'no_data'), 0) AS no_data,
 		       COALESCE(SUM(m.muted_until IS NOT NULL AND m.muted_until > NOW()), 0) AS muted`+
 		monitorWithStateFrom+`
 		 WHERE `+where, args...)

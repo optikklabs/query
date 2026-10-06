@@ -10,13 +10,6 @@ type ServerConfig struct {
 	AllowedOrigins string `yaml:"allowed_origins"`
 }
 
-func (c Config) MetricsPort() string {
-	if c.Server.MetricsPort != "" {
-		return c.Server.MetricsPort
-	}
-	return "19091"
-}
-
 type AuthConfig struct {
 	JWTSecret         string `yaml:"jwt_secret"`
 	AccessTTLMs       int64  `yaml:"access_ttl_ms"`
@@ -36,6 +29,7 @@ type BillingConfig struct {
 	GBPriceUSD                   float64 `yaml:"gb_price_usd"`
 	MetricMillionSamplesPriceUSD float64 `yaml:"metric_million_samples_price_usd"`
 	MonthlyRecordCommitment      uint64  `yaml:"monthly_record_commitment"`
+	MonthlyByteCommitment        uint64  `yaml:"monthly_byte_commitment"`
 }
 
 // Public OTLP endpoints advertised to users for sending telemetry.

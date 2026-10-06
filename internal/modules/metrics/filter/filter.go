@@ -2,10 +2,13 @@ package filter
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 type Filters struct {
@@ -25,11 +28,30 @@ type Filters struct {
 	Tags []TagFilter
 }
 
+// TagFilter matches a resource or attribute key with one of the Op*
+// operators.
 type TagFilter struct {
 	Key      string
 	Operator string
 	Values   []string
 }
+
+// Tag filter operators, as the query builder sends them. Wildcard matches
+// its single value with * standing for any run of characters.
+const (
+	OpEq       = "eq"
+	OpNeq      = "neq"
+	OpIn       = "in"
+	OpNotIn    = "not_in"
+	OpWildcard = "wildcard"
+)
+
+// singleValueOps take exactly one value; the others take one or more.
+var singleValueOps = map[string]bool{OpEq: true, OpNeq: true, OpWildcard: true}
+
+var validOperators = map[string]bool{OpEq: true, OpNeq: true, OpIn: true, OpNotIn: true, OpWildcard: true}
+
+func negated(op string) bool { return op == OpNeq || op == OpNotIn }
 
 var validAggregations = map[string]bool{
 	"avg": true, "sum": true, "min": true, "max": true, "count": true,
@@ -37,14 +59,11 @@ var validAggregations = map[string]bool{
 	"rate": true,
 }
 
-// Validate checks one metric query and defaults its aggregation. The time
-// window is validated once per request by the explorer.
+// Validate checks one metric query. The time window is validated once per
+// request by the explorer.
 func (f *Filters) Validate() error {
 	if f.MetricName == "" {
 		return errors.New("metricName is required")
-	}
-	if f.Aggregation == "" {
-		f.Aggregation = "avg"
 	}
 	if !validAggregations[f.Aggregation] {
 		return errors.New("unsupported aggregation: " + f.Aggregation)
@@ -55,8 +74,13 @@ func (f *Filters) Validate() error {
 		}
 	}
 	for _, tag := range f.Tags {
-		if !ValidKey(tag.Key) || !validOperators[tag.Operator] || len(tag.Values) == 0 {
-			return errors.New("invalid metric filter: " + tag.Key)
+		switch {
+		case !ValidKey(tag.Key):
+			return errors.New("invalid metric filter key: " + tag.Key)
+		case !validOperators[tag.Operator]:
+			return errors.New("unsupported metric filter operator: " + tag.Operator)
+		case len(tag.Values) == 0, singleValueOps[tag.Operator] && len(tag.Values) != 1:
+			return fmt.Errorf("metric filter %s %s needs %s", tag.Key, tag.Operator, valueArity(tag.Operator))
 		}
 	}
 	return nil
@@ -105,11 +129,11 @@ func invalidKeyRune(r rune) bool {
 	}
 }
 
-var validOperators = map[string]bool{
-	"=":      true,
-	"!=":     true,
-	"IN":     true,
-	"NOT IN": true,
+func valueArity(op string) string {
+	if singleValueOps[op] {
+		return "exactly one value"
+	}
+	return "at least one value"
 }
 
 func BuildClauses(f Filters) (resourceWhere, attrWhere string, args []any) {
@@ -122,15 +146,15 @@ func BuildClauses(f Filters) (resourceWhere, attrWhere string, args []any) {
 
 	rowIdx := 0
 	for _, t := range f.Tags {
-		if canonical := Canonical(t.Key); canonical != "" {
+		canonical := Canonical(t.Key)
+		if canonical != "" && t.Operator != OpWildcard {
 			acc := resAccum[canonical]
 			if acc == nil {
 				acc = &resourceAccum{}
 				resAccum[canonical] = acc
 				resourceOrder = append(resourceOrder, canonical)
 			}
-			negated := t.Operator == "!=" || t.Operator == "NOT IN"
-			if negated {
+			if negated(t.Operator) {
 				acc.negative = append(acc.negative, t.Values...)
 			} else {
 				acc.positive = append(acc.positive, t.Values...)
@@ -140,15 +164,26 @@ func BuildClauses(f Filters) (resourceWhere, attrWhere string, args []any) {
 
 		bind := "mf" + strconv.Itoa(rowIdx)
 		rowIdx++
-		switch t.Operator {
-		case "=", "!=":
-			args = append(args, clickhouse.Named(bind, t.Values[0]))
-		case "IN", "NOT IN":
-			args = append(args, clickhouse.Named(bind, t.Values))
-		default:
+		if canonical != "" {
+			resourceWhere += " AND " + canonical + " LIKE @" + bind
+			args = append(args, clickhouse.Named(bind, filterutil.WildcardPattern(t.Values[0])))
 			continue
 		}
-		attrWhere += " AND mapContains(attributes, '" + t.Key + "') AND " + AttrColumn(t.Key) + " " + t.Operator + " @" + bind
+		column := AttrColumn(t.Key)
+		var cond string
+		switch t.Operator {
+		case OpEq:
+			cond, args = column+" = @"+bind, append(args, clickhouse.Named(bind, t.Values[0]))
+		case OpNeq:
+			cond, args = column+" != @"+bind, append(args, clickhouse.Named(bind, t.Values[0]))
+		case OpIn:
+			cond, args = column+" IN @"+bind, append(args, clickhouse.Named(bind, t.Values))
+		case OpNotIn:
+			cond, args = column+" NOT IN @"+bind, append(args, clickhouse.Named(bind, t.Values))
+		default: // OpWildcard
+			cond, args = column+" LIKE @"+bind, append(args, clickhouse.Named(bind, filterutil.WildcardPattern(t.Values[0])))
+		}
+		attrWhere += " AND mapContains(attributes, '" + t.Key + "') AND " + cond
 	}
 
 	for i, col := range resourceOrder {

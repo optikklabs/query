@@ -85,7 +85,8 @@ func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID 
 	return rows, err
 }
 
-func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startMs, endMs int64) (*SpanAttributeRow, error) {
+// GetSpanAttributes returns the span, or sql.ErrNoRows.
+func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startMs, endMs int64) (SpanAttributeRow, error) {
 	const query = `
 		SELECT span_id, trace_id, name AS operation_name, service,
 		       service_version, environment, host, pod,
@@ -101,10 +102,8 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, trac
 		LIMIT 1`
 	var row SpanAttributeRow
 	args := append(boundedTraceArgs(tenantID, traceID, startMs, endMs), clickhouse.Named("spanID", spanID))
-	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &row, query, args...); err != nil || row.SpanID == "" {
-		return nil, err
-	}
-	return &row, nil
+	err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &row, query, args...)
+	return row, err
 }
 
 func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]models.RelatedTrace, error) {
@@ -135,7 +134,9 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 	return rows, err
 }
 
-func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (*TraceSummaryRow, error) {
+// GetTraceSummary returns the trace's summary, or sql.ErrNoRows when it has
+// no spans in the window.
+func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) (TraceSummaryRow, error) {
 	const query = `
 		SELECT trace_id,
 		       min(timestamp)                                            AS start_time,
@@ -157,8 +158,6 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 		GROUP BY trace_id
 		LIMIT 1`
 	var res TraceSummaryRow
-	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &res, query, boundedTraceArgs(tenantID, traceID, startMs, endMs)...); err != nil || res.TraceID == "" {
-		return nil, err
-	}
-	return &res, nil
+	err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &res, query, boundedTraceArgs(tenantID, traceID, startMs, endMs)...)
+	return res, err
 }

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
 	"github.com/optikklabs/query/internal/shared/metrics"
@@ -26,7 +25,7 @@ func (s *Service) GetFleetPods(ctx context.Context, tenantID int64, startMs, end
 			ErrorRate:    errorRate,
 			AvgLatencyMs: avgLatency,
 			P95LatencyMs: float64(r.P95LatencyMs),
-			LastSeen:     r.LastSeen.Format(time.RFC3339),
+			LastSeen:     r.LastSeen,
 		}
 	}
 	return out, nil

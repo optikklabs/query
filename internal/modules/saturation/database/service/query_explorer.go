@@ -10,6 +10,8 @@ import (
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
+const maxPatternLimit = 200
+
 func (s *Service) QueryPatterns(
 	ctx context.Context,
 	tenantID, startMs, endMs int64,
@@ -17,8 +19,14 @@ func (s *Service) QueryPatterns(
 	limit int,
 	rawCursor string,
 ) (models.QueryPatternsPage, error) {
-	limit = filterutil.PickLimit(limit, repository.DefaultPatternLimit, 200)
-	cur, _ := cursor.Decode[repository.QueryPatternsCursor](rawCursor)
+	limit, err := filterutil.Limit(limit, repository.DefaultPatternLimit, maxPatternLimit)
+	if err != nil {
+		return models.QueryPatternsPage{}, err
+	}
+	cur, err := cursor.Decode[repository.QueryPatternsCursor](rawCursor)
+	if err != nil {
+		return models.QueryPatternsPage{}, err
+	}
 	rows, err := s.repo.QueryPatterns(ctx, tenantID, startMs, endMs, f, limit+1, cur)
 	if err != nil {
 		return models.QueryPatternsPage{}, err
@@ -45,14 +53,11 @@ func toSlowQueryPatterns(rows []repository.PatternRaw) []models.SlowQueryPattern
 			QueryText:      r.QueryText,
 			DBSystem:       r.DBSystem,
 			CollectionName: r.CollectionName,
-			Namespace:      r.Namespace,
-			Server:         r.Server,
+			P50Ms:          float64(r.QS[0]),
+			P95Ms:          float64(r.QS[1]),
+			P99Ms:          float64(r.QS[2]),
 			CallCount:      int64(r.CallCount),
 			ErrorCount:     int64(r.ErrorCount),
-		}
-		if len(r.QS) >= 3 {
-			p50, p95, p99 := float64(r.QS[0]), float64(r.QS[1]), float64(r.QS[2])
-			out[i].P50Ms, out[i].P95Ms, out[i].P99Ms = &p50, &p95, &p99
 		}
 	}
 	return out

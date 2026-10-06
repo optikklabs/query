@@ -25,7 +25,6 @@ func (m *Module) RegisterRoutes(v1 chi.Router) {
 		r.Get("/{id}", m.handler.GetPage)
 		r.Put("/{id}", m.handler.UpdatePage)
 		r.Delete("/{id}", m.handler.DeletePage)
-		r.Get("/{id}/dashboards", m.handler.ListWidgets)
 		r.Post("/{id}/dashboards", m.handler.CreateWidget)
 		r.Put("/{id}/dashboards/{widgetId}", m.handler.UpdateWidget)
 		r.Delete("/{id}/dashboards/{widgetId}", m.handler.DeleteWidget)

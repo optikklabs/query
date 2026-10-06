@@ -13,10 +13,7 @@ type Module struct {
 
 func NewModule(sqlDB *sql.DB, keys KeyResolver, completer Completer) *Module {
 	repo := NewRepository(sqlDB)
-	var experiment *ExperimentService
-	if keys != nil && completer != nil {
-		experiment = NewExperimentService(repo, keys, completer)
-	}
+	experiment := NewExperimentService(repo, keys, completer)
 	return &Module{handler: NewHandler(NewService(repo), experiment), experiment: experiment}
 }
 
@@ -25,10 +22,7 @@ func (m *Module) Name() string { return "llm.datasets" }
 func (m *Module) Start() {}
 
 func (m *Module) Stop() error {
-	if m.experiment != nil {
-		return m.experiment.Stop()
-	}
-	return nil
+	return m.experiment.Stop()
 }
 
 func (m *Module) RegisterRoutes(v1 chi.Router) {

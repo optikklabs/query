@@ -7,6 +7,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/modules/alerting/shared/channels"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
 
@@ -43,13 +44,10 @@ func (r *Repository) DeleteChannel(ctx context.Context, id, tenantID int64) erro
 		`DELETE FROM optikk.notification_channels WHERE id = ? AND tenant_id = ?`, id, tenantID)
 }
 
-const channelCols = `id, tenant_id, type, name, config_json, status,
-  last_used_at, last_delivery_at, last_error_text, created_at, updated_at`
-
 func (r *Repository) GetChannel(ctx context.Context, id, tenantID int64) (models.ChannelRow, error) {
 	var row models.ChannelRow
 	err := dbutil.GetSQL(ctx, r.db, "notifications.GetChannel", &row,
-		`SELECT `+channelCols+` FROM optikk.notification_channels WHERE id = ? AND tenant_id = ? LIMIT 1`,
+		`SELECT `+channels.Columns+` FROM optikk.notification_channels WHERE id = ? AND tenant_id = ? LIMIT 1`,
 		id, tenantID)
 	return row, err
 }
@@ -57,47 +55,37 @@ func (r *Repository) GetChannel(ctx context.Context, id, tenantID int64) (models
 func (r *Repository) ListChannels(ctx context.Context, tenantID int64) ([]models.ChannelRow, error) {
 	var rows []models.ChannelRow
 	err := dbutil.SelectSQL(ctx, r.db, "notifications.ListChannels", &rows,
-		`SELECT `+channelCols+` FROM optikk.notification_channels WHERE tenant_id = ? ORDER BY created_at DESC`,
+		`SELECT `+channels.Columns+` FROM optikk.notification_channels WHERE tenant_id = ? ORDER BY created_at DESC`,
 		tenantID)
 	return rows, err
 }
 
+// CountChannelUsage returns how many of the tenant's monitors notify each
+// channel, keyed by channel id.
 func (r *Repository) CountChannelUsage(ctx context.Context, tenantID int64) (map[int64]int, error) {
-	rows, err := r.db.QueryxContext(ctx, `
-		SELECT j.channel_id AS cid, COUNT(*) AS cnt
+	var rows []struct {
+		ChannelID int64 `db:"channel_id"`
+		Monitors  int   `db:"monitors"`
+	}
+	err := dbutil.SelectSQL(ctx, r.db, "notifications.CountChannelUsage", &rows, `
+		SELECT j.channel_id AS channel_id, COUNT(*) AS monitors
 		  FROM optikk.monitors m
 		  JOIN JSON_TABLE(m.notify_json, '$.channelIds[*]'
 		         COLUMNS (channel_id BIGINT PATH '$')) AS j
 		 WHERE m.tenant_id = ?
-		 GROUP BY j.channel_id
-	`, tenantID)
+		 GROUP BY j.channel_id`, tenantID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := map[int64]int{}
-	for rows.Next() {
-		var cid int64
-		var cnt int
-		if err := rows.Scan(&cid, &cnt); err != nil {
-			return nil, err
-		}
-		out[cid] = cnt
+	out := make(map[int64]int, len(rows))
+	for _, row := range rows {
+		out[row.ChannelID] = row.Monitors
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
-func (r *Repository) MarkChannelDelivered(ctx context.Context, id int64, at time.Time, errText sql.NullString) error {
-	status := "ok"
-	if errText.Valid && errText.String != "" {
-		status = "warn"
-	}
-	_, err := dbutil.ExecSQL(ctx, r.db, "notifications.MarkChannelDelivered", `
-		UPDATE optikk.notification_channels
-		   SET last_used_at = ?, last_delivery_at = ?, last_error_text = ?, status = ?
-		 WHERE id = ?
-	`, at, at, errText, status, id)
-	return err
+func (r *Repository) MarkChannelDelivered(ctx context.Context, id int64, at time.Time, deliveryErr error) error {
+	return channels.MarkDelivered(ctx, r.db, id, at, deliveryErr)
 }
 
 const policyCols = `id, tenant_id, name, match_dsl, actions_json, hits_30d,
@@ -126,6 +114,13 @@ func (r *Repository) UpdatePolicy(ctx context.Context, id, tenantID int64, row m
 func (r *Repository) DeletePolicy(ctx context.Context, id, tenantID int64) error {
 	return dbutil.ExecMatched(ctx, r.db, "notifications.DeletePolicy",
 		`DELETE FROM optikk.notification_policies WHERE id = ? AND tenant_id = ?`, id, tenantID)
+}
+
+func (r *Repository) GetPolicy(ctx context.Context, id, tenantID int64) (models.PolicyRow, error) {
+	var row models.PolicyRow
+	err := dbutil.GetSQL(ctx, r.db, "notifications.GetPolicy", &row,
+		`SELECT `+policyCols+` FROM optikk.notification_policies WHERE id = ? AND tenant_id = ?`, id, tenantID)
+	return row, err
 }
 
 func (r *Repository) ListPolicies(ctx context.Context, tenantID int64) ([]models.PolicyRow, error) {
@@ -161,6 +156,13 @@ func (r *Repository) UpdateTemplate(ctx context.Context, id, tenantID int64, row
 func (r *Repository) DeleteTemplate(ctx context.Context, id, tenantID int64) error {
 	return dbutil.ExecMatched(ctx, r.db, "notifications.DeleteTemplate",
 		`DELETE FROM optikk.notification_templates WHERE id = ? AND tenant_id = ?`, id, tenantID)
+}
+
+func (r *Repository) GetTemplate(ctx context.Context, id, tenantID int64) (models.TemplateRow, error) {
+	var row models.TemplateRow
+	err := dbutil.GetSQL(ctx, r.db, "notifications.GetTemplate", &row,
+		`SELECT `+templateCols+` FROM optikk.notification_templates WHERE id = ? AND tenant_id = ?`, id, tenantID)
+	return row, err
 }
 
 func (r *Repository) ListTemplates(ctx context.Context, tenantID int64) ([]models.TemplateRow, error) {

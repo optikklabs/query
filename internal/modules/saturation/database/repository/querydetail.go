@@ -10,16 +10,10 @@ import (
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
 )
 
-const DefaultExecutionsLimit = 50
-
-const maxExecutionsLimit = 200
-
-func clampExecutionsLimit(limit int) int {
-	if limit <= 0 {
-		return DefaultExecutionsLimit
-	}
-	return min(limit, maxExecutionsLimit)
-}
+const (
+	DefaultExecutionsLimit = 50
+	MaxExecutionsLimit     = 200
+)
 
 type SummaryRaw struct {
 	QueryText      string    `ch:"query_text"`
@@ -113,7 +107,6 @@ type ExecutionRaw struct {
 }
 
 func (r *Repository) GetExecutions(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters, limit int) ([]ExecutionRaw, error) {
-	limit = clampExecutionsLimit(limit)
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
 		SELECT timestamp,

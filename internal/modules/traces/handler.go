@@ -5,7 +5,6 @@ import (
 
 	"github.com/optikklabs/query/internal/modules/traces/service"
 	"github.com/optikklabs/query/internal/shared/errorcode"
-	"github.com/optikklabs/query/internal/shared/filterutil"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -39,7 +38,7 @@ func (h *Handler) GetTraceDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := h.Service.GetTraceDetail(r.Context(), tenantID, traceID, startMs, endMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch trace", err)
+		httputil.RespondServiceError(w, r, err, "Failed to fetch trace")
 		return
 	}
 	httputil.RespondOK(w, detail)
@@ -52,7 +51,7 @@ func (h *Handler) GetSpanEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	events, err := h.Service.GetSpanEvents(r.Context(), tenantID, traceID, startMs, endMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query span events", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query span events")
 		return
 	}
 	httputil.RespondOK(w, events)
@@ -70,11 +69,7 @@ func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
 	}
 	attrs, err := h.Service.GetSpanAttributes(r.Context(), tenantID, traceID, spanID, startMs, endMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query span attributes", err)
-		return
-	}
-	if attrs == nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "Span not found", nil)
+		httputil.RespondServiceError(w, r, err, "Failed to query span attributes")
 		return
 	}
 	httputil.RespondOK(w, attrs)
@@ -91,11 +86,14 @@ func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "service and operation are required", nil)
 		return
 	}
-	limit := filterutil.PickLimit(httputil.ParseIntParam(r, "limit", 0), defaultRelatedLimit, maxRelatedLimit)
+	limit, ok := httputil.QueryLimit(w, r, defaultRelatedLimit, maxRelatedLimit)
+	if !ok {
+		return
+	}
 
 	traces, err := h.Service.GetRelatedTraces(r.Context(), tenantID, serviceName, operationName, startMs, endMs, traceID, limit)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query related traces", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query related traces")
 		return
 	}
 	httputil.RespondOK(w, traces)

@@ -90,6 +90,11 @@ func (s *Service) AddItems(ctx context.Context, tenantID, datasetID int64, req A
 	if len(req.Items) > maxItemsPerRequest {
 		return 0, errorcode.ValidationError{Msg: "too many items in one request"}
 	}
+	for _, it := range req.Items {
+		if len(it.Input) == 0 || string(it.Input) == "null" {
+			return 0, errorcode.ValidationError{Msg: "every item needs an input"}
+		}
+	}
 	ok, err := s.repo.DatasetExists(ctx, tenantID, datasetID)
 	if err != nil {
 		return 0, err

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"golang.org/x/sync/errgroup"
 
@@ -38,9 +40,16 @@ func (s *Service) GetTraceDetail(ctx context.Context, tenantID int64, traceID st
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		var err error
-		summaryRow, err = s.repo.GetTraceSummary(gctx, tenantID, traceID, startMs, endMs)
-		return err
+		row, err := s.repo.GetTraceSummary(gctx, tenantID, traceID, startMs, endMs)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			// No spans in range: the trace view falls back to its logs.
+		case err != nil:
+			return err
+		default:
+			summaryRow = &row
+		}
+		return nil
 	})
 	g.Go(func() error {
 		var err error
@@ -84,6 +93,9 @@ func toSpanListItems(rows []repository.TraceSpanRow) []models.SpanListItem {
 			OperationName: r.OperationName,
 			KindString:    r.KindString,
 			StatusCode:    r.StatusCode,
+			StatusMessage: r.StatusMessage,
+			HTTPMethod:    r.HTTPMethod,
+			HTTPStatus:    r.HTTPStatusCode,
 			HasError:      r.HasError,
 			DurationMs:    r.DurationMs(),
 			Timestamp:     r.Timestamp,

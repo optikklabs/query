@@ -31,11 +31,15 @@ func (r *Repository) GetFleetREDMetrics(ctx context.Context, f filter.Filters) (
 		       grouping(service)  AS is_total,
 		       ` + spanstats.Requests + `,
 		       ` + spanstats.Errors + `,
-		       ` + spanstats.LatencyP50P95P99.SQL() + `
+		       ` + spanstats.LatencyP50P95P99.SQL() + `,
+		       argMax(service_version, timestamp)                  AS latest_version,
+		       argMax(environment, timestamp)                      AS latest_environment,
+		       uniqExactIf((host, pod), host != '' OR pod != '')   AS instances
 		FROM ` + timebucket.SpanStatsRollup(f.StartMs, f.EndMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp >= @start AND timestamp < @end` + where + `
-		GROUP BY GROUPING SETS ((service_name), ())`
+		GROUP BY GROUPING SETS ((service_name), ())
+		ORDER BY is_total DESC, ` + spanstats.RequestTotal + ` DESC, service_name`
 	var rows []models.REDMetricsRow
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "redfleet.GetFleetREDMetrics",
 		&rows, query, args...); err != nil {

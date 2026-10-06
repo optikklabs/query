@@ -93,11 +93,10 @@ func CompileScope(signal string, scope models.Scope, args []any) (string, []any,
 	return clause.String(), args, nil
 }
 
-func monitorWindowSec(v int) int64 {
-	if v <= 0 {
-		return 300
-	}
-	return int64(v)
+// errMissingQuery reports a monitor stored without the query its type needs,
+// which validation on write rules out.
+func errMissingQuery(m models.MonitorRow) error {
+	return fmt.Errorf("monitor %d has no %s query", m.ID, m.Type)
 }
 
 func completeWindow(now time.Time, windowSec, grainSec int64) (int64, int64) {

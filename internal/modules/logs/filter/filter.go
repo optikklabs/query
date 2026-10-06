@@ -2,10 +2,10 @@ package filter
 
 import (
 	"strconv"
-	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -35,7 +35,7 @@ type Filters struct {
 }
 
 func (f *Filters) Validate() error {
-	if err := filterutil.ValidateTimeRange(&f.StartMs, &f.EndMs); err != nil {
+	if err := filterutil.ValidateTimeRange(f.StartMs, f.EndMs); err != nil {
 		return err
 	}
 	return filterutil.ValidateAttrs(f.Attributes)
@@ -62,8 +62,8 @@ func (r *RangeRequest) BindTenant(tenantID int64) error {
 func rangeArgs(f Filters) []any {
 	return []any{
 		clickhouse.Named("tenantID", uint32(f.TenantID)),
-		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
-		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
+		chargs.Millis("start", f.StartMs),
+		chargs.Millis("end", f.EndMs),
 		clickhouse.Named("startBucket", timebucket.LogBucket(f.StartMs)),
 		clickhouse.Named("endBucket", timebucket.LogBucket(f.EndMs)),
 	}
@@ -147,8 +147,8 @@ func BuildStatsClauses(f Filters) (StatsClauses, bool) {
 	}
 
 	args := append(rangeArgs(f),
-		clickhouse.Named("rollupStart", time.UnixMilli(rollupStartMs)),
-		clickhouse.Named("rollupEnd", time.UnixMilli(rollupEndMs)),
+		chargs.Millis("rollupStart", rollupStartMs),
+		chargs.Millis("rollupEnd", rollupEndMs),
 	)
 	dimensions := ""
 	args = filterutil.AppendIn(&dimensions, args, resourceIns(f)...)

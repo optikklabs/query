@@ -12,8 +12,8 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-func endpointCursorFilter(cursor models.TopEndpointsCursor) string {
-	if cursor.IsZero() {
+func endpointCursorFilter(cursor *models.TopEndpointsCursor) string {
+	if cursor == nil {
 		return ""
 	}
 	return "AND (" + spanstats.RequestTotal + " < @cursorCount OR (" +
@@ -22,8 +22,8 @@ func endpointCursorFilter(cursor models.TopEndpointsCursor) string {
 		"(@cursorService, @cursorOp, @cursorKind, @cursorRoute, @cursorMethod, @cursorRPC)))"
 }
 
-func dbCursorFilter(cursor models.TopEndpointsCursor) string {
-	if cursor.IsZero() {
+func dbCursorFilter(cursor *models.TopEndpointsCursor) string {
+	if cursor == nil {
 		return ""
 	}
 	return "AND (" + spanstats.RequestTotal + " < @cursorCount OR (" +
@@ -31,9 +31,12 @@ func dbCursorFilter(cursor models.TopEndpointsCursor) string {
 		"(@cursorService, @cursorOp, @cursorDB)))"
 }
 
-func cursorArgs(args []any, limit int, cursor models.TopEndpointsCursor) []any {
+func cursorArgs(args []any, limit int, cursor *models.TopEndpointsCursor) []any {
+	args = append(args, clickhouse.Named("limit", limit))
+	if cursor == nil {
+		return args
+	}
 	return append(args,
-		clickhouse.Named("limit", limit),
 		clickhouse.Named("cursorCount", cursor.TotalCount),
 		clickhouse.Named("cursorService", cursor.ServiceName),
 		clickhouse.Named("cursorOp", cursor.OperationName),
@@ -46,7 +49,7 @@ func cursorArgs(args []any, limit int, cursor models.TopEndpointsCursor) []any {
 }
 
 func (r *Repository) GetTopEndpointsCombined(
-	ctx context.Context, f filter.Filters, limit int, cursor models.TopEndpointsCursor,
+	ctx context.Context, f filter.Filters, limit int, cursor *models.TopEndpointsCursor,
 ) ([]models.TopEndpointRow, error) {
 	where, args := filter.BuildClauses(f)
 	query := `
@@ -80,7 +83,7 @@ func (r *Repository) GetTopEndpointsCombined(
 }
 
 func (r *Repository) GetTopDBQueriesCombined(
-	ctx context.Context, f filter.Filters, limit int, cursor models.TopEndpointsCursor,
+	ctx context.Context, f filter.Filters, limit int, cursor *models.TopEndpointsCursor,
 ) ([]models.TopDBQueryRow, error) {
 	// Database calls are CLIENT spans, so this one skips the inbound filter.
 	where, args := filter.BuildServiceClauses(f)

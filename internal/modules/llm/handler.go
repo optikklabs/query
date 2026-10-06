@@ -23,7 +23,7 @@ func (h *Handler) Models(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.Models(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM models", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query LLM models")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -36,7 +36,7 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.Overview(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM overview", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query LLM overview")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -47,13 +47,9 @@ func (h *Handler) TracesQuery(w http.ResponseWriter, r *http.Request) {
 	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
-	if req.StartTime <= 0 || req.EndTime <= 0 || req.StartTime >= req.EndTime {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required", nil)
-		return
-	}
 	resp, err := h.svc.QueryTraces(r.Context(), httputil.Tenant(r).TenantID, req)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM traces", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query LLM traces")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -71,11 +67,7 @@ func (h *Handler) TraceDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.TraceDetail(r.Context(), httputil.Tenant(r).TenantID, traceID, startTimeMs, endTimeMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to load LLM trace", err)
-		return
-	}
-	if resp.TraceID == "" || len(resp.Spans) == 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "Trace not found", nil)
+		httputil.RespondServiceError(w, r, err, "Failed to load LLM trace")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -92,13 +84,9 @@ func (h *Handler) SpanIO(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	resp, found, err := h.svc.SpanIO(r.Context(), httputil.Tenant(r).TenantID, traceID, spanID, startTimeMs, endTimeMs)
+	resp, err := h.svc.SpanIO(r.Context(), httputil.Tenant(r).TenantID, traceID, spanID, startTimeMs, endTimeMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to load LLM span content", err)
-		return
-	}
-	if !found {
-		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "Span not found", nil)
+		httputil.RespondServiceError(w, r, err, "Failed to load LLM span content")
 		return
 	}
 	httputil.RespondOK(w, resp)

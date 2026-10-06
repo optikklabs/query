@@ -9,6 +9,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/metrics"
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
@@ -22,9 +23,9 @@ func NewAPMBackend(db clickhouse.Conn) *APMBackend { return &APMBackend{db: db} 
 func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, now time.Time) (ScalarResult, error) {
 	q := m.Query.APM
 	if q == nil {
-		return ScalarResult{}, nil
+		return ScalarResult{}, errMissingQuery(m)
 	}
-	windowSec := monitorWindowSec(q.WindowSec)
+	windowSec := int64(q.WindowSec)
 	startMs, endMs := completeWindow(now, windowSec, 60)
 
 	query := `
@@ -63,7 +64,7 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, now time.T
 func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, windowMs int64, now time.Time) ([]Point, error) {
 	q := m.Query.APM
 	if q == nil {
-		return nil, nil
+		return nil, errMissingQuery(m)
 	}
 	endMs := now.UnixMilli()
 	startMs := endMs - windowMs
@@ -100,19 +101,17 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, windowMs i
 	return out, nil
 }
 
+// apmTrackValue is the tracked signal: error percentage, requests per
+// second, or p99 latency (ms) for the "latency" track.
 func apmTrackValue(track string, row apmAggRow, windowSec int64) float64 {
 	switch track {
 	case "errors":
 		return metrics.Percentage(row.ErrorCount, row.RequestCount)
 	case "hits":
-		if windowSec == 0 {
-			return float64(row.RequestCount)
-		}
 		return float64(row.RequestCount) / float64(windowSec)
-	case "latency":
+	default:
 		return row.P99
 	}
-	return 0
 }
 
 func apmArgs(tenantID int64, q models.APMQuery, startMs, endMs int64) []any {
@@ -120,8 +119,8 @@ func apmArgs(tenantID int64, q models.APMQuery, startMs, endMs int64) []any {
 		tenantIDArg(tenantID),
 		clickhouse.Named("service", q.Service),
 		clickhouse.Named("resource", strings.TrimSpace(q.Resource)),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
+		chargs.Millis("start", startMs),
+		chargs.Millis("end", endMs),
 	}
 }
 

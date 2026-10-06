@@ -96,11 +96,8 @@ func (s *Service) summaryFromUsage(
 	end := time.UnixMilli(endMs).UTC()
 	daysElapsed := end.Day()
 	totalDays := daysInMonth(end)
-	var dailyAvg, dailyAvgBytes uint64
-	if daysElapsed > 0 {
-		dailyAvg = records / uint64(daysElapsed)
-		dailyAvgBytes = bytesTotal / uint64(daysElapsed)
-	}
+	dailyAvg := records / uint64(daysElapsed)
+	dailyAvgBytes := bytesTotal / uint64(daysElapsed)
 	recCommit := s.cfg.MonthlyRecordCommitment
 	byteCommit := s.cfg.MonthlyByteCommitment
 	return SummaryResponse{

@@ -3,7 +3,6 @@ package scores
 import (
 	"net/http"
 
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -34,7 +33,7 @@ func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.Summary(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query score summary", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query score summary")
 		return
 	}
 	httputil.RespondOK(w, resp)

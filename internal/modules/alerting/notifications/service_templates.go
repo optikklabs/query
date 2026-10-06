@@ -19,8 +19,7 @@ func (s *Service) CreateTemplate(ctx context.Context, tenantID int64, req Create
 	if err != nil {
 		return TemplateResponse{}, err
 	}
-	row.ID = id
-	return toTemplateResponse(row), nil
+	return s.getTemplate(ctx, tenantID, id)
 }
 
 func (s *Service) UpdateTemplate(ctx context.Context, tenantID, id int64, req UpdateTemplateRequest) (TemplateResponse, error) {
@@ -28,8 +27,15 @@ func (s *Service) UpdateTemplate(ctx context.Context, tenantID, id int64, req Up
 	if err != nil {
 		return TemplateResponse{}, err
 	}
-	row.ID = id
 	if err := s.repo.UpdateTemplate(ctx, id, tenantID, row); err != nil {
+		return TemplateResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
+	}
+	return s.getTemplate(ctx, tenantID, id)
+}
+
+func (s *Service) getTemplate(ctx context.Context, tenantID, id int64) (TemplateResponse, error) {
+	row, err := s.repo.GetTemplate(ctx, id, tenantID)
+	if err != nil {
 		return TemplateResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return toTemplateResponse(row), nil

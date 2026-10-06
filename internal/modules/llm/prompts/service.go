@@ -24,6 +24,9 @@ func NewService(repo *Repository) *Service {
 
 var ErrNotFound = errorcode.NotFoundError{Msg: "prompt not found"}
 
+// versionStatuses are the statuses a version can be set to. "production" is
+// not stored on the version: it points the prompt's production_version_id at
+// it.
 var versionStatuses = []string{"draft", "production", "archived"}
 
 func (s *Service) List(ctx context.Context, tenantID int64) ([]PromptSummary, error) {
@@ -66,10 +69,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 	if name == "" {
 		return PromptDetail{}, errorcode.ValidationError{Msg: "name is required"}
 	}
-	ptype := req.Type
-	if ptype == "" {
-		ptype = "chat"
-	}
+	ptype := cmp.Or(req.Type, "chat")
 	if ptype != "chat" && ptype != "text" {
 		return PromptDetail{}, errorcode.ValidationError{Msg: "type must be chat or text"}
 	}
@@ -77,16 +77,14 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 		return PromptDetail{}, errorcode.ValidationError{Msg: "template is required"}
 	}
 	p := promptInsertArgs{
-		TenantID: tenantID,
-		Name:     name,
-		Type:     ptype,
-		Tags:     req.Tags,
+		TenantID:  tenantID,
+		Name:      name,
+		Type:      ptype,
+		Tags:      req.Tags,
+		CreatedBy: sql.NullInt64{Valid: true, Int64: userID},
 	}
 	if d := strings.TrimSpace(req.Description); d != "" {
 		p.Description = sql.NullString{Valid: true, String: d}
-	}
-	if userID > 0 {
-		p.CreatedBy = sql.NullInt64{Valid: true, Int64: userID}
 	}
 	v := versionInsertArgs{
 		TenantID:     tenantID,
@@ -117,12 +115,10 @@ func (s *Service) AddVersion(ctx context.Context, tenantID, userID int64, name s
 		TemplateJSON: []byte(req.Template),
 		Variables:    req.Variables,
 		Production:   req.Production,
+		CreatedBy:    sql.NullInt64{Valid: true, Int64: userID},
 	}
 	if n := strings.TrimSpace(req.Notes); n != "" {
 		v.Notes = sql.NullString{Valid: true, String: n}
-	}
-	if userID > 0 {
-		v.CreatedBy = sql.NullInt64{Valid: true, Int64: userID}
 	}
 	if _, err := s.repo.CreateVersion(ctx, v); err != nil {
 		return PromptDetail{}, err

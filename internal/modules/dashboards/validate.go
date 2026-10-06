@@ -14,94 +14,113 @@ const maxWidgetsPerPage = 30
 // Widget specs come from the metrics widget builder; these are the only
 // values it produces.
 var (
-	panelTypes      = []string{"metrics-timeseries", "metrics-value", "metrics-toplist", "metrics-table"}
-	layoutVariants  = []string{"standard-chart", "kpi", "ranking", "detail-table"}
-	aggregations    = []string{"avg", "sum", "min", "max", "count", "p50", "p95", "p99", "rate"}
-	filterOperators = []string{"eq", "neq", "in", "not_in", "wildcard"}
+	panelTypes        = []string{"metrics-timeseries", "metrics-value", "metrics-toplist", "metrics-table"}
+	layoutVariants    = []string{"standard-chart", "kpi", "ranking", "detail-table"}
+	steps             = []string{"1m", "5m", "15m", "1h", "1d"}
+	aggregations      = []string{"avg", "sum", "min", "max", "count", "p50", "p95", "p99", "rate"}
+	spaceAggregations = []string{"avg", "sum", "min", "max"}
+	filterOperators   = []string{"eq", "neq", "in", "not_in", "wildcard"}
 )
 
-func validateWidget(spec json.RawMessage) (querySpecProbe, error) {
-	var probe querySpecProbe
-	if err := json.Unmarshal(spec, &probe); err != nil {
-		return probe, errorcode.ValidationError{Msg: "spec must be a valid panel spec object"}
-	}
-	if !slices.Contains(panelTypes, probe.PanelType) {
-		return probe, errorcode.ValidationError{Msg: fmt.Sprintf("panel_type %q is not a supported dashboard panel", probe.PanelType)}
-	}
-	if !slices.Contains(layoutVariants, probe.LayoutVariant) {
-		return probe, errorcode.ValidationError{Msg: fmt.Sprintf("layout_variant %q is not supported", probe.LayoutVariant)}
-	}
-	if err := validateLayout(probe.Layout); err != nil {
-		return probe, err
-	}
-	if probe.Query == nil {
-		return probe, errorcode.ValidationError{Msg: "spec.query is required"}
-	}
-	if probe.Query.Kind != "metrics" {
-		return probe, errorcode.ValidationError{Msg: fmt.Sprintf("spec.query.kind %q is not supported; expected \"metrics\"", probe.Query.Kind)}
-	}
-	return probe, validateBuilderQuery(probe.Query.Queries)
+// panelSpecProbe holds the spec fields the server checks. The spec is stored
+// verbatim and returned as-is; the web reads it back with the same contract.
+type panelSpecProbe struct {
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	PanelType     string `json:"panelType"`
+	LayoutVariant string `json:"layoutVariant"`
+	Legend        *bool  `json:"legend"`
+	Smooth        *bool  `json:"smooth"`
+	Layout        *struct {
+		X *float64 `json:"x"`
+		Y *float64 `json:"y"`
+		W *float64 `json:"w"`
+		H *float64 `json:"h"`
+	} `json:"layout"`
+	Query *struct {
+		Kind             string              `json:"kind"`
+		Step             string              `json:"step"`
+		SpaceAggregation string              `json:"spaceAggregation"`
+		Queries          []builderQueryProbe `json:"queries"`
+	} `json:"query"`
 }
 
-type layoutProbe struct {
-	X *float64 `json:"x"`
-	Y *float64 `json:"y"`
-	W *float64 `json:"w"`
-	H *float64 `json:"h"`
+type builderQueryProbe struct {
+	MetricName       string `json:"metricName"`
+	Aggregation      string `json:"aggregation"`
+	SpaceAggregation string `json:"spaceAggregation"`
+	Where            []struct {
+		Operator string `json:"operator"`
+	} `json:"where"`
 }
 
-func validateLayout(raw json.RawMessage) error {
-	var l layoutProbe
-	if err := json.Unmarshal(raw, &l); err != nil {
-		return errorcode.ValidationError{Msg: "layout must be a {x,y,w,h} object"}
+func invalid(format string, args ...any) error {
+	return errorcode.ValidationError{Msg: fmt.Sprintf(format, args...)}
+}
+
+func validateWidget(spec json.RawMessage) error {
+	var p panelSpecProbe
+	if err := json.Unmarshal(spec, &p); err != nil {
+		return invalid("spec must be a valid panel spec object")
 	}
-	if l.X == nil || l.Y == nil || l.W == nil || l.H == nil {
-		return errorcode.ValidationError{Msg: "layout requires x, y, w and h"}
+	switch {
+	case strings.TrimSpace(p.ID) == "":
+		return invalid("spec.id is required")
+	case strings.TrimSpace(p.Title) == "":
+		return invalid("spec.title is required")
+	case p.Legend == nil || p.Smooth == nil:
+		return invalid("spec.legend and spec.smooth are required")
+	case !slices.Contains(panelTypes, p.PanelType):
+		return invalid("spec.panelType %q is not supported", p.PanelType)
+	case !slices.Contains(layoutVariants, p.LayoutVariant):
+		return invalid("spec.layoutVariant %q is not supported", p.LayoutVariant)
 	}
-	if *l.W <= 0 || *l.H <= 0 {
-		return errorcode.ValidationError{Msg: "layout w and h must be positive"}
+	if err := validateLayout(p); err != nil {
+		return err
 	}
-	if *l.X < 0 || *l.Y < 0 {
-		return errorcode.ValidationError{Msg: "layout x and y must not be negative"}
+	q := p.Query
+	switch {
+	case q == nil:
+		return invalid("spec.query is required")
+	case q.Kind != "metrics":
+		return invalid("spec.query.kind %q is not supported; expected \"metrics\"", q.Kind)
+	case !slices.Contains(steps, q.Step):
+		return invalid("spec.query.step %q is not supported", q.Step)
+	case !slices.Contains(spaceAggregations, q.SpaceAggregation):
+		return invalid("spec.query.spaceAggregation %q is not supported", q.SpaceAggregation)
+	}
+	return validateBuilderQueries(q.Queries)
+}
+
+func validateLayout(p panelSpecProbe) error {
+	l := p.Layout
+	switch {
+	case l == nil || l.X == nil || l.Y == nil || l.W == nil || l.H == nil:
+		return invalid("spec.layout requires x, y, w and h")
+	case *l.W <= 0 || *l.H <= 0:
+		return invalid("spec.layout w and h must be positive")
+	case *l.X < 0 || *l.Y < 0:
+		return invalid("spec.layout x and y must not be negative")
 	}
 	return nil
 }
 
-type builderFilterProbe struct {
-	Operator string `json:"operator"`
-}
-
-type builderQueryProbe struct {
-	MetricName  string               `json:"metricName"`
-	Aggregation string               `json:"aggregation"`
-	Where       []builderFilterProbe `json:"where"`
-}
-
-type querySpecProbe struct {
-	Title         string          `json:"title"`
-	PanelType     string          `json:"panelType"`
-	LayoutVariant string          `json:"layoutVariant"`
-	Layout        json.RawMessage `json:"layout"`
-	Query         *struct {
-		Kind    string              `json:"kind"`
-		Queries []builderQueryProbe `json:"queries"`
-	} `json:"query"`
-}
-
-func validateBuilderQuery(queries []builderQueryProbe) error {
+func validateBuilderQueries(queries []builderQueryProbe) error {
 	if len(queries) == 0 {
-		return errorcode.ValidationError{Msg: "spec.query.queries must have at least one query"}
+		return invalid("spec.query.queries must have at least one query")
 	}
 	for _, q := range queries {
-		if strings.TrimSpace(q.MetricName) == "" {
-			return errorcode.ValidationError{Msg: "spec.query.queries[].metricName is required"}
-		}
-		if !slices.Contains(aggregations, q.Aggregation) {
-			return errorcode.ValidationError{Msg: fmt.Sprintf("aggregation %q is not supported", q.Aggregation)}
+		switch {
+		case strings.TrimSpace(q.MetricName) == "":
+			return invalid("spec.query.queries[].metricName is required")
+		case !slices.Contains(aggregations, q.Aggregation):
+			return invalid("aggregation %q is not supported", q.Aggregation)
+		case !slices.Contains(spaceAggregations, q.SpaceAggregation):
+			return invalid("spaceAggregation %q is not supported", q.SpaceAggregation)
 		}
 		for _, f := range q.Where {
 			if !slices.Contains(filterOperators, f.Operator) {
-				return errorcode.ValidationError{Msg: fmt.Sprintf("filter operator %q is not supported", f.Operator)}
+				return invalid("filter operator %q is not supported", f.Operator)
 			}
 		}
 	}

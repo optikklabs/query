@@ -12,7 +12,7 @@ func (s *Service) GetAvgCPU(ctx context.Context, tenantID int64, startMs, endMs 
 	if err != nil {
 		return models.MetricValue{}, err
 	}
-	return models.MetricValue{Value: valueOrZero(foldCPU(byMetric))}, nil
+	return models.MetricValue{Value: foldCPU(byMetric)}, nil
 }
 
 func (s *Service) GetAvgMemory(ctx context.Context, tenantID int64, startMs, endMs int64) (models.MetricValue, error) {
@@ -20,5 +20,5 @@ func (s *Service) GetAvgMemory(ctx context.Context, tenantID int64, startMs, end
 	if err != nil {
 		return models.MetricValue{}, err
 	}
-	return models.MetricValue{Value: valueOrZero(foldMem(byMetric))}, nil
+	return models.MetricValue{Value: foldMem(byMetric)}, nil
 }

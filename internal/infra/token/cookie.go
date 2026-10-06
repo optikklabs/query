@@ -2,7 +2,6 @@ package token
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/optikklabs/query/internal/shared/httputil"
@@ -55,15 +54,9 @@ func (s *Service) ClearRefreshCookie(w http.ResponseWriter) {
 	})
 }
 
-func parseSameSite(raw string) http.SameSite {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "strict":
-		return http.SameSiteStrictMode
-	case "none":
-		return http.SameSiteNoneMode
-	case "default":
-		return http.SameSiteDefaultMode
-	default:
-		return http.SameSiteLaxMode
-	}
+// sameSiteModes maps the validated config.CookieSameSiteModes values.
+var sameSiteModes = map[string]http.SameSite{
+	"lax":    http.SameSiteLaxMode,
+	"strict": http.SameSiteStrictMode,
+	"none":   http.SameSiteNoneMode,
 }

@@ -9,6 +9,32 @@ import (
 	"github.com/optikklabs/query/internal/shared/sqljson"
 )
 
+// Monitor statuses, as stored in monitor_state.status.
+const (
+	StatusAlert  = "alert"
+	StatusWarn   = "warn"
+	StatusOK     = "ok"
+	StatusNoData = "no_data"
+)
+
+// IsFiring reports whether status is one that notifies and acks.
+func IsFiring(status string) bool {
+	return status == StatusAlert || status == StatusWarn
+}
+
+// Monitor event kinds, as stored in monitor_events.kind.
+const (
+	EventTriggered = "triggered"
+	EventRecovered = "recovered"
+)
+
+// Comparators for Conditions.Comparator.
+const (
+	ComparatorAbove = "above"
+	ComparatorBelow = "below"
+	ComparatorEqual = "equal"
+)
+
 type MonitorRow struct {
 	ID                int64              `db:"id"`
 	TenantID          int64              `db:"tenant_id"`
@@ -59,42 +85,11 @@ const MonitorWithStateColumns = `
   s.evaluation_count, s.acked_by_user_id, s.acked_at, s.no_data_since
 `
 
-// MonitorWithStateRow scans MonitorWithStateColumns. State columns are
-// nullable because a LEFT JOIN may find no state row.
+// MonitorWithStateRow scans MonitorWithStateColumns. Every monitor has a
+// state row, created with it.
 type MonitorWithStateRow struct {
 	MonitorRow
-	StateMonitorID        sql.NullInt64   `db:"monitor_id"`
-	StateStatus           sql.NullString  `db:"status"`
-	StateCurrentValue     sql.NullFloat64 `db:"current_value"`
-	StateLastEvaluatedAt  sql.NullTime    `db:"last_evaluated_at"`
-	StateNextEvaluationAt sql.NullTime    `db:"next_evaluation_at"`
-	StateTriggeredAt      sql.NullTime    `db:"triggered_at"`
-	StateLastNotifiedAt   sql.NullTime    `db:"last_notified_at"`
-	StateEvaluationCount  sql.NullInt64   `db:"evaluation_count"`
-	StateAckedByUserID    sql.NullInt64   `db:"acked_by_user_id"`
-	StateAckedAt          sql.NullTime    `db:"acked_at"`
-	StateNoDataSince      sql.NullTime    `db:"no_data_since"`
-}
-
-// Split returns the monitor and its state; the state is zero when the
-// monitor has no state row.
-func (r MonitorWithStateRow) Split() (MonitorRow, MonitorStateRow) {
-	if !r.StateMonitorID.Valid {
-		return r.MonitorRow, MonitorStateRow{}
-	}
-	return r.MonitorRow, MonitorStateRow{
-		MonitorID:        r.StateMonitorID.Int64,
-		Status:           r.StateStatus.String,
-		CurrentValue:     r.StateCurrentValue,
-		LastEvaluatedAt:  r.StateLastEvaluatedAt,
-		NextEvaluationAt: r.StateNextEvaluationAt.Time,
-		TriggeredAt:      r.StateTriggeredAt,
-		LastNotifiedAt:   r.StateLastNotifiedAt,
-		EvaluationCount:  r.StateEvaluationCount.Int64,
-		AckedByUserID:    r.StateAckedByUserID,
-		AckedAt:          r.StateAckedAt,
-		NoDataSince:      r.StateNoDataSince,
-	}
+	MonitorStateRow
 }
 
 type MonitorEventRow struct {
@@ -124,13 +119,15 @@ type ScopeTag struct {
 	Value string `json:"value"`
 }
 
+// Conditions are validated on write: Comparator, AlertThreshold and NoDataAs
+// are always set.
 type Conditions struct {
 	Comparator        string   `json:"comparator"`
 	AlertThreshold    *float64 `json:"alertThreshold,omitempty"`
 	WarnThreshold     *float64 `json:"warnThreshold,omitempty"`
 	RecoveryThreshold *float64 `json:"recoveryThreshold,omitempty"`
 	NoDataAfterSec    int      `json:"noDataAfterSec"`
-
+	// NoDataAs is the status a data gap resolves to: no_data, alert or ok.
 	NoDataAs  string `json:"noDataAs"`
 	MinSample *int   `json:"minSample,omitempty"`
 }
@@ -138,16 +135,3 @@ type Conditions struct {
 func (c *Conditions) Scan(src any) error { return sqljson.Scan(src, c) }
 
 func (c Conditions) Value() (driver.Value, error) { return json.Marshal(c) }
-
-// PrimaryThreshold is the threshold an alert reports: the alert threshold,
-// falling back to the warn threshold.
-func (c Conditions) PrimaryThreshold() (float64, bool) {
-	switch {
-	case c.AlertThreshold != nil:
-		return *c.AlertThreshold, true
-	case c.WarnThreshold != nil:
-		return *c.WarnThreshold, true
-	default:
-		return 0, false
-	}
-}

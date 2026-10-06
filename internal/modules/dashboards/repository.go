@@ -10,6 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 	"github.com/optikklabs/query/internal/shared/sqljson"
 )
 
@@ -95,12 +96,7 @@ func (r *Repository) ListPages(ctx context.Context, tenantID int64, q ListPagesQ
 		return nil, 0, err
 	}
 
-	limit := q.Limit
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	offset := max(q.Offset, 0)
-	listArgs := append(slices.Clip(args), limit, offset)
+	listArgs := append(slices.Clip(args), q.Limit, q.Offset)
 	listSQL := `SELECT ` + selectPageCols + ` WHERE ` + whereSQL + `
 		ORDER BY p.is_favorite DESC, p.updated_at DESC, p.created_at DESC, p.id DESC
 		LIMIT ? OFFSET ?`
@@ -117,7 +113,7 @@ func pageFilters(tenantID int64, q ListPagesQuery) ([]string, []any) {
 	args := []any{tenantID}
 	if q.Search != "" {
 		where = append(where, "p.name LIKE ?")
-		args = append(args, "%"+q.Search+"%")
+		args = append(args, filterutil.LikeSubstringPattern(q.Search))
 	}
 	if q.Favorite {
 		where = append(where, "p.is_favorite = 1")
@@ -130,19 +126,14 @@ func pageFilters(tenantID int64, q ListPagesQuery) ([]string, []any) {
 }
 
 type widgetInsertArgs struct {
-	PageID        int64
-	TenantID      int64
-	Title         sql.NullString
-	PanelType     string
-	LayoutVariant sql.NullString
-	SpecJSON      []byte
-	LayoutJSON    []byte
-	Position      int
+	PageID   int64
+	TenantID int64
+	SpecJSON []byte
+	Position int
 }
 
 const selectWidgetCols = `
-  id, page_id, tenant_id, title, panel_type, layout_variant,
-  spec_json, layout_json, position, created_at, updated_at
+  id, page_id, tenant_id, spec_json, position, created_at, updated_at
 `
 
 func (r *Repository) ListWidgets(ctx context.Context, pageID, tenantID int64) ([]DashboardRow, error) {
@@ -171,16 +162,14 @@ func (r *Repository) CountWidgets(ctx context.Context, pageID, tenantID int64) (
 
 const insertWidget = `
 INSERT INTO optikk.dashboards
-  (page_id, tenant_id, title, panel_type, layout_variant, spec_json, layout_json,
-   position, created_at)
+  (page_id, tenant_id, spec_json, position, created_at)
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?)
 `
 
 func (r *Repository) CreateWidget(ctx context.Context, row widgetInsertArgs) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.CreateWidget", insertWidget,
-		row.PageID, row.TenantID, row.Title, row.PanelType, row.LayoutVariant,
-		row.SpecJSON, row.LayoutJSON, row.Position, time.Now().UTC())
+		row.PageID, row.TenantID, row.SpecJSON, row.Position, time.Now().UTC())
 	if err != nil {
 		return 0, err
 	}
@@ -189,15 +178,13 @@ func (r *Repository) CreateWidget(ctx context.Context, row widgetInsertArgs) (in
 
 const updateWidget = `
 UPDATE optikk.dashboards
-   SET title = ?, panel_type = ?, layout_variant = ?,
-       spec_json = ?, layout_json = ?, position = ?, updated_at = ?
+   SET spec_json = ?, position = ?, updated_at = ?
  WHERE id = ? AND page_id = ? AND tenant_id = ?
 `
 
 func (r *Repository) UpdateWidget(ctx context.Context, id int64, row widgetInsertArgs) error {
 	return dbutil.ExecMatched(ctx, r.db, "dashboards.UpdateWidget", updateWidget,
-		row.Title, row.PanelType, row.LayoutVariant,
-		row.SpecJSON, row.LayoutJSON, row.Position, time.Now().UTC(),
+		row.SpecJSON, row.Position, time.Now().UTC(),
 		id, row.PageID, row.TenantID)
 }
 

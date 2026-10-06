@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -43,10 +44,19 @@ func ClientIP(r *http.Request) string {
 	return host
 }
 
+// WriteJSON encodes v before committing the status, so a value that cannot
+// be encoded (a NaN, say) becomes a 500 failure envelope rather than an empty
+// body under the original status.
 func WriteJSON(w http.ResponseWriter, status int, v any) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		slog.Error("failed to encode json response", slog.Any("error", err))
+		status = http.StatusInternalServerError
+		body, _ = json.Marshal(types.Failure(errorcode.Internal, "failed to encode response", "", w.Header().Get("X-Request-Id")))
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
+	if _, err := w.Write(append(body, '\n')); err != nil {
 		slog.Error("failed to write json response", slog.Any("error", err))
 	}
 }
@@ -127,7 +137,6 @@ func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fail
 		ua errorcode.UnauthorizedError
 		te errorcode.TrialExpiredError
 		rl errorcode.RateLimitedError
-		un errorcode.UnavailableError
 	)
 	switch {
 	case errors.As(err, &nf):
@@ -142,48 +151,95 @@ func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fail
 		RespondErrorWithCause(w, r, http.StatusPaymentRequired, errorcode.TrialExpired, te.Msg, nil)
 	case errors.As(err, &rl):
 		RespondErrorWithCause(w, r, http.StatusTooManyRequests, errorcode.RateLimited, rl.Msg, nil)
-	case errors.As(err, &un):
-		RespondErrorWithCause(w, r, http.StatusServiceUnavailable, errorcode.Unavailable, un.Msg, nil)
 	default:
 		RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, failMsg, err)
 	}
 }
 
-func ParseInt64Param(r *http.Request, key string, fallback int64) int64 {
-	if v := r.URL.Query().Get(key); v != "" {
-		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
-			return parsed
-		}
-	}
-	return fallback
-}
-
 func ParseIDParam(w http.ResponseWriter, r *http.Request, key string) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, key), 10, 64)
 	if err != nil || id <= 0 {
-		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid "+key, nil)
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "invalid "+key, nil)
 		return 0, false
 	}
 	return id, true
 }
 
-const MaxPageSize = 200
-
-func ParseIntParam(r *http.Request, key string, fallback int) int {
-	if v := r.URL.Query().Get(key); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil {
-			return parsed
-		}
+// QueryInt64 reads an optional integer query param; an absent param yields
+// def and a malformed one answers 400.
+func QueryInt64(w http.ResponseWriter, r *http.Request, key string, def int64) (int64, bool) {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return def, true
 	}
-	return fallback
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, key+" must be an integer", nil)
+		return 0, false
+	}
+	return v, true
 }
 
-func ParsePageSize(r *http.Request, key string, fallback int) int {
-	size := min(ParseIntParam(r, key, fallback), MaxPageSize)
-	if size <= 0 {
-		size = fallback
+// QueryInt is QueryInt64 for int params.
+func QueryInt(w http.ResponseWriter, r *http.Request, key string, def int) (int, bool) {
+	v, ok := QueryInt64(w, r, key, int64(def))
+	return int(v), ok
+}
+
+// QueryEnum reads an optional query param that must be one of allowed; an
+// absent param yields "".
+func QueryEnum(w http.ResponseWriter, r *http.Request, key string, allowed []string) (string, bool) {
+	v := r.URL.Query().Get(key)
+	if v != "" && !slices.Contains(allowed, v) {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation,
+			key+" must be one of "+strings.Join(allowed, ", "), nil)
+		return "", false
 	}
-	return size
+	return v, true
+}
+
+// QueryEnums reads a repeatable query param whose every value must be one
+// of allowed; an absent param yields nil.
+func QueryEnums(w http.ResponseWriter, r *http.Request, key string, allowed []string) ([]string, bool) {
+	values := r.URL.Query()[key]
+	for _, v := range values {
+		if !slices.Contains(allowed, v) {
+			RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation,
+				key+" must be one of "+strings.Join(allowed, ", "), nil)
+			return nil, false
+		}
+	}
+	return values, true
+}
+
+// QueryBool reads an optional true/false query param; an absent param yields
+// nil.
+func QueryBool(w http.ResponseWriter, r *http.Request, key string) (*bool, bool) {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return nil, true
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, key+" must be true or false", nil)
+		return nil, false
+	}
+	return &v, true
+}
+
+// QueryLimit reads the optional limit query param under filterutil.Limit's
+// rules, answering 400 when it is out of range.
+func QueryLimit(w http.ResponseWriter, r *http.Request, def, max int) (int, bool) {
+	raw, ok := QueryInt(w, r, "limit", 0)
+	if !ok {
+		return 0, false
+	}
+	limit, err := filterutil.Limit(raw, def, max)
+	if err != nil {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, err.Error(), nil)
+		return 0, false
+	}
+	return limit, true
 }
 
 // ParseRequiredRange reads the startTime/endTime query params as Unix
@@ -201,7 +257,7 @@ func ParseRequiredUncappedRange(w http.ResponseWriter, r *http.Request) (startMs
 func requireRange(w http.ResponseWriter, r *http.Request, maxMs int64) (startMs, endMs int64, ok bool) {
 	startMs, endMs, err := parseRange(r, maxMs)
 	if err != nil {
-		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, err.Error(), nil)
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, err.Error(), nil)
 		return 0, 0, false
 	}
 	return startMs, endMs, true
@@ -209,10 +265,11 @@ func requireRange(w http.ResponseWriter, r *http.Request, maxMs int64) (startMs,
 
 // parseRange validates the window; maxMs of 0 leaves its length unbounded.
 func parseRange(r *http.Request, maxMs int64) (startMs, endMs int64, err error) {
-	startMs = ParseInt64Param(r, "startTime", 0)
-	endMs = ParseInt64Param(r, "endTime", 0)
+	q := r.URL.Query()
+	startMs, startErr := strconv.ParseInt(q.Get("startTime"), 10, 64)
+	endMs, endErr := strconv.ParseInt(q.Get("endTime"), 10, 64)
 	switch {
-	case startMs <= 0 || endMs <= 0:
+	case startErr != nil || endErr != nil || startMs <= 0 || endMs <= 0:
 		return 0, 0, errors.New("startTime and endTime must be positive Unix milliseconds")
 	case startMs >= endMs:
 		return 0, 0, errors.New("startTime must be before endTime")
@@ -222,25 +279,19 @@ func parseRange(r *http.Request, maxMs int64) (startMs, endMs int64, err error) 
 	return startMs, endMs, nil
 }
 
-// ParseComparisonRange resolves the comparison window from explicit
-// compareStart/compareEnd params or a compareTo preset.
-func ParseComparisonRange(r *http.Request, startMs, endMs int64) (cmpStart, cmpEnd int64, ok bool) {
-	cmpStart = ParseInt64Param(r, "compareStart", 0)
-	cmpEnd = ParseInt64Param(r, "compareEnd", 0)
-	if cmpStart > 0 && cmpEnd > 0 {
-		return cmpStart, cmpEnd, true
-	}
-
-	var shift int64
-	switch r.URL.Query().Get("compareTo") {
+// comparisonShift returns how far before the requested window the compareTo
+// preset places the comparison window; 0 means no comparison was asked for.
+func comparisonShift(preset string, windowMs int64) (int64, error) {
+	switch preset {
+	case "":
+		return 0, nil
 	case "previous_period":
-		shift = endMs - startMs
+		return windowMs, nil
 	case "previous_day":
-		shift = (24 * time.Hour).Milliseconds()
+		return (24 * time.Hour).Milliseconds(), nil
 	case "previous_week":
-		shift = (7 * 24 * time.Hour).Milliseconds()
+		return (7 * 24 * time.Hour).Milliseconds(), nil
 	default:
-		return 0, 0, false
+		return 0, errors.New("compareTo must be previous_period, previous_day or previous_week")
 	}
-	return startMs - shift, endMs - shift, true
 }

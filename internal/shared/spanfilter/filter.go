@@ -1,9 +1,8 @@
 package spanfilter
 
 import (
-	"time"
-
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -40,7 +39,7 @@ type Filters struct {
 }
 
 func (f *Filters) Validate() error {
-	if err := filterutil.ValidateTimeRange(&f.StartMs, &f.EndMs); err != nil {
+	if err := filterutil.ValidateTimeRange(f.StartMs, f.EndMs); err != nil {
 		return err
 	}
 	return filterutil.ValidateAttrs(f.Attributes)
@@ -77,8 +76,8 @@ func (c Clauses) HasSpanMatch() bool {
 func BuildClauses(f Filters) Clauses {
 	c := Clauses{Args: []any{
 		clickhouse.Named("tenantID", uint32(f.TenantID)),
-		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
-		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
+		chargs.Millis("start", f.StartMs),
+		chargs.Millis("end", f.EndMs),
 	}}
 
 	if len(f.Services) > 0 {

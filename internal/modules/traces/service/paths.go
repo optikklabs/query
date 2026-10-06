@@ -2,7 +2,6 @@ package service
 
 import (
 	"slices"
-	"strings"
 
 	"github.com/optikklabs/query/internal/modules/traces/models"
 	"github.com/optikklabs/query/internal/modules/traces/repository"
@@ -84,24 +83,29 @@ func pickBestRoot(nodes map[string]*criticalNode, roots []string) string {
 	return bestRoot
 }
 
+// walkCriticalChain follows the chain from root. A span's SelfMs is the
+// stretch of the path's wall time it accounts for: from its start to where the
+// path ends below it, minus the same stretch for its critical child. Measuring
+// to subtree ends rather than span ends keeps async children that outlive
+// their parent from being counted twice, so SelfMs sums to the path's span.
 func walkCriticalChain(nodes map[string]*criticalNode, root string) []models.CriticalPathSpan {
 	result := []models.CriticalPathSpan{}
-	cur := root
-	for cur != "" {
-		n, ok := nodes[cur]
-		if !ok {
-			break
+	for cur := root; cur != ""; {
+		n := nodes[cur]
+		selfNs := n.subtreeEnd - n.startNs
+		cur = ""
+		if len(n.children) > 0 {
+			cur = pickBestChild(nodes, n.children)
+			child := nodes[cur]
+			selfNs = max(0, selfNs-(child.subtreeEnd-child.startNs))
 		}
 		result = append(result, models.CriticalPathSpan{
 			SpanID:        n.row.SpanID,
 			OperationName: n.row.OperationName,
 			ServiceName:   n.row.ServiceName,
 			DurationMs:    n.row.DurationMs(),
+			SelfMs:        float64(selfNs) / 1e6,
 		})
-		if len(n.children) == 0 {
-			break
-		}
-		cur = pickBestChild(nodes, n.children)
 	}
 	return result
 }
@@ -174,7 +178,8 @@ func walkErrorChain(spans map[string]*repository.TraceSpanRow, leafID string) []
 	return chain
 }
 
+// isRootParentSpanID reports a root span: ingest stores an absent (or
+// all-zero) parent span id as "".
 func isRootParentSpanID(parentID string) bool {
-	trimmed := strings.Trim(parentID, "\x00")
-	return trimmed == "" || trimmed == "0000000000000000"
+	return parentID == ""
 }

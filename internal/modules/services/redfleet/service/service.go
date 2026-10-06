@@ -14,9 +14,6 @@ import (
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
-// Series count when the caller does not ask for one; handler caps at MaxPageSize.
-const defaultEndpointSeriesLimit = 20
-
 type Service struct {
 	repo *repository.Repository
 }
@@ -152,14 +149,8 @@ func (s *Service) GetREDByEndpointTimeSeries(ctx context.Context, f filter.Filte
 }
 
 func buildEndpointRateSeries(rows []models.EndpointRateRow, f filter.Filters, limit int) models.EndpointRateSeries {
-	if limit <= 0 {
-		limit = defaultEndpointSeriesLimit
-	}
 	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
-	grainSec := float64(grain.Seconds())
-	if grainSec <= 0 {
-		grainSec = 60
-	}
+	grainSec := grain.Seconds()
 	operations, buckets, series := timebucket.FillGapsKeyed(f.StartMs, f.EndMs, grain, topEndpointRows(rows, limit),
 		func(r models.EndpointRateRow) string { return r.OperationName },
 		func(r models.EndpointRateRow) time.Time { return r.BucketAt },

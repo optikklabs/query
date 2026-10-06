@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -63,15 +64,36 @@ func Load(path ...string) (Config, error) {
 
 const minJWTSecretLen = 32
 
+// CookieSameSiteModes lists the accepted auth.cookie_same_site values.
+var CookieSameSiteModes = []string{"lax", "strict", "none"}
+
 func (c Config) Validate() error {
 	if len(c.Auth.JWTSecret) < minJWTSecretLen {
 		return fmt.Errorf("auth.jwt_secret must be at least %d bytes", minJWTSecretLen)
 	}
+	if c.Auth.AccessTTLMs <= 0 || c.Auth.RefreshTTLMs <= 0 {
+		return errors.New("auth.access_ttl_ms and auth.refresh_ttl_ms must be positive")
+	}
+	if !slices.Contains(CookieSameSiteModes, c.Auth.CookieSameSite) {
+		return fmt.Errorf("auth.cookie_same_site must be one of %v", CookieSameSiteModes)
+	}
+	if c.Auth.CookieSameSite == "none" && !c.Auth.CookieSecure {
+		return errors.New("auth.cookie_same_site none requires auth.cookie_secure")
+	}
+	if c.Server.Port == "" || c.Server.MetricsPort == "" {
+		return errors.New("server.port and server.metrics_port must be set")
+	}
 	if c.MySQL.Password == "" {
 		return errors.New("mysql.password must not be empty")
 	}
+	if c.MySQL.MaxOpenConns <= 0 || c.MySQL.MaxIdleConns <= 0 {
+		return errors.New("mysql.max_open_conns and mysql.max_idle_conns must be positive")
+	}
 	if c.ClickHouse.Password == "" {
 		return errors.New("clickhouse.password must not be empty")
+	}
+	if c.ClickHouse.MaxOpenConns <= 0 || c.ClickHouse.MaxIdleConns <= 0 {
+		return errors.New("clickhouse.max_open_conns and clickhouse.max_idle_conns must be positive")
 	}
 	if c.Environment == "production" {
 		if !c.Auth.CookieSecure {
@@ -124,16 +146,16 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("mysql.database", "")
 	v.SetDefault("mysql.user", "")
 	v.SetDefault("mysql.password", "")
-	v.SetDefault("mysql.max_open_conns", 0)
-	v.SetDefault("mysql.max_idle_conns", 0)
+	v.SetDefault("mysql.max_open_conns", 50)
+	v.SetDefault("mysql.max_idle_conns", 25)
 
 	v.SetDefault("clickhouse.host", "")
 	v.SetDefault("clickhouse.port", "")
 	v.SetDefault("clickhouse.database", "")
 	v.SetDefault("clickhouse.user", "")
 	v.SetDefault("clickhouse.password", "")
-	v.SetDefault("clickhouse.max_open_conns", 0)
-	v.SetDefault("clickhouse.max_idle_conns", 0)
+	v.SetDefault("clickhouse.max_open_conns", 12)
+	v.SetDefault("clickhouse.max_idle_conns", 6)
 
 	v.SetDefault("clickhouse.query_budgets.dashboard.max_execution_time", 10)
 	v.SetDefault("clickhouse.query_budgets.dashboard.max_rows_to_read", 300_000_000)
@@ -175,4 +197,5 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("billing.gb_price_usd", 0.10)
 	v.SetDefault("billing.metric_million_samples_price_usd", 0.10)
 	v.SetDefault("billing.monthly_record_commitment", 5_000_000_000)
+	v.SetDefault("billing.monthly_byte_commitment", 50<<40) // 50 TiB
 }

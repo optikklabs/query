@@ -19,7 +19,7 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	res, err := h.svc.List(r.Context(), httputil.Tenant(r).TenantID)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.QueryFailed, "failed to list prompts", err)
+		httputil.RespondServiceError(w, r, err, "failed to list prompts")
 		return
 	}
 	httputil.RespondOK(w, map[string]any{"items": res})
@@ -65,7 +65,7 @@ func (h *Handler) CreateVersion(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateVersion(w http.ResponseWriter, r *http.Request) {
 	version, err := strconv.Atoi(chi.URLParam(r, "version"))
 	if err != nil || version <= 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "invalid version", nil)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "invalid version", nil)
 		return
 	}
 	var req UpdateVersionRequest

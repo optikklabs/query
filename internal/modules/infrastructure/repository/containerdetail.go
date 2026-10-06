@@ -15,13 +15,13 @@ import (
 )
 
 type PodMetaRow struct {
-	LastSeen     time.Time `ch:"last_seen"`
-	Host         string    `ch:"host_any"`
-	Containers   []string  `ch:"containers"`
-	Services     []string  `ch:"services"`
-	Environments []string  `ch:"environments"`
-	Namespaces   []string  `ch:"namespaces"`
-	MetricNames  []string  `ch:"metric_names"`
+	LastSeen     *time.Time `ch:"last_seen"`
+	Host         string     `ch:"host_any"`
+	Containers   []string   `ch:"containers"`
+	Services     []string   `ch:"services"`
+	Environments []string   `ch:"environments"`
+	Namespaces   []string   `ch:"namespaces"`
+	MetricNames  []string   `ch:"metric_names"`
 }
 
 type PodREDRow struct {
@@ -38,7 +38,7 @@ func (r *Repository) QueryPodSeries(ctx context.Context, tenantID int64, pod str
 func (r *Repository) QueryPodMeta(ctx context.Context, tenantID int64, pod string, startMs, endMs int64) (PodMetaRow, error) {
 	query := `
 		SELECT
-		    max(timestamp)                                                        AS last_seen,
+		    maxOrNull(timestamp)                                                  AS last_seen,
 		    argMaxIf(host, (timestamp, fingerprint), host != '')                  AS host_any,
 		    groupUniqArrayIf(container, container != '')                          AS containers,
 		    groupUniqArrayIf(service, service != '')                              AS services,

@@ -76,6 +76,7 @@ func TestParseRangeRejectsInvalidWindows(t *testing.T) {
 		"/?startTime=2000&endTime=1000",
 		"/?startTime=1000&endTime=1000",
 		"/?startTime=1&endTime=2592000002",
+		"/?startTime=abc&endTime=2000",
 	} {
 		req := httptest.NewRequest(http.MethodGet, target, nil)
 		if _, _, err := parseRange(req, filterutil.MaxTimeRangeMs); err == nil {
@@ -124,23 +125,22 @@ func TestBindJSON(t *testing.T) {
 	}
 }
 
-func TestParseComparisonRange(t *testing.T) {
-	const start, end = int64(10_000_000_000), int64(10_003_600_000)
+func TestComparisonShift(t *testing.T) {
+	const window = int64(3_600_000)
 	for _, tc := range []struct {
-		query          string
-		wantStart, end int64
-		ok             bool
+		preset string
+		want   int64
+		ok     bool
 	}{
-		{"compareTo=previous_period", start - 3_600_000, end - 3_600_000, true},
-		{"compareTo=previous_day", start - 86_400_000, end - 86_400_000, true},
-		{"compareStart=1&compareEnd=2", 1, 2, true},
-		{"compareTo=bogus", 0, 0, false},
-		{"", 0, 0, false},
+		{"previous_period", window, true},
+		{"previous_day", 86_400_000, true},
+		{"previous_week", 604_800_000, true},
+		{"", 0, true},
+		{"bogus", 0, false},
 	} {
-		req := httptest.NewRequest(http.MethodGet, "/?"+tc.query, nil)
-		s, e, ok := ParseComparisonRange(req, start, end)
-		if s != tc.wantStart || e != tc.end || ok != tc.ok {
-			t.Errorf("%q = (%d, %d, %v), want (%d, %d, %v)", tc.query, s, e, ok, tc.wantStart, tc.end, tc.ok)
+		got, err := comparisonShift(tc.preset, window)
+		if got != tc.want || (err == nil) != tc.ok {
+			t.Errorf("comparisonShift(%q) = (%d, %v), want (%d, ok=%v)", tc.preset, got, err, tc.want, tc.ok)
 		}
 	}
 }

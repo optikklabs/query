@@ -3,25 +3,25 @@ package repository
 import (
 	"context"
 	"strings"
-	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/logs/filter"
 	"github.com/optikklabs/query/internal/modules/logs/models"
+	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 // ListLogs returns up to limit rows; callers pass limit+1 to detect more.
-func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, cur models.Cursor) ([]models.LogRow, error) {
+func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, cur *models.Cursor) ([]models.LogRow, error) {
 	prewhere, where, args := filter.BuildClauses(f)
-	if !cur.IsZero() {
+	if cur != nil {
 		prewhere += ` AND (ts_bucket, timestamp) <= (@curBucket, @curTs)`
 		where += ` AND (ts_bucket, timestamp, log_id) < (@curBucket, @curTs, @curLid)`
 		args = append(args,
 			clickhouse.Named("curBucket", timebucket.LogBucket(cur.Timestamp.UnixMilli())),
-			clickhouse.DateNamed("curTs", cur.Timestamp, clickhouse.NanoSeconds),
+			chargs.Nanos("curTs", cur.Timestamp),
 			clickhouse.Named("curLid", cur.LogID),
 		)
 	}
@@ -113,8 +113,8 @@ func (r *Repository) runSuggest(ctx context.Context, op, query string, args []an
 func suggestArgs(tenantID, startMs, endMs int64, prefix string, limit int) []any {
 	return []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
+		chargs.Millis("start", startMs),
+		chargs.Millis("end", endMs),
 		clickhouse.Named("startBucket", timebucket.LogBucket(startMs)),
 		clickhouse.Named("endBucket", timebucket.LogBucket(endMs)),
 		clickhouse.Named("prefix", prefix),

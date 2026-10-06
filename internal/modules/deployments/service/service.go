@@ -13,6 +13,7 @@ import (
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 	"github.com/optikklabs/query/internal/shared/metrics"
+	"github.com/optikklabs/query/internal/shared/nullable"
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
@@ -229,7 +230,7 @@ func buildListResponse(rows []models.RawDeploymentRow, endMs int64) models.ListR
 	}
 	sortDeploymentResults(results)
 
-	environments := slices.Sorted(maps.Keys(environmentSet))
+	environments := nullable.OrEmpty(slices.Sorted(maps.Keys(environmentSet)))
 	return models.ListResponse{
 		Results:      results,
 		Environments: environments,
@@ -481,18 +482,15 @@ func redValues(requests, errors uint64, qs []float64) models.REDValues {
 	}
 }
 
+// p95From reads p95 from a LatencyP95 projection; an empty input set yields
+// NaN, which reads as 0.
 func p95From(qs []float64) float64 {
-	if len(qs) == 0 {
-		return 0
-	}
 	return httputil.SanitizeFloat(spanstats.LatencyP95.At(qs, spanstats.P95))
 }
 
+// quantiles reads the p50/p75/p90/p95/p99 projection of ComparisonRow.
 func quantiles(qs []float64) [5]float64 {
 	var out [5]float64
-	if len(qs) < len(out) {
-		return out
-	}
 	for i := range out {
 		out[i] = httputil.SanitizeFloat(qs[i])
 	}

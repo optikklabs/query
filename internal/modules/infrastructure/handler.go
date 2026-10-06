@@ -7,7 +7,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/optikklabs/query/internal/modules/infrastructure/service"
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -68,7 +67,7 @@ func (h *Handler) GetHostOverview(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetHostSeries(w http.ResponseWriter, r *http.Request) {
 	host := chi.URLParam(r, "host")
-	h.respondSeries(w, r, "Failed to query host series", func(ctx context.Context, tenantID, startMs, endMs int64, metricID string) (any, bool, error) {
+	h.respondSeries(w, r, "Failed to query host series", func(ctx context.Context, tenantID, startMs, endMs int64, metricID string) (any, error) {
 		return h.Service.GetHostSeries(ctx, tenantID, host, metricID, startMs, endMs)
 	})
 }
@@ -82,27 +81,23 @@ func (h *Handler) GetPodOverview(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetPodSeries(w http.ResponseWriter, r *http.Request) {
 	pod := chi.URLParam(r, "pod")
-	h.respondSeries(w, r, "Failed to query pod series", func(ctx context.Context, tenantID, startMs, endMs int64, metricID string) (any, bool, error) {
+	h.respondSeries(w, r, "Failed to query pod series", func(ctx context.Context, tenantID, startMs, endMs int64, metricID string) (any, error) {
 		return h.Service.GetPodSeries(ctx, tenantID, pod, metricID, startMs, endMs)
 	})
 }
 
 func (h *Handler) respondSeries(
 	w http.ResponseWriter, r *http.Request, failMsg string,
-	query func(ctx context.Context, tenantID, startMs, endMs int64, metricID string) (any, bool, error),
+	query func(ctx context.Context, tenantID, startMs, endMs int64, metricID string) (any, error),
 ) {
 	tenantID := httputil.Tenant(r).TenantID
 	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
-	rows, known, err := query(r.Context(), tenantID, startMs, endMs, r.URL.Query().Get("metric"))
-	if !known {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "unknown metric group", nil)
-		return
-	}
+	rows, err := query(r.Context(), tenantID, startMs, endMs, r.URL.Query().Get("metric"))
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, failMsg, err)
+		httputil.RespondServiceError(w, r, err, failMsg)
 		return
 	}
 	httputil.RespondOK(w, rows)

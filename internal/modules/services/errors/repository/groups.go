@@ -11,12 +11,13 @@ import (
 	"github.com/optikklabs/query/internal/shared/errorgroups"
 )
 
-// ErrorGroupDetailRow returns nil when the group has no errors in the window.
-func (r *Repository) ErrorGroupDetailRow(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*models.RawErrorGroupDetailRow, error) {
+// ErrorGroupDetailRow returns sql.ErrNoRows when the group has no errors in
+// the window.
+func (r *Repository) ErrorGroupDetailRow(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (models.RawErrorGroupDetailRow, error) {
 	query := `
 		SELECT ` + errorgroups.IdentityProjection("") + `,
 		       service                              AS service,
-		       toUInt16OrZero(argMax(response_status_code, (timestamp, span_id))) AS http_status_code,
+		       toUInt16OrNull(argMax(response_status_code, (timestamp, span_id))) AS http_status_code,
 		       count()                                   AS error_count,
 		       max(timestamp)                       AS last_occurrence,
 		       min(timestamp)                       AS first_occurrence
@@ -28,16 +29,22 @@ func (r *Repository) ErrorGroupDetailRow(ctx context.Context, tenantID int64, st
 		clickhouse.Named("groupID", groupID),
 	)
 	var row models.RawErrorGroupDetailRow
-	if err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupDetail", &row, query, args...); err != nil || row.GroupID == "" {
-		return nil, err
-	}
-	return &row, nil
+	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupDetail", &row, query, args...)
+	return row, err
 }
 
-func (r *Repository) ErrorGroupTraceRows(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string, limit int, cursor models.ErrorTracesCursor) ([]models.RawErrorGroupTraceRow, error) {
+func (r *Repository) ErrorGroupTraceRows(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string, limit int, cursor *models.ErrorTracesCursor) ([]models.RawErrorGroupTraceRow, error) {
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
+		clickhouse.Named("groupID", groupID),
+		clickhouse.Named("limit", limit),
+	)
 	var paginationFilter string
-	if !cursor.IsZero() {
+	if cursor != nil {
 		paginationFilter = "AND (s.timestamp < @cursorTs OR (s.timestamp = @cursorTs AND s.span_id > @cursorSpan))"
+		args = append(args,
+			chargs.Nanos("cursorTs", cursor.Timestamp),
+			clickhouse.Named("cursorSpan", cursor.SpanID),
+		)
 	}
 
 	query := `
@@ -52,12 +59,6 @@ func (r *Repository) ErrorGroupTraceRows(ctx context.Context, tenantID int64, st
 		WHERE 1=1 ` + paginationFilter + `
 		ORDER BY s.timestamp DESC, s.span_id ASC
 		LIMIT @limit`
-	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
-		clickhouse.Named("groupID", groupID),
-		clickhouse.Named("limit", limit),
-		clickhouse.Named("cursorTs", cursor.Timestamp),
-		clickhouse.Named("cursorSpan", cursor.SpanID),
-	)
 	var rows []models.RawErrorGroupTraceRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupTraces", &rows, query, args...)
 }
@@ -79,9 +80,9 @@ func (r *Repository) ErrorGroupTimeseriesRows(ctx context.Context, tenantID int6
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupTimeseries", &rows, query, args...)
 }
 
-// ErrorGroupLatestOccurrenceRow returns nil when the group has no errors in
-// the window.
-func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*models.RawErrorLatestOccurrenceRow, error) {
+// ErrorGroupLatestOccurrenceRow returns sql.ErrNoRows when the group has no
+// errors in the window.
+func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (models.RawErrorLatestOccurrenceRow, error) {
 	query := `
 		SELECT s.trace_id                  AS trace_id,
 		       s.span_id                   AS span_id,
@@ -91,7 +92,7 @@ func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, tenantID
 		       s.exception_stacktrace      AS exception_stacktrace,
 		       s.http_method               AS http_method,
 		       s.http_route                AS http_route,
-		       s.response_status_code      AS response_status_code,
+		       toUInt16OrNull(s.response_status_code) AS http_status_code,
 		       s.service_version           AS service_version,
 		       s.environment               AS environment,
 		       s.pod                       AS pod,
@@ -105,10 +106,8 @@ func (r *Repository) ErrorGroupLatestOccurrenceRow(ctx context.Context, tenantID
 		clickhouse.Named("groupID", groupID),
 	)
 	var row models.RawErrorLatestOccurrenceRow
-	if err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupLatestOccurrence", &row, query, args...); err != nil || row.SpanID == "" {
-		return nil, err
-	}
-	return &row, nil
+	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "errors.ErrorGroupLatestOccurrence", &row, query, args...)
+	return row, err
 }
 
 func (r *Repository) ErrorGroupFacetRowsAll(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) ([]models.RawFacetDimRow, error) {

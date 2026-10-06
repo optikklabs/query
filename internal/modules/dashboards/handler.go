@@ -15,23 +15,43 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{Service: service}
 }
 
+const (
+	defaultPageLimit = 50
+	maxPageLimit     = 200
+)
+
 func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
-	tenant := httputil.Tenant(r)
-	q := ListPagesQuery{
-		Search: r.URL.Query().Get("q"),
-		Tag:    r.URL.Query().Get("tag"),
-		Limit:  httputil.ParseIntParam(r, "limit", 50),
-		Offset: httputil.ParseIntParam(r, "offset", 0),
+	q, ok := parseListPagesQuery(w, r)
+	if !ok {
+		return
 	}
-	if fv := r.URL.Query().Get("favorite"); fv == "true" || fv == "1" {
-		q.Favorite = true
-	}
-	res, err := h.Service.ListPages(r.Context(), tenant.TenantID, q)
+	res, err := h.Service.ListPages(r.Context(), httputil.Tenant(r).TenantID, q)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.QueryFailed, "failed to list dashboard pages", err)
+		httputil.RespondServiceError(w, r, err, "failed to list dashboard pages")
 		return
 	}
 	httputil.RespondOK(w, res)
+}
+
+func parseListPagesQuery(w http.ResponseWriter, r *http.Request) (q ListPagesQuery, ok bool) {
+	q.Search = r.URL.Query().Get("q")
+	q.Tag = r.URL.Query().Get("tag")
+	favorite, ok := httputil.QueryBool(w, r, "favorite")
+	if !ok {
+		return q, false
+	}
+	q.Favorite = favorite != nil && *favorite
+	if q.Limit, ok = httputil.QueryLimit(w, r, defaultPageLimit, maxPageLimit); !ok {
+		return q, false
+	}
+	if q.Offset, ok = httputil.QueryInt(w, r, "offset", 0); !ok {
+		return q, false
+	}
+	if q.Offset < 0 {
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "offset must not be negative", nil)
+		return q, false
+	}
+	return q, true
 }
 
 func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
@@ -91,20 +111,6 @@ func (h *Handler) DeletePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.RespondOK(w, map[string]any{"deleted": id})
-}
-
-func (h *Handler) ListWidgets(w http.ResponseWriter, r *http.Request) {
-	tenant := httputil.Tenant(r)
-	pageID, ok := httputil.ParseIDParam(w, r, "id")
-	if !ok {
-		return
-	}
-	res, err := h.Service.ListWidgets(r.Context(), tenant.TenantID, pageID)
-	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.QueryFailed, "failed to list widgets", err)
-		return
-	}
-	httputil.RespondOK(w, map[string]any{"items": res})
 }
 
 func (h *Handler) CreateWidget(w http.ResponseWriter, r *http.Request) {

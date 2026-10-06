@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"cmp"
 	"database/sql"
 	"time"
 
@@ -18,9 +19,6 @@ type Decision struct {
 
 func Decide(prev models.MonitorStateRow, cond models.Conditions, value float64, hasData bool, renotifyEverySec int64, now time.Time) Decision {
 	prevStatus := prev.Status
-	if prevStatus == "" {
-		prevStatus = "no_data"
-	}
 	noDataSince := sql.NullTime{}
 	if !hasData {
 		noDataSince = prev.NoDataSince
@@ -39,12 +37,12 @@ func Decide(prev models.MonitorStateRow, cond models.Conditions, value float64, 
 	notify := false
 	isRecovery := false
 	switch {
-	case transition && (newStatus == "alert" || newStatus == "warn"):
+	case transition && models.IsFiring(newStatus):
 		notify = true
-	case transition && newStatus == "ok" && (prevStatus == "alert" || prevStatus == "warn"):
+	case transition && newStatus == models.StatusOK && models.IsFiring(prevStatus):
 		notify = true
 		isRecovery = true
-	case !transition && newStatus == "alert" && renotifyEverySec > 0 && prev.LastNotifiedAt.Valid:
+	case !transition && newStatus == models.StatusAlert && renotifyEverySec > 0 && prev.LastNotifiedAt.Valid:
 		elapsed := now.Sub(prev.LastNotifiedAt.Time)
 		if elapsed >= time.Duration(renotifyEverySec)*time.Second {
 			notify = true
@@ -61,74 +59,33 @@ func Decide(prev models.MonitorStateRow, cond models.Conditions, value float64, 
 
 func classify(prev string, cond models.Conditions, value float64, hasData bool) string {
 	if !hasData {
-		switch cond.NoDataAs {
-		case "alert":
-			return "alert"
-		case "ok":
-			return "ok"
-		default:
-			return "no_data"
-		}
-	}
-	cmp := cond.Comparator
-	if cmp == "" {
-		cmp = "above"
+		return cond.NoDataAs
 	}
 	hit := func(threshold *float64) bool {
-		if threshold == nil {
-			return false
-		}
-		switch cmp {
-		case "above":
-			return value > *threshold
-		case "below":
-			return value < *threshold
-		case "equal":
-			return value == *threshold
-		}
-		return false
+		return threshold != nil && breaches(cond.Comparator, value, *threshold)
 	}
-	hitRecovery := func() bool {
-		t := cond.RecoveryThreshold
-		if t == nil {
-			t = cond.WarnThreshold
-		}
-		if t == nil {
-			t = cond.AlertThreshold
-		}
-		if t == nil {
-			return true
-		}
-		switch cmp {
-		case "above":
-			return value <= *t
-		case "below":
-			return value >= *t
-		case "equal":
-			return value != *t
-		}
-		return true
+	if hit(cond.AlertThreshold) {
+		return models.StatusAlert
 	}
-
-	switch prev {
-	case "alert", "warn":
-		if hit(cond.AlertThreshold) {
-			return "alert"
-		}
-		if hit(cond.WarnThreshold) {
-			return "warn"
-		}
-		if hitRecovery() {
-			return "ok"
-		}
+	if hit(cond.WarnThreshold) {
+		return models.StatusWarn
+	}
+	// A firing monitor stays firing until the value clears the recovery
+	// threshold, which defaults to the warn, then the alert threshold.
+	if models.IsFiring(prev) && breaches(cond.Comparator, value, *cmp.Or(cond.RecoveryThreshold, cond.WarnThreshold, cond.AlertThreshold)) {
 		return prev
-	default:
-		if hit(cond.AlertThreshold) {
-			return "alert"
-		}
-		if hit(cond.WarnThreshold) {
-			return "warn"
-		}
-		return "ok"
+	}
+	return models.StatusOK
+}
+
+// breaches reports whether value is on the alerting side of threshold.
+func breaches(comparator string, value, threshold float64) bool {
+	switch comparator {
+	case models.ComparatorAbove:
+		return value > threshold
+	case models.ComparatorBelow:
+		return value < threshold
+	default: // models.ComparatorEqual
+		return value == threshold
 	}
 }

@@ -96,7 +96,7 @@ func (r *Repository) ServiceUsage(
 	GROUP BY period, signal, d, svc
 	ORDER BY period, d, svc, signal`
 	args := append(chargs.RangeArgs(tenantID, priorStartMs, endMs),
-		clickhouse.Named("currentStart", time.UnixMilli(currentStartMs)),
+		chargs.Millis("currentStart", currentStartMs),
 		clickhouse.Named("signals", []string{"logs", "spans"}))
 	var rows []serviceUsageRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db,

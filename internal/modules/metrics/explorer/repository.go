@@ -183,7 +183,7 @@ func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([
 
 	args := append(metricArgs(f), filterArgs...)
 	if f.Cumulative {
-		args = append(args, clickhouse.Named("displayStart", time.UnixMilli(displayStart)))
+		args = append(args, chargs.Millis("displayStart", displayStart))
 	}
 
 	var rows []timeseriesPointDTO

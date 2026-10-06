@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 // RangeQuery runs one tenant-scoped query over a time window.
@@ -33,11 +35,16 @@ func HandleComparableRangeQuery(w http.ResponseWriter, r *http.Request, errMessa
 	if !ok {
 		return
 	}
-	cmpStart, cmpEnd, hasCmp := ParseComparisonRange(r, startMs, endMs)
-	if !hasCmp {
+	shift, err := comparisonShift(r.URL.Query().Get("compareTo"), endMs-startMs)
+	if err != nil {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, err.Error(), nil)
+		return
+	}
+	if shift == 0 {
 		HandleRangeQuery(w, r, errMessage, query)
 		return
 	}
+	cmpStart, cmpEnd := startMs-shift, endMs-shift
 
 	tenantID := Tenant(r).TenantID
 	var primary, comparison any

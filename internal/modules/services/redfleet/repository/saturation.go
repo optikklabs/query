@@ -6,6 +6,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/modules/services/redfleet/models"
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
@@ -22,8 +23,11 @@ func saturationCTEs(startMs, endMs int64) string {
 		)`
 }
 
+// saturationScope keeps the service's own series and its hosts' series, of
+// the utilization series only the ones infraconsts.UsageValueSQL reads.
 const saturationScope = `
-		WHERE service = @serviceName OR (host != '' AND host IN service_hosts)`
+		WHERE (service = @serviceName OR (host != '' AND host IN service_hosts))
+		  AND ` + infraconsts.UsageFilterSQL
 
 func saturationArgs(tenantID, startMs, endMs int64, serviceName string, metricNames []string) []any {
 	return append(chargs.RangeArgs(tenantID, startMs, endMs),
@@ -37,9 +41,9 @@ func (r *Repository) GetServiceSaturationAggs(
 ) ([]models.ServiceMetricRow, error) {
 	query := saturationCTEs(startMs, endMs) + `
 		SELECT
-		    @serviceName                  AS service,
+		    @serviceName AS service,
 		    metric_name,
-		    sum(val_sum) / sum(val_count) AS value
+		    ` + infraconsts.UsageValueSQL + ` AS value
 		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name IN @metricNames
@@ -57,12 +61,13 @@ func (r *Repository) GetServiceSaturationTimeSeries(
 	query := saturationCTEs(startMs, endMs) + `
 		SELECT
 		    ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		    sum(val_sum) / sum(val_count) AS value
+		    metric_name,
+		    ` + infraconsts.UsageValueSQL + ` AS value
 		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name IN @metricNames
 		     AND timestamp >= @start AND timestamp < @end` + saturationScope + `
-		GROUP BY bucket_at
+		GROUP BY bucket_at, metric_name
 		ORDER BY bucket_at ASC`
 
 	var rows []models.SaturationPointRow

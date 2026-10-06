@@ -34,13 +34,6 @@ func TestRescheduleOnlyKeepsState(t *testing.T) {
 	}
 }
 
-func TestRescheduleOnlyDefaultsToNoData(t *testing.T) {
-	got := rescheduleOnly(models.MonitorRow{EvalEverySec: 60}, models.MonitorStateRow{}, now)
-	if got.PrevStatus != "no_data" || got.NewStatus != "no_data" {
-		t.Fatalf("status %s->%s, want no_data->no_data", got.PrevStatus, got.NewStatus)
-	}
-}
-
 func TestBuildUpdateArgsTriggeredAt(t *testing.T) {
 	m := models.MonitorRow{ID: 1, EvalEverySec: 30}
 	res := query.ScalarResult{Value: 5, HasData: true}

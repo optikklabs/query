@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS optikk.monitor_events
      id           BIGINT AUTO_INCREMENT PRIMARY KEY,
      monitor_id   BIGINT NOT NULL,
      tenant_id      BIGINT NOT NULL,
-     kind         ENUM('triggered','recovered','acked','muted','test') NOT NULL,
+     kind         ENUM('triggered','recovered') NOT NULL,
      value        DOUBLE NULL,
      threshold    DOUBLE NULL,
      started_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

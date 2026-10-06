@@ -8,6 +8,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
 type MetricBackend struct {
@@ -19,9 +20,9 @@ func NewMetricBackend(db clickhouse.Conn) *MetricBackend { return &MetricBackend
 func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, now time.Time) (ScalarResult, error) {
 	q := m.Query.Metric
 	if q == nil {
-		return ScalarResult{}, nil
+		return ScalarResult{}, errMissingQuery(m)
 	}
-	windowSec := monitorWindowSec(q.WindowSec)
+	windowSec := int64(q.WindowSec)
 	startMs, endMs := completeWindow(now, windowSec, timebucket.RollupGrainSeconds(windowSec*1000))
 
 	scopeSQL, args, err := CompileScope("metric", m.Scope, metricArgs(m.TenantID, q, startMs, endMs))
@@ -32,7 +33,7 @@ func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, now tim
 	if q.Aggregation == "sum" {
 		query = metricSumQuery("", scopeSQL)
 	} else {
-		expr := metricSource(q.Aggregation)
+		expr := metricSources[q.Aggregation]
 		samples, _ := metricGuards(q.Aggregation, expr)
 		query = `
 		SELECT ` + samples + ` AS samples, ` + expr + ` AS value
@@ -51,7 +52,7 @@ func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, now tim
 func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, windowMs int64, now time.Time) ([]Point, error) {
 	q := m.Query.Metric
 	if q == nil {
-		return nil, nil
+		return nil, errMissingQuery(m)
 	}
 	endMs := now.UnixMilli()
 	startMs := endMs - windowMs
@@ -65,7 +66,7 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, windowM
 	if q.Aggregation == "sum" {
 		query = metricSumQuery(bucketSQL, scopeSQL)
 	} else {
-		expr := metricSource(q.Aggregation)
+		expr := metricSources[q.Aggregation]
 		_, having := metricGuards(q.Aggregation, expr)
 		query = `
 		SELECT ` + bucketSQL + ` AS bucket, ` + expr + ` AS value
@@ -88,7 +89,10 @@ func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, windowM
 	return out, nil
 }
 
+// metricSources is the value expression per aggregation, except sum, which
+// metricSumQuery derives from counter increases.
 var metricSources = map[string]string{
+	"avg": "if(sum(hist_count) > 0, sum(hist_sum) / nullIf(sum(hist_count), 0), sum(val_sum) / nullIf(sum(val_count), 0))",
 	"min": "min(val_min)", "max": "max(val_max)",
 	"p50": "(quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(latency_state))[1]",
 	"p95": "(quantilesPrometheusHistogramMerge(0.5, 0.95, 0.99)(latency_state))[2]",
@@ -126,13 +130,6 @@ func metricSumQuery(bucketSQL, scopeSQL string) string {
 		metricSumRows(scopeSQL) + `) WHERE timestamp >= @displayStart GROUP BY bucket ORDER BY bucket`
 }
 
-func metricSource(agg string) string {
-	if expr := metricSources[agg]; expr != "" {
-		return expr
-	}
-	return "if(sum(hist_count) > 0, sum(hist_sum) / nullIf(sum(hist_count), 0), sum(val_sum) / nullIf(sum(val_count), 0))"
-}
-
 func metricGuards(agg, expr string) (samples, having string) {
 	samples = "greatest(sum(val_count), sum(hist_count))"
 	switch agg {
@@ -161,9 +158,9 @@ func metricArgs(tenantID int64, q *models.MetricQuery, startMs, endMs int64) []a
 	return []any{
 		tenantIDArg(tenantID),
 		clickhouse.Named("metricName", q.Metric),
-		clickhouse.Named("start", time.UnixMilli(sourceStart)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
-		clickhouse.Named("displayStart", time.UnixMilli(startMs)),
+		chargs.Millis("start", sourceStart),
+		chargs.Millis("end", endMs),
+		chargs.Millis("displayStart", startMs),
 	}
 }
 

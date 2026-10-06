@@ -10,7 +10,10 @@ import (
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
-const defaultDetailLimit = 50
+const (
+	defaultDetailLimit = 50
+	maxDetailLimit     = 200
+)
 
 type Handler struct {
 	service *service.Service
@@ -58,7 +61,10 @@ func (h *Handler) handleDetail(
 	errMessage string,
 	query func(context.Context, models.DetailRequest) (any, error),
 ) {
-	limit := httputil.ParsePageSize(r, "limit", defaultDetailLimit)
+	limit, ok := httputil.QueryLimit(w, r, defaultDetailLimit, maxDetailLimit)
+	if !ok {
+		return
+	}
 	httputil.HandleRangeQuery(w, r, errMessage, func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		_, environmentSet := r.URL.Query()["environment"]
 		req := models.DetailRequest{

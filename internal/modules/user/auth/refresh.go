@@ -33,9 +33,6 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 	var reasons []string
 	reusedFamilies := make(map[string]struct{})
 	for _, raw := range refreshTokens {
-		if raw == "" {
-			continue
-		}
 		if _, dup := seen[raw]; dup {
 			continue
 		}

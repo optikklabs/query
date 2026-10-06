@@ -44,8 +44,6 @@ func traceIDFromTraceparent(tp string) string {
 
 func newRequestID() string {
 	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "unknown"
-	}
+	rand.Read(b[:])
 	return hex.EncodeToString(b[:])
 }

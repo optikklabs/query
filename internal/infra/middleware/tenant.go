@@ -46,17 +46,19 @@ func abortUnauthorized(w http.ResponseWriter, r *http.Request) {
 	deny(w, r, http.StatusUnauthorized, errorcode.Unauthorized, "Valid authentication is required")
 }
 
+// resolveTenant picks the X-Tenant-Id tenant, or the session's default tenant
+// when the header is absent.
 func resolveTenant(w http.ResponseWriter, r *http.Request, state token.AuthState) (int64, bool) {
-	requested, _ := strconv.ParseInt(r.Header.Get("X-Tenant-Id"), 10, 64)
-	if requested == 0 {
-		if state.DefaultTenantID == 0 {
-			deny(w, r, http.StatusForbidden, "MISSING_TENANT", "Session does not contain a valid tenant_id",
-				slog.String("user", state.Email))
-			return 0, false
-		}
+	header := r.Header.Get("X-Tenant-Id")
+	if header == "" {
 		return state.DefaultTenantID, true
 	}
-	if !authorizedForTenant(state.TenantIDs, state.DefaultTenantID, requested) {
+	requested, err := strconv.ParseInt(header, 10, 64)
+	if err != nil {
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "X-Tenant-Id must be a tenant id", nil)
+		return 0, false
+	}
+	if !slices.Contains(state.TenantIDs, requested) {
 		deny(w, r, http.StatusForbidden, "FORBIDDEN_TENANT", "You are not a member of the requested tenant",
 			slog.String("user", state.Email), slog.Int64("requested_tenant", requested))
 		return 0, false
@@ -106,26 +108,14 @@ func TenantMiddleware(tokens *token.Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			role := authState.Role
-			if role == "" {
-				role = "member"
-			}
-
 			ctx := types.WithTenant(r.Context(), types.TenantContext{
 				TenantID:  tenantID,
 				UserID:    authState.UserID,
 				UserEmail: authState.Email,
-				UserRole:  role,
+				UserRole:  authState.Role,
 			})
 			metrics.AuthAuthenticated.Inc()
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
-}
-
-func authorizedForTenant(tenantIDs []int64, defaultTenantID, requestedTenantID int64) bool {
-	if len(tenantIDs) == 0 {
-		return defaultTenantID == requestedTenantID
-	}
-	return slices.Contains(tenantIDs, requestedTenantID)
 }

@@ -43,10 +43,7 @@ func (r *Repository) Get(ctx context.Context, tenantID, id int64) (datasetRow, e
 }
 
 func (r *Repository) Create(ctx context.Context, tenantID, userID int64, name string, desc sql.NullString) (int64, error) {
-	var createdBy sql.NullInt64
-	if userID > 0 {
-		createdBy = sql.NullInt64{Valid: true, Int64: userID}
-	}
+	createdBy := sql.NullInt64{Valid: true, Int64: userID}
 	res, err := dbutil.ExecSQL(ctx, r.db, "datasets.Create",
 		`INSERT INTO optikk.llm_datasets (tenant_id, name, description, created_at, created_by_user_id)
 		 VALUES (?, ?, ?, ?, ?)`,
@@ -75,7 +72,7 @@ func (r *Repository) AddItems(ctx context.Context, tenantID, datasetID int64, it
 			INSERT INTO optikk.llm_dataset_items
 			  (dataset_id, tenant_id, input_json, expected_output_json, metadata_json, created_at)
 			VALUES (?, ?, ?, ?, ?, ?)`,
-			datasetID, tenantID, rawOrEmptyObject(it.Input),
+			datasetID, tenantID, []byte(it.Input),
 			nullableRaw(it.ExpectedOutput), rawOrEmptyObject(it.Metadata), now); err != nil {
 			return 0, err
 		}

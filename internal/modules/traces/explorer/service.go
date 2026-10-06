@@ -8,6 +8,7 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/shared/filterutil"
+	"github.com/optikklabs/query/internal/shared/nullable"
 )
 
 var scalarFields = map[string]struct{}{
@@ -25,7 +26,7 @@ func IsScalarField(field string) bool {
 }
 
 type TraceRepository interface {
-	Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, error)
+	Query(ctx context.Context, req QueryRequest, cur *TraceCursor) ([]traceIndexRowDTO, error)
 	EnrichTraces(ctx context.Context, tenantID int64, traceIDs []string, start, end time.Time) ([]traceAggRow, error)
 	QueryFacets(ctx context.Context, req FacetsRequest) ([]facetDimRow, error)
 	QueryTrend(ctx context.Context, req TrendRequest) ([]trendRow, error)
@@ -41,17 +42,30 @@ func NewService(repo TraceRepository) *Service {
 	return &Service{repo: repo}
 }
 
-const enrichSlack = 5 * time.Minute
+const (
+	enrichSlack         = 5 * time.Minute
+	defaultQueryLimit   = 50
+	maxQueryLimit       = 500
+	defaultSuggestLimit = 10
+	maxSuggestLimit     = 50
+)
 
 func (s *Service) Query(ctx context.Context, req QueryRequest) (QueryResponse, error) {
-	limit := filterutil.PickLimit(req.Limit, 50, 500)
+	limit, err := filterutil.Limit(req.Limit, defaultQueryLimit, maxQueryLimit)
+	if err != nil {
+		return QueryResponse{}, err
+	}
 	req.Limit = limit
-	rows, err := s.repo.Query(ctx, req)
+	cur, err := cursor.Decode[TraceCursor](req.Cursor)
+	if err != nil {
+		return QueryResponse{}, err
+	}
+	rows, err := s.repo.Query(ctx, req, cur)
 	if err != nil {
 		return QueryResponse{}, err
 	}
 	rows, pageInfo := cursor.Paginate(rows, limit, func(last traceIndexRowDTO) string {
-		return TraceCursor{StartNs: uint64(last.StartTime.UnixNano()), TraceID: last.TraceID, SpanID: last.SpanID}.Encode()
+		return cursor.Encode(TraceCursor{StartNs: uint64(last.StartTime.UnixNano()), TraceID: last.TraceID, SpanID: last.SpanID})
 	})
 	aggs, err := s.enrichPage(ctx, req.TenantID, rows)
 	if err != nil {
@@ -128,7 +142,7 @@ func mapTrace(d traceIndexRowDTO, agg traceAggRow, ok bool) Trace {
 	t.SpanCount = uint32(agg.SpanCount)
 	t.ErrorCount = uint32(agg.ErrorCount)
 	t.HasError = agg.ErrorCount > 0
-	t.ServiceSet = agg.ServiceSet
+	t.ServiceSet = nullable.OrEmpty(agg.ServiceSet)
 	return t
 }
 
@@ -150,7 +164,13 @@ func (s *Service) QueryFacets(ctx context.Context, req FacetsRequest) (Facets, e
 }
 
 func pivotFacets(rows []facetDimRow) Facets {
-	var f Facets
+	f := Facets{
+		Service:    []FacetBucket{},
+		Operation:  []FacetBucket{},
+		HTTPMethod: []FacetBucket{},
+		HTTPStatus: []FacetBucket{},
+		Status:     []FacetBucket{},
+	}
 	for _, row := range rows {
 		b := FacetBucket{Value: row.Value, Count: row.Count}
 		switch row.Dim {
@@ -186,7 +206,10 @@ func (s *Service) QueryTrend(ctx context.Context, req TrendRequest) ([]TrendBuck
 }
 
 func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int64) (SuggestResponse, error) {
-	limit := filterutil.PickLimit(req.Limit, 10, 50)
+	limit, err := filterutil.Limit(req.Limit, defaultSuggestLimit, maxSuggestLimit)
+	if err != nil {
+		return SuggestResponse{}, err
+	}
 	rows, err := s.fetchSuggest(ctx, tenantID, req, limit)
 	if err != nil {
 		return SuggestResponse{}, err

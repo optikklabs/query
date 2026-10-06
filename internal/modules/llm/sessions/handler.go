@@ -23,7 +23,7 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.Overview(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM sessions overview", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query LLM sessions overview")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -34,13 +34,9 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
-	if req.StartTime <= 0 || req.EndTime <= 0 || req.StartTime >= req.EndTime {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required", nil)
-		return
-	}
 	resp, err := h.svc.Query(r.Context(), httputil.Tenant(r).TenantID, req)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query LLM sessions", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query LLM sessions")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -58,11 +54,7 @@ func (h *Handler) Detail(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.Detail(r.Context(), httputil.Tenant(r).TenantID, sessionID, startMs, endMs)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to load LLM session", err)
-		return
-	}
-	if len(resp.Turns) == 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusNotFound, errorcode.NotFound, "Session not found", nil)
+		httputil.RespondServiceError(w, r, err, "Failed to load LLM session")
 		return
 	}
 	httputil.RespondOK(w, resp)

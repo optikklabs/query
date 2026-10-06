@@ -1,7 +1,6 @@
 package users
 
 import (
-	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -36,13 +35,12 @@ func NewService(repo repository, authService *auth.Service) *Service {
 func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantID int64) (UserResponse, error) {
 	email, validEmail := shared.NormalizeEmail(req.Email)
 	name := strings.TrimSpace(req.Name)
-	role := cmp.Or(req.Role, shared.RoleMember)
 	switch {
 	case !validEmail:
 		return UserResponse{}, errorcode.ValidationError{Msg: "A valid email is required"}
 	case name == "":
 		return UserResponse{}, errorcode.ValidationError{Msg: "Name is required"}
-	case !shared.IsValidRole(role):
+	case !shared.IsValidRole(req.Role):
 		return UserResponse{}, errorcode.ValidationError{Msg: "role must be 'admin' or 'member'"}
 	}
 
@@ -58,7 +56,7 @@ func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantI
 		hashStr = hash
 	}
 
-	userID, err := s.repo.CreateUser(ctx, email, hashStr, name, tenantID, role, time.Now().UTC())
+	userID, err := s.repo.CreateUser(ctx, email, hashStr, name, tenantID, req.Role, time.Now().UTC())
 	if shared.IsDuplicateEntry(err) {
 		return UserResponse{}, errorcode.ConflictError{Msg: "A user with this email already exists"}
 	}

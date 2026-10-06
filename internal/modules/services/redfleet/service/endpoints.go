@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Service) GetTopEndpointsCombined(
-	ctx context.Context, f filter.Filters, limit int, cursorIn models.TopEndpointsCursor,
+	ctx context.Context, f filter.Filters, limit int, cursorIn *models.TopEndpointsCursor,
 ) (models.PaginatedEndpoints, error) {
 	rows, err := s.repo.GetTopEndpointsCombined(ctx, f, limit+1, cursorIn)
 	if err != nil {
@@ -34,7 +34,7 @@ func (s *Service) GetTopEndpointsCombined(
 }
 
 func (s *Service) GetTopDBQueries(
-	ctx context.Context, f filter.Filters, limit int, cursorIn models.TopEndpointsCursor,
+	ctx context.Context, f filter.Filters, limit int, cursorIn *models.TopEndpointsCursor,
 ) (models.PaginatedDBQueries, error) {
 	rows, err := s.repo.GetTopDBQueriesCombined(ctx, f, limit+1, cursorIn)
 	if err != nil {

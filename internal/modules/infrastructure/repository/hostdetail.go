@@ -15,19 +15,19 @@ import (
 )
 
 type HostMetaRow struct {
-	LastSeen      time.Time `ch:"last_seen"`
-	Environments  []string  `ch:"environments"`
-	Namespaces    []string  `ch:"namespaces"`
-	MetricNames   []string  `ch:"metric_names"`
-	OSType        string    `ch:"os_type"`
-	OSDescription string    `ch:"os_description"`
-	HostArch      string    `ch:"host_arch"`
-	HostID        string    `ch:"host_id"`
-	CloudProvider string    `ch:"cloud_provider"`
-	CloudPlatform string    `ch:"cloud_platform"`
-	CloudRegion   string    `ch:"cloud_region"`
-	CloudZone     string    `ch:"cloud_zone"`
-	K8SNodeName   string    `ch:"k8s_node_name"`
+	LastSeen      *time.Time `ch:"last_seen"`
+	Environments  []string   `ch:"environments"`
+	Namespaces    []string   `ch:"namespaces"`
+	MetricNames   []string   `ch:"metric_names"`
+	OSType        string     `ch:"os_type"`
+	OSDescription string     `ch:"os_description"`
+	HostArch      string     `ch:"host_arch"`
+	HostID        string     `ch:"host_id"`
+	CloudProvider string     `ch:"cloud_provider"`
+	CloudPlatform string     `ch:"cloud_platform"`
+	CloudRegion   string     `ch:"cloud_region"`
+	CloudZone     string     `ch:"cloud_zone"`
+	K8SNodeName   string     `ch:"k8s_node_name"`
 }
 
 type KPIRow struct {
@@ -49,7 +49,7 @@ func aboutAttrSQL(key, alias string) string {
 func (r *Repository) QueryHostMeta(ctx context.Context, tenantID int64, host string, startMs, endMs int64) (HostMetaRow, error) {
 	query := `
 		SELECT
-		    max(timestamp)                                                        AS last_seen,
+		    maxOrNull(timestamp)                                                  AS last_seen,
 		    groupUniqArrayIf(environment, environment != '')                      AS environments,
 		    groupUniqArrayIf(k8s_namespace, k8s_namespace != '')                  AS namespaces,
 		    groupUniqArrayIf(metric_name, metric_name IN @systemMetricNames)      AS metric_names,

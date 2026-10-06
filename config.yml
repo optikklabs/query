@@ -48,3 +48,4 @@ billing:
   gb_price_usd: 0.10
   metric_million_samples_price_usd: 0.10
   monthly_record_commitment: 5000000000
+  monthly_byte_commitment: 54975581388800

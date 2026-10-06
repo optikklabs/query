@@ -17,7 +17,7 @@ func testFilters() Filters {
 func TestBuildSelectionEmitsNoSeriesJoin(t *testing.T) {
 	f := testFilters()
 	f.GroupBy = []string{"host", "state"}
-	f.Tags = []TagFilter{{Key: "service", Operator: "=", Values: []string{"api"}}}
+	f.Tags = []TagFilter{{Key: "service", Operator: "eq", Values: []string{"api"}}}
 
 	fromTable, where, selectCols, groupByCols, _ := BuildSelection(f)
 	joined := fromTable + where + selectCols + groupByCols
@@ -62,10 +62,10 @@ func TestBuildSelectionNoGroupByOrTagsIsBare(t *testing.T) {
 func TestBuildSelectionUsesSharedTagClauses(t *testing.T) {
 	f := testFilters()
 	f.Tags = []TagFilter{
-		{Key: "service", Operator: "=", Values: []string{"api"}},
-		{Key: "service.name", Operator: "IN", Values: []string{"worker"}},
-		{Key: "service", Operator: "!=", Values: []string{"admin"}},
-		{Key: "state", Operator: "=", Values: []string{"busy"}},
+		{Key: "service", Operator: "eq", Values: []string{"api"}},
+		{Key: "service.name", Operator: "in", Values: []string{"worker"}},
+		{Key: "service", Operator: "neq", Values: []string{"admin"}},
+		{Key: "state", Operator: "eq", Values: []string{"busy"}},
 	}
 
 	_, where, _, _, args := BuildSelection(f)

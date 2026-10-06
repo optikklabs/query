@@ -7,12 +7,16 @@ import (
 
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
 	"github.com/optikklabs/query/internal/modules/saturation/database/models"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
 func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (models.QuerySummary, error) {
 	raw, err := s.repo.GetSummary(ctx, tenantID, startMs, endMs, hash, f)
 	if err != nil {
 		return models.QuerySummary{}, err
+	}
+	if raw.CallCount == 0 {
+		return models.QuerySummary{}, errorcode.NotFoundError{Msg: "query not found in the selected range"}
 	}
 	out := models.QuerySummary{
 		QueryHash:      hash,
@@ -24,9 +28,6 @@ func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64
 		ErrorCount:     int64(raw.ErrorCount),
 		AvgRows:        raw.AvgRows,
 		Services:       []models.ServiceCalls{},
-	}
-	if raw.CallCount == 0 {
-		return out, nil
 	}
 	if len(raw.QS) >= 3 {
 		p50, p95, p99 := float64(raw.QS[0]), float64(raw.QS[1]), float64(raw.QS[2])

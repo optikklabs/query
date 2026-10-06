@@ -60,7 +60,7 @@ func (a *App) addMetricsServerActor(g *run.Group) {
 		promhttp.HandlerOpts{DisableCompression: true},
 	))
 	srv := &http.Server{
-		Addr:              ":" + a.Config.MetricsPort(),
+		Addr:              ":" + a.Config.Server.MetricsPort,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,

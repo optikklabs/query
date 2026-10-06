@@ -1,10 +1,7 @@
 package app
 
 import (
-	"log/slog"
-
 	"github.com/optikklabs/query/internal/infra/llmproviders"
-	"github.com/optikklabs/query/internal/infra/secretbox"
 
 	alerting_evaluator "github.com/optikklabs/query/internal/modules/alerting/evaluator"
 	alerting_monitors "github.com/optikklabs/query/internal/modules/alerting/monitors"
@@ -47,11 +44,7 @@ func configuredModules(infraDeps *Infra) []Module {
 	tenantService := user_tenant.NewService(user_tenant.NewRepository(infraDeps.DB), infraDeps.Config.Ingestion)
 	usersService := user_users.NewService(user_users.NewRepository(infraDeps.DB), authService)
 
-	box, err := secretbox.New(infraDeps.Config.LLM.KeyEncryptionKey)
-	if err != nil {
-		slog.Warn("llm: provider-key encryption disabled", slog.Any("reason", err))
-	}
-	providerKeySvc := llm_providerkeys.NewService(llm_providerkeys.NewRepository(infraDeps.DB), box)
+	providerKeySvc := llm_providerkeys.NewService(llm_providerkeys.NewRepository(infraDeps.DB), infraDeps.SecretBox)
 	llmProviders := llmproviders.NewRegistry()
 
 	return []Module{

@@ -8,7 +8,6 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/metrics/filter"
-	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 func normalizeMetricType(t string) string {
@@ -110,11 +109,7 @@ func quantileFor(qs []float64, aggregation string) float64 {
 func toFilter(tenantID, startMs, endMs int64, step string, query MetricQuery) filter.Filters {
 	tags := make([]filter.TagFilter, 0, len(query.Where))
 	for _, item := range query.Where {
-		tags = append(tags, filter.TagFilter{
-			Key:      item.Key,
-			Operator: filterutil.MapOperator(item.Operator),
-			Values:   filterutil.ExtractValues(item.Value),
-		})
+		tags = append(tags, filter.TagFilter{Key: item.Key, Operator: item.Operator, Values: item.Value})
 	}
 
 	return filter.Filters{

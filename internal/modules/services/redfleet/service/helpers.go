@@ -25,9 +25,12 @@ func mapFleetServices(rows []models.REDMetricsRow) []models.ServiceREDMetric {
 			ServiceName:  row.ServiceName,
 			RequestCount: int64(row.TotalCount),
 			ErrorCount:   int64(row.ErrorCount),
-			AvgLatency:   httputil.SanitizeFloat(float64(row.P50Ms)),
+			P50Latency:   httputil.SanitizeFloat(float64(row.P50Ms)),
 			P95Latency:   httputil.SanitizeFloat(float64(row.P95Ms)),
 			P99Latency:   httputil.SanitizeFloat(float64(row.P99Ms)),
+			Version:      row.Version,
+			Environment:  row.Environment,
+			Instances:    row.Instances,
 		})
 	}
 	return services
@@ -95,31 +98,22 @@ func redMetrics(total, errors uint64, p50, p95, p99 float32, durationSec float64
 	}
 }
 
-func extractSaturationAverages(sats []models.ServiceMetricRow) (cpuVal, memVal, diskVal float64) {
+// extractSaturationAverages folds the summary's usage ratios into
+// percentages: CPU is the mean of the CPU metrics reported.
+func extractSaturationAverages(sats []models.ServiceMetricRow) (cpu, mem, disk *float64) {
 	var cpuValues []float64
-
 	for _, row := range sats {
+		pct := infraconsts.RatioPct(row.Value)
 		switch row.MetricName {
 		case infraconsts.MetricSystemCPUUtilization, infraconsts.MetricSystemCPUUsage, infraconsts.MetricProcessCPUUsage, infraconsts.MetricJVMCPUUtilization:
-			if v := infraconsts.NormalizeUtilization(row.Value); v != nil {
-				cpuValues = append(cpuValues, *v)
-			}
+			cpuValues = append(cpuValues, pct)
 		case infraconsts.MetricSystemMemoryUtilization:
-			if v := infraconsts.NormalizeUtilization(row.Value); v != nil {
-				memVal = *v
-			}
+			mem = new(pct)
 		case infraconsts.MetricSystemDiskUtilization:
-			if v := infraconsts.NormalizeUtilization(row.Value); v != nil {
-				diskVal = *v
-			}
+			disk = new(pct)
 		}
 	}
-
-	if cpuAvg := infraconsts.AverageUtilization(cpuValues); cpuAvg != nil {
-		cpuVal = *cpuAvg
-	}
-
-	return cpuVal, memVal, diskVal
+	return infraconsts.Mean(cpuValues), mem, disk
 }
 
 func extractREDMetrics(redRow *models.REDMetricsRow, durationSec float64) (reqCount, errCount int64, rps, errRate, p50, p95, p99 float64) {

@@ -2,16 +2,44 @@ package llm
 
 import (
 	"context"
-	"log/slog"
+	"slices"
 
 	"github.com/optikklabs/query/internal/infra/cursor"
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/filterutil"
+	"github.com/optikklabs/query/internal/shared/nullable"
+)
+
+const (
+	defaultTracesLimit = 50
+	maxTracesLimit     = 500
+)
+
+var (
+	errTraceNotFound = errorcode.NotFoundError{Msg: "Trace not found"}
+	errSpanNotFound  = errorcode.NotFoundError{Msg: "Span not found"}
+	traceStatuses    = []string{"", "error", "ok"}
 )
 
 func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) (TracesQueryResponse, error) {
-	req.Limit = filterutil.PickLimit(req.Limit, 50, 500)
-	rows, err := s.repo.QueryTraces(ctx, tenantID, req)
+	if err := filterutil.ValidateTimeRange(req.StartTime, req.EndTime); err != nil {
+		return TracesQueryResponse{}, err
+	}
+	if !slices.Contains(traceStatuses, req.Status) {
+		return TracesQueryResponse{}, errorcode.ValidationError{Msg: "status must be error or ok"}
+	}
+	limit, err := filterutil.Limit(req.Limit, defaultTracesLimit, maxTracesLimit)
+	if err != nil {
+		return TracesQueryResponse{}, err
+	}
+	req.Limit = limit
+	cur, err := cursor.Decode[traceCursor](req.Cursor)
+	if err != nil {
+		return TracesQueryResponse{}, err
+	}
+	rows, err := s.repo.QueryTraces(ctx, tenantID, req, cur)
 	if err != nil {
 		return TracesQueryResponse{}, err
 	}
@@ -35,7 +63,7 @@ func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQue
 			Model:         r.Model,
 			UserID:        r.UserID,
 			SessionID:     r.SessionID,
-			Tags:          r.Tags,
+			Tags:          nullable.OrEmpty(r.Tags),
 			LLMCalls:      r.LLMCalls,
 			PromptPreview: r.PromptPreview,
 			InputTokens:   r.InputTokens,
@@ -43,20 +71,15 @@ func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQue
 			Cost:          r.Cost,
 		}
 	}
-	// Scores decorate the page; a failed lookup degrades, not fails, the response.
-	if scores, err := s.repo.ScoresForTraces(ctx, tenantID, req.StartTime, req.EndTime, traceIDs); err != nil {
-		slog.Warn("llm: scores lookup failed", "error", err)
-	} else {
-		byTrace := groupScores(scores)
-		for i := range results {
-			results[i].Scores = byTrace[results[i].TraceID]
-		}
+	scores, err := s.repo.ScoresForTraces(ctx, tenantID, req.StartTime, req.EndTime, traceIDs)
+	if err != nil {
+		return TracesQueryResponse{}, err
+	}
+	byTrace := groupScores(scores)
+	for i := range results {
+		results[i].Scores = nullable.OrEmpty(byTrace[results[i].TraceID])
 	}
 	return TracesQueryResponse{Results: results, PageInfo: info}, nil
-}
-
-func decodeTraceCursor(raw string) (traceCursor, bool) {
-	return cursor.Decode[traceCursor](raw)
 }
 
 func levelOf(hasError bool) string {
@@ -83,15 +106,18 @@ func groupScores(rows []traceScoreRow) map[string][]TraceScore {
 
 func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) (TraceDetailResponse, error) {
 	rows, err := s.repo.TraceSpans(ctx, tenantID, traceID, startTimeMs, endTimeMs)
-	if err != nil || len(rows) == 0 {
+	if err != nil {
 		return TraceDetailResponse{}, err
 	}
-	resp := buildTraceDetail(traceID, rows)
-	if scores, err := s.repo.ScoresForTraces(ctx, tenantID, startTimeMs, endTimeMs, []string{traceID}); err != nil {
-		slog.Warn("llm: scores lookup failed", "error", err)
-	} else {
-		resp.Scores = groupScores(scores)[traceID]
+	if len(rows) == 0 {
+		return TraceDetailResponse{}, errTraceNotFound
 	}
+	resp := buildTraceDetail(traceID, rows)
+	scores, err := s.repo.ScoresForTraces(ctx, tenantID, startTimeMs, endTimeMs, []string{traceID})
+	if err != nil {
+		return TraceDetailResponse{}, err
+	}
+	resp.Scores = nullable.OrEmpty(groupScores(scores)[traceID])
 	fillTraceIO(&resp, rows)
 	return resp, nil
 }
@@ -147,15 +173,15 @@ func fillTraceIO(resp *TraceDetailResponse, rows []traceSpanRow) {
 }
 
 // SpanIO returns the untruncated prompt/completion for a single span.
-func (s *Service) SpanIO(ctx context.Context, tenantID int64, traceID, spanID string, startTimeMs, endTimeMs int64) (SpanIOResponse, bool, error) {
-	row, found, err := s.repo.TraceSpanIO(ctx, tenantID, traceID, spanID, startTimeMs, endTimeMs)
-	if err != nil || !found {
-		return SpanIOResponse{}, found, err
+func (s *Service) SpanIO(ctx context.Context, tenantID int64, traceID, spanID string, startTimeMs, endTimeMs int64) (SpanIOResponse, error) {
+	row, err := s.repo.TraceSpanIO(ctx, tenantID, traceID, spanID, startTimeMs, endTimeMs)
+	if err != nil {
+		return SpanIOResponse{}, dbutil.NoRowsAs(err, errSpanNotFound)
 	}
 	return SpanIOResponse{
 		TraceID:    traceID,
 		SpanID:     spanID,
 		Prompt:     row.Prompt,
 		Completion: row.Completion,
-	}, true, nil
+	}, nil
 }

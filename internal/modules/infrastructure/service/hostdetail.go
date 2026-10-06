@@ -1,8 +1,8 @@
 package service
 
 import (
+	"cmp"
 	"context"
-	"time"
 
 	"github.com/optikklabs/query/internal/shared/nullable"
 
@@ -14,16 +14,16 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (s *Service) GetHostSeries(ctx context.Context, tenantID int64, host, metricID string, startMs, endMs int64) ([]models.SeriesPoint, bool, error) {
+func (s *Service) GetHostSeries(ctx context.Context, tenantID int64, host, metricID string, startMs, endMs int64) ([]models.SeriesPoint, error) {
 	def, ok := seriesdefs.Host.Def(metricID)
 	if !ok {
-		return nil, false, nil
+		return nil, errUnknownMetricGroup
 	}
 	rows, err := s.repo.QueryHostSeries(ctx, tenantID, host, startMs, endMs, def)
 	if err != nil {
-		return nil, true, err
+		return nil, err
 	}
-	return scaleSeries(rows, def), true, nil
+	return scaleSeries(rows, def), nil
 }
 
 func (s *Service) GetHostOverview(ctx context.Context, tenantID int64, host string, startMs, endMs int64) (models.HostOverview, error) {
@@ -48,12 +48,10 @@ func (s *Service) GetHostOverview(ctx context.Context, tenantID int64, host stri
 
 	out := models.HostOverview{
 		Host:             host,
+		LastSeen:         meta.LastSeen,
 		Environments:     nullable.OrEmpty(meta.Environments),
 		Namespaces:       nullable.OrEmpty(meta.Namespaces),
 		AvailableMetrics: nullable.OrEmpty(seriesdefs.Host.GroupsFor(meta.MetricNames)),
-	}
-	if !meta.LastSeen.IsZero() {
-		out.LastSeen = meta.LastSeen.UTC().Format(time.RFC3339)
 	}
 	out.About = aboutFromMeta(meta)
 	foldKPIs(kpis, &out)
@@ -61,13 +59,8 @@ func (s *Service) GetHostOverview(ctx context.Context, tenantID int64, host stri
 }
 
 func scaleSeries(rows []models.SeriesPoint, def seriesgroup.Def) []models.SeriesPoint {
-	if def.Scale != 1 {
-		for i := range rows {
-			rows[i].Value *= def.Scale
-		}
-	}
-	if rows == nil {
-		return []models.SeriesPoint{}
+	for i := range rows {
+		rows[i].Value *= def.Scale
 	}
 	return rows
 }
@@ -90,32 +83,31 @@ func aboutFromMeta(meta repository.HostMetaRow) *models.HostAbout {
 	return &about
 }
 
+// foldKPIs fills the host's KPI cards. Utilization metrics are ratios: CPU is
+// read from its idle state (or the stateless series) and memory from its used
+// state; load averages and process count are reported as-is.
 func foldKPIs(rows []repository.KPIRow, out *models.HostOverview) {
 	var cpuIdle, cpuPlain, memUsed, memPlain *float64
 	for _, row := range rows {
-		nv := infraconsts.NormalizeUtilization(row.Value)
-		if nv == nil {
-			continue
-		}
-		v := *nv
+		v := row.Value
 		switch row.MetricName {
 		case infraconsts.MetricSystemCPUUtilization:
 			switch row.State {
 			case "idle":
 				cpuIdle = new(v)
 			case "":
-				cpuPlain = new(v)
+				cpuPlain = new(infraconsts.RatioPct(v))
 			}
 		case infraconsts.MetricSystemMemoryUtilization:
 			switch row.State {
 			case "used":
-				memUsed = new(v)
+				memUsed = new(infraconsts.RatioPct(v))
 			case "":
-				memPlain = new(v)
+				memPlain = new(infraconsts.RatioPct(v))
 			}
 		case infraconsts.MetricSystemFilesystemUtil:
-			if out.DiskPct == nil || v > *out.DiskPct {
-				out.DiskPct = new(v)
+			if pct := infraconsts.RatioPct(v); out.DiskPct == nil || pct > *out.DiskPct {
+				out.DiskPct = new(pct)
 			}
 		case infraconsts.MetricSystemCPULoadAvg1m:
 			out.Load1m = new(v)
@@ -127,17 +119,10 @@ func foldKPIs(rows []repository.KPIRow, out *models.HostOverview) {
 			out.ProcessCount = new(v)
 		}
 	}
-
 	if cpuIdle != nil {
-		if nv := infraconsts.NormalizeUtilization(1 - *cpuIdle); nv != nil {
-			out.CPUPct = nv
-		}
-	} else if cpuPlain != nil {
+		out.CPUPct = new(infraconsts.RatioPct(1 - *cpuIdle))
+	} else {
 		out.CPUPct = cpuPlain
 	}
-	if memUsed != nil {
-		out.MemoryPct = memUsed
-	} else if memPlain != nil {
-		out.MemoryPct = memPlain
-	}
+	out.MemoryPct = cmp.Or(memUsed, memPlain)
 }

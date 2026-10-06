@@ -19,6 +19,8 @@ type TraceSpanRow struct {
 	KindString       string    `ch:"kind_string"`
 	StatusCode       string    `ch:"status_code_string"`
 	StatusMessage    string    `ch:"status_message"`
+	HTTPMethod       string    `ch:"http_method"`
+	HTTPStatusCode   *uint16   `ch:"http_status_code"`
 	ExceptionType    string    `ch:"exception_type"`
 	ExceptionMessage string    `ch:"exception_message"`
 	HasError         bool      `ch:"has_error"`
@@ -43,6 +45,8 @@ func (r *Repository) ListTraceSpanRows(ctx context.Context, tenantID int64, trac
 		       kind_string,
 		       status_code_string,
 		       status_message,
+		       http_method,
+		       toUInt16OrNull(response_status_code) AS http_status_code,
 		       exception_type,
 		       exception_message,
 		       is_error = 1 AS has_error,

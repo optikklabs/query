@@ -46,12 +46,13 @@ type StatusCounts struct {
 }
 
 func toResponse(row models.MonitorRow, state models.MonitorStateRow) MonitorResponse {
-	out := MonitorResponse{
+	return MonitorResponse{
 		ID:               row.ID,
 		Name:             row.Name,
 		Type:             row.Type,
 		Priority:         row.Priority,
-		Status:           "no_data",
+		Status:           state.Status,
+		CurrentValue:     nullable.Ptr(state.CurrentValue.Float64, state.CurrentValue.Valid),
 		Scope:            row.Scope,
 		Query:            row.Query,
 		Conditions:       row.Conditions,
@@ -65,12 +66,7 @@ func toResponse(row models.MonitorRow, state models.MonitorStateRow) MonitorResp
 		Active:           row.Active,
 		CreatedAt:        row.CreatedAt,
 		UpdatedAt:        nullable.Ptr(row.UpdatedAt.Time, row.UpdatedAt.Valid),
+		LastEvaluatedAt:  nullable.Ptr(state.LastEvaluatedAt.Time, state.LastEvaluatedAt.Valid),
+		TriggeredAt:      nullable.Ptr(state.TriggeredAt.Time, state.TriggeredAt.Valid),
 	}
-	if state.MonitorID != 0 {
-		out.Status = state.Status
-		out.CurrentValue = nullable.Ptr(state.CurrentValue.Float64, state.CurrentValue.Valid)
-		out.LastEvaluatedAt = nullable.Ptr(state.LastEvaluatedAt.Time, state.LastEvaluatedAt.Valid)
-		out.TriggeredAt = nullable.Ptr(state.TriggeredAt.Time, state.TriggeredAt.Valid)
-	}
-	return out
 }

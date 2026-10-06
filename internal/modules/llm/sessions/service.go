@@ -3,7 +3,15 @@ package sessions
 import (
 	"context"
 
+	"github.com/optikklabs/query/internal/shared/errorcode"
+	"github.com/optikklabs/query/internal/shared/filterutil"
+
 	"golang.org/x/sync/errgroup"
+)
+
+const (
+	defaultQueryLimit = 50
+	maxQueryLimit     = 200
 )
 
 type Service struct {
@@ -19,18 +27,22 @@ func (s *Service) Overview(ctx context.Context, tenantID, startMs, endMs int64) 
 	if err != nil {
 		return SessionsOverviewResponse{}, err
 	}
-	resp := SessionsOverviewResponse{Sessions: ov.Sessions, AvgDurationMs: ov.DurationMs}
+	resp := SessionsOverviewResponse{Sessions: ov.Sessions}
 	if ov.Sessions > 0 {
-		resp.AvgTurns = float64(ov.Turns) / float64(ov.Sessions)
-		resp.AvgCost = ov.Cost / float64(ov.Sessions)
+		resp.AvgTurns = new(float64(ov.Turns) / float64(ov.Sessions))
+		resp.AvgDurationMs = new(ov.DurationMs)
+		resp.AvgCost = new(ov.Cost / float64(ov.Sessions))
 	}
 	return resp, nil
 }
 
 func (s *Service) Query(ctx context.Context, tenantID int64, req SessionsQueryRequest) (SessionsQueryResponse, error) {
-	limit := req.Limit
-	if limit <= 0 || limit > 200 {
-		limit = 50
+	if err := filterutil.ValidateTimeRange(req.StartTime, req.EndTime); err != nil {
+		return SessionsQueryResponse{}, err
+	}
+	limit, err := filterutil.Limit(req.Limit, defaultQueryLimit, maxQueryLimit)
+	if err != nil {
+		return SessionsQueryResponse{}, err
 	}
 	rows, err := s.repo.TopSessions(ctx, tenantID, req.StartTime, req.EndTime, limit)
 	if err != nil {
@@ -47,9 +59,9 @@ func (s *Service) Query(ctx context.Context, tenantID int64, req SessionsQueryRe
 	if err != nil {
 		return SessionsQueryResponse{}, err
 	}
-	meanBySession := make(map[string]float64, len(scores))
+	meanBySession := make(map[string]*float64, len(scores))
 	for _, sc := range scores {
-		meanBySession[sc.SessionID] = sc.Mean
+		meanBySession[sc.SessionID] = &sc.Mean
 	}
 	out := make([]Session, len(rows))
 	for i, r := range rows {
@@ -86,6 +98,9 @@ func (s *Service) Detail(ctx context.Context, tenantID int64, sessionID string, 
 	})
 	if err := g.Wait(); err != nil {
 		return SessionDetailResponse{}, err
+	}
+	if len(rows) == 0 {
+		return SessionDetailResponse{}, errorcode.NotFoundError{Msg: "Session not found"}
 	}
 	resp := SessionDetailResponse{
 		SessionID: sessionID,

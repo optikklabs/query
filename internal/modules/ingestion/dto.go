@@ -11,12 +11,11 @@ type Config struct {
 	Currency                     string
 }
 
-// NewConfig builds pricing from the billing config section; rates and
-// the record commitment default via viper (billing.* keys).
+// NewConfig builds pricing from the billing config section.
 func NewConfig(billing config.BillingConfig) Config {
 	return Config{
 		MonthlyRecordCommitment:      billing.MonthlyRecordCommitment,
-		MonthlyByteCommitment:        50 * 1024 * 1024 * 1024 * 1024,
+		MonthlyByteCommitment:        billing.MonthlyByteCommitment,
 		PricePerGBLogsTraces:         billing.GBPriceUSD,
 		PricePerMillionMetricSamples: billing.MetricMillionSamplesPriceUSD,
 		Currency:                     "USD",
@@ -119,5 +118,4 @@ type OverviewResponse struct {
 	TimeseriesByType    TimeseriesResponse `json:"timeseriesByType"`
 	TimeseriesByService TimeseriesResponse `json:"timeseriesByService"`
 	Services            ServicesResponse   `json:"services"`
-	UsageSemantics      string             `json:"usageSemantics"`
 }

@@ -12,7 +12,7 @@ type ErrorGroup struct {
 	ServiceName     string    `json:"serviceName"`
 	OperationName   string    `json:"operationName"`
 	StatusMessage   string    `json:"statusMessage"`
-	HTTPStatusCode  int       `json:"httpStatusCode"`
+	HTTPStatusCode  *uint16   `json:"httpStatusCode"`
 	ErrorCount      int64     `json:"errorCount"`
 	LastOccurrence  time.Time `json:"lastOccurrence"`
 	FirstOccurrence time.Time `json:"firstOccurrence"`
@@ -23,7 +23,7 @@ type ErrorGroupDetail struct {
 	GroupID         string    `json:"groupId"`
 	ServiceName     string    `json:"serviceName"`
 	OperationName   string    `json:"operationName"`
-	HTTPStatusCode  int       `json:"httpStatusCode"`
+	HTTPStatusCode  *uint16   `json:"httpStatusCode"`
 	ErrorCount      int64     `json:"errorCount"`
 	LastOccurrence  time.Time `json:"lastOccurrence"`
 	FirstOccurrence time.Time `json:"firstOccurrence"`
@@ -52,7 +52,7 @@ type ErrorLatestOccurrence struct {
 	Stacktrace     string    `json:"stacktrace,omitempty"`
 	HTTPMethod     string    `json:"httpMethod"`
 	HTTPRoute      string    `json:"httpRoute"`
-	HTTPStatusCode string    `json:"httpStatusCode"`
+	HTTPStatusCode *uint16   `json:"httpStatusCode"`
 	ServiceVersion string    `json:"serviceVersion"`
 	Environment    string    `json:"environment"`
 	Pod            string    `json:"pod"`
@@ -133,10 +133,10 @@ type FacetBucket struct {
 // Facets keys mirror the DSL field names the search bar emits, so a facet
 // click and a typed filter produce the same query.
 type Facets struct {
-	Service       []FacetBucket `json:"service,omitempty"`
-	Operation     []FacetBucket `json:"operation,omitempty"`
-	HTTPStatus    []FacetBucket `json:"httpStatus,omitempty"`
-	ExceptionType []FacetBucket `json:"exceptionType,omitempty"`
+	Service       []FacetBucket `json:"service"`
+	Operation     []FacetBucket `json:"operation"`
+	HTTPStatus    []FacetBucket `json:"httpStatus"`
+	ExceptionType []FacetBucket `json:"exceptionType"`
 }
 
 type RawServiceRateRow struct {
@@ -148,22 +148,22 @@ type RawServiceRateRow struct {
 }
 
 type RawErrorGroupRow struct {
-	GroupID          string    `ch:"error_group_id"`
-	ServiceName      string    `ch:"service"`
-	OperationName    string    `ch:"operation_name"`
-	HTTPStatusBucket string    `ch:"http_status_bucket"`
-	ErrorCount       uint64    `ch:"error_count"`
-	LastOccurrence   time.Time `ch:"last_occurrence"`
-	FirstOccurrence  time.Time `ch:"first_occurrence"`
-	StatusMessage    string    `ch:"error_message"`
-	SampleTraceID    string    `ch:"sample_trace_id"`
+	GroupID         string    `ch:"error_group_id"`
+	ServiceName     string    `ch:"service"`
+	OperationName   string    `ch:"operation_name"`
+	HTTPStatusCode  *uint16   `ch:"http_status_code"`
+	ErrorCount      uint64    `ch:"error_count"`
+	LastOccurrence  time.Time `ch:"last_occurrence"`
+	FirstOccurrence time.Time `ch:"first_occurrence"`
+	StatusMessage   string    `ch:"error_message"`
+	SampleTraceID   string    `ch:"sample_trace_id"`
 }
 
 type RawErrorGroupDetailRow struct {
 	GroupID         string    `ch:"error_group_id"`
 	ServiceName     string    `ch:"service"`
 	OperationName   string    `ch:"operation_name"`
-	HTTPStatusCode  uint16    `ch:"http_status_code"`
+	HTTPStatusCode  *uint16   `ch:"http_status_code"`
 	ErrorCount      uint64    `ch:"error_count"`
 	LastOccurrence  time.Time `ch:"last_occurrence"`
 	FirstOccurrence time.Time `ch:"first_occurrence"`
@@ -187,7 +187,7 @@ type RawErrorLatestOccurrenceRow struct {
 	StackTrace       string    `ch:"exception_stacktrace"`
 	HTTPMethod       string    `ch:"http_method"`
 	HTTPRoute        string    `ch:"http_route"`
-	HTTPStatusCode   string    `ch:"response_status_code"`
+	HTTPStatusCode   *uint16   `ch:"http_status_code"`
 	ServiceVersion   string    `ch:"service_version"`
 	Environment      string    `ch:"environment"`
 	Pod              string    `ch:"pod"`
@@ -232,8 +232,4 @@ type ErrorGroupsCursor struct {
 type ErrorTracesCursor struct {
 	Timestamp time.Time `json:"ts"`
 	SpanID    string    `json:"sid"`
-}
-
-func (c ErrorTracesCursor) IsZero() bool {
-	return c.Timestamp.IsZero() && c.SpanID == ""
 }

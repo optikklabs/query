@@ -90,10 +90,6 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
-	if tenant.UserID <= 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusUnauthorized, errorcode.Unauthorized, "Authentication required", nil)
-		return
-	}
 
 	var req ChangePasswordRequest
 	if !httputil.BindJSON(w, r, &req) {

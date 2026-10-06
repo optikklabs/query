@@ -3,7 +3,6 @@ package explorer
 import (
 	"reflect"
 	"testing"
-	"time"
 )
 
 func TestConvertFEQuery(t *testing.T) {
@@ -12,8 +11,8 @@ func TestConvertFEQuery(t *testing.T) {
 		Aggregation: "p95",
 		GroupBy:     []string{"service.name"},
 		Where: []Filter{
-			{Key: "environment", Operator: "eq", Value: "production"},
-			{Key: "http.method", Operator: "not_in", Value: []any{"GET", "HEAD"}},
+			{Key: "environment", Operator: "eq", Value: FilterValues{"production"}},
+			{Key: "http.method", Operator: "not_in", Value: FilterValues{"GET", "HEAD"}},
 		},
 	}
 
@@ -28,10 +27,10 @@ func TestConvertFEQuery(t *testing.T) {
 	if !reflect.DeepEqual(f.GroupBy, query.GroupBy) {
 		t.Fatalf("group by = %#v, want %#v", f.GroupBy, query.GroupBy)
 	}
-	if got := f.Tags[0]; got.Key != "environment" || got.Operator != "=" || !reflect.DeepEqual(got.Values, []string{"production"}) {
+	if got := f.Tags[0]; got.Key != "environment" || got.Operator != "eq" || !reflect.DeepEqual(got.Values, []string{"production"}) {
 		t.Fatalf("first tag = %#v", got)
 	}
-	if got := f.Tags[1]; got.Key != "http.method" || got.Operator != "NOT IN" || !reflect.DeepEqual(got.Values, []string{"GET", "HEAD"}) {
+	if got := f.Tags[1]; got.Key != "http.method" || got.Operator != "not_in" || !reflect.DeepEqual(got.Values, []string{"GET", "HEAD"}) {
 		t.Fatalf("second tag = %#v", got)
 	}
 }
@@ -98,16 +97,5 @@ func TestCumulativeValueSupportsSumAndRate(t *testing.T) {
 	}
 	if got := cumulativeValue(row, "rate", 60); got != 2 {
 		t.Fatalf("cumulative rate = %v, want 2", got)
-	}
-}
-
-func TestConvertedFilterUsesCommonValidationDefaults(t *testing.T) {
-	start := time.Now().UnixMilli()
-	f := toFilter(42, start, start+60_000, "1m", MetricQuery{MetricName: "cpu.utilization"})
-	if err := f.Validate(); err != nil {
-		t.Fatalf("Validate() error = %v", err)
-	}
-	if f.Aggregation != "avg" {
-		t.Fatalf("aggregation = %q, want avg", f.Aggregation)
 	}
 }

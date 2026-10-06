@@ -18,10 +18,15 @@ const (
 )
 
 func (s *Service) QueryErrorGroups(ctx context.Context, req models.GroupsRequest) (models.GroupsResponse, error) {
-	limit := filterutil.PickLimit(req.Limit, defaultGroupsLimit, maxGroupsLimit)
-	req.Limit = limit + 1
-
-	raw, err := s.repo.ExplorerGroupRows(ctx, req)
+	limit, err := filterutil.Limit(req.Limit, defaultGroupsLimit, maxGroupsLimit)
+	if err != nil {
+		return models.GroupsResponse{}, err
+	}
+	cur, err := cursor.Decode[models.ErrorGroupsCursor](req.Cursor)
+	if err != nil {
+		return models.GroupsResponse{}, err
+	}
+	raw, err := s.repo.ExplorerGroupRows(ctx, req, limit+1, cur)
 	if err != nil {
 		return models.GroupsResponse{}, err
 	}
@@ -42,7 +47,12 @@ func (s *Service) QueryErrorFacets(ctx context.Context, req models.FacetsRequest
 		return models.Facets{}, err
 	}
 
-	var facets models.Facets
+	facets := models.Facets{
+		Service:       []models.FacetBucket{},
+		Operation:     []models.FacetBucket{},
+		HTTPStatus:    []models.FacetBucket{},
+		ExceptionType: []models.FacetBucket{},
+	}
 	for _, row := range rows {
 		bucket := models.FacetBucket{Value: row.Value, Count: int64(row.Count)}
 		switch row.Dim {
@@ -92,7 +102,7 @@ func toErrorGroup(row models.RawErrorGroupRow) models.ErrorGroup {
 		ServiceName:     row.ServiceName,
 		OperationName:   row.OperationName,
 		StatusMessage:   row.StatusMessage,
-		HTTPStatusCode:  httpBucketToCode(row.HTTPStatusBucket),
+		HTTPStatusCode:  row.HTTPStatusCode,
 		ErrorCount:      int64(row.ErrorCount),
 		LastOccurrence:  row.LastOccurrence,
 		FirstOccurrence: row.FirstOccurrence,

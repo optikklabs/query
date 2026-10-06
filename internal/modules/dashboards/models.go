@@ -28,17 +28,13 @@ type DashboardPageRow struct {
 }
 
 type DashboardRow struct {
-	ID            int64          `db:"id"`
-	PageID        int64          `db:"page_id"`
-	TenantID      int64          `db:"tenant_id"`
-	Title         sql.NullString `db:"title"`
-	PanelType     string         `db:"panel_type"`
-	LayoutVariant sql.NullString `db:"layout_variant"`
-	SpecJSON      []byte         `db:"spec_json"`
-	LayoutJSON    []byte         `db:"layout_json"`
-	Position      int            `db:"position"`
-	CreatedAt     time.Time      `db:"created_at"`
-	UpdatedAt     sql.NullTime   `db:"updated_at"`
+	ID        int64        `db:"id"`
+	PageID    int64        `db:"page_id"`
+	TenantID  int64        `db:"tenant_id"`
+	SpecJSON  []byte       `db:"spec_json"`
+	Position  int          `db:"position"`
+	CreatedAt time.Time    `db:"created_at"`
+	UpdatedAt sql.NullTime `db:"updated_at"`
 }
 
 type Owner struct {

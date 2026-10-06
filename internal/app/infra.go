@@ -2,6 +2,7 @@ package app
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -10,17 +11,24 @@ import (
 
 	"github.com/optikklabs/query/internal/config"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/infra/secretbox"
 	"github.com/optikklabs/query/internal/infra/token"
 )
 
 type Infra struct {
-	Config config.Config
-	DB     *sql.DB
-	CH     clickhouse.Conn
-	Tokens *token.Service
+	Config    config.Config
+	DB        *sql.DB
+	CH        clickhouse.Conn
+	Tokens    *token.Service
+	SecretBox *secretbox.Box
 }
 
 func newInfra(cfg config.Config) (_ *Infra, err error) {
+	box, err := secretbox.New(cfg.LLM.KeyEncryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("llm.key_encryption_key: %w", err)
+	}
+
 	dbConn, err := openMySQL(cfg)
 	if err != nil {
 		return nil, err
@@ -37,10 +45,11 @@ func newInfra(cfg config.Config) (_ *Infra, err error) {
 	}
 
 	return &Infra{
-		Config: cfg,
-		DB:     dbConn,
-		CH:     chConn,
-		Tokens: token.NewService(cfg),
+		Config:    cfg,
+		DB:        dbConn,
+		CH:        chConn,
+		Tokens:    token.NewService(cfg),
+		SecretBox: box,
 	}, nil
 }
 
@@ -75,16 +84,5 @@ func openClickHouse(cfg config.Config) (clickhouse.Conn, error) {
 }
 
 func (i *Infra) Close() error {
-	if i == nil {
-		return nil
-	}
-	if i.CH != nil {
-		_ = i.CH.Close()
-		slog.Info("clickhouse connection closed")
-	}
-	if i.DB != nil {
-		_ = i.DB.Close()
-		slog.Info("mysql connection closed")
-	}
-	return nil
+	return errors.Join(i.CH.Close(), i.DB.Close())
 }

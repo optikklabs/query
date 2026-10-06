@@ -2,6 +2,7 @@ package monitors
 
 import (
 	"net/http"
+	"time"
 
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
@@ -69,7 +70,10 @@ func (h *Handler) Series(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	windowMs := int64(httputil.ParseIntParam(r, "windowMs", 3_600_000))
+	windowMs, ok := httputil.QueryInt64(w, r, "windowMs", time.Hour.Milliseconds())
+	if !ok {
+		return
+	}
 	res, err := h.Service.Series(r.Context(), tenant.TenantID, id, h.Queries, windowMs)
 	if err != nil {
 		httputil.RespondServiceError(w, r, err, "monitor request failed")
@@ -84,7 +88,10 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	limit := httputil.ParseIntParam(r, "limit", 20)
+	limit, ok := httputil.QueryLimit(w, r, defaultEventLimit, maxListLimit)
+	if !ok {
+		return
+	}
 	res, err := h.Service.Events(r.Context(), tenant.TenantID, id, limit)
 	if err != nil {
 		httputil.RespondServiceError(w, r, err, "monitor request failed")
@@ -95,8 +102,14 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Activity(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
-	since := httputil.ParseInt64Param(r, "since", 0)
-	limit := httputil.ParseIntParam(r, "limit", 20)
+	since, ok := httputil.QueryInt64(w, r, "since", 0)
+	if !ok {
+		return
+	}
+	limit, ok := httputil.QueryLimit(w, r, defaultEventLimit, maxListLimit)
+	if !ok {
+		return
+	}
 	res, err := h.Service.Activity(r.Context(), tenant.TenantID, since, limit)
 	if err != nil {
 		httputil.RespondServiceError(w, r, err, "monitor request failed")
@@ -111,7 +124,10 @@ func (h *Handler) StatusTimeline(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	windowMs := int64(httputil.ParseIntParam(r, "windowMs", 24*60*60*1000))
+	windowMs, ok := httputil.QueryInt64(w, r, "windowMs", (24 * time.Hour).Milliseconds())
+	if !ok {
+		return
+	}
 	res, err := h.Service.StatusTimeline(r.Context(), tenant.TenantID, id, windowMs)
 	if err != nil {
 		httputil.RespondServiceError(w, r, err, "monitor request failed")

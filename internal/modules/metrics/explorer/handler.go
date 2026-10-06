@@ -22,7 +22,7 @@ func (h *Handler) ListMetricNames(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := h.Service.ListMetricNames(r.Context(), tenantID, startMs, endMs, search)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to list metric names", err)
+		httputil.RespondServiceError(w, r, err, "Failed to list metric names")
 		return
 	}
 
@@ -37,7 +37,7 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 	}
 	metricName := chi.URLParam(r, "metricName")
 	if metricName == "" {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "metricName is required", nil)
+		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "metricName is required", nil)
 		return
 	}
 	tagKey := r.URL.Query().Get("tagKey")
@@ -56,7 +56,7 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := validateQueryRequest(req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, err.Error(), nil)
+		httputil.RespondServiceError(w, r, err, "invalid explorer query")
 		return
 	}
 

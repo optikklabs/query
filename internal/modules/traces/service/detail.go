@@ -8,8 +8,12 @@ import (
 	"strings"
 	"time"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
+
 	"github.com/optikklabs/query/internal/modules/traces/models"
 	"github.com/optikklabs/query/internal/modules/traces/repository"
+	"github.com/optikklabs/query/internal/shared/errorcode"
+	"github.com/optikklabs/query/internal/shared/nullable"
 )
 
 func foldTraceSummary(res repository.TraceSummaryRow) models.TraceSummary {
@@ -26,7 +30,7 @@ func foldTraceSummary(res repository.TraceSummaryRow) models.TraceSummary {
 		SpanCount:      uint32(res.SpanCount),
 		HasError:       res.HasError,
 		ErrorCount:     uint32(res.ErrorCount),
-		ServiceSet:     res.ServiceSet,
+		ServiceSet:     nullable.OrEmpty(res.ServiceSet),
 		RootMissing:    res.RootMissing,
 	}
 }
@@ -96,13 +100,11 @@ func sortSpanEvents(events []models.SpanEvent) {
 	})
 }
 
-// GetSpanAttributes returns nil when the span is not in the window.
 func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startMs, endMs int64) (*models.SpanAttributes, error) {
 	row, err := s.repo.GetSpanAttributes(ctx, tenantID, traceID, spanID, startMs, endMs)
-	if err != nil || row == nil {
-		return nil, err
+	if err != nil {
+		return nil, dbutil.NoRowsAs(err, errorcode.NotFoundError{Msg: "Span not found"})
 	}
-
 	attrs := row.Attributes
 	if attrs == nil {
 		attrs = map[string]string{}
@@ -118,7 +120,7 @@ func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID
 		OperationName:         row.OperationName,
 		ServiceName:           row.ServiceName,
 		AttributesString:      attrs,
-		ResourceAttrs:         resourceAttributes(row),
+		ResourceAttrs:         resourceAttributes(&row),
 		ExceptionType:         row.ExceptionType,
 		ExceptionMessage:      row.ExceptionMessage,
 		ExceptionStacktrace:   row.ExceptionStacktrace,

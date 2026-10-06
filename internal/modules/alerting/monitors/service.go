@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 
 	dbutil "github.com/optikklabs/query/internal/infra/database"
@@ -62,13 +63,16 @@ func (s *Service) List(ctx context.Context, tenantID int64, q ListQuery) (Monito
 	if err != nil {
 		return MonitorListResponse{}, err
 	}
-	counts, err := s.repo.Count(ctx, tenantID, q)
+	// Counts back the status tabs, so they ignore the tab filters.
+	tabless := q
+	tabless.Statuses, tabless.Muted = nil, nil
+	counts, err := s.repo.Count(ctx, tenantID, tabless)
 	if err != nil {
 		return MonitorListResponse{}, err
 	}
 	items := make([]MonitorResponse, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, toResponse(row.Split()))
+		items = append(items, toResponse(row.MonitorRow, row.MonitorStateRow))
 	}
 	return MonitorListResponse{Items: items, Counts: counts}, nil
 }
@@ -79,16 +83,17 @@ func buildMonitorRow(tenantID, userID int64, req CreateMonitorRequest) (models.M
 		return models.MonitorRow{}, err
 	}
 	row := models.MonitorRow{
-		TenantID:     tenantID,
-		Name:         name,
-		Type:         req.Type,
-		Priority:     priority,
-		Scope:        req.Scope,
-		Query:        req.Query,
-		Conditions:   req.Conditions,
-		Notify:       req.Notify,
-		Tags:         req.Tags,
-		EvalEverySec: evalEvery,
+		TenantID:        tenantID,
+		Name:            name,
+		Type:            req.Type,
+		Priority:        priority,
+		Scope:           req.Scope,
+		Query:           req.Query,
+		Conditions:      req.Conditions,
+		Notify:          req.Notify,
+		Tags:            req.Tags,
+		EvalEverySec:    evalEvery,
+		CreatedByUserID: sql.NullInt64{Valid: true, Int64: userID},
 	}
 	if msg := strings.TrimSpace(req.MessageBody); msg != "" {
 		row.MessageBody = sql.NullString{Valid: true, String: msg}
@@ -98,9 +103,6 @@ func buildMonitorRow(tenantID, userID int64, req CreateMonitorRequest) (models.M
 	}
 	if req.RenotifyEverySec != nil && *req.RenotifyEverySec > 0 {
 		row.RenotifyEverySec = sql.NullInt64{Valid: true, Int64: int64(*req.RenotifyEverySec)}
-	}
-	if userID > 0 {
-		row.CreatedByUserID = sql.NullInt64{Valid: true, Int64: userID}
 	}
 	return row, nil
 }
@@ -114,9 +116,6 @@ func validateCreateRequest(req CreateMonitorRequest) (name, priority string, eva
 		return "", "", 0, errorcode.ValidationError{Msg: fmt.Sprintf("type must be one of %v", models.SupportedMonitorTypes)}
 	}
 	priority = req.Priority
-	if priority == "" {
-		priority = "P2"
-	}
 	if !models.IsValidPriority(priority) {
 		return "", "", 0, errorcode.ValidationError{Msg: fmt.Sprintf("priority must be one of %v", models.SupportedPriorities)}
 	}
@@ -129,11 +128,10 @@ func validateCreateRequest(req CreateMonitorRequest) (name, priority string, eva
 	if err := validateConditions(req.Conditions); err != nil {
 		return "", "", 0, err
 	}
-	evalEvery = req.EvalEverySec
-	if evalEvery <= 0 {
-		evalEvery = 300
+	if req.EvalEverySec <= 0 {
+		return "", "", 0, errorcode.ValidationError{Msg: "evalEverySec must be positive"}
 	}
-	return name, priority, evalEvery, nil
+	return name, priority, req.EvalEverySec, nil
 }
 
 func validateQueryForType(t string, q models.MonitorQuery) error {
@@ -142,12 +140,12 @@ func validateQueryForType(t string, q models.MonitorQuery) error {
 		return validateMetricQuery(q.Metric)
 	case "apm":
 		return validateAPMQuery(q.APM)
-	case "log":
+	default: // "log"
 		if q.Log == nil || strings.TrimSpace(q.Log.Query) == "" {
 			return errorcode.ValidationError{Msg: "log query requires query.log.query"}
 		}
+		return validateWindow(q.Log.WindowSec)
 	}
-	return nil
 }
 
 func validateMetricQuery(query *models.MetricQuery) error {
@@ -159,7 +157,7 @@ func validateMetricQuery(query *models.MetricQuery) error {
 	default:
 		return errorcode.ValidationError{Msg: "unsupported metric aggregation"}
 	}
-	return nil
+	return validateWindow(query.WindowSec)
 }
 
 func validateAPMQuery(query *models.APMQuery) error {
@@ -168,18 +166,24 @@ func validateAPMQuery(query *models.APMQuery) error {
 	}
 	switch query.Track {
 	case "errors", "hits", "latency":
-		return nil
 	default:
 		return errorcode.ValidationError{Msg: "unsupported apm track"}
 	}
+	return validateWindow(query.WindowSec)
+}
+
+// maxWindowSec bounds the evaluation window a monitor queries.
+const maxWindowSec = 24 * 60 * 60
+
+func validateWindow(windowSec int) error {
+	if windowSec <= 0 || windowSec > maxWindowSec {
+		return errorcode.ValidationError{Msg: fmt.Sprintf("query windowSec must be between 1 and %d", maxWindowSec)}
+	}
+	return nil
 }
 
 func validateConditions(c models.Conditions) error {
-	switch c.Comparator {
-	case "above", "below", "equal":
-	case "":
-		return errorcode.ValidationError{Msg: "conditions.comparator is required"}
-	default:
+	if !models.IsValidComparator(c.Comparator) {
 		return errorcode.ValidationError{Msg: "conditions.comparator must be above, below, or equal"}
 	}
 	if c.AlertThreshold == nil {
@@ -188,9 +192,7 @@ func validateConditions(c models.Conditions) error {
 	if c.NoDataAfterSec < 0 {
 		return errorcode.ValidationError{Msg: "conditions.noDataAfterSec must not be negative"}
 	}
-	switch c.NoDataAs {
-	case "no_data", "alert", "ok", "":
-	default:
+	if !slices.Contains(models.NoDataResolutions, c.NoDataAs) {
 		return errorcode.ValidationError{Msg: "conditions.noDataAs must be no_data, alert, or ok"}
 	}
 	return nil

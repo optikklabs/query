@@ -15,8 +15,6 @@ type PatternRaw struct {
 	QueryText      string    `ch:"query_text"`
 	DBSystem       string    `ch:"db_system"`
 	CollectionName string    `ch:"collection_name"`
-	Namespace      string    `ch:"namespace"`
-	Server         string    `ch:"server"`
 	QS             []float32 `ch:"qs"`
 	CallCount      uint64    `ch:"call_count"`
 	ErrorCount     uint64    `ch:"error_count"`
@@ -36,7 +34,7 @@ func (r *Repository) QueryPatterns(
 	tenantID, startMs, endMs int64,
 	f filter.ExplorerFilters,
 	limit int,
-	cursor QueryPatternsCursor,
+	cursor *QueryPatternsCursor,
 ) ([]PatternRaw, error) {
 	where, having, args := buildExplorerClauses(f, cursor)
 	args = append(chargs.RangeArgs(tenantID, startMs, endMs), args...)
@@ -47,8 +45,6 @@ func (r *Repository) QueryPatterns(
 		       argMax(db_statement_normalized, (timestamp, span_id))       AS query_text,
 		       db_system,
 		       db_name                                                     AS collection_name,
-		       ''                                                          AS namespace,
-		       ''                                                          AS server,
 		       quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
 		       count()                                                     AS call_count,
 		       countIf(is_error)                                           AS error_count
@@ -66,7 +62,7 @@ func (r *Repository) QueryPatterns(
 	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "database.QueryPatterns", &rows, query, args...)
 }
 
-func buildExplorerClauses(f filter.ExplorerFilters, cursor QueryPatternsCursor) (string, string, []any) {
+func buildExplorerClauses(f filter.ExplorerFilters, cursor *QueryPatternsCursor) (string, string, []any) {
 	var where, having string
 	var args []any
 	args = filterutil.AppendIn(&where, args,
@@ -113,7 +109,7 @@ func buildExplorerClauses(f filter.ExplorerFilters, cursor QueryPatternsCursor) 
 			addHaving(bound.alias+" "+bound.op+" @"+bound.bind, clickhouse.Named(bound.bind, *bound.value))
 		}
 	}
-	if cursor.QueryHash != "" {
+	if cursor != nil {
 		having += ` AND (
 			call_count < @cursorCallCount OR (
 				call_count = @cursorCallCount AND (

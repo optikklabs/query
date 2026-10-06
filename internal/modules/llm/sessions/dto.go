@@ -3,22 +3,23 @@ package sessions
 import "time"
 
 type SessionsOverviewResponse struct {
-	Sessions      uint64  `json:"sessions"`
-	AvgTurns      float64 `json:"avgTurns"`
-	AvgDurationMs float64 `json:"avgDurationMs"`
-	AvgCost       float64 `json:"avgCost"`
+	Sessions uint64 `json:"sessions"`
+	// Averages are null when the window has no sessions.
+	AvgTurns      *float64 `json:"avgTurns"`
+	AvgDurationMs *float64 `json:"avgDurationMs"`
+	AvgCost       *float64 `json:"avgCost"`
 }
 
 type Session struct {
-	SessionID  string  `json:"sessionId"`
-	Service    string  `json:"service"`
-	UserID     string  `json:"userId"`
-	Preview    string  `json:"preview"`
-	Turns      uint64  `json:"turns"`
-	DurationMs int64   `json:"durationMs"`
-	Cost       float64 `json:"cost"`
-	AvgScore   float64 `json:"avgScore"`
-	LastMs     int64   `json:"lastMs"`
+	SessionID  string   `json:"sessionId"`
+	Service    string   `json:"service"`
+	UserID     string   `json:"userId"`
+	Preview    string   `json:"preview"`
+	Turns      uint64   `json:"turns"`
+	DurationMs int64    `json:"durationMs"`
+	Cost       float64  `json:"cost"`
+	AvgScore   *float64 `json:"avgScore"`
+	LastMs     int64    `json:"lastMs"`
 }
 
 type SessionsQueryRequest struct {

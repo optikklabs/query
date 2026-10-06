@@ -26,9 +26,15 @@ type ServiceREDMetric struct {
 	ServiceName  string  `json:"serviceName"`
 	RequestCount int64   `json:"requestCount"`
 	ErrorCount   int64   `json:"errorCount"`
-	AvgLatency   float64 `json:"avgLatency"`
+	P50Latency   float64 `json:"p50Latency"`
 	P95Latency   float64 `json:"p95Latency"`
 	P99Latency   float64 `json:"p99Latency"`
+	// Latest service.version and deployment.environment seen in the window;
+	// empty when the service does not report them.
+	Version     string `json:"version"`
+	Environment string `json:"environment"`
+	// Distinct host/pod pairs that reported spans.
+	Instances uint64 `json:"instances"`
 }
 
 type ServicePerformancePoint struct {
@@ -118,22 +124,25 @@ type OperationBaseline struct {
 }
 
 type ServiceSummaryResponse struct {
-	ServiceName       string  `json:"serviceName"`
-	RequestCount      int64   `json:"requestCount"`
-	ErrorCount        int64   `json:"errorCount"`
-	RPS               float64 `json:"rps"`
-	ErrorRate         float64 `json:"errorRate"`
-	P50Ms             float64 `json:"p50Ms"`
-	P95Ms             float64 `json:"p95Ms"`
-	P99Ms             float64 `json:"p99Ms"`
-	CPUUtilization    float64 `json:"cpuUtilization"`
-	MemoryUtilization float64 `json:"memoryUtilization"`
-	DiskUtilization   float64 `json:"diskUtilization"`
+	ServiceName  string  `json:"serviceName"`
+	RequestCount int64   `json:"requestCount"`
+	ErrorCount   int64   `json:"errorCount"`
+	RPS          float64 `json:"rps"`
+	ErrorRate    float64 `json:"errorRate"`
+	P50Ms        float64 `json:"p50Ms"`
+	P95Ms        float64 `json:"p95Ms"`
+	P99Ms        float64 `json:"p99Ms"`
+	// Utilization percentages; null when nothing reported the metric.
+	CPUUtilization    *float64 `json:"cpuUtilization"`
+	MemoryUtilization *float64 `json:"memoryUtilization"`
+	DiskUtilization   *float64 `json:"diskUtilization"`
 }
 
+// SaturationTimeSeriesPoint is the service's CPU utilization percentage;
+// Value is null for buckets nothing reported.
 type SaturationTimeSeriesPoint struct {
-	TimestampMs int64   `json:"timestampMs"`
-	Value       float64 `json:"value"`
+	TimestampMs int64    `json:"timestampMs"`
+	Value       *float64 `json:"value"`
 }
 
 // RequestRateSeries is the columnar per-service request-rate time series.
@@ -159,10 +168,6 @@ type TopEndpointsCursor struct {
 	DBSystem      string `json:"db,omitempty"`
 }
 
-func (c TopEndpointsCursor) IsZero() bool {
-	return c.TotalCount == 0 && c.ServiceName == "" && c.OperationName == ""
-}
-
 type PaginatedEndpoints struct {
 	Results  []TopEndpoint      `json:"results"`
 	PageInfo contracts.PageInfo `json:"pageInfo"`
@@ -182,6 +187,9 @@ type REDMetricsRow struct {
 	P50Ms       float32   `ch:"p50_ms"`
 	P95Ms       float32   `ch:"p95_ms"`
 	P99Ms       float32   `ch:"p99_ms"`
+	Version     string    `ch:"latest_version"`
+	Environment string    `ch:"latest_environment"`
+	Instances   uint64    `ch:"instances"`
 }
 
 type OperationBaselineRow struct {
@@ -199,8 +207,9 @@ type ServiceMetricRow struct {
 }
 
 type SaturationPointRow struct {
-	BucketAt time.Time `ch:"bucket_at"`
-	Value    float64   `ch:"value"`
+	BucketAt   time.Time `ch:"bucket_at"`
+	MetricName string    `ch:"metric_name"`
+	Value      float64   `ch:"value"`
 }
 
 type RequestRateRawRow struct {

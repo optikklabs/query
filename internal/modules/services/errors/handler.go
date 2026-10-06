@@ -8,8 +8,6 @@ import (
 	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/modules/services/errors/models"
 	"github.com/optikklabs/query/internal/modules/services/errors/service"
-	"github.com/optikklabs/query/internal/shared/errorcode"
-	"github.com/optikklabs/query/internal/shared/filterutil"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -18,7 +16,7 @@ type ErrorHandler struct {
 }
 
 func (h *ErrorHandler) GetServiceErrorRate(w http.ResponseWriter, r *http.Request) {
-	serviceName := r.URL.Query().Get("serviceName")
+	serviceName := r.URL.Query().Get("service")
 	httputil.HandleRangeQuery(w, r, "Failed to query service error rate", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
 		return h.Service.GetServiceErrorRate(ctx, tenantID, startMs, endMs, serviceName)
 	})
@@ -31,7 +29,7 @@ func (h *ErrorHandler) QueryErrorGroups(w http.ResponseWriter, r *http.Request) 
 	}
 	resp, err := h.Service.QueryErrorGroups(r.Context(), req)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error groups", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query error groups")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -44,7 +42,7 @@ func (h *ErrorHandler) QueryErrorFacets(w http.ResponseWriter, r *http.Request) 
 	}
 	resp, err := h.Service.QueryErrorFacets(r.Context(), req)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error facets", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query error facets")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -57,7 +55,7 @@ func (h *ErrorHandler) QueryErrorOverview(w http.ResponseWriter, r *http.Request
 	}
 	resp, err := h.Service.QueryErrorOverview(r.Context(), req)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error overview", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query error overview")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -70,20 +68,29 @@ func (h *ErrorHandler) GetErrorGroupDetail(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-const maxTracesLimit = 20
+const (
+	defaultTracesLimit = 20
+	maxTracesLimit     = 100
+)
 
 func (h *ErrorHandler) GetErrorGroupTraces(w http.ResponseWriter, r *http.Request) {
 	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
-	limit := filterutil.PickLimit(httputil.ParseIntParam(r, "limit", 0), maxTracesLimit, maxTracesLimit)
-	// An absent or malformed cursor starts from the first page.
-	cur, _ := cursor.Decode[models.ErrorTracesCursor](r.URL.Query().Get("cursor"))
+	limit, ok := httputil.QueryLimit(w, r, defaultTracesLimit, maxTracesLimit)
+	if !ok {
+		return
+	}
+	cur, err := cursor.Decode[models.ErrorTracesCursor](r.URL.Query().Get("cursor"))
+	if err != nil {
+		httputil.RespondServiceError(w, r, err, "invalid cursor")
+		return
+	}
 
 	traces, err := h.Service.GetErrorGroupTraces(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs, chi.URLParam(r, "groupId"), limit, cur)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error group traces", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query error group traces")
 		return
 	}
 	httputil.RespondOK(w, traces)

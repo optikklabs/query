@@ -2,9 +2,9 @@ package notifications
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
@@ -60,29 +60,17 @@ func (s *Service) UpdateChannel(ctx context.Context, tenantID, id int64, req Upd
 }
 
 func preserveChannelCredentials(existing models.ChannelRow, req UpdateChannelRequest) (UpdateChannelRequest, error) {
-	if strings.TrimSpace(req.Type) != "slack" {
-		return req, nil
-	}
-
 	var next models.SlackWebhookConfig
 	if len(req.Config) > 0 {
 		if err := json.Unmarshal(req.Config, &next); err != nil {
-			return req, errorcode.ValidationError{Msg: "config must be valid JSON"}
+			return req, errorcode.ValidationError{Msg: "config must be a JSON object"}
 		}
 	}
-	if strings.TrimSpace(next.WebhookURL) != "" {
-		return req, nil
+	if next.WebhookURL == "" {
+		// Responses never echo the webhook URL, so an edit that omits it
+		// keeps the stored one.
+		req.Config = existing.ConfigJSON
 	}
-
-	var current models.SlackWebhookConfig
-	if err := json.Unmarshal(existing.ConfigJSON, &current); err != nil || strings.TrimSpace(current.WebhookURL) == "" {
-		return req, errorcode.ValidationError{Msg: "slack channel requires config.webhookUrl"}
-	}
-	merged, err := json.Marshal(current)
-	if err != nil {
-		return req, err
-	}
-	req.Config = merged
 	return req, nil
 }
 
@@ -144,12 +132,11 @@ func (s *Service) TestChannel(ctx context.Context, tenantID, id int64) (TestChan
 		IsAlert:      true,
 	}
 	out := TestChannelResponse{OK: true}
-	errText := sql.NullString{}
-	if err := s.dispatcher.Dispatch(ctx, row, payload); err != nil {
-		out = TestChannelResponse{ErrorText: err.Error()}
-		errText = sql.NullString{Valid: true, String: err.Error()}
+	deliveryErr := s.dispatcher.Dispatch(ctx, row, payload)
+	if deliveryErr != nil {
+		out = TestChannelResponse{ErrorText: deliveryErr.Error()}
 	}
-	if err := s.repo.MarkChannelDelivered(ctx, id, time.Now().UTC(), errText); err != nil {
+	if err := s.repo.MarkChannelDelivered(ctx, id, time.Now().UTC(), deliveryErr); err != nil {
 		slog.WarnContext(ctx, "notifications: record test delivery failed", slog.Int64("channel_id", id), slog.Any("error", err))
 	}
 	return out, nil
@@ -164,15 +151,16 @@ func buildChannelRow(tenantID int64, req CreateChannelRequest) (models.ChannelRo
 	if name == "" {
 		return models.ChannelRow{}, errorcode.ValidationError{Msg: "name is required"}
 	}
-	cfg := req.Config
-	if len(cfg) == 0 {
-		cfg = json.RawMessage("{}")
+	var sc models.SlackWebhookConfig
+	if err := json.Unmarshal(req.Config, &sc); err != nil {
+		return models.ChannelRow{}, errorcode.ValidationError{Msg: "config must be a JSON object"}
 	}
-	if t == "slack" {
-		var sc models.SlackWebhookConfig
-		if err := json.Unmarshal(cfg, &sc); err != nil || strings.TrimSpace(sc.WebhookURL) == "" {
-			return models.ChannelRow{}, errorcode.ValidationError{Msg: "slack channel requires config.webhookUrl"}
-		}
+	if err := validateSlackWebhook(sc.WebhookURL); err != nil {
+		return models.ChannelRow{}, err
+	}
+	cfg, err := json.Marshal(sc)
+	if err != nil {
+		return models.ChannelRow{}, err
 	}
 	return models.ChannelRow{
 		TenantID:   tenantID,
@@ -180,6 +168,18 @@ func buildChannelRow(tenantID int64, req CreateChannelRequest) (models.ChannelRo
 		Name:       name,
 		ConfigJSON: cfg,
 	}, nil
+}
+
+// slackWebhookPrefix is the only destination a Slack channel may post to, so a
+// channel cannot make the server call internal addresses.
+const slackWebhookPrefix = "https://hooks.slack.com/services/"
+
+func validateSlackWebhook(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || !strings.HasPrefix(raw, slackWebhookPrefix) || u.User != nil || len(u.Path) <= len("/services/") {
+		return errorcode.ValidationError{Msg: "config.webhookUrl must be a Slack incoming webhook (" + slackWebhookPrefix + "...)"}
+	}
+	return nil
 }
 
 var integrationCatalog = []struct {

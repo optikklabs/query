@@ -10,15 +10,15 @@ import (
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, error) {
+func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest, cur *traceCursor) ([]llmTraceRow, error) {
 	// Vendor/model filters apply to the per-trace aggregate, so they force
 	// aggregating every trace in range before paging. Without them, page the
 	// root spans first and aggregate only the page's traces.
 	if len(req.Vendors) > 0 || len(req.Models) > 0 {
-		return r.queryTracesPreAggregated(ctx, tenantID, req)
+		return r.queryTracesPreAggregated(ctx, tenantID, req, cur)
 	}
 
-	roots, err := r.queryTraceRootPage(ctx, tenantID, req)
+	roots, err := r.queryTraceRootPage(ctx, tenantID, req, cur)
 	if err != nil || len(roots) == 0 {
 		return roots, err
 	}
@@ -58,9 +58,9 @@ var traceAggregateColumns = `
 		       argMinIf(substring(gen_ai_prompt, 1, 160), (timestamp, span_id), gen_ai_prompt != '') AS prompt_preview,
 		       sum(` + pricing.SpanCostSQL + `) AS cost`
 
-func (r *Repository) queryTraceRootPage(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, error) {
+func (r *Repository) queryTraceRootPage(ctx context.Context, tenantID int64, req TracesQueryRequest, cur *traceCursor) ([]llmTraceRow, error) {
 	where, args := buildTraceFilters(tenantID, req)
-	where, args = appendCursorFilter(where, args, req.Cursor)
+	where, args = appendCursorFilter(where, args, cur)
 	args = append(args, clickhouse.Named("pgLimit", uint64(req.Limit+1)))
 
 	genAIServiceFilter := ""
@@ -114,9 +114,9 @@ func (r *Repository) traceAggregates(ctx context.Context, tenantID, startMs, end
 	return rows, nil
 }
 
-func (r *Repository) queryTracesPreAggregated(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, error) {
+func (r *Repository) queryTracesPreAggregated(ctx context.Context, tenantID int64, req TracesQueryRequest, cur *traceCursor) ([]llmTraceRow, error) {
 	where, args := buildTraceFilters(tenantID, req)
-	where, args = appendCursorFilter(where, args, req.Cursor)
+	where, args = appendCursorFilter(where, args, cur)
 	args = append(args, clickhouse.Named("pgLimit", uint64(req.Limit+1)))
 	args = append(args, pricing.Args()...)
 
@@ -167,14 +167,13 @@ func (r *Repository) queryTracesPreAggregated(ctx context.Context, tenantID int6
 	return rows, nil
 }
 
-func appendCursorFilter(where string, args []any, rawCursor string) (string, []any) {
-	cur, _ := decodeTraceCursor(rawCursor)
-	if cur.SpanID == "" {
+func appendCursorFilter(where string, args []any, cur *traceCursor) (string, []any) {
+	if cur == nil {
 		return where, args
 	}
 	where += ` AND (s.timestamp, s.span_id) < (@curStart, @curSpanID)`
 	args = append(args,
-		clickhouse.DateNamed("curStart", time.Unix(0, int64(cur.StartNs)), clickhouse.NanoSeconds),
+		chargs.Nanos("curStart", time.Unix(0, int64(cur.StartNs))),
 		clickhouse.Named("curSpanID", cur.SpanID),
 	)
 	return where, args
@@ -243,8 +242,9 @@ func (r *Repository) TraceSpans(ctx context.Context, tenantID int64, traceID str
 	)
 }
 
-// TraceSpanIO fetches the untruncated prompt/completion for a single span.
-func (r *Repository) TraceSpanIO(ctx context.Context, tenantID int64, traceID, spanID string, startTimeMs, endTimeMs int64) (spanIORow, bool, error) {
+// TraceSpanIO fetches the untruncated prompt/completion for a single span,
+// or sql.ErrNoRows.
+func (r *Repository) TraceSpanIO(ctx context.Context, tenantID int64, traceID, spanID string, startTimeMs, endTimeMs int64) (spanIORow, error) {
 	query := `
 		SELECT gen_ai_prompt     AS prompt,
 		       gen_ai_completion AS completion
@@ -258,14 +258,9 @@ func (r *Repository) TraceSpanIO(ctx context.Context, tenantID int64, traceID, s
 		clickhouse.Named("traceID", traceID),
 		clickhouse.Named("spanID", spanID),
 	)
-	var rows []spanIORow
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "llm.TraceSpanIO", &rows, query, args...); err != nil {
-		return spanIORow{}, false, err
-	}
-	if len(rows) == 0 {
-		return spanIORow{}, false, nil
-	}
-	return rows[0], true, nil
+	var row spanIORow
+	err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "llm.TraceSpanIO", &row, query, args...)
+	return row, err
 }
 
 func (r *Repository) ScoresForTraces(ctx context.Context, tenantID, startMs, endMs int64, traceIDs []string) ([]traceScoreRow, error) {

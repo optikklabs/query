@@ -38,8 +38,8 @@ const (
 	MetricJVMMemoryMax      = "jvm.memory.max"
 	MetricJVMCPUUtilization = "jvm.cpu.recent_utilization"
 
+	// PercentageMultiplier scales a utilization ratio to a percentage.
 	PercentageMultiplier = 100.0
-	PercentageThreshold  = 1.0
 )
 
 var (

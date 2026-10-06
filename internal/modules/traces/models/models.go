@@ -17,7 +17,7 @@ type TraceSummary struct {
 	SpanCount      uint32   `json:"spanCount"`
 	HasError       bool     `json:"hasError"`
 	ErrorCount     uint32   `json:"errorCount"`
-	ServiceSet     []string `json:"serviceSet,omitempty"`
+	ServiceSet     []string `json:"serviceSet"`
 	Truncated      bool     `json:"truncated,omitempty"`
 
 	RootMissing bool `json:"rootMissing,omitempty"`
@@ -45,7 +45,7 @@ type SpanAttributes struct {
 	DBName                string            `json:"dbName,omitempty"`
 	DBStatement           string            `json:"dbStatement,omitempty"`
 	DBStatementNormalized string            `json:"dbStatementNormalized,omitempty"`
-	Links                 []SpanLink        `json:"links,omitempty"`
+	Links                 []SpanLink        `json:"links"`
 }
 
 type SpanLink struct {
@@ -73,6 +73,9 @@ type SpanListItem struct {
 	OperationName string    `json:"operationName" ch:"name"`
 	KindString    string    `json:"spanKind"      ch:"kind_string"`
 	StatusCode    string    `json:"status"         ch:"status_code_string"`
+	StatusMessage string    `json:"statusMessage"`
+	HTTPMethod    string    `json:"httpMethod"`
+	HTTPStatus    *uint16   `json:"httpStatusCode"`
 	HasError      bool      `json:"hasError"      ch:"has_error"`
 	DurationMs    float64   `json:"durationMs"    ch:"duration_ms"`
 	Timestamp     time.Time `json:"-"              ch:"timestamp"`
@@ -84,6 +87,7 @@ type CriticalPathSpan struct {
 	OperationName string  `json:"operationName" ch:"operation_name"`
 	ServiceName   string  `json:"serviceName"   ch:"service"`
 	DurationMs    float64 `json:"durationMs"    ch:"duration_ms"`
+	SelfMs        float64 `json:"selfMs"`
 }
 
 type ErrorPathSpan struct {

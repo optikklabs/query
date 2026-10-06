@@ -32,7 +32,7 @@ func BindSuggestRequest(w http.ResponseWriter, r *http.Request, req *filterutil.
 		return false
 	}
 	req.Field = strings.TrimSpace(req.Field)
-	rangeErr := filterutil.ValidateTimeRange(&req.StartTime, &req.EndTime)
+	rangeErr := filterutil.ValidateTimeRange(req.StartTime, req.EndTime)
 	switch {
 	case rangeErr != nil:
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, rangeErr.Error(), nil)

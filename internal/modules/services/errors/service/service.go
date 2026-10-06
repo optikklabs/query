@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/cursor"
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/services/errors/models"
 	"github.com/optikklabs/query/internal/modules/services/errors/repository"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
@@ -71,16 +73,19 @@ func fillServicePoints(
 	return slices.Concat(series...)
 }
 
-func (s *Service) GetErrorGroupDetail(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*models.ErrorGroupDetail, error) {
+// errGroupNotFound answers group lookups with no errors in the window.
+var errGroupNotFound = errorcode.NotFoundError{Msg: "error group has no occurrences in the selected range"}
+
+func (s *Service) GetErrorGroupDetail(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (models.ErrorGroupDetail, error) {
 	row, err := s.repo.ErrorGroupDetailRow(ctx, tenantID, startMs, endMs, groupID)
-	if err != nil || row == nil {
-		return nil, err
+	if err != nil {
+		return models.ErrorGroupDetail{}, dbutil.NoRowsAs(err, errGroupNotFound)
 	}
-	return &models.ErrorGroupDetail{
+	return models.ErrorGroupDetail{
 		GroupID:         groupID,
 		ServiceName:     row.ServiceName,
 		OperationName:   row.OperationName,
-		HTTPStatusCode:  int(row.HTTPStatusCode),
+		HTTPStatusCode:  row.HTTPStatusCode,
 		ErrorCount:      int64(row.ErrorCount),
 		LastOccurrence:  row.LastOccurrence,
 		FirstOccurrence: row.FirstOccurrence,
@@ -90,12 +95,12 @@ func (s *Service) GetErrorGroupDetail(ctx context.Context, tenantID int64, start
 
 var facetColumns = []string{"service_version", "environment", "pod", "http_route"}
 
-func (s *Service) GetErrorGroupLatestOccurrence(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*models.ErrorLatestOccurrence, error) {
+func (s *Service) GetErrorGroupLatestOccurrence(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (models.ErrorLatestOccurrence, error) {
 	row, err := s.repo.ErrorGroupLatestOccurrenceRow(ctx, tenantID, startMs, endMs, groupID)
-	if err != nil || row == nil {
-		return nil, err
+	if err != nil {
+		return models.ErrorLatestOccurrence{}, dbutil.NoRowsAs(err, errGroupNotFound)
 	}
-	return &models.ErrorLatestOccurrence{
+	return models.ErrorLatestOccurrence{
 		TraceID:        row.TraceID,
 		SpanID:         row.SpanID,
 		Timestamp:      row.Timestamp,
@@ -146,7 +151,7 @@ func (s *Service) GetErrorGroupFacets(ctx context.Context, tenantID int64, start
 	return groups, nil
 }
 
-func (s *Service) GetErrorGroupTraces(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string, limit int, cursorIn models.ErrorTracesCursor) (models.PaginatedErrorTraces, error) {
+func (s *Service) GetErrorGroupTraces(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string, limit int, cursorIn *models.ErrorTracesCursor) (models.PaginatedErrorTraces, error) {
 	raw, err := s.repo.ErrorGroupTraceRows(ctx, tenantID, startMs, endMs, groupID, limit+1, cursorIn)
 	if err != nil {
 		return models.PaginatedErrorTraces{}, err

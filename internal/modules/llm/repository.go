@@ -2,7 +2,6 @@ package llm
 
 import (
 	"context"
-	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
@@ -96,5 +95,5 @@ func (r *Repository) TraceCounts(ctx context.Context, tenantID, startMs, endMs i
 func overviewArgs(tenantID, startMs, endMs int64) []any {
 	prevStartMs := startMs - (endMs - startMs)
 	return append(chargs.RangeArgs(tenantID, startMs, endMs),
-		clickhouse.Named("prevStart", time.UnixMilli(prevStartMs)))
+		chargs.Millis("prevStart", prevStartMs))
 }

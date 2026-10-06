@@ -2,20 +2,15 @@ package repository
 
 import (
 	"context"
-	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/optikklabs/query/internal/infra/cursor"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/services/errors/models"
+	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/errorgroups"
 	"github.com/optikklabs/query/internal/shared/spanfilter"
 )
-
-func decodeGroupsCursor(raw string) (models.ErrorGroupsCursor, bool) {
-	return cursor.Decode[models.ErrorGroupsCursor](raw)
-}
 
 // Error groups are always read from the error spans themselves, so span- and
 // root-level predicates both apply to the same row — no trace-level CTE.
@@ -28,24 +23,24 @@ func errorSpanWhere(f spanfilter.Filters) (string, []any) {
 	return errorSpanScan + c.Span + c.Root, c.Args
 }
 
-func (r *Repository) ExplorerGroupRows(ctx context.Context, req models.GroupsRequest) ([]models.RawErrorGroupRow, error) {
+func (r *Repository) ExplorerGroupRows(ctx context.Context, req models.GroupsRequest, limit int, cur *models.ErrorGroupsCursor) ([]models.RawErrorGroupRow, error) {
 	scan, args := errorSpanWhere(req.Filters)
 
 	var having string
-	if cur, ok := decodeGroupsCursor(req.Cursor); ok {
+	if cur != nil {
 		having = `HAVING (error_count < @cursorCount OR (error_count = @cursorCount AND error_group_id > @cursorID))`
 		args = append(args,
 			clickhouse.Named("cursorCount", cur.ErrorCount),
 			clickhouse.Named("cursorID", cur.GroupID),
 		)
 	}
-	args = append(args, clickhouse.Named("pgLimit", uint64(req.Limit)))
+	args = append(args, clickhouse.Named("pgLimit", uint64(limit)))
 
 	query := `
 		SELECT error_group_id           AS error_group_id,
 		       service                  AS service,
 		       name                     AS operation_name,
-		       http_status_bucket       AS http_status_bucket,
+		       toUInt16OrNull(argMax(response_status_code, (timestamp, span_id))) AS http_status_code,
 		       count()                  AS error_count,
 		       max(timestamp)           AS last_occurrence,
 		       min(timestamp)           AS first_occurrence,
@@ -96,7 +91,7 @@ func (r *Repository) ExplorerFacetRows(ctx context.Context, req models.FacetsReq
 // issue counts are exact for the range instead of a sample of the first page.
 func (r *Repository) ExplorerSummaryRow(ctx context.Context, req models.OverviewRequest, newSinceMs int64) (models.RawSummaryRow, error) {
 	scan, args := errorSpanWhere(req.Filters)
-	args = append(args, clickhouse.DateNamed("newSince", time.UnixMilli(newSinceMs), clickhouse.MilliSeconds))
+	args = append(args, chargs.Millis("newSince", newSinceMs))
 
 	query := `
 		SELECT sum(cnt)                        AS total_errors,

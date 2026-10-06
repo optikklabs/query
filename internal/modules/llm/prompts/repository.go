@@ -142,8 +142,7 @@ func (r *Repository) ListVersions(ctx context.Context, promptID int64) ([]versio
 	var rows []versionRow
 	err := dbutil.SelectSQL(ctx, r.db, "prompts.ListVersions", &rows, `
 		SELECT v.version, v.template_json, v.variables_json, v.notes,
-		       IF(v.id = p.production_version_id, 'production',
-		          IF(v.status = 'production', 'draft', v.status)) AS status, v.created_at
+		       IF(v.id = p.production_version_id, 'production', v.status) AS status, v.created_at
 		  FROM optikk.llm_prompt_versions v
 		  JOIN optikk.llm_prompts p ON p.id = v.prompt_id
 		 WHERE v.prompt_id = ? ORDER BY v.version DESC`, promptID)

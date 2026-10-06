@@ -60,9 +60,13 @@ func (s *Service) GetPageDetail(ctx context.Context, tenantID, id int64) (Dashbo
 	if err != nil {
 		return DashboardPageDetailResponse{}, err
 	}
-	widgets, err := s.ListWidgets(ctx, tenantID, id)
+	rows, err := s.repo.ListWidgets(ctx, id, tenantID)
 	if err != nil {
 		return DashboardPageDetailResponse{}, err
+	}
+	widgets := make([]WidgetResponse, 0, len(rows))
+	for _, row := range rows {
+		widgets = append(widgets, toWidgetResponse(row))
 	}
 	return DashboardPageDetailResponse{DashboardPageResponse: page, Widgets: widgets}, nil
 }
@@ -77,18 +81,6 @@ func (s *Service) ListPages(ctx context.Context, tenantID int64, q ListPagesQuer
 		items = append(items, toPageResponse(row))
 	}
 	return DashboardPageListResponse{Items: items, Total: total}, nil
-}
-
-func (s *Service) ListWidgets(ctx context.Context, tenantID, pageID int64) ([]WidgetResponse, error) {
-	rows, err := s.repo.ListWidgets(ctx, pageID, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]WidgetResponse, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, toWidgetResponse(row))
-	}
-	return out, nil
 }
 
 func (s *Service) CreateWidget(ctx context.Context, tenantID, pageID int64, req CreateWidgetRequest) (WidgetResponse, error) {
@@ -161,40 +153,28 @@ func buildPageArgs(tenantID, userID int64, req CreatePageRequest) (pageInsertArg
 		iconColor = "primary"
 	}
 	args := pageInsertArgs{
-		TenantID:   tenantID,
-		Name:       name,
-		Icon:       icon,
-		IconColor:  iconColor,
-		Tags:       req.Tags,
-		IsFavorite: req.IsFavorite,
+		TenantID:        tenantID,
+		Name:            name,
+		Icon:            icon,
+		IconColor:       iconColor,
+		Tags:            req.Tags,
+		IsFavorite:      req.IsFavorite,
+		CreatedByUserID: sql.NullInt64{Valid: true, Int64: userID},
 	}
 	if desc := strings.TrimSpace(req.Description); desc != "" {
 		args.Description = sql.NullString{Valid: true, String: desc}
-	}
-	if userID > 0 {
-		args.CreatedByUserID = sql.NullInt64{Valid: true, Int64: userID}
 	}
 	return args, nil
 }
 
 func buildWidgetArgs(tenantID, pageID int64, req CreateWidgetRequest) (widgetInsertArgs, error) {
-	spec, err := validateWidget(req.Spec)
-	if err != nil {
+	if err := validateWidget(req.Spec); err != nil {
 		return widgetInsertArgs{}, err
 	}
-	args := widgetInsertArgs{
-		PageID:     pageID,
-		TenantID:   tenantID,
-		PanelType:  spec.PanelType,
-		SpecJSON:   []byte(req.Spec),
-		LayoutJSON: []byte(spec.Layout),
-		Position:   req.Position,
-	}
-	if title := strings.TrimSpace(spec.Title); title != "" {
-		args.Title = sql.NullString{Valid: true, String: title}
-	}
-	if lv := strings.TrimSpace(spec.LayoutVariant); lv != "" {
-		args.LayoutVariant = sql.NullString{Valid: true, String: lv}
-	}
-	return args, nil
+	return widgetInsertArgs{
+		PageID:   pageID,
+		TenantID: tenantID,
+		SpecJSON: []byte(req.Spec),
+		Position: req.Position,
+	}, nil
 }

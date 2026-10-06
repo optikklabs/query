@@ -3,7 +3,6 @@ package explorer
 import (
 	"net/http"
 
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -24,7 +23,7 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.Query(r.Context(), req)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query traces", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query traces")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -37,7 +36,7 @@ func (h *Handler) QueryFacets(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.QueryFacets(r.Context(), req)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query trace facets", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query trace facets")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -50,7 +49,7 @@ func (h *Handler) QueryTrend(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.QueryTrend(r.Context(), req)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query trace trend", err)
+		httputil.RespondServiceError(w, r, err, "Failed to query trace trend")
 		return
 	}
 	httputil.RespondOK(w, resp)
@@ -63,7 +62,7 @@ func (h *Handler) Suggest(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := h.svc.Suggest(r.Context(), req, httputil.Tenant(r).TenantID)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch suggestions", err)
+		httputil.RespondServiceError(w, r, err, "Failed to fetch suggestions")
 		return
 	}
 	httputil.RespondOK(w, resp)

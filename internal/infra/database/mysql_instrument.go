@@ -67,7 +67,7 @@ func startSQLOp(ctx context.Context) func(error, time.Time, string) {
 		dur := time.Since(start).Seconds()
 		metrics.DBQueryDuration.WithLabelValues("mysql", op).Observe(dur)
 		metrics.DBQueriesTotal.WithLabelValues("mysql", op, resultLabel(err)).Inc()
-		if err != nil {
+		if isFailure(err) {
 			slog.ErrorContext(ctx, "mysql query failed",
 				slog.String("op", op),
 				slog.Float64("duration_s", dur),

@@ -1,23 +1,27 @@
 package models
 
 import (
+	"time"
+
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
 )
 
+// MetricValue is a fleet-wide percentage; Value is null when nothing reported
+// the metric in the window.
 type MetricValue struct {
-	Value float64 `json:"value"`
+	Value *float64 `json:"value"`
 }
 
 type FleetPod struct {
-	PodName      string   `json:"podName"`
-	Host         string   `json:"host"`
-	Services     []string `json:"services"`
-	RequestCount int64    `json:"requestCount"`
-	ErrorCount   int64    `json:"errorCount"`
-	ErrorRate    float64  `json:"errorRate"`
-	AvgLatencyMs float64  `json:"avgLatencyMs"`
-	P95LatencyMs float64  `json:"p95LatencyMs"`
-	LastSeen     string   `json:"lastSeen"`
+	PodName      string    `json:"podName"`
+	Host         string    `json:"host"`
+	Services     []string  `json:"services"`
+	RequestCount int64     `json:"requestCount"`
+	ErrorCount   int64     `json:"errorCount"`
+	ErrorRate    float64   `json:"errorRate"`
+	AvgLatencyMs float64   `json:"avgLatencyMs"`
+	P95LatencyMs float64   `json:"p95LatencyMs"`
+	LastSeen     time.Time `json:"lastSeen"`
 }
 
 type HostStatus string
@@ -37,12 +41,13 @@ const (
 type Host struct {
 	Host string `json:"host"`
 
-	Subsystem string  `json:"subsystem"`
-	CPU       float64 `json:"cpu"`
-	Mem       float64 `json:"mem"`
-	Disk      float64 `json:"disk"`
-
-	Saturation float64 `json:"saturation"`
+	// CPU, Mem and Disk are utilization percentages, null when the host did
+	// not report them; Saturation is the highest of those reported.
+	Subsystem  string   `json:"subsystem"`
+	CPU        *float64 `json:"cpu"`
+	Mem        *float64 `json:"mem"`
+	Disk       *float64 `json:"disk"`
+	Saturation *float64 `json:"saturation"`
 
 	Tone string `json:"tone"`
 
@@ -51,21 +56,21 @@ type Host struct {
 	ErrorRate    *float64   `json:"errorRate,omitempty"`
 	P99Ms        *float64   `json:"p99Ms,omitempty"`
 	Status       HostStatus `json:"status,omitempty"`
-	LastSeen     string     `json:"lastSeen,omitempty"`
+	LastSeen     *time.Time `json:"lastSeen,omitempty"`
 	RequestCount int64      `json:"requestCount,omitempty"`
 	ErrorCount   int64      `json:"errorCount,omitempty"`
 }
 
 type InfrastructureNode struct {
-	Host         string   `json:"host"`
-	PodCount     int64    `json:"podCount"`
-	Services     []string `json:"services"`
-	RequestCount int64    `json:"requestCount"`
-	ErrorCount   int64    `json:"errorCount"`
-	ErrorRate    float64  `json:"errorRate"`
-	AvgLatencyMs float64  `json:"avgLatencyMs"`
-	P95LatencyMs float64  `json:"p95LatencyMs"`
-	LastSeen     string   `json:"lastSeen"`
+	Host         string    `json:"host"`
+	PodCount     int64     `json:"podCount"`
+	Services     []string  `json:"services"`
+	RequestCount int64     `json:"requestCount"`
+	ErrorCount   int64     `json:"errorCount"`
+	ErrorRate    float64   `json:"errorRate"`
+	AvgLatencyMs float64   `json:"avgLatencyMs"`
+	P95LatencyMs float64   `json:"p95LatencyMs"`
+	LastSeen     time.Time `json:"lastSeen"`
 }
 
 type InfrastructureNodeService struct {
@@ -89,7 +94,7 @@ type SeriesPoint = seriesgroup.Point
 
 type HostOverview struct {
 	Host             string     `json:"host"`
-	LastSeen         string     `json:"lastSeen,omitempty"`
+	LastSeen         *time.Time `json:"lastSeen"`
 	Environments     []string   `json:"environments"`
 	Namespaces       []string   `json:"namespaces"`
 	CPUPct           *float64   `json:"cpuPct"`
@@ -116,17 +121,18 @@ type HostAbout struct {
 }
 
 type PodOverview struct {
-	Pod              string   `json:"pod"`
-	Host             string   `json:"host,omitempty"`
-	LastSeen         string   `json:"lastSeen,omitempty"`
-	Containers       []string `json:"containers"`
-	Services         []string `json:"services"`
-	Environments     []string `json:"environments"`
-	Namespaces       []string `json:"namespaces"`
-	RequestCount     int64    `json:"requestCount"`
-	ErrorCount       int64    `json:"errorCount"`
-	ErrorRate        float64  `json:"errorRate"`
-	AvgLatencyMs     float64  `json:"avgLatencyMs"`
-	P95LatencyMs     float64  `json:"p95LatencyMs"`
+	Pod          string     `json:"pod"`
+	Host         string     `json:"host,omitempty"`
+	LastSeen     *time.Time `json:"lastSeen"`
+	Containers   []string   `json:"containers"`
+	Services     []string   `json:"services"`
+	Environments []string   `json:"environments"`
+	Namespaces   []string   `json:"namespaces"`
+	RequestCount int64      `json:"requestCount"`
+	ErrorCount   int64      `json:"errorCount"`
+	// Rates and latencies are null when the pod served no requests.
+	ErrorRate        *float64 `json:"errorRate"`
+	AvgLatencyMs     *float64 `json:"avgLatencyMs"`
+	P95LatencyMs     *float64 `json:"p95LatencyMs"`
 	AvailableMetrics []string `json:"availableMetrics"`
 }

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
 	"github.com/optikklabs/query/internal/shared/metrics"
@@ -26,7 +25,7 @@ func (s *Service) GetInfrastructureNodes(ctx context.Context, tenantID int64, st
 			ErrorRate:    errorRate,
 			AvgLatencyMs: avgLatency,
 			P95LatencyMs: float64(r.P95LatencyMs),
-			LastSeen:     r.LastSeen.Format(time.RFC3339),
+			LastSeen:     r.LastSeen,
 		}
 	}
 	return out, nil
@@ -37,15 +36,11 @@ func (s *Service) GetInfrastructureNodeSummary(ctx context.Context, tenantID int
 	if err != nil {
 		return models.InfrastructureNodeSummary{}, err
 	}
-	var totalPods int64
-	if row.TotalPods != nil {
-		totalPods = int64(*row.TotalPods)
-	}
 	return models.InfrastructureNodeSummary{
 		HealthyNodes:   int64(row.HealthyNodes),
 		DegradedNodes:  int64(row.DegradedNodes),
 		UnhealthyNodes: int64(row.UnhealthyNodes),
-		TotalPods:      totalPods,
+		TotalPods:      int64(row.TotalPods),
 	}, nil
 }
 

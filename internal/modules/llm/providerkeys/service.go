@@ -21,9 +21,8 @@ func NewService(repo *Repository, box *secretbox.Box) *Service {
 }
 
 var (
-	ErrNotFound     = errorcode.NotFoundError{Msg: "provider key not found"}
-	ErrNoEncryption = errorcode.UnavailableError{Msg: "provider key encryption is not configured"}
-	ErrNoKey        = errorcode.UnavailableError{Msg: "no provider key configured for this provider"}
+	ErrNotFound = errorcode.NotFoundError{Msg: "provider key not found"}
+	ErrNoKey    = errorcode.ValidationError{Msg: "no provider key is configured for this provider"}
 )
 
 func (s *Service) List(ctx context.Context, tenantID int64) ([]ProviderKey, error) {
@@ -39,9 +38,6 @@ func (s *Service) List(ctx context.Context, tenantID int64) ([]ProviderKey, erro
 }
 
 func (s *Service) Create(ctx context.Context, tenantID, userID int64, req CreateRequest) (ProviderKey, error) {
-	if s.box == nil {
-		return ProviderKey{}, ErrNoEncryption
-	}
 	if err := llmproviders.ValidateProvider(req.Provider); err != nil {
 		return ProviderKey{}, err
 	}
@@ -65,9 +61,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 		Nonce:      nonce,
 		Last4:      apiKey[len(apiKey)-4:],
 	}
-	if userID > 0 {
-		a.CreatedBy = sql.NullInt64{Valid: true, Int64: userID}
-	}
+	a.CreatedBy = sql.NullInt64{Valid: true, Int64: userID}
 	id, err := s.repo.Create(ctx, a)
 	if err != nil {
 		return ProviderKey{}, err
@@ -84,9 +78,6 @@ func (s *Service) Delete(ctx context.Context, tenantID, id int64) error {
 }
 
 func (s *Service) ResolveKey(ctx context.Context, tenantID int64, provider string) (string, error) {
-	if s.box == nil {
-		return "", ErrNoEncryption
-	}
 	row, err := s.repo.Secret(ctx, tenantID, provider)
 	if err != nil {
 		return "", dbutil.NoRowsAs(err, ErrNoKey)

@@ -2,8 +2,6 @@ package database
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"log/slog"
 	"maps"
 	"time"
@@ -12,11 +10,12 @@ import (
 	"github.com/optikklabs/query/internal/infra/metrics"
 )
 
-// Tags the query with op so system.query_log rows attribute back to the caller.
+// withOpComment tags the query with op so system.query_log rows attribute
+// back to the caller. Every query runs under a budget context.
 func withOpComment(ctx context.Context, op string) context.Context {
 	base, ok := ctx.Value(budgetKey{}).(clickhouse.Settings)
 	if !ok {
-		return ctx
+		panic("database: ClickHouse query " + op + " has no budget context")
 	}
 	settings := make(clickhouse.Settings, len(base)+1)
 	maps.Copy(settings, base)
@@ -33,23 +32,15 @@ func SelectCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, qu
 	return err
 }
 
+// QueryRowCH scans one row into dest and returns sql.ErrNoRows when the
+// query matched none.
 func QueryRowCH(ctx context.Context, conn clickhouse.Conn, op string, dest any, query string, args ...any) error {
 	ctx = withOpComment(ctx, op)
 	done := startCHOp(ctx)
 	start := time.Now()
-	err := conn.QueryRow(ctx, query, args...).ScanStruct(dest)
-
-	if err != nil && isNoRows(err) {
-		done(nil, start, op)
-		return nil
-	}
-	err = wrapBudgetExceeded(err)
+	err := wrapBudgetExceeded(conn.QueryRow(ctx, query, args...).ScanStruct(dest))
 	done(err, start, op)
 	return err
-}
-
-func isNoRows(err error) bool {
-	return errors.Is(err, sql.ErrNoRows)
 }
 
 func startCHOp(ctx context.Context) func(error, time.Time, string) {
@@ -57,7 +48,7 @@ func startCHOp(ctx context.Context) func(error, time.Time, string) {
 		dur := time.Since(start).Seconds()
 		metrics.DBQueryDuration.WithLabelValues("clickhouse", op).Observe(dur)
 		metrics.DBQueriesTotal.WithLabelValues("clickhouse", op, resultLabel(err)).Inc()
-		if err != nil {
+		if isFailure(err) {
 			slog.ErrorContext(ctx, "clickhouse query failed",
 				slog.String("op", op),
 				slog.Float64("duration_s", dur),

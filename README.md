@@ -43,5 +43,7 @@ make run                                  # API/health :19090, metrics :19091
 ```
 
 Configuration is read from `config.yml` (env overrides via the `OPTIKK_` prefix).
-`make run` supplies a local-only JWT secret when the environment does not set
-`OPTIKK_AUTH_JWT_SECRET`; production must always provide its own secret.
+`make run` supplies local-only values for `OPTIKK_AUTH_JWT_SECRET` and
+`OPTIKK_LLM_KEY_ENCRYPTION_KEY` (base64 of 32 bytes, encrypts stored LLM
+provider keys) when the environment does not set them; production must always
+provide its own.

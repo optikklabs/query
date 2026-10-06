@@ -9,7 +9,6 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
-	"github.com/optikklabs/query/internal/modules/infrastructure/seriesdefs"
 	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
@@ -34,24 +33,18 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, tenantID, startMs
 		SELECT
 		    host,
 		    metric_name,
-		    if(metric_name = @cpuUtil,
-		       1 - sum(val_sum) / sum(val_count),
-		       sum(val_sum) / sum(val_count)) AS value
+		    ` + infraconsts.UsageValueSQL + ` AS value
 		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND metric_name IN @metricNames
 		     AND timestamp >= @start AND timestamp < @end
 		     AND host != ''
-		WHERE NOT (metric_name = @cpuUtil AND ` + seriesdefs.AttrState + ` != 'idle')
-		  AND NOT (metric_name = @memUtil AND ` + seriesdefs.AttrState + ` != 'used')
+		WHERE ` + infraconsts.UsageFilterSQL + `
 		GROUP BY host, metric_name
 		ORDER BY host, metric_name
 		LIMIT 500`
 
-	args := append(chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), utilizationMetricNames),
-		clickhouse.Named("cpuUtil", infraconsts.MetricSystemCPUUtilization),
-		clickhouse.Named("memUtil", infraconsts.MetricSystemMemoryUtilization),
-	)
+	args := chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), utilizationMetricNames)
 	var rows []HostMetricRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hosts.QueryHostUtilization", &rows, query, args...)
 }

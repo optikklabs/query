@@ -5,8 +5,8 @@ import (
 )
 
 type CreateMonitorRequest struct {
-	Name             string               `json:"name" validate:"required"`
-	Type             string               `json:"type" validate:"required"`
+	Name             string               `json:"name"`
+	Type             string               `json:"type"`
 	Priority         string               `json:"priority"`
 	Scope            models.Scope         `json:"scope"`
 	Query            models.MonitorQuery  `json:"query"`
@@ -22,17 +22,15 @@ type CreateMonitorRequest struct {
 type UpdateMonitorRequest = CreateMonitorRequest
 
 type MuteRequest struct {
-	DurationSec int `json:"durationSec" validate:"required"`
+	DurationSec int `json:"durationSec"`
 }
 
 type ListQuery struct {
-	Status string
-
+	Statuses []string
 	Type     string
 	Priority string
-
-	Muted  *bool
-	Search string
-	Limit  int
-	Offset int
+	Muted    *bool
+	Search   string
+	Limit    int
+	Offset   int
 }

@@ -1,10 +1,6 @@
 package models
 
-import (
-	"time"
-
-	"github.com/optikklabs/query/internal/infra/cursor"
-)
+import "time"
 
 type Log struct {
 	ID                string             `json:"id"`
@@ -57,21 +53,6 @@ type Cursor struct {
 	LogID     string    `json:"lid"`
 }
 
-func (c Cursor) IsZero() bool {
-	return c.Timestamp.IsZero() && c.LogID == ""
-}
-
-func (c Cursor) Encode() string {
-	if c.IsZero() {
-		return ""
-	}
-	return cursor.Encode(c)
-}
-
-func DecodeCursor(raw string) (Cursor, bool) {
-	return cursor.Decode[Cursor](raw)
-}
-
 type FacetValue struct {
 	Value string `json:"value"`
 	Count uint64 `json:"count"`
@@ -82,9 +63,9 @@ var SeverityLabels = []string{"UNSET", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"
 type Facets struct {
 	Severity    []string     `json:"severityBucket"`
 	Service     []FacetValue `json:"service"`
-	Host        []FacetValue `json:"host,omitempty"`
-	Pod         []FacetValue `json:"pod,omitempty"`
-	Environment []FacetValue `json:"environment,omitempty"`
+	Host        []FacetValue `json:"host"`
+	Pod         []FacetValue `json:"pod"`
+	Environment []FacetValue `json:"environment"`
 }
 
 type Summary struct {

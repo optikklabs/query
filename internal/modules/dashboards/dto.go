@@ -3,7 +3,7 @@ package dashboards
 import "encoding/json"
 
 type CreatePageRequest struct {
-	Name        string   `json:"name" validate:"required"`
+	Name        string   `json:"name"`
 	Description string   `json:"description,omitempty"`
 	Icon        string   `json:"icon,omitempty"`
 	IconColor   string   `json:"iconColor,omitempty"`
@@ -14,7 +14,7 @@ type CreatePageRequest struct {
 type UpdatePageRequest = CreatePageRequest
 
 type CreateWidgetRequest struct {
-	Spec     json.RawMessage `json:"spec" validate:"required"`
+	Spec     json.RawMessage `json:"spec"`
 	Position int             `json:"position"`
 }
 

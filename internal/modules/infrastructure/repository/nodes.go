@@ -33,10 +33,10 @@ type NodeServiceAggregateRow struct {
 }
 
 type NodeSummaryRow struct {
-	HealthyNodes   uint64  `ch:"healthy_nodes"`
-	DegradedNodes  uint64  `ch:"degraded_nodes"`
-	UnhealthyNodes uint64  `ch:"unhealthy_nodes"`
-	TotalPods      *uint64 `ch:"total_pods"`
+	HealthyNodes   uint64 `ch:"healthy_nodes"`
+	DegradedNodes  uint64 `ch:"degraded_nodes"`
+	UnhealthyNodes uint64 `ch:"unhealthy_nodes"`
+	TotalPods      uint64 `ch:"total_pods"`
 }
 
 func (r *Repository) QueryInfrastructureNodes(ctx context.Context, tenantID int64, startMs, endMs int64) ([]NodeAggregateRow, error) {

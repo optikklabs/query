@@ -17,7 +17,7 @@ func TestBuildExplorerClausesSeparatesRowAndAggregateFilters(t *testing.T) {
 		QueryText:    "select",
 		MinCallCount: &minCalls,
 		MaxP99Ms:     &maxP99,
-	}, QueryPatternsCursor{})
+	}, nil)
 
 	for _, fragment := range []string{"db_system IN @dbSystems", "db_name IN @collections", "service IN @services", "positionCaseInsensitive"} {
 		if !strings.Contains(where, fragment) {
@@ -35,7 +35,7 @@ func TestBuildExplorerClausesSeparatesRowAndAggregateFilters(t *testing.T) {
 }
 
 func TestBuildExplorerClausesAddsDeterministicCursor(t *testing.T) {
-	_, having, args := buildExplorerClauses(filter.ExplorerFilters{}, QueryPatternsCursor{
+	_, having, args := buildExplorerClauses(filter.ExplorerFilters{}, &QueryPatternsCursor{
 		CallCount:      42,
 		QueryHash:      "hash",
 		DBSystem:       "postgresql",

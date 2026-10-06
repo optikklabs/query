@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -17,7 +18,8 @@ func ErrorRecovery() func(http.Handler) http.Handler {
 				if recovered == nil {
 					return
 				}
-				if recovered == http.ErrAbortHandler {
+				// The server's own signal to abort a response must keep unwinding.
+				if err, ok := recovered.(error); ok && errors.Is(err, http.ErrAbortHandler) {
 					panic(recovered)
 				}
 				slog.Error("panic recovered",

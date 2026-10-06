@@ -1,7 +1,6 @@
 package explorer
 
 import (
-	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -20,7 +19,7 @@ type Trace struct {
 	SpanCount      uint32   `json:"spanCount"`
 	HasError       bool     `json:"hasError"`
 	ErrorCount     uint32   `json:"errorCount"`
-	ServiceSet     []string `json:"serviceSet,omitempty"`
+	ServiceSet     []string `json:"serviceSet"`
 }
 
 type TraceCursor struct {
@@ -29,30 +28,17 @@ type TraceCursor struct {
 	SpanID  string `json:"p"`
 }
 
-func (c TraceCursor) IsZero() bool { return c.SpanID == "" }
-
-func (c TraceCursor) Encode() string {
-	if c.IsZero() {
-		return ""
-	}
-	return cursor.Encode(c)
-}
-
-func DecodeCursor(raw string) (TraceCursor, bool) {
-	return cursor.Decode[TraceCursor](raw)
-}
-
 type FacetBucket struct {
 	Value string `json:"value"`
 	Count uint64 `json:"count"`
 }
 
 type Facets struct {
-	Service    []FacetBucket `json:"service,omitempty"`
-	Operation  []FacetBucket `json:"operation,omitempty"`
-	HTTPMethod []FacetBucket `json:"httpMethod,omitempty"`
-	HTTPStatus []FacetBucket `json:"httpStatus,omitempty"`
-	Status     []FacetBucket `json:"status,omitempty"`
+	Service    []FacetBucket `json:"service"`
+	Operation  []FacetBucket `json:"operation"`
+	HTTPMethod []FacetBucket `json:"httpMethod"`
+	HTTPStatus []FacetBucket `json:"httpStatus"`
+	Status     []FacetBucket `json:"status"`
 }
 
 type TrendBucket struct {

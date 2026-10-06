@@ -1,24 +1,18 @@
 package infraconsts
 
-import "math"
-
 // Error-rate percentages above which a host is degraded or unhealthy.
 const (
 	DegradedErrorPct  = 2.0
 	UnhealthyErrorPct = 10.0
 )
 
-func NormalizeUtilization(v float64) *float64 {
-	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > PercentageThreshold*100 {
-		return nil
-	}
-	if v <= PercentageThreshold {
-		v *= PercentageMultiplier
-	}
-	return &v
+// RatioPct converts an OpenTelemetry utilization ratio (0..1) to a percentage.
+func RatioPct(ratio float64) float64 {
+	return ratio * PercentageMultiplier
 }
 
-func AverageUtilization(values []float64) *float64 {
+// Mean returns the mean of values, or nil when there are none.
+func Mean(values []float64) *float64 {
 	if len(values) == 0 {
 		return nil
 	}
@@ -26,6 +20,16 @@ func AverageUtilization(values []float64) *float64 {
 	for _, v := range values {
 		sum += v
 	}
-	avg := sum / float64(len(values))
-	return &avg
+	return new(sum / float64(len(values)))
 }
+
+// UsageFilterSQL keeps, of the per-state utilization series, only the one
+// UsageValueSQL turns into usage: idle CPU and used memory.
+const UsageFilterSQL = `NOT (metric_name = '` + MetricSystemCPUUtilization + `' AND attributes['state'] != 'idle')
+		  AND NOT (metric_name = '` + MetricSystemMemoryUtilization + `' AND attributes['state'] != 'used')`
+
+// UsageValueSQL is a metric group's mean ratio, with idle CPU inverted into
+// busy CPU. Pair it with UsageFilterSQL and GROUP BY metric_name.
+const UsageValueSQL = `if(metric_name = '` + MetricSystemCPUUtilization + `',
+		       1 - sum(val_sum) / sum(val_count),
+		       sum(val_sum) / sum(val_count))`

@@ -223,10 +223,10 @@ func comparisonArgs(req models.DetailRequest, comparison models.Context) []any {
 		clickhouse.Named("currentVersion", req.Version),
 		clickhouse.Named("baselineVersion", baselineVersion),
 		clickhouse.Named("hasBaseline", hasBaseline),
-		clickhouse.Named("currentStart", comparison.Window.CurrentStart),
-		clickhouse.Named("currentEnd", comparison.Window.CurrentEnd),
-		clickhouse.Named("baselineStart", comparison.Window.BaselineStart),
-		clickhouse.Named("baselineEnd", comparison.Window.BaselineEnd),
+		chargs.Millis("currentStart", comparison.Window.CurrentStart.UnixMilli()),
+		chargs.Millis("currentEnd", comparison.Window.CurrentEnd.UnixMilli()),
+		chargs.Millis("baselineStart", comparison.Window.BaselineStart.UnixMilli()),
+		chargs.Millis("baselineEnd", comparison.Window.BaselineEnd.UnixMilli()),
 	}
 }
 
@@ -235,8 +235,8 @@ func trafficArgs(req models.DetailRequest, comparison models.Context) []any {
 		clickhouse.Named("tenantID", uint32(req.TenantID)),
 		clickhouse.Named("service", req.Service),
 		clickhouse.Named("environment", req.Environment),
-		clickhouse.Named("currentEnd", comparison.Window.CurrentEnd),
-		clickhouse.Named("baselineStart", comparison.Window.BaselineStart),
+		chargs.Millis("currentEnd", comparison.Window.CurrentEnd.UnixMilli()),
+		chargs.Millis("baselineStart", comparison.Window.BaselineStart.UnixMilli()),
 	}
 }
 

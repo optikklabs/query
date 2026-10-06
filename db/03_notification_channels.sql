@@ -2,10 +2,10 @@ CREATE TABLE IF NOT EXISTS optikk.notification_channels
   (
      id                BIGINT AUTO_INCREMENT PRIMARY KEY,
      tenant_id           BIGINT NOT NULL,
-     type              ENUM('slack','pagerduty','opsgenie','teams','email','webhook','jira') NOT NULL,
+     type              ENUM('slack') NOT NULL,
      name              VARCHAR(200) NOT NULL,
      config_json       JSON NOT NULL,
-     status            ENUM('ok','warn','muted') NOT NULL DEFAULT 'ok',
+     status            ENUM('ok','warn') NOT NULL DEFAULT 'ok',
      last_used_at      DATETIME NULL,
      last_delivery_at  DATETIME NULL,
      last_error_text   VARCHAR(500) NULL,

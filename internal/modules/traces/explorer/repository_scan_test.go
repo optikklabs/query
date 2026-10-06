@@ -5,21 +5,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/shared/spanfilter"
 )
 
 func TestTraceCursorIncludesFullSortingKey(t *testing.T) {
 	want := TraceCursor{StartNs: 123, TraceID: "trace-b", SpanID: "span-c"}
-	raw := want.Encode()
-	if raw == "" {
-		t.Fatal("non-zero cursor encoded as empty")
+	raw := cursor.Encode(want)
+	decoded, err := cursor.Decode[TraceCursor](raw)
+	if err != nil {
+		t.Fatalf("could not decode cursor: %v", err)
 	}
-	decoded, ok := DecodeCursor(raw)
-	if !ok {
-		t.Fatal("could not decode cursor")
-	}
-	if decoded != want {
-		t.Fatalf("decoded cursor = %#v, want %#v", decoded, want)
+	if *decoded != want {
+		t.Fatalf("decoded cursor = %#v, want %#v", *decoded, want)
 	}
 
 	payload, err := base64.RawURLEncoding.DecodeString(raw)

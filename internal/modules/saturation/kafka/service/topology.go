@@ -39,11 +39,7 @@ func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int6
 		return models.TopologyResponse{}, err
 	}
 
-	winSecs := float64(endMs-startMs) / 1000
-	if winSecs <= 0 {
-		winSecs = 1
-	}
-	return buildGraph(rows, winSecs), nil
+	return buildGraph(rows, float64(endMs-startMs)/1000), nil
 }
 
 type percentileValues struct {

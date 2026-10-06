@@ -57,9 +57,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Upsert
 	if err != nil {
 		return Evaluator{}, err
 	}
-	if userID > 0 {
-		args.CreatedBy = sql.NullInt64{Valid: true, Int64: userID}
-	}
+	args.CreatedBy = sql.NullInt64{Valid: true, Int64: userID}
 	id, err := s.repo.Create(ctx, args)
 	if err != nil {
 		return Evaluator{}, err

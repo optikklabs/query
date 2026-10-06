@@ -34,20 +34,6 @@ type QueryBudget struct {
 	Priority         int   `yaml:"priority"`
 }
 
-func (c Config) ClickHouseMaxOpenConns() int {
-	if n := c.ClickHouse.MaxOpenConns; n > 0 {
-		return n
-	}
-	return 12
-}
-
-func (c Config) ClickHouseMaxIdleConns() int {
-	if n := c.ClickHouse.MaxIdleConns; n > 0 {
-		return n
-	}
-	return 6
-}
-
 // ClickHouseOptions builds the client settings for the configured server.
 func (c Config) ClickHouseOptions() *clickhouse.Options {
 	opts := &clickhouse.Options{
@@ -57,8 +43,8 @@ func (c Config) ClickHouseOptions() *clickhouse.Options {
 			Username: c.ClickHouse.User,
 			Password: c.ClickHouse.Password,
 		},
-		MaxOpenConns: c.ClickHouseMaxOpenConns(),
-		MaxIdleConns: c.ClickHouseMaxIdleConns(),
+		MaxOpenConns: c.ClickHouse.MaxOpenConns,
+		MaxIdleConns: c.ClickHouse.MaxIdleConns,
 	}
 	if c.ClickHouse.Secure {
 		opts.TLS = &tls.Config{}

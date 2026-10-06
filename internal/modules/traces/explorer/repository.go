@@ -8,6 +8,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/spanfilter"
 )
 
@@ -37,15 +38,15 @@ func buildScanClauses(c spanfilter.Clauses) (queryPrefix, prewhere, where string
 	return queryPrefix, prewhere, where
 }
 
-func (r *Repository) Query(ctx context.Context, req QueryRequest) ([]traceIndexRowDTO, error) {
+func (r *Repository) Query(ctx context.Context, req QueryRequest, cur *TraceCursor) ([]traceIndexRowDTO, error) {
 	c := spanfilter.BuildClauses(req.Filters)
 	prefix, prewhere, where := buildScanClauses(c)
 	args := c.Args
 
-	if cur, _ := DecodeCursor(req.Cursor); !cur.IsZero() {
+	if cur != nil {
 		where += ` AND (timestamp, trace_id, span_id) < (@curStart, @curTraceID, @curSpanID)`
 		args = append(args,
-			clickhouse.DateNamed("curStart", time.Unix(0, int64(cur.StartNs)), clickhouse.NanoSeconds),
+			chargs.Nanos("curStart", time.Unix(0, int64(cur.StartNs))),
 			clickhouse.Named("curTraceID", cur.TraceID),
 			clickhouse.Named("curSpanID", cur.SpanID),
 		)
@@ -94,8 +95,8 @@ func (r *Repository) EnrichTraces(ctx context.Context, tenantID int64, traceIDs 
 	var rows []traceAggRow
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "traces.EnrichTraces", &rows, query,
 		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("start", start),
-		clickhouse.Named("end", end),
+		chargs.Millis("start", start.UnixMilli()),
+		chargs.Millis("end", end.UnixMilli()),
 		clickhouse.Named("traceIDs", traceIDs),
 	); err != nil {
 		return nil, err
@@ -205,8 +206,8 @@ func (r *Repository) SuggestAttribute(ctx context.Context, tenantID, startMs, en
 func suggestArgs(tenantID, startMs, endMs int64, prefix string, limit int) []any {
 	return []any{
 		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("startMs", time.UnixMilli(startMs)),
-		clickhouse.Named("endMs", time.UnixMilli(endMs)),
+		chargs.Millis("startMs", startMs),
+		chargs.Millis("endMs", endMs),
 		clickhouse.Named("prefix", prefix),
 		clickhouse.Named("limit", uint64(limit)),
 	}

@@ -1,8 +1,17 @@
 package users
 
-import "context"
+import (
+	"context"
+
+	"github.com/optikklabs/query/internal/shared/filterutil"
+)
 
 const lowScoreThreshold = 0.6
+
+const (
+	defaultQueryLimit = 50
+	maxQueryLimit     = 200
+)
 
 type Service struct {
 	repo *Repository
@@ -30,9 +39,12 @@ func (s *Service) Overview(ctx context.Context, tenantID, startMs, endMs int64) 
 }
 
 func (s *Service) Query(ctx context.Context, tenantID int64, req UsersQueryRequest) (UsersQueryResponse, error) {
-	limit := req.Limit
-	if limit <= 0 || limit > 200 {
-		limit = 50
+	if err := filterutil.ValidateTimeRange(req.StartTime, req.EndTime); err != nil {
+		return UsersQueryResponse{}, err
+	}
+	limit, err := filterutil.Limit(req.Limit, defaultQueryLimit, maxQueryLimit)
+	if err != nil {
+		return UsersQueryResponse{}, err
 	}
 	rows, err := s.repo.TopUsers(ctx, tenantID, req.StartTime, req.EndTime, limit)
 	if err != nil {
@@ -49,9 +61,9 @@ func (s *Service) Query(ctx context.Context, tenantID int64, req UsersQueryReque
 	if err != nil {
 		return UsersQueryResponse{}, err
 	}
-	meanByUser := make(map[string]float64, len(scores))
+	meanByUser := make(map[string]*float64, len(scores))
 	for _, sc := range scores {
-		meanByUser[sc.UserID] = sc.Mean
+		meanByUser[sc.UserID] = &sc.Mean
 	}
 	users := make([]User, len(rows))
 	for i, r := range rows {

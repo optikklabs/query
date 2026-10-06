@@ -52,6 +52,19 @@ var SupportedMonitorTypes = []string{"metric", "apm", "log"}
 
 var SupportedPriorities = []string{"P1", "P2", "P3", "P4"}
 
+// Statuses lists every monitor status.
+var Statuses = []string{StatusAlert, StatusWarn, StatusOK, StatusNoData}
+
+// NoDataResolutions lists the statuses Conditions.NoDataAs may name.
+var NoDataResolutions = []string{StatusNoData, StatusAlert, StatusOK}
+
+var comparators = []string{ComparatorAbove, ComparatorBelow, ComparatorEqual}
+
+// IsValidComparator reports whether c is a supported Conditions.Comparator.
+func IsValidComparator(c string) bool {
+	return slices.Contains(comparators, c)
+}
+
 func IsValidType(t string) bool {
 	return slices.Contains(SupportedMonitorTypes, t)
 }

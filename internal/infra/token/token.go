@@ -54,7 +54,7 @@ func NewService(cfg config.Config) *Service {
 			name:     cfg.Auth.RefreshCookieName,
 			domain:   cfg.Auth.CookieDomain,
 			secure:   cfg.Auth.CookieSecure,
-			sameSite: parseSameSite(cfg.Auth.CookieSameSite),
+			sameSite: sameSiteModes[cfg.Auth.CookieSameSite],
 		},
 	}
 }
@@ -87,6 +87,9 @@ func (s *Service) ParseAccess(raw string) (AuthState, error) {
 	userID, err := parseSubject(claims.Subject)
 	if err != nil {
 		return AuthState{}, err
+	}
+	if claims.Role == "" || !slices.Contains(claims.TenantIDs, claims.DefaultTenantID) {
+		return AuthState{}, errors.New("access token lacks a role or tenant membership")
 	}
 	return AuthState{
 		UserID:          userID,

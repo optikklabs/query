@@ -10,6 +10,7 @@ import (
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	"github.com/optikklabs/query/internal/modules/alerting/shared/query"
 	"github.com/optikklabs/query/internal/shared/errorcode"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 var ErrNotAlerting = errorcode.ConflictError{Msg: "monitor is not currently alerting"}
@@ -18,17 +19,25 @@ func (s *Service) Ack(ctx context.Context, tenantID, userID, id int64) error {
 	return dbutil.NoRowsAs(s.repo.Ack(ctx, id, tenantID, userID, time.Now().UTC()), ErrNotAlerting)
 }
 
-// Mute silences notifications for durationSec; zero or less unmutes.
+// Mute silences notifications for durationSec.
 func (s *Service) Mute(ctx context.Context, tenantID, id int64, durationSec int) error {
-	var until sql.NullTime
-	if durationSec > 0 {
-		until = sql.NullTime{Valid: true, Time: time.Now().UTC().Add(time.Duration(durationSec) * time.Second)}
+	if durationSec <= 0 {
+		return errorcode.ValidationError{Msg: "durationSec must be positive"}
 	}
+	until := sql.NullTime{Valid: true, Time: time.Now().UTC().Add(time.Duration(durationSec) * time.Second)}
 	return dbutil.NoRowsAs(s.repo.Mute(ctx, id, tenantID, until), ErrNotFound)
 }
 
 func (s *Service) Unmute(ctx context.Context, tenantID, id int64) error {
-	return s.Mute(ctx, tenantID, id, 0)
+	return dbutil.NoRowsAs(s.repo.Mute(ctx, id, tenantID, sql.NullTime{}), ErrNotFound)
+}
+
+// validWindow checks a trailing chart window in milliseconds.
+func validWindow(windowMs int64) error {
+	if windowMs <= 0 || windowMs > filterutil.MaxTimeRangeMs {
+		return errorcode.ValidationError{Msg: "windowMs must be positive and at most 30 days"}
+	}
+	return nil
 }
 
 type TestResult struct {
@@ -55,12 +64,11 @@ func (s *Service) Test(ctx context.Context, tenantID, id int64, queries query.Re
 		return TestResult{}, err
 	}
 	d := expr.Decide(state, row.Conditions, res.Value, res.HasData, row.RenotifyEverySec.Int64, now)
-	threshold, _ := row.Conditions.PrimaryThreshold()
 	return TestResult{
 		Value:         res.Value,
 		HasData:       res.HasData,
 		WouldDecideAs: d.NewStatus,
-		Threshold:     threshold,
+		Threshold:     *row.Conditions.AlertThreshold,
 	}, nil
 }
 
@@ -72,6 +80,9 @@ type SeriesResponse struct {
 }
 
 func (s *Service) Series(ctx context.Context, tenantID, id int64, queries query.Registry, windowMs int64) (SeriesResponse, error) {
+	if err := validWindow(windowMs); err != nil {
+		return SeriesResponse{}, err
+	}
 	row, _, err := s.repo.GetByID(ctx, id, tenantID)
 	if err != nil {
 		return SeriesResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
@@ -101,8 +112,11 @@ func (s *Service) Events(ctx context.Context, tenantID, id int64, limit int) ([]
 	return toEventResponses(rows), nil
 }
 
-// Activity lists events since sinceMs, defaulting to the last hour.
+// Activity lists events since sinceMs; 0 means the last hour.
 func (s *Service) Activity(ctx context.Context, tenantID int64, sinceMs int64, limit int) ([]MonitorEventResponse, error) {
+	if sinceMs < 0 {
+		return nil, errorcode.ValidationError{Msg: "since must not be negative"}
+	}
 	since := time.Now().UTC().Add(-time.Hour)
 	if sinceMs > 0 {
 		since = time.UnixMilli(sinceMs).UTC()
@@ -126,29 +140,43 @@ type StatusBand struct {
 	EndedAt   time.Time `json:"endedAt"`
 }
 
-// StatusTimeline folds the monitor's events over the trailing window
-// (default 24h) into contiguous status bands.
+// StatusTimeline folds the monitor's events over the trailing window into
+// contiguous status bands. The window opens in the status the last earlier
+// event left the monitor in.
 func (s *Service) StatusTimeline(ctx context.Context, tenantID, id int64, windowMs int64) (StatusTimelineResponse, error) {
-	if windowMs <= 0 {
-		windowMs = (24 * time.Hour).Milliseconds()
+	if err := validWindow(windowMs); err != nil {
+		return StatusTimelineResponse{}, err
 	}
 	now := time.Now().UTC()
 	since := now.Add(-time.Duration(windowMs) * time.Millisecond)
+	prevKind, err := s.repo.LastEventKindBefore(ctx, id, tenantID, since)
+	if err != nil {
+		return StatusTimelineResponse{}, err
+	}
 	rows, err := s.repo.StatusTimelineRows(ctx, id, tenantID, since)
 	if err != nil {
 		return StatusTimelineResponse{}, err
 	}
 	return StatusTimelineResponse{
-		Bands:     buildBands(rows, since, now),
+		Bands:     buildBands(eventStatus(prevKind), rows, since, now),
 		StartedAt: since,
 		EndedAt:   now,
 	}, nil
 }
 
-func buildBands(events []models.MonitorEventRow, start, end time.Time) []StatusBand {
+// eventStatus is the band status an event leaves the monitor in; "" (no
+// event yet) reads as ok.
+func eventStatus(kind string) string {
+	if kind == models.EventTriggered {
+		return models.StatusAlert
+	}
+	return models.StatusOK
+}
+
+func buildBands(initial string, events []models.MonitorEventRow, start, end time.Time) []StatusBand {
 	bands := make([]StatusBand, 0, len(events)+1)
 	cursor := start
-	current := "ok"
+	current := initial
 	for _, e := range events {
 		if e.StartedAt.Before(cursor) {
 			continue
@@ -156,14 +184,7 @@ func buildBands(events []models.MonitorEventRow, start, end time.Time) []StatusB
 		if e.StartedAt.After(cursor) {
 			bands = append(bands, StatusBand{Status: current, StartedAt: cursor, EndedAt: e.StartedAt})
 		}
-		switch e.Kind {
-		case "triggered":
-			current = "alert"
-		case "recovered":
-			current = "ok"
-		case "muted":
-			current = "no_data"
-		}
+		current = eventStatus(e.Kind)
 		cursor = e.StartedAt
 	}
 	if cursor.Before(end) {

@@ -3,7 +3,6 @@ package providerkeys
 import (
 	"net/http"
 
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -16,7 +15,7 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	res, err := h.svc.List(r.Context(), httputil.Tenant(r).TenantID)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.QueryFailed, "failed to list provider keys", err)
+		httputil.RespondServiceError(w, r, err, "failed to list provider keys")
 		return
 	}
 	httputil.RespondOK(w, map[string]any{"items": res})

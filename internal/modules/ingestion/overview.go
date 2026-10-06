@@ -54,7 +54,6 @@ func (s *Service) Overview(ctx context.Context, tenantID, startMs, endMs int64) 
 		TimeseriesByType:    timeseriesByType(axis, logs, spans, metrics),
 		TimeseriesByService: timeseriesByServiceRows(axis, usage.dailyLogs, usage.dailySpans),
 		Services:            servicesFromUsage(axis, usage, series),
-		UsageSemantics:      "accepted",
 	}, nil
 }
 

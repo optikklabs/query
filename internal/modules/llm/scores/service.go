@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
@@ -29,7 +30,7 @@ func (s *Service) Create(ctx context.Context, tenantID int64, req CreateScoreReq
 
 	row, err := s.repo.LookupTraceContext(ctx, tenantID, req.TraceID)
 	if err != nil {
-		return err
+		return dbutil.NoRowsAs(err, errorcode.NotFoundError{Msg: "trace not found in the last 30 days"})
 	}
 	row.TenantID = tenantID
 	row.TraceID = req.TraceID

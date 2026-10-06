@@ -5,8 +5,8 @@ import (
 )
 
 type CreateChannelRequest struct {
-	Type   string          `json:"type" validate:"required"`
-	Name   string          `json:"name" validate:"required"`
+	Type   string          `json:"type"`
+	Name   string          `json:"name"`
 	Config json.RawMessage `json:"config"`
 }
 
@@ -18,8 +18,8 @@ type TestChannelResponse struct {
 }
 
 type CreatePolicyRequest struct {
-	Name     string          `json:"name" validate:"required"`
-	MatchDSL string          `json:"matchDsl" validate:"required"`
+	Name     string          `json:"name"`
+	MatchDSL string          `json:"matchDsl"`
 	Actions  json.RawMessage `json:"actions"`
 	Enabled  *bool           `json:"enabled,omitempty"`
 	Position *int            `json:"position,omitempty"`
@@ -28,9 +28,9 @@ type CreatePolicyRequest struct {
 type UpdatePolicyRequest = CreatePolicyRequest
 
 type CreateTemplateRequest struct {
-	Name        string `json:"name" validate:"required"`
+	Name        string `json:"name"`
 	Description string `json:"description"`
-	Body        string `json:"body" validate:"required"`
+	Body        string `json:"body"`
 }
 
 type UpdateTemplateRequest = CreateTemplateRequest

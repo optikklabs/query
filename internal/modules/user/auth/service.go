@@ -102,9 +102,6 @@ func (s *Service) signAccess(user shared.AuthUser, tenantID int64) (string, erro
 
 func (s *Service) Logout(ctx context.Context, tenant contracts.TenantContext, refreshTokens []string, clientIP string) shared.MessageResponse {
 	for _, refreshToken := range refreshTokens {
-		if refreshToken == "" {
-			continue
-		}
 		if err := s.repo.RevokeRefreshToken(ctx, token.HashSecret(refreshToken)); err != nil {
 			slog.WarnContext(ctx, "AUTH_EVENT logout_revoke_failed", slog.Int64("user_id", tenant.UserID), slog.Any("error", err))
 		}
@@ -136,10 +133,6 @@ func (s *Service) buildAuthContextResponse(ctx context.Context, user shared.Auth
 }
 
 func (s *Service) tenantForUser(ctx context.Context, tenantID int64) (AuthTenantSummary, error) {
-	if tenantID <= 0 {
-		return AuthTenantSummary{}, errorcode.ValidationError{Msg: "Account has no associated tenant"}
-	}
-
 	tenant, err := s.repo.FindTenantByID(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

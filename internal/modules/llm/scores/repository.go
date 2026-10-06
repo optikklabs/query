@@ -38,7 +38,7 @@ type scoreInsert struct {
 const traceLookbackMs = int64(30 * 24 * time.Hour / time.Millisecond)
 
 // LookupTraceContext copies the scored trace's service, environment,
-// session and user onto the score.
+// session and user onto the score; sql.ErrNoRows means no such trace.
 func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, traceID string) (scoreInsert, error) {
 	nowMs := time.Now().UnixMilli()
 	query := `
@@ -49,7 +49,8 @@ func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, tra
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp >= @start AND timestamp < @end
-		     AND trace_id = @traceID`
+		     AND trace_id = @traceID
+		HAVING count() > 0`
 	var row struct {
 		Service     string `ch:"service_any"`
 		Environment string `ch:"environment_any"`

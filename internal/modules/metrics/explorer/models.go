@@ -1,5 +1,10 @@
 package explorer
 
+import (
+	"encoding/json"
+	"errors"
+)
+
 type TagValueResult struct {
 	TagValue string `json:"tagValue"`
 	Count    uint64 `json:"count"`
@@ -33,9 +38,31 @@ type TagsResponse struct {
 }
 
 type Filter struct {
-	Key      string `json:"key"`
-	Operator string `json:"operator"`
-	Value    any    `json:"value"`
+	Key      string       `json:"key"`
+	Operator string       `json:"operator"`
+	Value    FilterValues `json:"value"`
+}
+
+var errFilterValue = errors.New("filter value must be a string or a list of strings")
+
+// FilterValues is a filter's value: a single string or a list of strings.
+type FilterValues []string
+
+func (v *FilterValues) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return errFilterValue
+	}
+	var one string
+	if err := json.Unmarshal(data, &one); err == nil {
+		*v = FilterValues{one}
+		return nil
+	}
+	var many []string
+	if err := json.Unmarshal(data, &many); err != nil {
+		return errFilterValue
+	}
+	*v = many
+	return nil
 }
 
 type MetricQuery struct {

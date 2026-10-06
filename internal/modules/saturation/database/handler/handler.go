@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
@@ -71,8 +70,12 @@ func (h *Handler) GetExecutions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	limit, ok := httputil.QueryLimit(w, r, repository.DefaultExecutionsLimit, repository.MaxExecutionsLimit)
+	if !ok {
+		return
+	}
 	httputil.HandleRangeQuery(w, r, "Failed to query detail executions", func(ctx context.Context, tenantID, startMs, endMs int64) (any, error) {
-		return h.service.GetExecutions(ctx, tenantID, startMs, endMs, hash, filter.ParseFilters(r), httputil.ParsePageSize(r, "limit", service.DefaultExecutionsLimit))
+		return h.service.GetExecutions(ctx, tenantID, startMs, endMs, hash, filter.ParseFilters(r), limit)
 	})
 }
 
@@ -88,7 +91,7 @@ type queryPatternsRequest struct {
 
 func (r *queryPatternsRequest) BindTenant(tenantID int64) error {
 	r.TenantID = tenantID
-	return filterutil.ValidateTimeRange(&r.StartTime, &r.EndTime)
+	return filterutil.ValidateTimeRange(r.StartTime, r.EndTime)
 }
 
 func (h *Handler) QueryPatterns(w http.ResponseWriter, r *http.Request) {
@@ -171,21 +174,8 @@ func parseSeriesScope(w http.ResponseWriter, r *http.Request) (collection, query
 		}
 		queryHash = queryHashValues[0]
 	}
-	limit = repository.DefaultSeriesLimit
-	limitValues := r.URL.Query()["limit"]
-	if len(limitValues) > 1 {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "limit must be provided at most once", nil)
-		return "", "", 0, false
-	}
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 1 || parsed > repository.MaxSeriesLimit {
-			httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "limit must be an integer between 1 and 100", nil)
-			return "", "", 0, false
-		}
-		limit = parsed
-	}
-	return collection, queryHash, limit, true
+	limit, ok = httputil.QueryLimit(w, r, repository.DefaultSeriesLimit, repository.MaxSeriesLimit)
+	return collection, queryHash, limit, ok
 }
 
 func (h *Handler) GetQueryPerformanceSeries(w http.ResponseWriter, r *http.Request) {

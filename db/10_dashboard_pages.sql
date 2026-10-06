@@ -13,6 +13,3 @@ CREATE TABLE IF NOT EXISTS optikk.dashboard_pages
      updated_at           DATETIME NULL,
      INDEX idx_dp_tenant_sort (tenant_id, is_favorite, updated_at, created_at, id)
   );
-
-ALTER TABLE optikk.dashboard_pages
-  ADD INDEX IF NOT EXISTS idx_dp_tenant_sort (tenant_id, is_favorite, updated_at, created_at, id);

@@ -15,13 +15,6 @@ func Open(cfg *mysql.Config, maxOpen, maxIdle int) (*sql.DB, error) {
 		return nil, err
 	}
 	db := sql.OpenDB(connector)
-
-	if maxOpen <= 0 {
-		maxOpen = 50
-	}
-	if maxIdle <= 0 {
-		maxIdle = maxOpen / 2
-	}
 	db.SetConnMaxLifetime(15 * time.Minute)
 	db.SetMaxOpenConns(maxOpen)
 	db.SetMaxIdleConns(maxIdle)

@@ -3,6 +3,7 @@ package monitors
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	dbutil "github.com/optikklabs/query/internal/infra/database"
@@ -21,19 +22,12 @@ const eventWithMonitorSelect = `
 		  FROM optikk.monitor_events e
 		  JOIN optikk.monitors m ON m.id = e.monitor_id`
 
-func eventLimit(limit int) int {
-	if limit <= 0 || limit > 200 {
-		return 20
-	}
-	return limit
-}
-
 func (r *Repository) Events(ctx context.Context, monitorID, tenantID int64, limit int) ([]EventRow, error) {
 	var rows []EventRow
 	err := dbutil.SelectSQL(ctx, r.db, "monitors.Events", &rows, eventWithMonitorSelect+`
 		 WHERE e.monitor_id = ? AND e.tenant_id = ?
 		 ORDER BY e.started_at DESC, e.id DESC
-		 LIMIT ?`, monitorID, tenantID, eventLimit(limit))
+		 LIMIT ?`, monitorID, tenantID, limit)
 	return rows, err
 }
 
@@ -42,7 +36,7 @@ func (r *Repository) Activity(ctx context.Context, tenantID int64, since time.Ti
 	err := dbutil.SelectSQL(ctx, r.db, "monitors.Activity", &rows, eventWithMonitorSelect+`
 		 WHERE e.tenant_id = ? AND e.started_at >= ?
 		 ORDER BY e.started_at DESC, e.id DESC
-		 LIMIT ?`, tenantID, since, eventLimit(limit))
+		 LIMIT ?`, tenantID, since, limit)
 	return rows, err
 }
 
@@ -57,6 +51,21 @@ func (r *Repository) StatusTimelineRows(ctx context.Context, monitorID, tenantID
 	`
 	err := dbutil.SelectSQL(ctx, r.db, "monitors.StatusTimelineRows", &rows, q, monitorID, tenantID, since)
 	return rows, err
+}
+
+// LastEventKindBefore returns the kind of the monitor's latest event before
+// t, or "" when it has none.
+func (r *Repository) LastEventKindBefore(ctx context.Context, monitorID, tenantID int64, t time.Time) (string, error) {
+	var kind string
+	err := dbutil.GetSQL(ctx, r.db, "monitors.LastEventKindBefore", &kind, `
+		SELECT kind FROM optikk.monitor_events
+		 WHERE monitor_id = ? AND tenant_id = ? AND started_at < ?
+		 ORDER BY started_at DESC, id DESC
+		 LIMIT 1`, monitorID, tenantID, t)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return kind, err
 }
 
 func (r *Repository) Ack(ctx context.Context, monitorID, tenantID, userID int64, at time.Time) error {

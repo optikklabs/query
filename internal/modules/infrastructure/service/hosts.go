@@ -5,7 +5,6 @@ import (
 	"context"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
@@ -26,7 +25,7 @@ func (s *Service) GetHosts(ctx context.Context, tenantID, startMs, endMs int64, 
 		for _, host := range order {
 			out = append(out, byHost[host])
 		}
-		slices.SortStableFunc(out, func(a, b models.Host) int { return cmp.Compare(b.Saturation, a.Saturation) })
+		slices.SortStableFunc(out, func(a, b models.Host) int { return cmp.Compare(saturationKey(b), saturationKey(a)) })
 		return out, nil
 	}
 
@@ -51,10 +50,8 @@ func foldUtilization(rows []repository.HostMetricRow) (map[string]models.Host, [
 	byHost := make(map[string]models.Host, len(order))
 	for _, host := range order {
 		m := byMetric[host]
-		cpu := valueOrZero(foldCPU(m))
-		mem := valueOrZero(foldMem(m))
-		disk := valueOrZero(foldDisk(m))
-		sat := max(cpu, mem, disk)
+		cpu, mem, disk := foldCPU(m), foldMem(m), foldDisk(m)
+		sat := highest(cpu, mem, disk)
 		byHost[host] = models.Host{
 			Host:       host,
 			Subsystem:  subsystemForHost(host),
@@ -89,7 +86,7 @@ func enrichWithSpans(byHost map[string]models.Host, spans []repository.HostSpans
 		h.ErrorRate = &errRate
 		h.P99Ms = &p99
 		h.Status = classifyHost(errRate, float64(row.P99Ms))
-		h.LastSeen = row.LastSeen.Format(time.RFC3339)
+		h.LastSeen = &row.LastSeen
 		h.RequestCount = total
 		h.ErrorCount = errs
 		out = append(out, h)
@@ -121,15 +118,37 @@ func subsystemForHost(host string) string {
 	}
 }
 
-func toneForSaturation(pct float64) string {
+func toneForSaturation(pct *float64) string {
 	switch {
-	case pct >= 90:
+	case pct == nil:
+		return "ok"
+	case *pct >= 90:
 		return "err"
-	case pct >= 70:
+	case *pct >= 70:
 		return "warn"
 	default:
 		return "ok"
 	}
+}
+
+// highest returns the largest non-nil value, or nil when all are nil.
+func highest(values ...*float64) *float64 {
+	var out *float64
+	for _, v := range values {
+		if v != nil && (out == nil || *v > *out) {
+			out = v
+		}
+	}
+	return out
+}
+
+// saturationKey orders hosts that reported nothing below every reporting
+// host.
+func saturationKey(h models.Host) float64 {
+	if h.Saturation == nil {
+		return -1
+	}
+	return *h.Saturation
 }
 
 func foldCPU(m map[string]float64) *float64 {
@@ -144,35 +163,26 @@ func foldCPU(m map[string]float64) *float64 {
 func foldMem(m map[string]float64) *float64 {
 	var values []float64
 	if v, ok := m[infraconsts.MetricSystemMemoryUtilization]; ok {
-		if nv := infraconsts.NormalizeUtilization(v); nv != nil {
-			values = append(values, *nv)
-		}
+		values = append(values, infraconsts.RatioPct(v))
 	}
 	if heapMax := m[infraconsts.MetricJVMMemoryMax]; heapMax > 0 {
-		values = append(values, infraconsts.PercentageMultiplier*m[infraconsts.MetricJVMMemoryUsed]/heapMax)
+		values = append(values, infraconsts.RatioPct(m[infraconsts.MetricJVMMemoryUsed]/heapMax))
 	}
-	return infraconsts.AverageUtilization(values)
+	return infraconsts.Mean(values)
 }
 
 func foldDisk(m map[string]float64) *float64 {
 	return averagePresent(m, infraconsts.MetricSystemDiskUtilization)
 }
 
+// averagePresent is the mean percentage of the named ratio metrics present in
+// m.
 func averagePresent(m map[string]float64, metricNames ...string) *float64 {
 	var values []float64
 	for _, name := range metricNames {
 		if v, ok := m[name]; ok {
-			if nv := infraconsts.NormalizeUtilization(v); nv != nil {
-				values = append(values, *nv)
-			}
+			values = append(values, infraconsts.RatioPct(v))
 		}
 	}
-	return infraconsts.AverageUtilization(values)
-}
-
-func valueOrZero(p *float64) float64 {
-	if p == nil {
-		return 0
-	}
-	return *p
+	return infraconsts.Mean(values)
 }

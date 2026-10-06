@@ -10,13 +10,13 @@ type UsersOverviewResponse struct {
 }
 
 type User struct {
-	UserID     string  `json:"userId"`
-	TopService string  `json:"topService"`
-	Traces     uint64  `json:"traces"`
-	Tokens     uint64  `json:"tokens"`
-	Cost       float64 `json:"cost"`
-	AvgScore   float64 `json:"avgScore"`
-	LastSeenMs int64   `json:"lastSeenMs"`
+	UserID     string   `json:"userId"`
+	TopService string   `json:"topService"`
+	Traces     uint64   `json:"traces"`
+	Tokens     uint64   `json:"tokens"`
+	Cost       float64  `json:"cost"`
+	AvgScore   *float64 `json:"avgScore"`
+	LastSeenMs int64    `json:"lastSeenMs"`
 }
 
 type UsersQueryRequest struct {

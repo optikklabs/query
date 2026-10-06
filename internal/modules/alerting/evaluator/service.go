@@ -3,6 +3,7 @@ package evaluator
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -71,30 +72,30 @@ func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {
 		return
 	}
 
-	if d.Transition && (d.NewStatus == "alert" || d.NewStatus == "warn") {
-		s.recordEvent(ctx, m, "triggered", res, now)
+	if d.Transition && models.IsFiring(d.NewStatus) {
+		s.recordEvent(ctx, m, models.EventTriggered, res, now)
 	}
 	if d.IsRecovery {
-		s.recordEvent(ctx, m, "recovered", res, now)
+		s.recordEvent(ctx, m, models.EventRecovered, res, now)
 	}
 	if d.ShouldNotify && !isMuted(m, now) {
-		s.dispatchAll(ctx, m, buildPayload(m, statusOrNoData(state), res, d), now)
+		s.dispatchAll(ctx, m, buildPayload(m, state.Status, res, d), now)
 	}
 }
 
+// updateState reports whether args were applied; a monitor whose status
+// changed under us was evaluated elsewhere, so its side effects are skipped.
 func (s *Service) updateState(ctx context.Context, m models.MonitorRow, args UpdateStateArgs) bool {
-	if err := s.repo.UpdateState(ctx, args); err != nil {
+	err := s.repo.UpdateState(ctx, args)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		slog.InfoContext(ctx, "alerting: state changed concurrently, skipping", slog.Int64("monitor_id", m.ID))
+		return false
+	case err != nil:
 		slog.WarnContext(ctx, "alerting: update state failed", slog.Int64("monitor_id", m.ID), slog.Any("error", err))
 		return false
 	}
 	return true
-}
-
-func statusOrNoData(state models.MonitorStateRow) string {
-	if state.Status == "" {
-		return "no_data"
-	}
-	return state.Status
 }
 
 func nextEvaluation(m models.MonitorRow, now time.Time) time.Time {
@@ -104,11 +105,10 @@ func nextEvaluation(m models.MonitorRow, now time.Time) time.Time {
 // rescheduleOnly keeps the monitor's state as it is and only schedules the
 // next evaluation, for ticks where the query itself failed.
 func rescheduleOnly(m models.MonitorRow, state models.MonitorStateRow, now time.Time) UpdateStateArgs {
-	status := statusOrNoData(state)
 	return UpdateStateArgs{
 		MonitorID:          m.ID,
-		PrevStatus:         status,
-		NewStatus:          status,
+		PrevStatus:         state.Status,
+		NewStatus:          state.Status,
 		CurrentValue:       state.CurrentValue,
 		LastEvaluatedAt:    now,
 		NextEvaluationAt:   nextEvaluation(m, now),
@@ -121,7 +121,7 @@ func rescheduleOnly(m models.MonitorRow, state models.MonitorStateRow, now time.
 func buildUpdateArgs(m models.MonitorRow, state models.MonitorStateRow, d expr.Decision, res query.ScalarResult, now time.Time) UpdateStateArgs {
 	args := UpdateStateArgs{
 		MonitorID:          m.ID,
-		PrevStatus:         statusOrNoData(state),
+		PrevStatus:         state.Status,
 		NewStatus:          d.NewStatus,
 		CurrentValue:       sql.NullFloat64{Valid: res.HasData, Float64: res.Value},
 		LastEvaluatedAt:    now,
@@ -129,7 +129,7 @@ func buildUpdateArgs(m models.MonitorRow, state models.MonitorStateRow, d expr.D
 		NoDataSince:        d.NoDataSince,
 		IncrementEvalCount: true,
 	}
-	if d.NewStatus == "alert" || d.NewStatus == "warn" {
+	if models.IsFiring(d.NewStatus) {
 		args.TriggeredAt = state.TriggeredAt
 		if !args.TriggeredAt.Valid {
 			args.TriggeredAt = sql.NullTime{Valid: true, Time: now}
@@ -142,11 +142,10 @@ func buildUpdateArgs(m models.MonitorRow, state models.MonitorStateRow, d expr.D
 }
 
 func (s *Service) recordEvent(ctx context.Context, m models.MonitorRow, kind string, res query.ScalarResult, now time.Time) {
-	threshold, hasThreshold := m.Conditions.PrimaryThreshold()
 	err := s.repo.InsertEvent(ctx, models.MonitorEventRow{
 		MonitorID: m.ID, TenantID: m.TenantID, Kind: kind,
 		Value:     sql.NullFloat64{Valid: true, Float64: res.Value},
-		Threshold: sql.NullFloat64{Valid: hasThreshold, Float64: threshold},
+		Threshold: sql.NullFloat64{Valid: true, Float64: *m.Conditions.AlertThreshold},
 		StartedAt: now,
 	})
 	if err != nil {
@@ -171,9 +170,7 @@ func (s *Service) dispatchAll(ctx context.Context, m models.MonitorRow, payload 
 	}
 	for _, ch := range channels {
 		err := s.dispatcher.Dispatch(ctx, ch, payload)
-		errText := sql.NullString{}
 		if err != nil {
-			errText = sql.NullString{Valid: true, String: err.Error()}
 			metrics.AlertingDispatchFailures.WithLabelValues(ch.Type).Inc()
 			slog.WarnContext(ctx, "alerting: dispatch failed",
 				slog.Int64("monitor_id", m.ID),
@@ -181,7 +178,7 @@ func (s *Service) dispatchAll(ctx context.Context, m models.MonitorRow, payload 
 				slog.String("channel_type", ch.Type),
 				slog.Any("error", err))
 		}
-		if err := s.repo.MarkChannelDelivered(ctx, ch.ID, now, errText); err != nil {
+		if err := s.repo.MarkChannelDelivered(ctx, ch.ID, now, err); err != nil {
 			metrics.AlertingAuditWriteFailures.WithLabelValues("delivery").Inc()
 			slog.WarnContext(ctx, "alerting: mark delivered failed",
 				slog.Int64("monitor_id", m.ID), slog.Int64("channel_id", ch.ID), slog.Any("error", err))
@@ -190,7 +187,7 @@ func (s *Service) dispatchAll(ctx context.Context, m models.MonitorRow, payload 
 }
 
 func buildPayload(m models.MonitorRow, prevStatus string, res query.ScalarResult, d expr.Decision) dispatch.Payload {
-	threshold, _ := m.Conditions.PrimaryThreshold()
+	threshold := *m.Conditions.AlertThreshold
 	scopeSummary := summarizeScope(m.Scope)
 	return dispatch.Payload{
 		MonitorName:  m.Name,
@@ -201,8 +198,8 @@ func buildPayload(m models.MonitorRow, prevStatus string, res query.ScalarResult
 		Threshold:    threshold,
 		ScopeSummary: scopeSummary,
 		Message:      renderMessageBody(m, res.Value, threshold, scopeSummary, d),
-		IsAlert:      d.NewStatus == "alert",
-		IsWarning:    d.NewStatus == "warn",
+		IsAlert:      d.NewStatus == models.StatusAlert,
+		IsWarning:    d.NewStatus == models.StatusWarn,
 		IsRecovery:   d.IsRecovery,
 	}
 }
@@ -228,8 +225,8 @@ func renderMessageBody(m models.MonitorRow, value, threshold float64, scopeSumma
 			"monitor.name": m.Name,
 			"scope":        scopeSummary,
 		},
-		IsAlert:    d.NewStatus == "alert",
-		IsWarning:  d.NewStatus == "warn",
+		IsAlert:    d.NewStatus == models.StatusAlert,
+		IsWarning:  d.NewStatus == models.StatusWarn,
 		IsRecovery: d.IsRecovery,
 	})
 }

@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"log/slog"
-	"time"
 
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
@@ -43,17 +41,9 @@ func (s *Service) GetServiceSummary(ctx context.Context, f filter.Filters) (mode
 		return err
 	})
 	g.Go(func() error {
-		// Saturation is best-effort: degrade gracefully but never silently.
-		rows, err := s.repo.GetServiceSaturationAggs(groupCtx, f.TenantID, f.StartMs, f.EndMs, serviceName, summaryMetrics)
-		if err != nil {
-			slog.WarnContext(ctx, "service summary: saturation query failed, omitting saturation metrics",
-				slog.String("service", serviceName),
-				slog.Any("error", err),
-			)
-			return nil
-		}
-		sats = rows
-		return nil
+		var err error
+		sats, err = s.repo.GetServiceSaturationAggs(groupCtx, f.TenantID, f.StartMs, f.EndMs, serviceName, summaryMetrics)
+		return err
 	})
 	if err := g.Wait(); err != nil {
 		return models.ServiceSummaryResponse{}, err
@@ -76,31 +66,29 @@ func (s *Service) GetServiceSummary(ctx context.Context, f filter.Filters) (mode
 		P50Ms:             p50,
 		P95Ms:             p95,
 		P99Ms:             p99,
-		CPUUtilization:    httputil.SanitizeFloat(cpuVal),
-		MemoryUtilization: httputil.SanitizeFloat(memVal),
-		DiskUtilization:   httputil.SanitizeFloat(diskVal),
+		CPUUtilization:    cpuVal,
+		MemoryUtilization: memVal,
+		DiskUtilization:   diskVal,
 	}, nil
 }
 
+// GetServiceSaturationTimeSeries is the service's mean CPU utilization per
+// bucket across the CPU metrics it and its hosts report.
 func (s *Service) GetServiceSaturationTimeSeries(ctx context.Context, f filter.Filters) ([]models.SaturationTimeSeriesPoint, error) {
 	rows, err := s.repo.GetServiceSaturationTimeSeries(ctx, f.TenantID, f.StartMs, f.EndMs, f.SingleService(), saturationSeriesMetrics)
 	if err != nil {
 		return nil, err
 	}
-
 	grain := timebucket.DisplayGrain(f.EndMs - f.StartMs)
-	return timebucket.FillGaps(f.StartMs, f.EndMs, grain, rows,
-		func(r models.SaturationPointRow) time.Time { return r.BucketAt },
-		func(t time.Time, row models.SaturationPointRow, ok bool) models.SaturationTimeSeriesPoint {
-			var val float64
-			if ok {
-				if normalized := infraconsts.NormalizeUtilization(row.Value); normalized != nil {
-					val = *normalized
-				}
-			}
-			return models.SaturationTimeSeriesPoint{
-				TimestampMs: t.UnixMilli(),
-				Value:       httputil.SanitizeFloat(val),
-			}
-		}), nil
+	byBucket := make(map[int64][]float64)
+	for _, row := range rows {
+		key := row.BucketAt.UTC().Truncate(grain).Unix()
+		byBucket[key] = append(byBucket[key], infraconsts.RatioPct(row.Value))
+	}
+	buckets := timebucket.DenseBuckets(f.StartMs, f.EndMs, grain)
+	out := make([]models.SaturationTimeSeriesPoint, len(buckets))
+	for i, t := range buckets {
+		out[i] = models.SaturationTimeSeriesPoint{TimestampMs: t.UnixMilli(), Value: infraconsts.Mean(byBucket[t.Unix()])}
+	}
+	return out, nil
 }

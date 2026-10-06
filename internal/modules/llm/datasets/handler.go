@@ -3,7 +3,6 @@ package datasets
 import (
 	"net/http"
 
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -17,10 +16,6 @@ func NewHandler(svc *Service, experiment *ExperimentService) *Handler {
 }
 
 func (h *Handler) RunExperiment(w http.ResponseWriter, r *http.Request) {
-	if h.experiment == nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusServiceUnavailable, errorcode.Unavailable, "experiments require provider keys to be configured", nil)
-		return
-	}
 	id, ok := httputil.ParseIDParam(w, r, "id")
 	if !ok {
 		return
@@ -40,7 +35,7 @@ func (h *Handler) RunExperiment(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	res, err := h.svc.List(r.Context(), httputil.Tenant(r).TenantID)
 	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.QueryFailed, "failed to list datasets", err)
+		httputil.RespondServiceError(w, r, err, "failed to list datasets")
 		return
 	}
 	httputil.RespondOK(w, map[string]any{"items": res})

@@ -109,7 +109,10 @@ type preparedQuery struct {
 	request    MetricQuery
 	filter     filter.Filters
 	metricType string
-	result     QueryResult
+	// absent: the metric reported nothing in the window, so its kind is
+	// unknown and its result is empty without querying.
+	absent bool
+	result QueryResult
 }
 
 func (s *Service) Query(ctx context.Context, tenantID int64, req QueryRequest) (*QueryResponse, error) {
@@ -153,7 +156,9 @@ func (s *Service) resolveMetricKinds(ctx context.Context, tenantID int64, req Qu
 		query := &prepared[i]
 		kind, found := kinds[query.filter.MetricName]
 		if !found {
-			return errorcode.ValidationError{Msg: fmt.Sprintf("query %q: metric metadata is unavailable", query.request.ID)}
+			query.absent = true
+			query.result = QueryResult{Timestamps: []int64{}, Series: []Series{}}
+			continue
 		}
 		cumulative, histogram, err := resolveMetricKind(kind)
 		if err != nil {
@@ -173,6 +178,9 @@ func (s *Service) executeQueries(ctx context.Context, prepared []preparedQuery) 
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(4)
 	for i := range prepared {
+		if prepared[i].absent {
+			continue
+		}
 		group.Go(func() error {
 			query := &prepared[i]
 			queryFilter := query.filter

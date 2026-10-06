@@ -9,6 +9,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -21,9 +22,9 @@ func NewLogBackend(db clickhouse.Conn) *LogBackend { return &LogBackend{db: db} 
 func (b *LogBackend) Scalar(ctx context.Context, m models.MonitorRow, now time.Time) (ScalarResult, error) {
 	q := m.Query.Log
 	if q == nil {
-		return ScalarResult{}, nil
+		return ScalarResult{}, errMissingQuery(m)
 	}
-	windowSec := monitorWindowSec(q.WindowSec)
+	windowSec := int64(q.WindowSec)
 	endMs := now.UnixMilli()
 	startMs := endMs - windowSec*1000
 
@@ -51,7 +52,7 @@ func (b *LogBackend) Scalar(ctx context.Context, m models.MonitorRow, now time.T
 func (b *LogBackend) Series(ctx context.Context, m models.MonitorRow, windowMs int64, now time.Time) ([]Point, error) {
 	q := m.Query.Log
 	if q == nil {
-		return nil, nil
+		return nil, errMissingQuery(m)
 	}
 	endMs := now.UnixMilli()
 	startMs := endMs - windowMs
@@ -86,8 +87,8 @@ func logArgs(tenantID int64, queryText string, startMs, endMs int64) []any {
 	return []any{
 		tenantIDArg(tenantID),
 		clickhouse.Named("searchTerm", filterutil.LikeSubstringPattern(strings.TrimSpace(queryText))),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
+		chargs.Millis("start", startMs),
+		chargs.Millis("end", endMs),
 		clickhouse.Named("bucketStart", timebucket.LogBucket(startMs)),
 		clickhouse.Named("bucketEnd", timebucket.LogBucket(endMs)),
 	}
