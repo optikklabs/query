@@ -27,7 +27,7 @@ func New(cfg config.Config) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize infrastructure: %w", err)
 	}
 
-	modules := configuredModules(infraDeps.CH, infraDeps)
+	modules := configuredModules(infraDeps)
 
 	return &App{
 		Config:  cfg,
@@ -60,7 +60,7 @@ func (a *App) addMetricsServerActor(g *run.Group) {
 		promhttp.HandlerOpts{DisableCompression: true},
 	))
 	srv := &http.Server{
-		Addr:              fmt.Sprintf(":%s", a.Config.MetricsPort()),
+		Addr:              ":" + a.Config.MetricsPort(),
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -99,7 +99,7 @@ func runAddContextCancelActor(g *run.Group, ctx context.Context) {
 
 func (a *App) addHTTPServerActor(g *run.Group) {
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%s", a.Config.Server.Port),
+		Addr:         ":" + a.Config.Server.Port,
 		Handler:      a.Router(),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 60 * time.Second,

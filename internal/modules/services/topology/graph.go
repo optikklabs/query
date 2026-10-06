@@ -30,7 +30,7 @@ func BuildGraph(nodeAggs []NodeAgg, edgeAggs []EdgeAgg) TopologyResponse {
 func buildNodes(rows []NodeAgg) []ServiceNode {
 	out := make([]ServiceNode, 0, len(rows))
 	for _, r := range rows {
-		errRate := metrics.PercentageInt(r.ErrorCount, r.RequestCount)
+		errRate := metrics.Percentage(r.ErrorCount, r.RequestCount)
 		out = append(out, ServiceNode{
 			Name:         r.Service,
 			RequestCount: r.RequestCount,
@@ -48,7 +48,7 @@ func buildNodes(rows []NodeAgg) []ServiceNode {
 func buildEdges(rows []EdgeAgg) []ServiceEdge {
 	out := make([]ServiceEdge, 0, len(rows))
 	for _, r := range rows {
-		errRate := metrics.PercentageInt(r.ErrorCount, r.CallCount)
+		errRate := metrics.Percentage(r.ErrorCount, r.CallCount)
 		out = append(out, ServiceEdge{
 			Source:       r.Source,
 			Target:       r.Target,

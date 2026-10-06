@@ -44,8 +44,7 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) TracesQuery(w http.ResponseWriter, r *http.Request) {
 	var req TracesQueryRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	if req.StartTime <= 0 || req.EndTime <= 0 || req.StartTime >= req.EndTime {
@@ -66,7 +65,7 @@ func (h *Handler) TraceDetail(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "traceId is required", nil)
 		return
 	}
-	startTimeMs, endTimeMs, ok := httputil.ParseRequiredExplicitRange(w, r)
+	startTimeMs, endTimeMs, ok := httputil.ParseRequiredUncappedRange(w, r)
 	if !ok {
 		return
 	}
@@ -89,7 +88,7 @@ func (h *Handler) SpanIO(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "traceId and spanId are required", nil)
 		return
 	}
-	startTimeMs, endTimeMs, ok := httputil.ParseRequiredExplicitRange(w, r)
+	startTimeMs, endTimeMs, ok := httputil.ParseRequiredUncappedRange(w, r)
 	if !ok {
 		return
 	}

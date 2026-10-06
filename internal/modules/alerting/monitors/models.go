@@ -4,6 +4,7 @@ import (
 	"time"
 
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	"github.com/optikklabs/query/internal/shared/nullable"
 )
 
 type MonitorResponse struct {
@@ -46,55 +47,30 @@ type StatusCounts struct {
 
 func toResponse(row models.MonitorRow, state models.MonitorStateRow) MonitorResponse {
 	out := MonitorResponse{
-		ID:           row.ID,
-		Name:         row.Name,
-		Type:         row.Type,
-		Priority:     row.Priority,
-		EvalEverySec: row.EvalEverySec,
-		Active:       row.Active,
-		CreatedAt:    row.CreatedAt,
-		Status:       "no_data",
-		Tags:         row.Tags,
-		Scope:        row.Scope,
-		Query:        row.Query,
-		Conditions:   row.Conditions,
-		Notify:       row.Notify,
-	}
-	if out.Tags == nil {
-		out.Tags = []string{}
-	}
-	if row.MessageBody.Valid {
-		out.MessageBody = row.MessageBody.String
-	}
-	if row.RunbookURL.Valid {
-		out.RunbookURL = row.RunbookURL.String
-	}
-	if row.RenotifyEverySec.Valid {
-		v := int(row.RenotifyEverySec.Int64)
-		out.RenotifyEverySec = &v
-	}
-	if row.MutedUntil.Valid {
-		t := row.MutedUntil.Time
-		out.MutedUntil = &t
-	}
-	if row.UpdatedAt.Valid {
-		t := row.UpdatedAt.Time
-		out.UpdatedAt = &t
+		ID:               row.ID,
+		Name:             row.Name,
+		Type:             row.Type,
+		Priority:         row.Priority,
+		Status:           "no_data",
+		Scope:            row.Scope,
+		Query:            row.Query,
+		Conditions:       row.Conditions,
+		Notify:           row.Notify,
+		MessageBody:      row.MessageBody.String,
+		RunbookURL:       row.RunbookURL.String,
+		Tags:             nullable.OrEmpty(row.Tags),
+		EvalEverySec:     row.EvalEverySec,
+		RenotifyEverySec: nullable.Ptr(int(row.RenotifyEverySec.Int64), row.RenotifyEverySec.Valid),
+		MutedUntil:       nullable.Ptr(row.MutedUntil.Time, row.MutedUntil.Valid),
+		Active:           row.Active,
+		CreatedAt:        row.CreatedAt,
+		UpdatedAt:        nullable.Ptr(row.UpdatedAt.Time, row.UpdatedAt.Valid),
 	}
 	if state.MonitorID != 0 {
 		out.Status = state.Status
-		if state.CurrentValue.Valid {
-			v := state.CurrentValue.Float64
-			out.CurrentValue = &v
-		}
-		if state.LastEvaluatedAt.Valid {
-			t := state.LastEvaluatedAt.Time
-			out.LastEvaluatedAt = &t
-		}
-		if state.TriggeredAt.Valid {
-			t := state.TriggeredAt.Time
-			out.TriggeredAt = &t
-		}
+		out.CurrentValue = nullable.Ptr(state.CurrentValue.Float64, state.CurrentValue.Valid)
+		out.LastEvaluatedAt = nullable.Ptr(state.LastEvaluatedAt.Time, state.LastEvaluatedAt.Valid)
+		out.TriggeredAt = nullable.Ptr(state.TriggeredAt.Time, state.TriggeredAt.Valid)
 	}
 	return out
 }

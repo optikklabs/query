@@ -12,42 +12,36 @@ type FilteredRequest interface {
 	BindTenant(tenantID int64) error
 }
 
+// BindFiltered decodes a filtered query body and binds it to the caller's
+// tenant, answering 400 when either step fails.
 func BindFiltered[T FilteredRequest](w http.ResponseWriter, r *http.Request, req T) bool {
-	if err := DecodeJSON(r, req); err != nil {
-		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
+	if !BindJSON(w, r, req) {
 		return false
 	}
 	if err := req.BindTenant(Tenant(r).TenantID); err != nil {
-		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid filters", err)
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, err.Error(), nil)
 		return false
 	}
 	return true
 }
 
-func ValidateSuggestRequest(w http.ResponseWriter, r *http.Request, req *filterutil.SuggestRequest) bool {
-	if req.StartTime <= 0 || req.EndTime <= 0 || req.StartTime >= req.EndTime {
-		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Valid startTime and endTime are required", nil)
+// BindSuggestRequest decodes a suggest body and accepts only attribute
+// fields ("@key") or the scalar fields isScalar knows.
+func BindSuggestRequest(w http.ResponseWriter, r *http.Request, req *filterutil.SuggestRequest, isScalar func(string) bool) bool {
+	if !BindJSON(w, r, req) {
 		return false
 	}
 	req.Field = strings.TrimSpace(req.Field)
-	if req.Field == "" {
+	rangeErr := filterutil.ValidateTimeRange(&req.StartTime, &req.EndTime)
+	switch {
+	case rangeErr != nil:
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, rangeErr.Error(), nil)
+	case req.Field == "":
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "field is required", nil)
-		return false
-	}
-	return true
-}
-
-func BindSuggestRequest(w http.ResponseWriter, r *http.Request, req *filterutil.SuggestRequest, isScalar func(string) bool) bool {
-	if err := DecodeJSON(r, req); err != nil {
-		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
-		return false
-	}
-	if !ValidateSuggestRequest(w, r, req) {
-		return false
-	}
-	if !strings.HasPrefix(req.Field, "@") && !isScalar(req.Field) {
+	case !strings.HasPrefix(req.Field, "@") && !isScalar(req.Field):
 		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "unknown field", nil)
-		return false
+	default:
+		return true
 	}
-	return true
+	return false
 }

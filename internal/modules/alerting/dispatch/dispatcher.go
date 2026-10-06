@@ -2,7 +2,6 @@ package dispatch
 
 import (
 	"context"
-	"fmt"
 
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
@@ -12,7 +11,7 @@ type UnsupportedChannelTypeError struct {
 }
 
 func (e UnsupportedChannelTypeError) Error() string {
-	return fmt.Sprintf("unsupported notification channel type: %s", e.Type)
+	return "unsupported notification channel type: " + e.Type
 }
 
 type Dispatcher struct {

@@ -57,16 +57,15 @@ type Host struct {
 }
 
 type InfrastructureNode struct {
-	Host           string   `json:"host"`
-	PodCount       int64    `json:"podCount"`
-	ContainerCount int64    `json:"containerCount"`
-	Services       []string `json:"services"`
-	RequestCount   int64    `json:"requestCount"`
-	ErrorCount     int64    `json:"errorCount"`
-	ErrorRate      float64  `json:"errorRate"`
-	AvgLatencyMs   float64  `json:"avgLatencyMs"`
-	P95LatencyMs   float64  `json:"p95LatencyMs"`
-	LastSeen       string   `json:"lastSeen"`
+	Host         string   `json:"host"`
+	PodCount     int64    `json:"podCount"`
+	Services     []string `json:"services"`
+	RequestCount int64    `json:"requestCount"`
+	ErrorCount   int64    `json:"errorCount"`
+	ErrorRate    float64  `json:"errorRate"`
+	AvgLatencyMs float64  `json:"avgLatencyMs"`
+	P95LatencyMs float64  `json:"p95LatencyMs"`
+	LastSeen     string   `json:"lastSeen"`
 }
 
 type InfrastructureNodeService struct {

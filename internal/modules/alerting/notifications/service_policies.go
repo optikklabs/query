@@ -2,11 +2,10 @@ package notifications
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"strings"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
@@ -31,22 +30,13 @@ func (s *Service) UpdatePolicy(ctx context.Context, tenantID, id int64, req Upda
 	}
 	row.ID = id
 	if err := s.repo.UpdatePolicy(ctx, id, tenantID, row); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return PolicyResponse{}, ErrNotFound
-		}
-		return PolicyResponse{}, err
+		return PolicyResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return toPolicyResponse(row), nil
 }
 
 func (s *Service) DeletePolicy(ctx context.Context, tenantID, id int64) error {
-	if err := s.repo.DeletePolicy(ctx, id, tenantID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
-		}
-		return err
-	}
-	return nil
+	return dbutil.NoRowsAs(s.repo.DeletePolicy(ctx, id, tenantID), ErrNotFound)
 }
 
 func (s *Service) ListPolicies(ctx context.Context, tenantID int64) ([]PolicyResponse, error) {

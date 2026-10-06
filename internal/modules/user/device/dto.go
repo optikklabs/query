@@ -10,7 +10,7 @@ type DeviceCodeResponse struct {
 }
 
 type DeviceTokenRequest struct {
-	DeviceCode string `json:"deviceCode" validate:"required"`
+	DeviceCode string `json:"deviceCode"`
 }
 
 type DeviceTokenResponse struct {
@@ -19,5 +19,5 @@ type DeviceTokenResponse struct {
 }
 
 type DeviceApproveRequest struct {
-	UserCode string `json:"userCode" validate:"required"`
+	UserCode string `json:"userCode"`
 }

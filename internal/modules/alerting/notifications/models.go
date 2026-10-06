@@ -6,6 +6,7 @@ import (
 	"time"
 
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	"github.com/optikklabs/query/internal/shared/nullable"
 )
 
 type ChannelResponse struct {
@@ -52,27 +53,18 @@ type IntegrationCatalogEntry struct {
 }
 
 func toChannelResponse(row models.ChannelRow, usedBy int) ChannelResponse {
-	out := ChannelResponse{
-		ID:          row.ID,
-		Type:        row.Type,
-		Name:        row.Name,
-		Config:      publicChannelConfig(row),
-		Status:      row.Status,
-		UsedByCount: usedBy,
-		CreatedAt:   row.CreatedAt,
+	return ChannelResponse{
+		ID:             row.ID,
+		Type:           row.Type,
+		Name:           row.Name,
+		Config:         publicChannelConfig(row),
+		Status:         row.Status,
+		UsedByCount:    usedBy,
+		LastUsedAt:     nullable.Ptr(row.LastUsedAt.Time, row.LastUsedAt.Valid),
+		LastDeliveryAt: nullable.Ptr(row.LastDeliveryAt.Time, row.LastDeliveryAt.Valid),
+		LastErrorText:  row.LastErrorText.String,
+		CreatedAt:      row.CreatedAt,
 	}
-	if row.LastUsedAt.Valid {
-		t := row.LastUsedAt.Time
-		out.LastUsedAt = &t
-	}
-	if row.LastDeliveryAt.Valid {
-		t := row.LastDeliveryAt.Time
-		out.LastDeliveryAt = &t
-	}
-	if row.LastErrorText.Valid {
-		out.LastErrorText = row.LastErrorText.String
-	}
-	return out
 }
 
 func publicChannelConfig(row models.ChannelRow) json.RawMessage {
@@ -88,33 +80,26 @@ func publicChannelConfig(row models.ChannelRow) json.RawMessage {
 }
 
 func toPolicyResponse(row models.PolicyRow) PolicyResponse {
-	out := PolicyResponse{
-		ID:        row.ID,
-		Name:      row.Name,
-		MatchDSL:  row.MatchDSL,
-		Actions:   row.ActionsJSON,
-		Hits30d:   row.Hits30d,
-		Enabled:   row.Enabled,
-		Position:  row.Position,
-		CreatedAt: row.CreatedAt,
+	return PolicyResponse{
+		ID:         row.ID,
+		Name:       row.Name,
+		MatchDSL:   row.MatchDSL,
+		Actions:    row.ActionsJSON,
+		Hits30d:    row.Hits30d,
+		LastUsedAt: nullable.Ptr(row.LastUsedAt.Time, row.LastUsedAt.Valid),
+		Enabled:    row.Enabled,
+		Position:   row.Position,
+		CreatedAt:  row.CreatedAt,
 	}
-	if row.LastUsedAt.Valid {
-		t := row.LastUsedAt.Time
-		out.LastUsedAt = &t
-	}
-	return out
 }
 
 func toTemplateResponse(row models.TemplateRow) TemplateResponse {
-	out := TemplateResponse{
-		ID:        row.ID,
-		Name:      row.Name,
-		Body:      row.Body,
-		UsedCount: row.UsedCount,
-		CreatedAt: row.CreatedAt,
+	return TemplateResponse{
+		ID:          row.ID,
+		Name:        row.Name,
+		Description: row.Description.String,
+		Body:        row.Body,
+		UsedCount:   row.UsedCount,
+		CreatedAt:   row.CreatedAt,
 	}
-	if row.Description.Valid {
-		out.Description = row.Description.String
-	}
-	return out
 }

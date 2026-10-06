@@ -46,20 +46,15 @@ func (s *Service) Overview(ctx context.Context, tenantID, startMs, endMs int64) 
 	logs, spans, metrics := splitDailySignals(daily)
 	usage := splitServiceUsage(serviceRows)
 	active, top := summarizeCardinality(cardinality)
-	dates := buildDateAxis(startMs, endMs)
-	idx := axisIndex(dates)
+	axis := newDateAxis(startMs, endMs)
 
 	return OverviewResponse{
-		Summary:             s.summaryFromUsage(logs, spans, metrics, active, top, startMs, endMs),
+		Summary:             s.summaryFromUsage(axis, logs, spans, metrics, active, top, endMs),
 		Cost:                s.costFromUsage(logs, spans, metrics, endMs),
-		TimeseriesByType:    timeseriesByType(logs, spans, metrics, dates, idx),
-		TimeseriesByService: timeseriesByServiceRows(usage.dailyLogs, usage.dailySpans, dates, idx),
-		Services: servicesFromUsage(
-			usage.logTotals, usage.spanTotals, series,
-			usage.priorLogs, usage.priorSpans,
-			usage.dailyLogs, usage.dailySpans, startMs, endMs,
-		),
-		UsageSemantics: "accepted",
+		TimeseriesByType:    timeseriesByType(axis, logs, spans, metrics),
+		TimeseriesByService: timeseriesByServiceRows(axis, usage.dailyLogs, usage.dailySpans),
+		Services:            servicesFromUsage(axis, usage, series),
+		UsageSemantics:      "accepted",
 	}, nil
 }
 
@@ -105,9 +100,10 @@ func splitServiceUsage(rows []serviceUsageRow) serviceUsageSets {
 				Day: row.Day, Service: row.Service,
 				Count: row.Count, Bytes: row.Bytes,
 			}
-			if row.Signal == "logs" {
+			switch row.Signal {
+			case "logs":
 				out.dailyLogs = append(out.dailyLogs, daily)
-			} else if row.Signal == "spans" {
+			case "spans":
 				out.dailySpans = append(out.dailySpans, daily)
 			}
 		}

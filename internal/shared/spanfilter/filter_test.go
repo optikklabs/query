@@ -1,6 +1,7 @@
 package spanfilter
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -108,5 +109,27 @@ func TestBuildAttrClauseGolden(t *testing.T) {
 				t.Fatalf("args:\n got  %#v\n want %#v", args, tc.args)
 			}
 		})
+	}
+}
+
+func TestRangeRequestBindTenant(t *testing.T) {
+	var req struct {
+		RangeRequest
+		Limit int `json:"limit"`
+	}
+	body := `{"startTime":1000,"endTime":2000,"services":["api"],"limit":5}`
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatal(err)
+	}
+	if err := req.BindTenant(7); err != nil {
+		t.Fatalf("BindTenant: %v", err)
+	}
+	if req.TenantID != 7 || req.StartMs != 1000 || req.EndMs != 2000 || req.Limit != 5 || len(req.Services) != 1 {
+		t.Fatalf("bound request = %+v", req)
+	}
+
+	req.StartTime, req.EndTime = 2000, 1000
+	if err := req.BindTenant(7); err == nil {
+		t.Fatal("inverted range accepted")
 	}
 }

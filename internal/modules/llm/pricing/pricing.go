@@ -38,9 +38,18 @@ func Args() []any {
 	}
 }
 
-func TokenCostSQL(inCol, outCol, modelCol string) string {
-	return "(" + inCol + " * transform(" + modelCol + ", @priceModels, @priceIn, 0.) + " +
-		outCol + " * transform(" + modelCol + ", @priceModels, @priceOut, 0.)) / 1e6"
+// SpanCostSQL prices one optikk.spans row and RollupCostSQL one
+// optikk.llm_stats_1m row; both need Args bound.
+var (
+	SpanCostSQL   = tokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens")
+	RollupCostSQL = tokenCostSQL("input_tokens", "output_tokens")
+)
+
+// tokenCostSQL prices token counts with the per-model rates from Args;
+// unknown models cost 0.
+func tokenCostSQL(inCol, outCol string) string {
+	return "(" + inCol + " * transform(gen_ai_request_model, @priceModels, @priceIn, 0.) + " +
+		outCol + " * transform(gen_ai_request_model, @priceModels, @priceOut, 0.)) / 1e6"
 }
 
 func CostOf(model string, in, out uint64) float64 {

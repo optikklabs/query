@@ -1,7 +1,7 @@
 package template
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -22,24 +22,21 @@ func Render(body string, v Vars) string {
 }
 
 func renderSections(body, tag string, keep bool) string {
-	open := "{{#" + tag + "}}"
-	close := "{{/" + tag + "}}"
+	openTag := "{{#" + tag + "}}"
+	closeTag := "{{/" + tag + "}}"
 	for {
-		i := strings.Index(body, open)
-		if i < 0 {
+		before, rest, found := strings.Cut(body, openTag)
+		if !found {
 			return body
 		}
-		j := strings.Index(body[i:], close)
-		if j < 0 {
+		inner, after, closed := strings.Cut(rest, closeTag)
+		if !closed {
 			return body
 		}
-		j += i
-		inner := body[i+len(open) : j]
-		replacement := ""
-		if keep {
-			replacement = inner
+		if !keep {
+			inner = ""
 		}
-		body = body[:i] + replacement + body[j+len(close):]
+		body = before + inner + after
 	}
 }
 
@@ -73,6 +70,7 @@ func renderScalars(body string, values map[string]string) string {
 	return out.String()
 }
 
+// FormatFloat renders v in its shortest exact form.
 func FormatFloat(v float64) string {
-	return fmt.Sprintf("%g", v)
+	return strconv.FormatFloat(v, 'g', -1, 64)
 }

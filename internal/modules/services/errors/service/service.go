@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/cursor"
@@ -31,8 +32,8 @@ func (s *Service) GetServiceErrorRate(ctx context.Context, tenantID int64, start
 				TimestampMs:  t.UnixMilli(),
 				RequestCount: total,
 				ErrorCount:   errs,
-				ErrorRate:    metrics.ComputeErrorRate(errs, total),
-				AvgLatency:   metrics.ComputeAvgLatency(row.DurationMsSum, row.RequestCount),
+				ErrorRate:    metrics.Percentage(errs, total),
+				AvgLatency:   metrics.AvgLatency(row.DurationMsSum, row.RequestCount),
 			}
 		}), nil
 }
@@ -62,23 +63,18 @@ func fillServicePoints(
 	}
 	services, _, series := timebucket.FillGapsKeyed(startMs, endMs, grain, named,
 		func(r models.RawServiceRateRow) string { return r.ServiceName }, at, point)
-	var points []models.TimeSeriesPoint
 	for i, svc := range services {
 		for j := range series[i] {
 			series[i][j].ServiceName = svc
 		}
-		points = append(points, series[i]...)
 	}
-	return points
+	return slices.Concat(series...)
 }
 
 func (s *Service) GetErrorGroupDetail(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*models.ErrorGroupDetail, error) {
 	row, err := s.repo.ErrorGroupDetailRow(ctx, tenantID, startMs, endMs, groupID)
-	if err != nil {
+	if err != nil || row == nil {
 		return nil, err
-	}
-	if row == nil {
-		return nil, nil
 	}
 	return &models.ErrorGroupDetail{
 		GroupID:         groupID,
@@ -96,11 +92,8 @@ var facetColumns = []string{"service_version", "environment", "pod", "http_route
 
 func (s *Service) GetErrorGroupLatestOccurrence(ctx context.Context, tenantID int64, startMs, endMs int64, groupID string) (*models.ErrorLatestOccurrence, error) {
 	row, err := s.repo.ErrorGroupLatestOccurrenceRow(ctx, tenantID, startMs, endMs, groupID)
-	if err != nil {
+	if err != nil || row == nil {
 		return nil, err
-	}
-	if row == nil {
-		return nil, nil
 	}
 	return &models.ErrorLatestOccurrence{
 		TraceID:        row.TraceID,
@@ -145,7 +138,7 @@ func (s *Service) GetErrorGroupFacets(ctx context.Context, tenantID int64, start
 			facets[i] = models.ErrorFacet{
 				Name:  r.Value,
 				Count: cnt,
-				Pct:   metrics.FacetPercentage(cnt, total),
+				Pct:   metrics.Percentage(cnt, total),
 			}
 		}
 		groups = append(groups, models.ErrorFacetGroup{Key: col, Facets: facets})

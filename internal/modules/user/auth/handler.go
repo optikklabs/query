@@ -24,8 +24,7 @@ func NewHandler(service *Service, tokens *token.Service) *Handler {
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Email and password are required", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 
@@ -67,8 +66,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req ForgotPasswordRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Email is required", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	if err := h.Service.ForgotPassword(r.Context(), req.Email); err != nil {
@@ -80,8 +78,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var req ResetPasswordRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Token and new password are required", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	if err := h.Service.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
@@ -99,8 +96,7 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ChangePasswordRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Current and new password are required", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	if err := h.Service.ChangePassword(r.Context(), tenant.UserID, req.CurrentPassword, req.NewPassword); err != nil {

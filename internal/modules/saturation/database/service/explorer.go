@@ -1,8 +1,10 @@
 package service
 
 import (
+	"cmp"
 	"context"
-	"sort"
+	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 
 	"github.com/optikklabs/query/internal/modules/saturation/database/models"
 	"github.com/optikklabs/query/internal/modules/saturation/database/repository"
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, endMs int64) ([]models.DatastoreSystemRow, error) {
@@ -27,10 +30,14 @@ func (s *Service) GetDatastoreSystems(ctx context.Context, tenantID, startMs, en
 		return nil
 	})
 	g.Go(func() error {
+		// Connection counts come from optional client metrics; without them
+		// the systems still list, just with no connection count.
 		c, err := s.repo.GetActiveConnectionsBySystem(gctx, tenantID, startMs, endMs)
-		if err == nil {
-			conns = c
+		if err != nil {
+			slog.WarnContext(gctx, "datastores: active connections lookup failed", slog.Any("error", err))
+			return nil
 		}
+		conns = c
 		return nil
 	})
 	if err := g.Wait(); err != nil {
@@ -52,7 +59,7 @@ func mapDatastoreSystems(spanRows []repository.SystemSummaryRaw, conns map[strin
 			QueryCount:        queryCount,
 			AvgLatencyMs:      r.AvgLatencyMs,
 			P95LatencyMs:      float64(r.P95Ms),
-			ErrorRate:         safeRatioPct(errorCount, queryCount),
+			ErrorRate:         metrics.Percentage(errorCount, queryCount),
 			ActiveConnections: conns[r.DBSystem],
 			Region:            r.Region,
 			LastSeen:          r.LastSeen.Format(time.RFC3339),
@@ -70,11 +77,8 @@ func mapDatastoreSystems(spanRows []repository.SystemSummaryRaw, conns map[strin
 		})
 	}
 
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].QueryCount == rows[j].QueryCount {
-			return rows[i].System < rows[j].System
-		}
-		return rows[i].QueryCount > rows[j].QueryCount
+	slices.SortFunc(rows, func(a, b models.DatastoreSystemRow) int {
+		return cmp.Or(cmp.Compare(b.QueryCount, a.QueryCount), strings.Compare(a.System, b.System))
 	})
 	return rows
 }
@@ -84,11 +88,4 @@ func datastoreCategory(system string) string {
 		return "redis"
 	}
 	return "database"
-}
-
-func safeRatioPct(numerator int64, denominator int64) float64 {
-	if denominator <= 0 {
-		return 0
-	}
-	return float64(numerator) / float64(denominator) * 100
 }

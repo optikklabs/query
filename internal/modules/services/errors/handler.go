@@ -9,7 +9,7 @@ import (
 	"github.com/optikklabs/query/internal/modules/services/errors/models"
 	"github.com/optikklabs/query/internal/modules/services/errors/service"
 	"github.com/optikklabs/query/internal/shared/errorcode"
-
+	"github.com/optikklabs/query/internal/shared/filterutil"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -73,24 +73,15 @@ func (h *ErrorHandler) GetErrorGroupDetail(w http.ResponseWriter, r *http.Reques
 const maxTracesLimit = 20
 
 func (h *ErrorHandler) GetErrorGroupTraces(w http.ResponseWriter, r *http.Request) {
-	tenantID := httputil.Tenant(r).TenantID
-	groupID := chi.URLParam(r, "groupId")
-	limit := httputil.ParseIntParam(r, "limit", maxTracesLimit)
-	if limit < 1 || limit > maxTracesLimit {
-		limit = maxTracesLimit
-	}
 	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
 	if !ok {
 		return
 	}
-	var cur models.ErrorTracesCursor
-	if cursorStr := r.URL.Query().Get("cursor"); cursorStr != "" {
-		if decoded, ok := cursor.Decode[models.ErrorTracesCursor](cursorStr); ok {
-			cur = decoded
-		}
-	}
+	limit := filterutil.PickLimit(httputil.ParseIntParam(r, "limit", 0), maxTracesLimit, maxTracesLimit)
+	// An absent or malformed cursor starts from the first page.
+	cur, _ := cursor.Decode[models.ErrorTracesCursor](r.URL.Query().Get("cursor"))
 
-	traces, err := h.Service.GetErrorGroupTraces(r.Context(), tenantID, startMs, endMs, groupID, limit, cur)
+	traces, err := h.Service.GetErrorGroupTraces(r.Context(), httputil.Tenant(r).TenantID, startMs, endMs, chi.URLParam(r, "groupId"), limit, cur)
 	if err != nil {
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query error group traces", err)
 		return

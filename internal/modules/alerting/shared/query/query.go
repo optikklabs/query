@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,9 +23,11 @@ type Point struct {
 	Value    float64 `json:"value"`
 }
 
+// Backend evaluates a monitor's query: Scalar for the current value the
+// evaluator classifies, Series for the chart over the trailing window.
 type Backend interface {
-	Scalar(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, cond models.Conditions, now time.Time) (ScalarResult, error)
-	Series(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, cond models.Conditions, windowMs int64, now time.Time) ([]Point, error)
+	Scalar(ctx context.Context, m models.MonitorRow, now time.Time) (ScalarResult, error)
+	Series(ctx context.Context, m models.MonitorRow, windowMs int64, now time.Time) ([]Point, error)
 }
 
 type Registry struct {
@@ -60,19 +63,24 @@ var scopeAliases = map[string]string{
 	"messaging.consumer.group.name": "messaging_consumer_group",
 }
 
-var scopeColumns = map[string]string{
-	"metric": "|service|host|environment|pod|container|k8s_namespace|k8s_node|cloud_provider|cloud_account|cloud_region|cloud_platform|",
-	"apm":    "|service|host|environment|pod|k8s_node|cloud_provider|cloud_region|cloud_platform|http_route|http_method|db_system|messaging_system|messaging_destination|messaging_consumer_group|",
-	"log":    "|service|host|environment|pod|container|",
+// scopeColumns lists the columns each monitor type can be scoped by.
+var scopeColumns = map[string][]string{
+	"metric": {"service", "host", "environment", "pod", "container", "k8s_namespace", "k8s_node",
+		"cloud_provider", "cloud_account", "cloud_region", "cloud_platform"},
+	"apm": {"service", "host", "environment", "pod", "k8s_node", "cloud_provider", "cloud_region",
+		"cloud_platform", "http_route", "http_method", "db_system", "messaging_system",
+		"messaging_destination", "messaging_consumer_group"},
+	"log": {"service", "host", "environment", "pod", "container"},
 }
 
+// CompileScope renders scope as " AND column = @scopeN" predicates for the
+// given monitor type and appends the bind args.
 func CompileScope(signal string, scope models.Scope, args []any) (string, []any, error) {
-	allowed := scopeColumns[signal]
 	var clause strings.Builder
 	for i, tag := range scope.Tags {
 		key, value := strings.TrimSpace(tag.Key), strings.TrimSpace(tag.Value)
 		column := scopeAliases[key]
-		if column == "" || !strings.Contains(allowed, "|"+column+"|") {
+		if column == "" || !slices.Contains(scopeColumns[signal], column) {
 			return "", nil, fmt.Errorf("%s monitor does not support scope %q", signal, key)
 		}
 		if value == "" {

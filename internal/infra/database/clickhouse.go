@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -14,15 +13,10 @@ const (
 	chDialTimeout     = 5 * time.Second
 )
 
-func OpenClickHouseConn(dsn string, maxOpenConns, maxIdleConns int) (clickhouse.Conn, error) {
-	opts, err := clickhouse.ParseDSN(dsn)
-	if err != nil {
-		return nil, fmt.Errorf("clickhouse: parse DSN: %w", err)
-	}
-
+// OpenClickHouseConn connects with opts plus the shared pool, compression
+// and dial settings, and verifies the connection.
+func OpenClickHouseConn(opts *clickhouse.Options) (clickhouse.Conn, error) {
 	opts.Compression = &clickhouse.Compression{Method: clickhouse.CompressionLZ4}
-	opts.MaxOpenConns = maxOpenConns
-	opts.MaxIdleConns = maxIdleConns
 	opts.ConnMaxLifetime = chConnMaxLifetime
 	opts.DialTimeout = chDialTimeout
 	opts.ConnOpenStrategy = clickhouse.ConnOpenRoundRobin
@@ -35,9 +29,9 @@ func OpenClickHouseConn(dsn string, maxOpenConns, maxIdleConns int) (clickhouse.
 	pingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := conn.Ping(pingCtx); err != nil {
+		_ = conn.Close()
 		return nil, err
 	}
-
 	return conn, nil
 }
 

@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/optikklabs/query/internal/modules/user/shared"
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -18,14 +17,9 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
-	if tenant.TenantID == 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
-		return
-	}
 
 	var req CreateUserRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "email and name are required", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 
@@ -39,10 +33,6 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
-	if tenant.TenantID == 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
-		return
-	}
 
 	userID, ok := httputil.ParseIDParam(w, r, "id")
 	if !ok {
@@ -50,8 +40,7 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateRoleRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "role is required", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 
@@ -65,10 +54,6 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
-	if tenant.TenantID == 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
-		return
-	}
 
 	users, err := h.Service.ListUsers(r.Context(), tenant.TenantID)
 	if err != nil {
@@ -80,10 +65,6 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
-	if tenant.TenantID == 0 {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "A tenant context is required", nil)
-		return
-	}
 
 	userID, ok := httputil.ParseIDParam(w, r, "id")
 	if !ok {

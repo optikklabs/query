@@ -86,24 +86,8 @@ type ErrorHotspotCell struct {
 	ErrorCount    int64  `json:"errorCount"    ch:"error_count"`
 }
 
-// RangeFilters is the body every errors-explorer endpoint shares: a time range
-// plus the span filter set, applied to the error spans themselves.
-type RangeFilters struct {
-	StartTime int64 `json:"startTime"`
-	EndTime   int64 `json:"endTime"`
-
-	spanfilter.Filters
-}
-
-func (r *RangeFilters) BindTenant(tenantID int64) error {
-	r.Filters.TenantID = tenantID
-	r.Filters.StartMs = r.StartTime
-	r.Filters.EndMs = r.EndTime
-	return r.Filters.Validate()
-}
-
 type GroupsRequest struct {
-	RangeFilters
+	spanfilter.RangeRequest
 
 	Limit  int    `json:"limit"`
 	Cursor string `json:"cursor"`
@@ -115,11 +99,11 @@ type GroupsResponse struct {
 }
 
 type FacetsRequest struct {
-	RangeFilters
+	spanfilter.RangeRequest
 }
 
 type OverviewRequest struct {
-	RangeFilters
+	spanfilter.RangeRequest
 }
 
 // OverviewResponse drives the KPI strip and the error-volume chart from one

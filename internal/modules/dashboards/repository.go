@@ -3,12 +3,14 @@ package dashboards
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/shared/sqljson"
 )
 
 type Repository struct {
@@ -25,7 +27,7 @@ type pageInsertArgs struct {
 	Description     sql.NullString
 	Icon            string
 	IconColor       string
-	TagsJSON        []byte
+	Tags            sqljson.StringList
 	IsFavorite      bool
 	CreatedByUserID sql.NullInt64
 }
@@ -41,7 +43,7 @@ VALUES
 func (r *Repository) CreatePage(ctx context.Context, row pageInsertArgs) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.CreatePage", insertPage,
 		row.TenantID, row.Name, row.Description, row.Icon, row.IconColor,
-		row.TagsJSON, row.IsFavorite, row.CreatedByUserID, time.Now().UTC())
+		row.Tags, row.IsFavorite, row.CreatedByUserID, time.Now().UTC())
 	if err != nil {
 		return 0, err
 	}
@@ -56,30 +58,15 @@ UPDATE optikk.dashboard_pages
 `
 
 func (r *Repository) UpdatePage(ctx context.Context, id, tenantID int64, row pageInsertArgs) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.UpdatePage", updatePage,
+	return dbutil.ExecMatched(ctx, r.db, "dashboards.UpdatePage", updatePage,
 		row.Name, row.Description, row.Icon, row.IconColor,
-		row.TagsJSON, row.IsFavorite, time.Now().UTC(), id, tenantID)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+		row.Tags, row.IsFavorite, time.Now().UTC(), id, tenantID)
 }
 
+// DeletePage removes the page; its widgets go with it (ON DELETE CASCADE).
 func (r *Repository) DeletePage(ctx context.Context, id, tenantID int64) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.DeletePage",
+	return dbutil.ExecMatched(ctx, r.db, "dashboards.DeletePage",
 		`DELETE FROM optikk.dashboard_pages WHERE id = ? AND tenant_id = ?`, id, tenantID)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
 }
 
 const selectPageCols = `
@@ -93,11 +80,9 @@ const selectPageCols = `
 
 func (r *Repository) GetPageByID(ctx context.Context, id, tenantID int64) (DashboardPageRow, error) {
 	var row DashboardPageRow
-	q := fmt.Sprintf("SELECT %s WHERE p.id = ? AND p.tenant_id = ? LIMIT 1", selectPageCols)
-	if err := dbutil.GetSQL(ctx, r.db, "dashboards.GetPageByID", &row, q, id, tenantID); err != nil {
-		return row, err
-	}
-	return row, nil
+	err := dbutil.GetSQL(ctx, r.db, "dashboards.GetPageByID", &row,
+		`SELECT `+selectPageCols+` WHERE p.id = ? AND p.tenant_id = ? LIMIT 1`, id, tenantID)
+	return row, err
 }
 
 func (r *Repository) ListPages(ctx context.Context, tenantID int64, q ListPagesQuery) ([]DashboardPageRow, int, error) {
@@ -115,10 +100,10 @@ func (r *Repository) ListPages(ctx context.Context, tenantID int64, q ListPagesQ
 		limit = 50
 	}
 	offset := max(q.Offset, 0)
-	listArgs := append(append([]any{}, args...), limit, offset)
-	listSQL := fmt.Sprintf(`SELECT %s WHERE %s
+	listArgs := append(slices.Clip(args), limit, offset)
+	listSQL := `SELECT ` + selectPageCols + ` WHERE ` + whereSQL + `
 		ORDER BY p.is_favorite DESC, p.updated_at DESC, p.created_at DESC, p.id DESC
-		LIMIT ? OFFSET ?`, selectPageCols, whereSQL)
+		LIMIT ? OFFSET ?`
 
 	var rows []DashboardPageRow
 	if err := dbutil.SelectSQL(ctx, r.db, "dashboards.ListPages", &rows, listSQL, listArgs...); err != nil {
@@ -161,24 +146,20 @@ const selectWidgetCols = `
 `
 
 func (r *Repository) ListWidgets(ctx context.Context, pageID, tenantID int64) ([]DashboardRow, error) {
-	q := fmt.Sprintf(`SELECT %s FROM optikk.dashboards
-		WHERE page_id = ? AND tenant_id = ?
-		ORDER BY position ASC, id ASC`, selectWidgetCols)
 	var rows []DashboardRow
-	if err := dbutil.SelectSQL(ctx, r.db, "dashboards.ListWidgets", &rows, q, pageID, tenantID); err != nil {
-		return nil, err
-	}
-	return rows, nil
+	err := dbutil.SelectSQL(ctx, r.db, "dashboards.ListWidgets", &rows,
+		`SELECT `+selectWidgetCols+` FROM optikk.dashboards
+		WHERE page_id = ? AND tenant_id = ?
+		ORDER BY position ASC, id ASC`, pageID, tenantID)
+	return rows, err
 }
 
 func (r *Repository) GetWidgetByID(ctx context.Context, id, pageID, tenantID int64) (DashboardRow, error) {
 	var row DashboardRow
-	q := fmt.Sprintf(`SELECT %s FROM optikk.dashboards
-		WHERE id = ? AND page_id = ? AND tenant_id = ? LIMIT 1`, selectWidgetCols)
-	if err := dbutil.GetSQL(ctx, r.db, "dashboards.GetWidgetByID", &row, q, id, pageID, tenantID); err != nil {
-		return row, err
-	}
-	return row, nil
+	err := dbutil.GetSQL(ctx, r.db, "dashboards.GetWidgetByID", &row,
+		`SELECT `+selectWidgetCols+` FROM optikk.dashboards
+		WHERE id = ? AND page_id = ? AND tenant_id = ? LIMIT 1`, id, pageID, tenantID)
+	return row, err
 }
 
 func (r *Repository) CountWidgets(ctx context.Context, pageID, tenantID int64) (int, error) {
@@ -214,32 +195,16 @@ UPDATE optikk.dashboards
 `
 
 func (r *Repository) UpdateWidget(ctx context.Context, id int64, row widgetInsertArgs) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.UpdateWidget", updateWidget,
+	return dbutil.ExecMatched(ctx, r.db, "dashboards.UpdateWidget", updateWidget,
 		row.Title, row.PanelType, row.LayoutVariant,
 		row.SpecJSON, row.LayoutJSON, row.Position, time.Now().UTC(),
 		id, row.PageID, row.TenantID)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
 }
 
 func (r *Repository) DeleteWidget(ctx context.Context, id, pageID, tenantID int64) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "dashboards.DeleteWidget",
+	return dbutil.ExecMatched(ctx, r.db, "dashboards.DeleteWidget",
 		`DELETE FROM optikk.dashboards WHERE id = ? AND page_id = ? AND tenant_id = ?`,
 		id, pageID, tenantID)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
 }
 
 func (r *Repository) PageExists(ctx context.Context, pageID, tenantID int64) (bool, error) {

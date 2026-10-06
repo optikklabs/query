@@ -1,8 +1,11 @@
 package prompts
 
 import (
+	"database/sql"
 	"encoding/json"
 	"time"
+
+	"github.com/optikklabs/query/internal/shared/sqljson"
 )
 
 type PromptSummary struct {
@@ -53,20 +56,20 @@ type UpdateVersionRequest struct {
 }
 
 type promptRow struct {
-	ID          int64      `db:"id"`
-	Name        string     `db:"name"`
-	Type        string     `db:"type"`
-	Description *string    `db:"description"`
-	TagsJSON    []byte     `db:"tags_json"`
-	UpdatedAt   *time.Time `db:"updated_at"`
-	CreatedAt   time.Time  `db:"created_at"`
+	ID          int64              `db:"id"`
+	Name        string             `db:"name"`
+	Type        string             `db:"type"`
+	Description sql.NullString     `db:"description"`
+	Tags        sqljson.StringList `db:"tags_json"`
+	UpdatedAt   sql.NullTime       `db:"updated_at"`
+	CreatedAt   time.Time          `db:"created_at"`
 }
 
 type versionRow struct {
-	Version       int       `db:"version"`
-	TemplateJSON  []byte    `db:"template_json"`
-	VariablesJSON []byte    `db:"variables_json"`
-	Notes         *string   `db:"notes"`
-	Status        string    `db:"status"`
-	CreatedAt     time.Time `db:"created_at"`
+	Version      int                `db:"version"`
+	TemplateJSON []byte             `db:"template_json"`
+	Variables    sqljson.StringList `db:"variables_json"`
+	Notes        sql.NullString     `db:"notes"`
+	Status       string             `db:"status"`
+	CreatedAt    time.Time          `db:"created_at"`
 }

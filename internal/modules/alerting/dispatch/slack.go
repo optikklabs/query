@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	tmpl "github.com/optikklabs/query/internal/modules/alerting/shared/template"
 )
 
 type SlackWebhook struct {
@@ -20,14 +22,13 @@ func NewSlackWebhook() *SlackWebhook {
 }
 
 type slackAttachment struct {
-	Color    string       `json:"color"`
-	Pretext  string       `json:"pretext,omitempty"`
-	Title    string       `json:"title"`
-	TitleURL string       `json:"titleLink,omitempty"`
-	Text     string       `json:"text,omitempty"`
-	Fields   []slackField `json:"fields,omitempty"`
-	Footer   string       `json:"footer,omitempty"`
-	Ts       int64        `json:"ts,omitempty"`
+	Color   string       `json:"color"`
+	Pretext string       `json:"pretext,omitempty"`
+	Title   string       `json:"title"`
+	Text    string       `json:"text,omitempty"`
+	Fields  []slackField `json:"fields,omitempty"`
+	Footer  string       `json:"footer,omitempty"`
+	Ts      int64        `json:"ts,omitempty"`
 }
 
 type slackField struct {
@@ -58,18 +59,20 @@ func (s *SlackWebhook) Send(ctx context.Context, ch models.ChannelRow, p Payload
 	return s.post(ctx, cfg.WebhookURL, raw)
 }
 
+// post never wraps the transport error: url.Error embeds the webhook URL,
+// which is a credential, and the error text is stored on the channel.
 func (s *SlackWebhook) post(ctx context.Context, url string, body []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("slack webhook request is invalid")
+		return errors.New("slack webhook request is invalid")
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("slack webhook request failed")
+		return errors.New("slack webhook request failed")
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf("slack webhook returned %d", resp.StatusCode)
 	}
 	return nil
@@ -86,25 +89,25 @@ func buildAttachment(p Payload) slackAttachment {
 		color = "#6b7280"
 	}
 	pretext := p.Transition
-	if p.IsRecovery {
+	switch {
+	case p.IsRecovery:
 		pretext = "Recovered: " + pretext
-	} else if p.IsAlert {
+	case p.IsAlert:
 		pretext = "Alerting: " + pretext
-	} else if p.IsWarning {
+	case p.IsWarning:
 		pretext = "Warning: " + pretext
 	}
 	att := slackAttachment{
-		Color:    color,
-		Pretext:  pretext,
-		Title:    p.MonitorName,
-		TitleURL: p.MonitorURL,
-		Text:     p.Message,
-		Footer:   "Optikk Monitors · " + p.Priority,
-		Ts:       time.Now().Unix(),
-	}
-	att.Fields = []slackField{
-		{Title: "Value", Value: fmt.Sprintf("%g", p.Value), Short: true},
-		{Title: "Threshold", Value: fmt.Sprintf("%g", p.Threshold), Short: true},
+		Color:   color,
+		Pretext: pretext,
+		Title:   p.MonitorName,
+		Text:    p.Message,
+		Footer:  "Optikk Monitors · " + p.Priority,
+		Ts:      time.Now().Unix(),
+		Fields: []slackField{
+			{Title: "Value", Value: tmpl.FormatFloat(p.Value), Short: true},
+			{Title: "Threshold", Value: tmpl.FormatFloat(p.Threshold), Short: true},
+		},
 	}
 	if p.ScopeSummary != "" {
 		att.Fields = append(att.Fields, slackField{Title: "Scope", Value: p.ScopeSummary, Short: false})

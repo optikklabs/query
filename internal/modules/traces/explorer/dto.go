@@ -9,19 +9,10 @@ import (
 )
 
 type QueryRequest struct {
-	StartTime int64  `json:"startTime"`
-	EndTime   int64  `json:"endTime"`
-	Limit     int    `json:"limit"`
-	Cursor    string `json:"cursor"`
+	spanfilter.RangeRequest
 
-	spanfilter.Filters
-}
-
-func (r *QueryRequest) BindTenant(tenantID int64) error {
-	r.Filters.TenantID = tenantID
-	r.Filters.StartMs = r.StartTime
-	r.Filters.EndMs = r.EndTime
-	return r.Filters.Validate()
+	Limit  int    `json:"limit"`
+	Cursor string `json:"cursor"`
 }
 
 type QueryResponse struct {
@@ -53,17 +44,7 @@ type traceAggRow struct {
 }
 
 type FacetsRequest struct {
-	StartTime int64 `json:"startTime"`
-	EndTime   int64 `json:"endTime"`
-
-	spanfilter.Filters
-}
-
-func (r *FacetsRequest) BindTenant(tenantID int64) error {
-	r.Filters.TenantID = tenantID
-	r.Filters.StartMs = r.StartTime
-	r.Filters.EndMs = r.EndTime
-	return r.Filters.Validate()
+	spanfilter.RangeRequest
 }
 
 type facetDimRow struct {
@@ -79,17 +60,7 @@ type trendRow struct {
 }
 
 type TrendRequest struct {
-	StartTime int64 `json:"startTime"`
-	EndTime   int64 `json:"endTime"`
-
-	spanfilter.Filters
-}
-
-func (r *TrendRequest) BindTenant(tenantID int64) error {
-	r.Filters.TenantID = tenantID
-	r.Filters.StartMs = r.StartTime
-	r.Filters.EndMs = r.EndTime
-	return r.Filters.Validate()
+	spanfilter.RangeRequest
 }
 
 type SuggestRequest = filterutil.SuggestRequest

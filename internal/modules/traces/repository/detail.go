@@ -7,6 +7,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/traces/models"
+	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
 type SpanEventTuple struct {
@@ -37,6 +38,10 @@ type SpanAttributeRow struct {
 	TraceID             string            `ch:"trace_id"`
 	OperationName       string            `ch:"operation_name"`
 	ServiceName         string            `ch:"service"`
+	ServiceVersion      string            `ch:"service_version"`
+	Environment         string            `ch:"environment"`
+	Host                string            `ch:"host"`
+	Pod                 string            `ch:"pod"`
 	Attributes          map[string]string `ch:"attributes"`
 	ExceptionType       string            `ch:"exception_type"`
 	ExceptionMessage    string            `ch:"exception_message"`
@@ -44,6 +49,7 @@ type SpanAttributeRow struct {
 	DBSystem            string            `ch:"db_system"`
 	DBName              string            `ch:"db_name"`
 	DBStatement         string            `ch:"db_statement"`
+	DBStatementNorm     string            `ch:"db_statement_normalized"`
 	Links               []SpanLinkTuple   `ch:"links"`
 }
 
@@ -82,14 +88,11 @@ func (r *Repository) GetSpanEvents(ctx context.Context, tenantID int64, traceID 
 func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startMs, endMs int64) (*SpanAttributeRow, error) {
 	const query = `
 		SELECT span_id, trace_id, name AS operation_name, service,
+		       service_version, environment, host, pod,
 		       attributes,
-		       exception_type,
-			   exception_message,
-			   exception_stacktrace,
-		       db_system,
-			   db_name,
-			   db_statement,
-		       links AS links
+		       exception_type, exception_message, exception_stacktrace,
+		       db_system, db_name, db_statement, db_statement_normalized,
+		       links
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp >= @start AND timestamp < @end
@@ -97,18 +100,9 @@ func (r *Repository) GetSpanAttributes(ctx context.Context, tenantID int64, trac
 		     AND span_id  = @spanID
 		LIMIT 1`
 	var row SpanAttributeRow
-	args := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("traceID", traceID),
-		clickhouse.Named("spanID", spanID),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
-	}
-	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &row, query, args...); err != nil {
+	args := append(boundedTraceArgs(tenantID, traceID, startMs, endMs), clickhouse.Named("spanID", spanID))
+	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetSpanAttributes", &row, query, args...); err != nil || row.SpanID == "" {
 		return nil, err
-	}
-	if row.SpanID == "" {
-		return nil, nil
 	}
 	return &row, nil
 }
@@ -130,15 +124,12 @@ func (r *Repository) GetRelatedTraces(ctx context.Context, tenantID int64, servi
 		WHERE trace_id != @excludeTraceID
 		ORDER BY timestamp DESC, span_id DESC
 		LIMIT @limit`
-	args := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("serviceName", serviceName),
 		clickhouse.Named("operationName", operationName),
 		clickhouse.Named("excludeTraceID", excludeTraceID),
 		clickhouse.Named("limit", limit),
-	}
+	)
 	var rows []models.RelatedTrace
 	err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetRelatedTraces", &rows, query, args...)
 	return rows, err
@@ -166,11 +157,8 @@ func (r *Repository) GetTraceSummary(ctx context.Context, tenantID int64, traceI
 		GROUP BY trace_id
 		LIMIT 1`
 	var res TraceSummaryRow
-	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &res, query, boundedTraceArgs(tenantID, traceID, startMs, endMs)...); err != nil {
+	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "detail.GetTraceSummary", &res, query, boundedTraceArgs(tenantID, traceID, startMs, endMs)...); err != nil || res.TraceID == "" {
 		return nil, err
-	}
-	if res.TraceID == "" {
-		return nil, nil
 	}
 	return &res, nil
 }

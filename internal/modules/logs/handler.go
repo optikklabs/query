@@ -8,15 +8,15 @@ import (
 	"github.com/optikklabs/query/internal/modules/logs/models"
 	"github.com/optikklabs/query/internal/modules/logs/service"
 	"github.com/optikklabs/query/internal/shared/errorcode"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
 const (
 	defaultTraceLogsLimit = 1000
 	maxTraceLogsLimit     = 5000
+	maxQueryLimit         = 5000
 )
-
-const maxQueryLimit = 5000
 
 type Handler struct {
 	Service *service.Service
@@ -27,9 +27,7 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	if !httputil.BindFiltered(w, r, &req) {
 		return
 	}
-	if req.Limit <= 0 || req.Limit > maxQueryLimit {
-		req.Limit = maxQueryLimit
-	}
+	req.Limit = filterutil.PickLimit(req.Limit, maxQueryLimit, maxQueryLimit)
 	resp, err := h.Service.Query(r.Context(), req)
 	if err != nil {
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to query logs", err)
@@ -96,13 +94,7 @@ func (h *Handler) GetByTrace(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return
 	}
-	limit := httputil.ParseIntParam(r, "limit", defaultTraceLogsLimit)
-	if limit <= 0 {
-		limit = defaultTraceLogsLimit
-	}
-	if limit > maxTraceLogsLimit {
-		limit = maxTraceLogsLimit
-	}
+	limit := filterutil.PickLimit(httputil.ParseIntParam(r, "limit", 0), defaultTraceLogsLimit, maxTraceLogsLimit)
 	logs, err := h.Service.GetByTraceID(r.Context(), httputil.Tenant(r).TenantID, traceID, limit)
 	if err != nil {
 		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to fetch logs by trace", err)
@@ -117,9 +109,8 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "log id required", nil)
 		return
 	}
-	startMs, endMs, err := httputil.ParseRange(r)
-	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, err.Error(), nil)
+	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
+	if !ok {
 		return
 	}
 	resp, err := h.Service.GetByID(r.Context(), httputil.Tenant(r).TenantID, id, startMs, endMs)

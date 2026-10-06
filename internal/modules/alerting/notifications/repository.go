@@ -18,17 +18,6 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: sqlx.NewDb(db, "mysql")}
 }
 
-func requireAffected(res sql.Result) error {
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
-}
-
 func (r *Repository) CreateChannel(ctx context.Context, row models.ChannelRow) (int64, error) {
 	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.CreateChannel", `
 		INSERT INTO optikk.notification_channels
@@ -42,24 +31,16 @@ func (r *Repository) CreateChannel(ctx context.Context, row models.ChannelRow) (
 }
 
 func (r *Repository) UpdateChannel(ctx context.Context, id, tenantID int64, row models.ChannelRow) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.UpdateChannel", `
+	return dbutil.ExecMatched(ctx, r.db, "notifications.UpdateChannel", `
 		UPDATE optikk.notification_channels
 		   SET type = ?, name = ?, config_json = ?, updated_at = ?
 		 WHERE id = ? AND tenant_id = ?
 	`, row.Type, row.Name, row.ConfigJSON, time.Now().UTC(), id, tenantID)
-	if err != nil {
-		return err
-	}
-	return requireAffected(res)
 }
 
 func (r *Repository) DeleteChannel(ctx context.Context, id, tenantID int64) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.DeleteChannel",
+	return dbutil.ExecMatched(ctx, r.db, "notifications.DeleteChannel",
 		`DELETE FROM optikk.notification_channels WHERE id = ? AND tenant_id = ?`, id, tenantID)
-	if err != nil {
-		return err
-	}
-	return requireAffected(res)
 }
 
 const channelCols = `id, tenant_id, type, name, config_json, status,
@@ -135,24 +116,16 @@ func (r *Repository) CreatePolicy(ctx context.Context, row models.PolicyRow) (in
 }
 
 func (r *Repository) UpdatePolicy(ctx context.Context, id, tenantID int64, row models.PolicyRow) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.UpdatePolicy", `
+	return dbutil.ExecMatched(ctx, r.db, "notifications.UpdatePolicy", `
 		UPDATE optikk.notification_policies
 		   SET name = ?, match_dsl = ?, actions_json = ?, enabled = ?, position = ?, updated_at = ?
 		 WHERE id = ? AND tenant_id = ?
 	`, row.Name, row.MatchDSL, row.ActionsJSON, row.Enabled, row.Position, time.Now().UTC(), id, tenantID)
-	if err != nil {
-		return err
-	}
-	return requireAffected(res)
 }
 
 func (r *Repository) DeletePolicy(ctx context.Context, id, tenantID int64) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.DeletePolicy",
+	return dbutil.ExecMatched(ctx, r.db, "notifications.DeletePolicy",
 		`DELETE FROM optikk.notification_policies WHERE id = ? AND tenant_id = ?`, id, tenantID)
-	if err != nil {
-		return err
-	}
-	return requireAffected(res)
 }
 
 func (r *Repository) ListPolicies(ctx context.Context, tenantID int64) ([]models.PolicyRow, error) {
@@ -178,24 +151,16 @@ func (r *Repository) CreateTemplate(ctx context.Context, row models.TemplateRow)
 }
 
 func (r *Repository) UpdateTemplate(ctx context.Context, id, tenantID int64, row models.TemplateRow) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.UpdateTemplate", `
+	return dbutil.ExecMatched(ctx, r.db, "notifications.UpdateTemplate", `
 		UPDATE optikk.notification_templates
 		   SET name = ?, description = ?, body = ?, updated_at = ?
 		 WHERE id = ? AND tenant_id = ?
 	`, row.Name, row.Description, row.Body, time.Now().UTC(), id, tenantID)
-	if err != nil {
-		return err
-	}
-	return requireAffected(res)
 }
 
 func (r *Repository) DeleteTemplate(ctx context.Context, id, tenantID int64) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "notifications.DeleteTemplate",
+	return dbutil.ExecMatched(ctx, r.db, "notifications.DeleteTemplate",
 		`DELETE FROM optikk.notification_templates WHERE id = ? AND tenant_id = ?`, id, tenantID)
-	if err != nil {
-		return err
-	}
-	return requireAffected(res)
 }
 
 func (r *Repository) ListTemplates(ctx context.Context, tenantID int64) ([]models.TemplateRow, error) {

@@ -4,10 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/optikklabs/query/internal/shared/nullable"
+
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
 	"github.com/optikklabs/query/internal/modules/infrastructure/repository"
 	"github.com/optikklabs/query/internal/modules/infrastructure/seriesdefs"
-	"github.com/optikklabs/query/internal/modules/infrastructure/seriesgroup"
 	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
@@ -36,11 +37,11 @@ func (s *Service) GetPodOverview(ctx context.Context, tenantID int64, pod string
 	out := models.PodOverview{
 		Pod:              pod,
 		Host:             meta.Host,
-		Containers:       seriesgroup.EmptyIfNil(meta.Containers),
-		Services:         seriesgroup.EmptyIfNil(meta.Services),
-		Environments:     seriesgroup.EmptyIfNil(meta.Environments),
-		Namespaces:       seriesgroup.EmptyIfNil(meta.Namespaces),
-		AvailableMetrics: seriesgroup.EmptyIfNil(seriesdefs.Pod.GroupsFor(meta.MetricNames)),
+		Containers:       nullable.OrEmpty(meta.Containers),
+		Services:         nullable.OrEmpty(meta.Services),
+		Environments:     nullable.OrEmpty(meta.Environments),
+		Namespaces:       nullable.OrEmpty(meta.Namespaces),
+		AvailableMetrics: nullable.OrEmpty(seriesdefs.Pod.GroupsFor(meta.MetricNames)),
 	}
 	if !meta.LastSeen.IsZero() {
 		out.LastSeen = meta.LastSeen.UTC().Format(time.RFC3339)

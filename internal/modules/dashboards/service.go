@@ -3,11 +3,10 @@ package dashboards
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
@@ -39,19 +38,19 @@ func (s *Service) UpdatePage(ctx context.Context, tenantID, userID, id int64, re
 		return DashboardPageResponse{}, err
 	}
 	if err := s.repo.UpdatePage(ctx, id, tenantID, args); err != nil {
-		return DashboardPageResponse{}, mapNotFound(err)
+		return DashboardPageResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return s.GetPage(ctx, tenantID, id)
 }
 
 func (s *Service) DeletePage(ctx context.Context, tenantID, id int64) error {
-	return mapNotFound(s.repo.DeletePage(ctx, id, tenantID))
+	return dbutil.NoRowsAs(s.repo.DeletePage(ctx, id, tenantID), ErrNotFound)
 }
 
 func (s *Service) GetPage(ctx context.Context, tenantID, id int64) (DashboardPageResponse, error) {
 	row, err := s.repo.GetPageByID(ctx, id, tenantID)
 	if err != nil {
-		return DashboardPageResponse{}, mapNotFound(err)
+		return DashboardPageResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return toPageResponse(row), nil
 }
@@ -119,21 +118,20 @@ func (s *Service) UpdateWidget(ctx context.Context, tenantID, pageID, widgetID i
 	if err != nil {
 		return WidgetResponse{}, err
 	}
-	args.PageID = pageID
 	if err := s.repo.UpdateWidget(ctx, widgetID, args); err != nil {
-		return WidgetResponse{}, mapNotFound(err)
+		return WidgetResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return s.getWidget(ctx, tenantID, pageID, widgetID)
 }
 
 func (s *Service) DeleteWidget(ctx context.Context, tenantID, pageID, widgetID int64) error {
-	return mapNotFound(s.repo.DeleteWidget(ctx, widgetID, pageID, tenantID))
+	return dbutil.NoRowsAs(s.repo.DeleteWidget(ctx, widgetID, pageID, tenantID), ErrNotFound)
 }
 
 func (s *Service) getWidget(ctx context.Context, tenantID, pageID, widgetID int64) (WidgetResponse, error) {
 	row, err := s.repo.GetWidgetByID(ctx, widgetID, pageID, tenantID)
 	if err != nil {
-		return WidgetResponse{}, mapNotFound(err)
+		return WidgetResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return toWidgetResponse(row), nil
 }
@@ -162,16 +160,12 @@ func buildPageArgs(tenantID, userID int64, req CreatePageRequest) (pageInsertArg
 	if iconColor == "" {
 		iconColor = "primary"
 	}
-	tagsJSON, err := json.Marshal(req.Tags)
-	if err != nil || len(req.Tags) == 0 {
-		tagsJSON = []byte("[]")
-	}
 	args := pageInsertArgs{
 		TenantID:   tenantID,
 		Name:       name,
 		Icon:       icon,
 		IconColor:  iconColor,
-		TagsJSON:   tagsJSON,
+		Tags:       req.Tags,
 		IsFavorite: req.IsFavorite,
 	}
 	if desc := strings.TrimSpace(req.Description); desc != "" {
@@ -203,14 +197,4 @@ func buildWidgetArgs(tenantID, pageID int64, req CreateWidgetRequest) (widgetIns
 		args.LayoutVariant = sql.NullString{Valid: true, String: lv}
 	}
 	return args, nil
-}
-
-func mapNotFound(err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	return err
 }

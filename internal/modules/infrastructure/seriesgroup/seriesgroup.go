@@ -57,10 +57,3 @@ func (c Catalog) GroupsFor(present []string) []string {
 	}
 	return groups
 }
-
-func EmptyIfNil(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
-}

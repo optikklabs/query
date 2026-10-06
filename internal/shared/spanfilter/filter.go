@@ -46,6 +46,23 @@ func (f *Filters) Validate() error {
 	return filterutil.ValidateAttrs(f.Attributes)
 }
 
+// RangeRequest is the JSON body the span explorer endpoints share: a time range
+// plus the filter set.
+type RangeRequest struct {
+	StartTime int64 `json:"startTime"`
+	EndTime   int64 `json:"endTime"`
+
+	Filters
+}
+
+// BindTenant scopes the filters to the tenant and the requested range.
+func (r *RangeRequest) BindTenant(tenantID int64) error {
+	r.TenantID = tenantID
+	r.StartMs = r.StartTime
+	r.EndMs = r.EndTime
+	return r.Validate()
+}
+
 type Clauses struct {
 	Resource string
 	Span     string

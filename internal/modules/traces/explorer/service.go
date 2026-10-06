@@ -3,7 +3,6 @@ package explorer
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -72,7 +71,6 @@ func (s *Service) enrichPage(ctx context.Context, tenantID int64, rows []traceIn
 	start, end := pageBounds(rows)
 	aggList, err := s.repo.EnrichTraces(ctx, tenantID, ids, start.Add(-enrichSlack), end.Add(enrichSlack))
 	if err != nil {
-		slog.ErrorContext(ctx, "explorer: enrichPage failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID))
 		return nil, err
 	}
 	aggs := make(map[string]traceAggRow, len(aggList))
@@ -191,7 +189,6 @@ func (s *Service) Suggest(ctx context.Context, req SuggestRequest, tenantID int6
 	limit := filterutil.PickLimit(req.Limit, 10, 50)
 	rows, err := s.fetchSuggest(ctx, tenantID, req, limit)
 	if err != nil {
-		slog.ErrorContext(ctx, "suggest: Suggest failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("field", req.Field))
 		return SuggestResponse{}, err
 	}
 	return SuggestResponse{Suggestions: rows}, nil

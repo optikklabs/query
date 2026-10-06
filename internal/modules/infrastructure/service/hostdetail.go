@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/optikklabs/query/internal/shared/nullable"
+
 	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/modules/infrastructure/models"
 	"github.com/optikklabs/query/internal/modules/infrastructure/repository"
@@ -46,9 +48,9 @@ func (s *Service) GetHostOverview(ctx context.Context, tenantID int64, host stri
 
 	out := models.HostOverview{
 		Host:             host,
-		Environments:     seriesgroup.EmptyIfNil(meta.Environments),
-		Namespaces:       seriesgroup.EmptyIfNil(meta.Namespaces),
-		AvailableMetrics: seriesgroup.EmptyIfNil(seriesdefs.Host.GroupsFor(meta.MetricNames)),
+		Environments:     nullable.OrEmpty(meta.Environments),
+		Namespaces:       nullable.OrEmpty(meta.Namespaces),
+		AvailableMetrics: nullable.OrEmpty(seriesdefs.Host.GroupsFor(meta.MetricNames)),
 	}
 	if !meta.LastSeen.IsZero() {
 		out.LastSeen = meta.LastSeen.UTC().Format(time.RFC3339)

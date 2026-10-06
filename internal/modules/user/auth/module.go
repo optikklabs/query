@@ -5,17 +5,17 @@ import (
 	"github.com/optikklabs/query/internal/infra/token"
 )
 
-func NewModule(service *Service, tokens *token.Service) *module {
-	return &module{handler: NewHandler(service, tokens)}
+func NewModule(service *Service, tokens *token.Service) *Module {
+	return &Module{handler: NewHandler(service, tokens)}
 }
 
-type module struct {
+type Module struct {
 	handler *Handler
 }
 
-func (m *module) Name() string { return "user-auth" }
+func (m *Module) Name() string { return "user-auth" }
 
-func (m *module) RegisterRoutes(group chi.Router) {
+func (m *Module) RegisterRoutes(group chi.Router) {
 	group.Post("/auth/login", m.handler.Login)
 	group.Post("/auth/refresh", m.handler.Refresh)
 	group.Post("/auth/logout", m.handler.Logout)

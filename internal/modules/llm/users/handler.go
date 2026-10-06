@@ -30,8 +30,7 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	var req UsersQueryRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	if req.StartTime <= 0 || req.EndTime <= 0 || req.StartTime >= req.EndTime {

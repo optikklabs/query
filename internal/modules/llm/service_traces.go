@@ -6,10 +6,11 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/cursor"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 func (s *Service) QueryTraces(ctx context.Context, tenantID int64, req TracesQueryRequest) (TracesQueryResponse, error) {
-	req.Limit = pickLimit(req.Limit, 50, 500)
+	req.Limit = filterutil.PickLimit(req.Limit, 50, 500)
 	rows, err := s.repo.QueryTraces(ctx, tenantID, req)
 	if err != nil {
 		return TracesQueryResponse{}, err
@@ -78,16 +79,6 @@ func groupScores(rows []traceScoreRow) map[string][]TraceScore {
 		})
 	}
 	return out
-}
-
-func pickLimit(v, def, max int) int {
-	if v <= 0 {
-		return def
-	}
-	if v > max {
-		return max
-	}
-	return v
 }
 
 func (s *Service) TraceDetail(ctx context.Context, tenantID int64, traceID string, startTimeMs, endTimeMs int64) (TraceDetailResponse, error) {

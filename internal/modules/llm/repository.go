@@ -31,7 +31,7 @@ func (r *Repository) ModelUsage(ctx context.Context, tenantID, startMs, endMs in
 		       sum(input_tokens)    AS in_tokens,
 		       sum(output_tokens)   AS out_tokens,
 		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs,
-		       sum(` + pricing.TokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
+		       sum(` + pricing.RollupCostSQL + `) AS cost
 		FROM ` + rollupTable + `
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE gen_ai_request_model != ''
@@ -52,7 +52,7 @@ func (r *Repository) OverviewWindows(ctx context.Context, tenantID, startMs, end
 		       sum(input_tokens)  AS in_tokens,
 		       sum(output_tokens) AS out_tokens,
 		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs,
-		       sum(` + pricing.TokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
+		       sum(` + pricing.RollupCostSQL + `) AS cost
 		FROM ` + rollupTable + `
 		PREWHERE tenant_id = @tenantID AND timestamp >= @prevStart AND timestamp < @end
 		GROUP BY is_current`
@@ -69,7 +69,7 @@ func (r *Repository) OverviewSeries(ctx context.Context, tenantID, startMs, endM
 		       sum(span_count)  AS total_spans,
 		       sum(error_count) AS error_spans,
 		       quantilesTDigestMergeIf(0.5, 0.95, 0.99)(latency_state, gen_ai_operation IN ` + latencyOps + `) AS qs,
-		       sum(` + pricing.TokenCostSQL("input_tokens", "output_tokens", "gen_ai_request_model") + `) AS cost
+		       sum(` + pricing.RollupCostSQL + `) AS cost
 		FROM ` + rollupTable + `
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		GROUP BY bucket_at

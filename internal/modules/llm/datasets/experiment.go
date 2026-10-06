@@ -69,23 +69,28 @@ func (s *ExperimentService) Stop() error {
 	return s.jobs.Wait()
 }
 
+// executeJob runs one experiment within the run budget and marks the run
+// failed if it cannot complete.
 func (s *ExperimentService) executeJob(job experimentJob) {
 	ctx, cancel := context.WithTimeout(s.ctx, runBudget)
 	err := s.execute(ctx, job)
 	cancel()
-	if err != nil {
-		slog.Error("llm experiment failed", slog.Int64("run_id", job.runID), slog.Any("error", err))
-		failCtx, failCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_ = s.repo.FinalizeRun(failCtx, job.runID, RunFinal{
-			Status: "failed", Error: sql.NullString{Valid: true, String: truncate(err.Error(), 1000)},
-		})
-		failCancel()
+	if err == nil {
+		return
+	}
+	slog.Error("llm experiment failed", slog.Int64("run_id", job.runID), slog.Any("error", err))
+	// The run context may be the reason it failed, so record the failure on
+	// a fresh one.
+	failCtx, failCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer failCancel()
+	if err := s.repo.FinalizeRun(failCtx, job.runID, RunFinal{Status: "failed", Error: errorText(err)}); err != nil {
+		slog.Error("llm experiment: mark run failed", slog.Int64("run_id", job.runID), slog.Any("error", err))
 	}
 }
 
 func (s *ExperimentService) Run(ctx context.Context, tenantID, datasetID int64, req RunExperimentRequest) (RunDetail, error) {
-	if _, ok := map[string]struct{}{"openai": {}, "anthropic": {}, "mistral": {}}[req.Provider]; !ok {
-		return RunDetail{}, errorcode.ValidationError{Msg: "provider must be openai, anthropic or mistral"}
+	if err := llmproviders.ValidateProvider(req.Provider); err != nil {
+		return RunDetail{}, err
 	}
 	if strings.TrimSpace(req.Model) == "" {
 		return RunDetail{}, errorcode.ValidationError{Msg: "model is required"}
@@ -116,7 +121,7 @@ func (s *ExperimentService) Run(ctx context.Context, tenantID, datasetID int64, 
 		return RunDetail{}, err
 	}
 
-	params, _ := json.Marshal(map[string]any{"temperature": req.Temperature, "maxTokens": req.MaxTokens})
+	params := mustJSON(map[string]any{"temperature": req.Temperature, "maxTokens": req.MaxTokens})
 	runID, err := s.repo.CreateRun(ctx, RunInsert{
 		DatasetID: datasetID, TenantID: tenantID, Name: name,
 		Provider: req.Provider, Model: req.Model, ParamsJSON: params, ItemCount: len(items),
@@ -203,11 +208,11 @@ func (s *ExperimentService) completeItem(ctx context.Context, job experimentJob,
 		LatencyMs: int(time.Since(start).Milliseconds()), ScoresJSON: []byte("{}"),
 	}
 	if err != nil {
-		row.Error = sql.NullString{Valid: true, String: truncate(err.Error(), 1000)}
+		row.Error = errorText(err)
 		return completedItem{row: row, failed: true}
 	}
 	cost := pricing.CostOf(job.req.Model, uint64(result.InputTokens), uint64(result.OutputTokens))
-	row.OutputJSON, _ = json.Marshal(map[string]any{"output": result.Output,
+	row.OutputJSON = mustJSON(map[string]any{"output": result.Output,
 		"inputTokens": result.InputTokens, "outputTokens": result.OutputTokens})
 	row.CostUsd = cost
 	score, scored := exactMatch(item.ExpectedOutputJSON, result.Output)
@@ -226,7 +231,7 @@ func (s *ExperimentService) getRun(ctx context.Context, tenantID, runID int64) (
 	if err != nil {
 		return RunDetail{}, err
 	}
-	detail := RunDetail{RunSummary: toRunSummary(run)}
+	detail := RunDetail{RunSummary: toRunSummary(run), Items: make([]RunItem, 0, len(rawItems))}
 	for _, it := range rawItems {
 		detail.Items = append(detail.Items, toRunItem(it))
 	}
@@ -293,9 +298,15 @@ func mustJSON(v any) []byte {
 	return b
 }
 
-func truncate(s string, n int) string {
-	if len(s) > n {
-		return s[:n]
+// maxErrorTextBytes matches the width of the error columns.
+const maxErrorTextBytes = 1000
+
+// errorText stores err's message, cut to the column width without splitting
+// a UTF-8 character (MySQL rejects invalid utf8mb4).
+func errorText(err error) sql.NullString {
+	msg := err.Error()
+	if len(msg) > maxErrorTextBytes {
+		msg = strings.ToValidUTF8(msg[:maxErrorTextBytes], "")
 	}
-	return s
+	return sql.NullString{Valid: true, String: msg}
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
@@ -40,37 +41,62 @@ func (f *Filters) Validate() error {
 	return filterutil.ValidateAttrs(f.Attributes)
 }
 
-func BuildClauses(f Filters) (prewhere, where string, args []any) {
-	startBucket := uint32((f.StartMs / 1000) / 300 * 300)
-	endBucket := uint32((f.EndMs / 1000) / 300 * 300)
+// RangeRequest is the JSON body the log explorer endpoints share: a time range
+// plus the filter set.
+type RangeRequest struct {
+	StartTime int64 `json:"startTime"`
+	EndTime   int64 `json:"endTime"`
 
-	args = []any{
+	Filters
+}
+
+// BindTenant scopes the filters to the tenant and the requested range.
+func (r *RangeRequest) BindTenant(tenantID int64) error {
+	r.TenantID = tenantID
+	r.StartMs = r.StartTime
+	r.EndMs = r.EndTime
+	return r.Validate()
+}
+
+// rangeArgs binds the tenant, the time window and its ts_bucket bounds.
+func rangeArgs(f Filters) []any {
+	return []any{
 		clickhouse.Named("tenantID", uint32(f.TenantID)),
 		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
 		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
-		clickhouse.Named("startBucket", startBucket),
-		clickhouse.Named("endBucket", endBucket),
+		clickhouse.Named("startBucket", timebucket.LogBucket(f.StartMs)),
+		clickhouse.Named("endBucket", timebucket.LogBucket(f.EndMs)),
 	}
+}
 
+// resourceIns and severityIns are the IN filters shared by the raw and
+// rollup scans.
+func resourceIns(f Filters) []filterutil.InClause {
+	return []filterutil.InClause{
+		{Column: "service", Bind: "services", Values: f.Services},
+		{Column: "service", Bind: "excServices", Values: f.ExcludeServices, Negate: true},
+		{Column: "host", Bind: "hosts", Values: f.Hosts},
+		{Column: "host", Bind: "excHosts", Values: f.ExcludeHosts, Negate: true},
+		{Column: "pod", Bind: "pods", Values: f.Pods},
+		{Column: "container", Bind: "containers", Values: f.Containers},
+		{Column: "environment", Bind: "environments", Values: f.Environments},
+	}
+}
+
+func severityIns(f Filters) []filterutil.InClause {
+	return []filterutil.InClause{
+		{Column: "upper(severity_text)", Bind: "severities", Values: filterutil.UpperAll(f.Severities)},
+		{Column: "upper(severity_text)", Bind: "excSeverities", Values: filterutil.UpperAll(f.ExcludeSeverities), Negate: true},
+	}
+}
+
+func BuildClauses(f Filters) (prewhere, where string, args []any) {
+	args = rangeArgs(f)
 	prewhere = `PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND ts_bucket BETWEEN @startBucket AND @endBucket`
 	where = `WHERE 1=1`
 
-	args = filterutil.AppendIn(&prewhere, args,
-		filterutil.InClause{Column: "service", Bind: "services", Values: f.Services},
-		filterutil.InClause{Column: "service", Bind: "excServices", Values: f.ExcludeServices, Negate: true},
-		filterutil.InClause{Column: "host", Bind: "hosts", Values: f.Hosts},
-		filterutil.InClause{Column: "host", Bind: "excHosts", Values: f.ExcludeHosts, Negate: true},
-		filterutil.InClause{Column: "pod", Bind: "pods", Values: f.Pods},
-		filterutil.InClause{Column: "container", Bind: "containers", Values: f.Containers},
-		filterutil.InClause{Column: "environment", Bind: "environments", Values: f.Environments},
-	)
-
-	args = filterutil.AppendIn(&where, args,
-		filterutil.InClause{Column: "upper(severity_text)", Bind: "severities",
-			Values: filterutil.UpperAll(f.Severities)},
-		filterutil.InClause{Column: "upper(severity_text)", Bind: "excSeverities",
-			Values: filterutil.UpperAll(f.ExcludeSeverities), Negate: true},
-	)
+	args = filterutil.AppendIn(&prewhere, args, resourceIns(f)...)
+	args = filterutil.AppendIn(&where, args, severityIns(f)...)
 
 	if f.TraceID != "" {
 		where += ` AND trace_id = @traceID`
@@ -120,32 +146,14 @@ func BuildStatsClauses(f Filters) (StatsClauses, bool) {
 		return StatsClauses{}, false
 	}
 
-	args := []any{
-		clickhouse.Named("tenantID", uint32(f.TenantID)),
-		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
-		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
-		clickhouse.Named("startBucket", uint32((f.StartMs/1000)/300*300)),
-		clickhouse.Named("endBucket", uint32((f.EndMs/1000)/300*300)),
+	args := append(rangeArgs(f),
 		clickhouse.Named("rollupStart", time.UnixMilli(rollupStartMs)),
 		clickhouse.Named("rollupEnd", time.UnixMilli(rollupEndMs)),
-	}
-
+	)
 	dimensions := ""
-	args = filterutil.AppendIn(&dimensions, args,
-		filterutil.InClause{Column: "service", Bind: "services", Values: f.Services},
-		filterutil.InClause{Column: "service", Bind: "excServices", Values: f.ExcludeServices, Negate: true},
-		filterutil.InClause{Column: "host", Bind: "hosts", Values: f.Hosts},
-		filterutil.InClause{Column: "host", Bind: "excHosts", Values: f.ExcludeHosts, Negate: true},
-		filterutil.InClause{Column: "pod", Bind: "pods", Values: f.Pods},
-		filterutil.InClause{Column: "container", Bind: "containers", Values: f.Containers},
-		filterutil.InClause{Column: "environment", Bind: "environments", Values: f.Environments},
-	)
-
+	args = filterutil.AppendIn(&dimensions, args, resourceIns(f)...)
 	where := "WHERE 1=1"
-	args = filterutil.AppendIn(&where, args,
-		filterutil.InClause{Column: "upper(severity_text)", Bind: "severities", Values: filterutil.UpperAll(f.Severities)},
-		filterutil.InClause{Column: "upper(severity_text)", Bind: "excSeverities", Values: filterutil.UpperAll(f.ExcludeSeverities), Negate: true},
-	)
+	args = filterutil.AppendIn(&where, args, severityIns(f)...)
 
 	return StatsClauses{
 		RawPrewhere: `PREWHERE tenant_id = @tenantID

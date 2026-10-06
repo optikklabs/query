@@ -1,5 +1,7 @@
 package tenant
 
+import "time"
+
 type IngestionEndpointsResponse struct {
 	GRPC       string `json:"grpc"`
 	HTTP       string `json:"http"`
@@ -7,10 +9,10 @@ type IngestionEndpointsResponse struct {
 }
 
 type TenantResponse struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Active       bool   `json:"active"`
-	APIKey       string `json:"apiKey,omitempty"`
-	APIKeyPrefix string `json:"apiKeyPrefix"`
-	CreatedAt    any    `json:"createdAt"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Active       bool      `json:"active"`
+	APIKey       string    `json:"apiKey,omitempty"`
+	APIKeyPrefix string    `json:"apiKeyPrefix"`
+	CreatedAt    time.Time `json:"createdAt"`
 }

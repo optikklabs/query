@@ -28,8 +28,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req UpsertRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	tenant := httputil.Tenant(r)
@@ -47,8 +46,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpsertRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.svc.Update(r.Context(), httputil.Tenant(r).TenantID, id, req)

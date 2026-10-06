@@ -4,8 +4,6 @@ import (
 	"net/http"
 
 	"github.com/optikklabs/query/internal/infra/token"
-	"github.com/optikklabs/query/internal/modules/user/auth"
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -20,8 +18,7 @@ func NewHandler(service *Service, tokens *token.Service) *Handler {
 
 func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	var req SignupRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid signup request", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 
@@ -32,10 +29,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 	if response.Session != nil {
 		h.Tokens.SetRefreshCookie(w, response.RefreshToken)
-		httputil.RespondOK(w, struct {
-			auth.LoginResponse
-			APIKey string `json:"apiKey"`
-		}{*response.Session, response.APIKey})
+		httputil.RespondOK(w, SessionResponse{LoginResponse: *response.Session, APIKey: response.APIKey})
 		return
 	}
 	httputil.RespondOK(w, SignupResponse{Message: response.Message})
@@ -43,8 +37,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req VerifyEmailRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid verification request", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	response, refresh, apiKey, err := h.Service.VerifyEmail(r.Context(), req.Token)
@@ -53,8 +46,5 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Tokens.SetRefreshCookie(w, refresh)
-	httputil.RespondOK(w, struct {
-		auth.LoginResponse
-		APIKey string `json:"apiKey"`
-	}{response, apiKey})
+	httputil.RespondOK(w, SessionResponse{LoginResponse: response, APIKey: apiKey})
 }

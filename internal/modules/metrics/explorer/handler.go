@@ -52,8 +52,7 @@ func (h *Handler) ListTags(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	var req QueryRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "Invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	if err := validateQueryRequest(req); err != nil {

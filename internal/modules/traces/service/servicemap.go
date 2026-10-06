@@ -1,7 +1,9 @@
 package service
 
 import (
-	"sort"
+	"cmp"
+	"slices"
+	"strings"
 
 	"github.com/optikklabs/query/internal/modules/services/topology"
 	"github.com/optikklabs/query/internal/modules/traces/models"
@@ -27,6 +29,7 @@ func nodeAggsFromSpans(rows []repository.TraceSpanRow) []topology.NodeAgg {
 			aggMap[r.ServiceName] = a
 		}
 		a.RequestCount++
+		// Within one trace the mean span duration stands in for p50.
 		a.P50Ms += r.DurationMs()
 		if r.HasError {
 			a.ErrorCount++
@@ -103,7 +106,9 @@ func groupErrors(rows []repository.TraceSpanRow) []models.TraceErrorGroup {
 	for _, g := range groups {
 		out = append(out, *g)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Count > out[j].Count })
+	slices.SortFunc(out, func(a, b models.TraceErrorGroup) int {
+		return cmp.Or(cmp.Compare(b.Count, a.Count), strings.Compare(a.ExceptionType, b.ExceptionType))
+	})
 	return out
 }
 

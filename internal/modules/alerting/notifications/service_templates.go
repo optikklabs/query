@@ -3,9 +3,9 @@ package notifications
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strings"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
@@ -30,22 +30,13 @@ func (s *Service) UpdateTemplate(ctx context.Context, tenantID, id int64, req Up
 	}
 	row.ID = id
 	if err := s.repo.UpdateTemplate(ctx, id, tenantID, row); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return TemplateResponse{}, ErrNotFound
-		}
-		return TemplateResponse{}, err
+		return TemplateResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return toTemplateResponse(row), nil
 }
 
 func (s *Service) DeleteTemplate(ctx context.Context, tenantID, id int64) error {
-	if err := s.repo.DeleteTemplate(ctx, id, tenantID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
-		}
-		return err
-	}
-	return nil
+	return dbutil.NoRowsAs(s.repo.DeleteTemplate(ctx, id, tenantID), ErrNotFound)
 }
 
 func (s *Service) ListTemplates(ctx context.Context, tenantID int64) ([]TemplateResponse, error) {

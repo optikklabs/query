@@ -33,7 +33,7 @@ func (r *Repository) TopSessions(ctx context.Context, tenantID, startMs, endMs i
 		       argMinIf(substring(gen_ai_prompt, 1, 140), (timestamp, span_id), gen_ai_prompt != '') AS preview,
 		       uniqExact(trace_id) AS turns,
 		       ` + durationMsSQL + ` AS duration_ms,
-		       sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost,
+		       sum(` + pricing.SpanCostSQL + `) AS cost,
 		       max(timestamp) AS last_ts
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
@@ -56,7 +56,7 @@ func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int6
 		FROM (
 		    SELECT uniqExact(trace_id) AS turns,
 		           ` + durationMsSQL + ` AS dur,
-		           sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
+		           sum(` + pricing.SpanCostSQL + `) AS cost
 		    FROM optikk.spans
 		    PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		    WHERE is_gen_ai AND llm_session_id != ''
@@ -88,7 +88,7 @@ func (r *Repository) Detail(ctx context.Context, tenantID int64, sessionID strin
 		       argMaxIf(gen_ai_request_model, gen_ai_input_tokens + gen_ai_output_tokens, gen_ai_request_model != '') AS model,
 		       argMinIf(gen_ai_prompt, (timestamp, span_id), gen_ai_prompt != '') AS user_text,
 		       argMaxIf(gen_ai_completion, (timestamp, span_id), gen_ai_completion != '') AS output_text,
-		       sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
+		       sum(` + pricing.SpanCostSQL + `) AS cost
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE is_gen_ai AND llm_session_id = @sessionID

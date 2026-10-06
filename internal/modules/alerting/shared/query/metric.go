@@ -16,76 +16,65 @@ type MetricBackend struct {
 
 func NewMetricBackend(db clickhouse.Conn) *MetricBackend { return &MetricBackend{db: db} }
 
-func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, _ models.Conditions, now time.Time) (ScalarResult, error) {
-	if q.Metric == nil {
+func (b *MetricBackend) Scalar(ctx context.Context, m models.MonitorRow, now time.Time) (ScalarResult, error) {
+	q := m.Query.Metric
+	if q == nil {
 		return ScalarResult{}, nil
 	}
-	windowSec := monitorWindowSec(q.Metric.WindowSec)
-	windowMs := windowSec * 1000
-	startMs, endMs := completeWindow(now, windowSec, timebucket.RollupGrainSeconds(windowMs))
+	windowSec := monitorWindowSec(q.WindowSec)
+	startMs, endMs := completeWindow(now, windowSec, timebucket.RollupGrainSeconds(windowSec*1000))
 
-	sourceStart := startMs
-	if q.Metric.Aggregation == "sum" {
-		sourceStart -= int64(time.Hour / time.Millisecond)
-	}
-	scopeSQL, args, err := CompileScope("metric", scope, metricArgs(m.TenantID, q.Metric.Metric, sourceStart, endMs))
+	scopeSQL, args, err := CompileScope("metric", m.Scope, metricArgs(m.TenantID, q, startMs, endMs))
 	if err != nil {
 		return ScalarResult{}, err
 	}
-	expr := metricSource(q.Metric.Aggregation)
-	samples, _ := metricGuards(q.Metric.Aggregation, expr)
-	query := `
+	var query string
+	if q.Aggregation == "sum" {
+		query = metricSumQuery("", scopeSQL)
+	} else {
+		expr := metricSource(q.Aggregation)
+		samples, _ := metricGuards(q.Aggregation, expr)
+		query = `
 		SELECT ` + samples + ` AS samples, ` + expr + ` AS value
 		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND timestamp >= @start AND timestamp < @end
-		     AND metric_name = @metricName`
-	if q.Metric.Aggregation == "sum" {
-		query = metricSumQuery("", scopeSQL)
-		args = append(args, clickhouse.Named("displayStart", time.UnixMilli(startMs)))
-	} else {
-		query += scopeSQL
+		     AND metric_name = @metricName` + scopeSQL
 	}
-	var rows []scalarRow
-	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.metric.Scalar", &rows, query, args...); err != nil {
+	var row scalarRow
+	if err := dbutil.QueryRowCH(dbutil.DashboardCtx(ctx), b.db, "alerting.metric.Scalar", &row, query, args...); err != nil {
 		return ScalarResult{}, err
 	}
-	if len(rows) == 0 {
-		return ScalarResult{}, nil
-	}
-	r := rows[0]
-	return ScalarResult{Value: r.Value, HasData: r.Samples > 0}, nil
+	return ScalarResult{Value: row.Value, HasData: row.Samples > 0}, nil
 }
 
-func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, _ models.Conditions, windowMs int64, now time.Time) ([]Point, error) {
-	if q.Metric == nil {
+func (b *MetricBackend) Series(ctx context.Context, m models.MonitorRow, windowMs int64, now time.Time) ([]Point, error) {
+	q := m.Query.Metric
+	if q == nil {
 		return nil, nil
 	}
 	endMs := now.UnixMilli()
 	startMs := endMs - windowMs
 
-	sourceStart := startMs
-	if q.Metric.Aggregation == "sum" {
-		sourceStart -= int64(time.Hour / time.Millisecond)
-	}
-	scopeSQL, args, err := CompileScope("metric", scope, metricArgs(m.TenantID, q.Metric.Metric, sourceStart, endMs))
+	scopeSQL, args, err := CompileScope("metric", m.Scope, metricArgs(m.TenantID, q, startMs, endMs))
 	if err != nil {
 		return nil, err
 	}
-	expr := metricSource(q.Metric.Aggregation)
-	_, having := metricGuards(q.Metric.Aggregation, expr)
-	query := `
-		SELECT ` + timebucket.DisplayGrainSQL(windowMs) + ` AS bucket, ` +
-		expr + ` AS value
+	bucketSQL := timebucket.DisplayGrainSQL(windowMs)
+	var query string
+	if q.Aggregation == "sum" {
+		query = metricSumQuery(bucketSQL, scopeSQL)
+	} else {
+		expr := metricSource(q.Aggregation)
+		_, having := metricGuards(q.Aggregation, expr)
+		query = `
+		SELECT ` + bucketSQL + ` AS bucket, ` + expr + ` AS value
 		FROM ` + timebucket.MetricsRollup(startMs, endMs) + `
 		PREWHERE tenant_id     = @tenantID
 		     AND timestamp >= @start AND timestamp < @end
 		     AND metric_name = @metricName` + scopeSQL + `
 		GROUP BY bucket` + having + `
 		ORDER BY bucket`
-	if q.Metric.Aggregation == "sum" {
-		query = metricSumQuery(timebucket.DisplayGrainSQL(windowMs), scopeSQL)
-		args = append(args, clickhouse.Named("displayStart", time.UnixMilli(startMs)))
 	}
 
 	var rows []bucketRow
@@ -161,12 +150,20 @@ func metricGuards(agg, expr string) (samples, having string) {
 	}
 }
 
-func metricArgs(tenantID int64, metricName string, startMs, endMs int64) []any {
+// metricArgs binds the display window. Sums read an extra hour of raw
+// samples before it (@start) so the first displayed counter increase has a
+// previous sample to diff against (@displayStart).
+func metricArgs(tenantID int64, q *models.MetricQuery, startMs, endMs int64) []any {
+	sourceStart := startMs
+	if q.Aggregation == "sum" {
+		sourceStart -= time.Hour.Milliseconds()
+	}
 	return []any{
 		tenantIDArg(tenantID),
-		clickhouse.Named("metricName", metricName),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
+		clickhouse.Named("metricName", q.Metric),
+		clickhouse.Named("start", time.UnixMilli(sourceStart)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
+		clickhouse.Named("displayStart", time.UnixMilli(startMs)),
 	}
 }
 

@@ -8,6 +8,8 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/metrics/filter"
+	"github.com/optikklabs/query/internal/shared/chargs"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 type Repository struct {
@@ -33,17 +35,11 @@ func (r *Repository) ListMetricNames(ctx context.Context, tenantID, startMs, end
 		GROUP BY metric_name
 		ORDER BY metric_name
 		LIMIT 100`
-	args := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
-		clickhouse.Named("search", "%"+search+"%"),
-	}
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
+		clickhouse.Named("search", filterutil.LikeSubstringPattern(search)),
+	)
 	var rows []metricNameDTO
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListMetricNames", &rows, query, args...); err != nil {
-		return nil, err
-	}
-	return rows, nil
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListMetricNames", &rows, query, args...)
 }
 
 func (r *Repository) ListResourceTagValues(ctx context.Context, tenantID, startMs, endMs int64, metricName, canonical string) ([]tagValueDTO, error) {
@@ -62,17 +58,11 @@ func (r *Repository) ListResourceTagValues(ctx context.Context, tenantID, startM
 		GROUP BY tag_value
 		ORDER BY count DESC, tag_value ASC
 		LIMIT 100`
-	args := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("metricName", metricName),
-	}
+	)
 	var rows []tagValueDTO
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListResourceTagValues", &rows, query, args...); err != nil {
-		return nil, err
-	}
-	return rows, nil
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListResourceTagValues", &rows, query, args...)
 }
 
 func (r *Repository) ListAttributeTagValues(ctx context.Context, tenantID, startMs, endMs int64, metricName, tagKey string) ([]tagValueDTO, error) {
@@ -89,17 +79,11 @@ func (r *Repository) ListAttributeTagValues(ctx context.Context, tenantID, start
 		ORDER BY count DESC, tag_value ASC
 		LIMIT 100`
 
-	args := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("metricName", metricName),
-	}
+	)
 	var rows []tagValueDTO
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListAttributeTagValues", &rows, query, args...); err != nil {
-		return nil, err
-	}
-	return rows, nil
+	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListAttributeTagValues", &rows, query, args...)
 }
 
 func (r *Repository) ListMetricTagKeys(ctx context.Context, tenantID, startMs, endMs int64, metricName string) ([]string, error) {
@@ -112,12 +96,9 @@ func (r *Repository) ListMetricTagKeys(ctx context.Context, tenantID, startMs, e
 		ORDER BY tag_key
 		LIMIT 200`
 
-	args := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("metricName", metricName),
-	}
+	)
 	var rows []tagKeyDTO
 	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "metrics.ListMetricTagKeys", &rows, query, args...); err != nil {
 		return nil, err
@@ -166,12 +147,9 @@ func (r *Repository) ResolveMetricKinds(
 		     AND ms.timestamp >= @start - INTERVAL 6 HOUR
 		     AND ms.timestamp < @end + INTERVAL 6 HOUR
 		GROUP BY metric_name`
-	args := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
 		clickhouse.Named("metricNames", metricNames),
-	}
+	)
 
 	var rows []metricNameDTO
 	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.ResolveMetricKinds", &rows, query, args...); err != nil {
@@ -209,10 +187,7 @@ func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([
 	}
 
 	var rows []timeseriesPointDTO
-	if err := dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.QueryRollupSeries", &rows, sql, args...); err != nil {
-		return nil, err
-	}
-	return rows, nil
+	return rows, dbutil.SelectCH(dbutil.ExplorerCtx(ctx), r.db, "metrics.QueryRollupSeries", &rows, sql, args...)
 }
 
 func deltaRollupSQL(fromTable, where, selectCols, groupByCols string) string {
@@ -287,10 +262,5 @@ func cumulativeRollupSQL(fromTable, where, selectCols, groupByCols string, group
 }
 
 func metricArgs(f filter.Filters) []any {
-	return []any{
-		clickhouse.Named("tenantID", uint32(f.TenantID)),
-		clickhouse.Named("metricName", f.MetricName),
-		clickhouse.Named("start", time.UnixMilli(f.StartMs)),
-		clickhouse.Named("end", time.UnixMilli(f.EndMs)),
-	}
+	return append(chargs.RangeArgs(f.TenantID, f.StartMs, f.EndMs), clickhouse.Named("metricName", f.MetricName))
 }

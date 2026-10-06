@@ -34,9 +34,13 @@ type scoreInsert struct {
 	Comment     string
 }
 
+// traceLookbackMs bounds how far back a scored trace is searched for.
+const traceLookbackMs = int64(30 * 24 * time.Hour / time.Millisecond)
+
+// LookupTraceContext copies the scored trace's service, environment,
+// session and user onto the score.
 func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, traceID string) (scoreInsert, error) {
-	now := time.Now()
-	start := now.Add(-30 * 24 * time.Hour)
+	nowMs := time.Now().UnixMilli()
 	query := `
 		SELECT argMax(service, (timestamp, span_id)) AS service_any,
 		       argMax(environment, (timestamp, span_id)) AS environment_any,
@@ -45,20 +49,14 @@ func (r *Repository) LookupTraceContext(ctx context.Context, tenantID int64, tra
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp >= @start AND timestamp < @end
-		     AND trace_id = @traceID
-		LIMIT 1`
+		     AND trace_id = @traceID`
 	var row struct {
 		Service     string `ch:"service_any"`
 		Environment string `ch:"environment_any"`
 		SessionID   string `ch:"session_id"`
 		UserID      string `ch:"user_id"`
 	}
-	args := []any{
-		clickhouse.Named("tenantID", tenantID),
-		clickhouse.Named("traceID", traceID),
-		clickhouse.Named("start", start),
-		clickhouse.Named("end", now),
-	}
+	args := append(chargs.RangeArgs(tenantID, nowMs-traceLookbackMs, nowMs), clickhouse.Named("traceID", traceID))
 	if err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "llm.scores.LookupTraceContext", &row, query, args...); err != nil {
 		return scoreInsert{}, err
 	}

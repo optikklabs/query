@@ -17,16 +17,11 @@ func NewHandler(svc *Service) *Handler {
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateScoreRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	if err := h.svc.Create(r.Context(), httputil.Tenant(r).TenantID, req); err != nil {
-		if IsValidationError(err) {
-			httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, err.Error(), nil)
-			return
-		}
-		httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "Failed to save score", err)
+		httputil.RespondServiceError(w, r, err, "Failed to save score")
 		return
 	}
 	httputil.RespondOK(w, map[string]bool{"ok": true})

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/optikklabs/query/internal/infra/llmproviders"
-	"github.com/optikklabs/query/internal/modules/llm/providerkeys"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
@@ -18,24 +16,16 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 func (h *Handler) Complete(w http.ResponseWriter, r *http.Request) {
 	var req CompleteRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.svc.Complete(r.Context(), httputil.Tenant(r).TenantID, req)
-	if err != nil {
-		var ve errorcode.ValidationError
-		switch {
-		case errors.As(err, &ve):
-			httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, ve.Msg, nil)
-		case providerkeys.IsUnavailable(err):
-			httputil.RespondErrorWithCause(w, r, http.StatusServiceUnavailable, errorcode.Unavailable, "no provider key configured for this provider", nil)
-		case errors.Is(err, llmproviders.ErrUnknownProvider):
-			httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "unsupported provider", nil)
-		default:
-			httputil.RespondErrorWithCause(w, r, http.StatusBadGateway, errorcode.Internal, "provider request failed", err)
-		}
-		return
+	switch {
+	case errors.Is(err, errProviderFailed):
+		httputil.RespondErrorWithCause(w, r, http.StatusBadGateway, errorcode.Internal, "provider request failed", err)
+	case err != nil:
+		httputil.RespondServiceError(w, r, err, "playground request failed")
+	default:
+		httputil.RespondOK(w, res)
 	}
-	httputil.RespondOK(w, res)
 }

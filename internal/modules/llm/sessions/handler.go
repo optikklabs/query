@@ -31,8 +31,7 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	var req SessionsQueryRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "Invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	if req.StartTime <= 0 || req.EndTime <= 0 || req.StartTime >= req.EndTime {
@@ -53,7 +52,7 @@ func (h *Handler) Detail(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "sessionId is required", nil)
 		return
 	}
-	startMs, endMs, ok := httputil.ParseRequiredExplicitRange(w, r)
+	startMs, endMs, ok := httputil.ParseRequiredUncappedRange(w, r)
 	if !ok {
 		return
 	}

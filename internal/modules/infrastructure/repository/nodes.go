@@ -7,6 +7,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
+	"github.com/optikklabs/query/internal/modules/infrastructure/infraconsts"
 	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
@@ -14,6 +15,7 @@ import (
 type NodeAggregateRow struct {
 	Host          string    `ch:"host"`
 	PodCount      uint64    `ch:"pod_count"`
+	Services      []string  `ch:"services"`
 	RequestCount  uint64    `ch:"request_total"`
 	ErrorCount    uint64    `ch:"error_total"`
 	DurationMsSum float64   `ch:"duration_ms_total"`
@@ -42,6 +44,7 @@ func (r *Repository) QueryInfrastructureNodes(ctx context.Context, tenantID int6
 		SELECT
 		    if(host != '', host, @defaultUnknown)                    AS host,
 		    uniqExactIf(pod, pod != '')                              AS pod_count,
+		    groupUniqArrayIf(service, service != '')                 AS services,
 		    ` + spanstats.Requests + `,
 		    ` + spanstats.Errors + `,
 		    ` + spanstats.DurationSum + `,
@@ -64,9 +67,9 @@ func (r *Repository) QueryInfrastructureNodes(ctx context.Context, tenantID int6
 
 func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, tenantID int64, startMs, endMs int64) (NodeSummaryRow, error) {
 	query := `
-		SELECT countIf(error_rate <= 2)                    AS healthy_nodes,
-		       countIf(error_rate > 2 AND error_rate <= 10) AS degraded_nodes,
-		       countIf(error_rate > 10)                    AS unhealthy_nodes,
+		SELECT countIf(error_rate <= @degradedPct)                               AS healthy_nodes,
+		       countIf(error_rate > @degradedPct AND error_rate <= @unhealthyPct) AS degraded_nodes,
+		       countIf(error_rate > @unhealthyPct)                               AS unhealthy_nodes,
 		       sum(pod_count)                              AS total_pods
 		FROM (
 		    SELECT if(sum(request_count) = 0, 0,
@@ -77,7 +80,9 @@ func (r *Repository) QueryInfrastructureNodeSummary(ctx context.Context, tenantI
 		    GROUP BY if(host != '', host, @defaultUnknown)
 		)`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
-		clickhouse.Named("defaultUnknown", unknownHost))
+		clickhouse.Named("defaultUnknown", unknownHost),
+		clickhouse.Named("degradedPct", infraconsts.DegradedErrorPct),
+		clickhouse.Named("unhealthyPct", infraconsts.UnhealthyErrorPct))
 	var row NodeSummaryRow
 	return row, dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "nodes.QueryInfrastructureNodeSummary", &row, query, args...)
 }

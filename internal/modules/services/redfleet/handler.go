@@ -63,13 +63,10 @@ func (h *Handler) GetREDByEndpointTimeSeries(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+// parseTopCursor reads the page cursor; an absent or malformed one starts
+// from the first page.
 func parseTopCursor(r *http.Request) models.TopEndpointsCursor {
-	var cur models.TopEndpointsCursor
-	if raw := r.URL.Query().Get("cursor"); raw != "" {
-		if decoded, ok := cursor.Decode[models.TopEndpointsCursor](raw); ok {
-			cur = decoded
-		}
-	}
+	cur, _ := cursor.Decode[models.TopEndpointsCursor](r.URL.Query().Get("cursor"))
 	return cur
 }
 

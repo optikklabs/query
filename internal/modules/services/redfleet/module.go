@@ -8,19 +8,19 @@ import (
 	"github.com/optikklabs/query/internal/modules/services/redfleet/service"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) *module {
-	return &module{
+func NewModule(nativeQuerier clickhouse.Conn) *Module {
+	return &Module{
 		handler: &Handler{Service: service.NewService(repository.NewRepository(nativeQuerier))},
 	}
 }
 
-type module struct {
+type Module struct {
 	handler *Handler
 }
 
-func (m *module) Name() string { return "redFleet" }
+func (m *Module) Name() string { return "redFleet" }
 
-func (m *module) RegisterRoutes(group chi.Router) {
+func (m *Module) RegisterRoutes(group chi.Router) {
 	h := m.handler
 	group.Get("/spans/red/fleet-overview", h.GetFleetOverview)
 

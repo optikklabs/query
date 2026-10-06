@@ -58,15 +58,8 @@ func (r *Repository) Create(ctx context.Context, tenantID, userID int64, name st
 }
 
 func (r *Repository) Delete(ctx context.Context, tenantID, id int64) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "datasets.Delete",
+	return dbutil.ExecMatched(ctx, r.db, "datasets.Delete",
 		`DELETE FROM optikk.llm_datasets WHERE tenant_id = ? AND id = ?`, tenantID, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
 }
 
 func (r *Repository) AddItems(ctx context.Context, tenantID, datasetID int64, items []ItemInput) (int, error) {
@@ -74,7 +67,7 @@ func (r *Repository) AddItems(ctx context.Context, tenantID, datasetID int64, it
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().UTC()
 	for _, it := range items {

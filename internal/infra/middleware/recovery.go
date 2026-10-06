@@ -7,8 +7,6 @@ import (
 
 	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
-
-	types "github.com/optikklabs/query/internal/shared/contracts"
 )
 
 func ErrorRecovery() func(http.Handler) http.Handler {
@@ -30,8 +28,7 @@ func ErrorRecovery() func(http.Handler) http.Handler {
 					slog.String("request_id", RequestIDFrom(r.Context())),
 					slog.String("stack", string(debug.Stack())),
 				)
-				httputil.WriteJSON(w, http.StatusInternalServerError,
-					types.Failure(errorcode.Internal, "An unexpected error occurred", r.URL.Path))
+				httputil.RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, "An unexpected error occurred", nil)
 			}()
 			next.ServeHTTP(w, r)
 		})

@@ -51,8 +51,7 @@ func (h *Handler) GetPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
 	var req CreatePageRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.CreatePage(r.Context(), tenant.TenantID, tenant.UserID, req)
@@ -70,8 +69,7 @@ func (h *Handler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdatePageRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.UpdatePage(r.Context(), tenant.TenantID, tenant.UserID, id, req)
@@ -116,8 +114,7 @@ func (h *Handler) CreateWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req CreateWidgetRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.CreateWidget(r.Context(), tenant.TenantID, pageID, req)
@@ -139,8 +136,7 @@ func (h *Handler) UpdateWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdateWidgetRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.UpdateWidget(r.Context(), tenant.TenantID, pageID, widgetID, req)

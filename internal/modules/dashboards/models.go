@@ -6,22 +6,25 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/optikklabs/query/internal/shared/nullable"
+	"github.com/optikklabs/query/internal/shared/sqljson"
 )
 
 type DashboardPageRow struct {
-	ID              int64          `db:"id"`
-	TenantID        int64          `db:"tenant_id"`
-	Name            string         `db:"name"`
-	Description     sql.NullString `db:"description"`
-	Icon            string         `db:"icon"`
-	IconColor       string         `db:"icon_color"`
-	TagsJSON        []byte         `db:"tags_json"`
-	IsFavorite      bool           `db:"is_favorite"`
-	CreatedByUserID sql.NullInt64  `db:"created_by_user_id"`
-	CreatedAt       time.Time      `db:"created_at"`
-	UpdatedAt       sql.NullTime   `db:"updated_at"`
-	WidgetCount     int            `db:"widget_count"`
-	OwnerName       sql.NullString `db:"owner_name"`
+	ID              int64              `db:"id"`
+	TenantID        int64              `db:"tenant_id"`
+	Name            string             `db:"name"`
+	Description     sql.NullString     `db:"description"`
+	Icon            string             `db:"icon"`
+	IconColor       string             `db:"icon_color"`
+	Tags            sqljson.StringList `db:"tags_json"`
+	IsFavorite      bool               `db:"is_favorite"`
+	CreatedByUserID sql.NullInt64      `db:"created_by_user_id"`
+	CreatedAt       time.Time          `db:"created_at"`
+	UpdatedAt       sql.NullTime       `db:"updated_at"`
+	WidgetCount     int                `db:"widget_count"`
+	OwnerName       sql.NullString     `db:"owner_name"`
 }
 
 type DashboardRow struct {
@@ -80,27 +83,14 @@ func toPageResponse(row DashboardPageRow) DashboardPageResponse {
 	out := DashboardPageResponse{
 		ID:          row.ID,
 		Name:        row.Name,
+		Description: row.Description.String,
 		Icon:        row.Icon,
 		IconColor:   row.IconColor,
-		Tags:        []string{},
+		Tags:        nullable.OrEmpty(row.Tags),
 		IsFavorite:  row.IsFavorite,
 		WidgetCount: row.WidgetCount,
 		CreatedAt:   row.CreatedAt,
-	}
-	if len(row.TagsJSON) > 0 {
-		if err := json.Unmarshal(row.TagsJSON, &out.Tags); err != nil {
-			out.Tags = []string{}
-		}
-	}
-	if out.Tags == nil {
-		out.Tags = []string{}
-	}
-	if row.Description.Valid {
-		out.Description = row.Description.String
-	}
-	if row.UpdatedAt.Valid {
-		t := row.UpdatedAt.Time
-		out.UpdatedAt = &t
+		UpdatedAt:   nullable.Ptr(row.UpdatedAt.Time, row.UpdatedAt.Valid),
 	}
 	if name := strings.TrimSpace(row.OwnerName.String); row.OwnerName.Valid && name != "" {
 		out.Owner = &Owner{Name: name, Initials: initials(name)}
@@ -109,15 +99,14 @@ func toPageResponse(row DashboardPageRow) DashboardPageResponse {
 }
 
 func toWidgetResponse(row DashboardRow) WidgetResponse {
-	out := WidgetResponse{
-		ID: row.ID, PageID: row.PageID, Spec: json.RawMessage(row.SpecJSON),
-		Position: row.Position, CreatedAt: row.CreatedAt,
+	return WidgetResponse{
+		ID:        row.ID,
+		PageID:    row.PageID,
+		Spec:      json.RawMessage(row.SpecJSON),
+		Position:  row.Position,
+		CreatedAt: row.CreatedAt,
+		UpdatedAt: nullable.Ptr(row.UpdatedAt.Time, row.UpdatedAt.Valid),
 	}
-	if row.UpdatedAt.Valid {
-		t := row.UpdatedAt.Time
-		out.UpdatedAt = &t
-	}
-	return out
 }
 
 func initials(name string) string {

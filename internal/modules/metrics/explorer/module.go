@@ -5,25 +5,19 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) *metricsExplorerModule {
-	module := &metricsExplorerModule{}
-	module.configure(nativeQuerier)
-	return module
+func NewModule(nativeQuerier clickhouse.Conn) *Module {
+	return &Module{handler: &Handler{
+		Service: NewService(NewRepository(nativeQuerier)),
+	}}
 }
 
-type metricsExplorerModule struct {
+type Module struct {
 	handler *Handler
 }
 
-func (m *metricsExplorerModule) Name() string { return "metricsExplorer" }
+func (m *Module) Name() string { return "metricsExplorer" }
 
-func (m *metricsExplorerModule) configure(nativeQuerier clickhouse.Conn) {
-	m.handler = &Handler{
-		Service: NewService(NewRepository(nativeQuerier)),
-	}
-}
-
-func (m *metricsExplorerModule) RegisterRoutes(group chi.Router) {
+func (m *Module) RegisterRoutes(group chi.Router) {
 	group.Route("/metrics", func(r chi.Router) {
 		r.Get("/names", m.handler.ListMetricNames)
 		r.Get("/{metricName}/tags", m.handler.ListTags)

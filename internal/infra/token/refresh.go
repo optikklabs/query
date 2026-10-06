@@ -12,16 +12,18 @@ import (
 
 const refreshTokenBytes = 32
 
-func GenerateRefreshToken() (raw string, hash string, err error) {
+// GenerateRefreshToken returns a new refresh token and its storage hash.
+func GenerateRefreshToken() (raw, hash string) {
 	buf := make([]byte, refreshTokenBytes)
-	if _, err = rand.Read(buf); err != nil {
-		return "", "", err
-	}
+	_, _ = rand.Read(buf) // never fails; aborts the program instead
 	raw = base64.RawURLEncoding.EncodeToString(buf)
-	return raw, HashRefreshToken(raw), nil
+	return raw, HashSecret(raw)
 }
 
-func HashRefreshToken(raw string) string {
+// HashSecret is the storage hash for high-entropy secrets: refresh tokens,
+// API keys and verification tokens. Their entropy makes a fast unsalted
+// hash sufficient.
+func HashSecret(raw string) string {
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }

@@ -55,24 +55,25 @@ func (r *Repository) TouchDeviceCodePolled(ctx context.Context, deviceCode strin
 	return err
 }
 
+// ApproveDeviceCode returns sql.ErrNoRows when the code was already approved.
 func (r *Repository) ApproveDeviceCode(ctx context.Context, userCode string, userID int64, at time.Time) error {
-	_, err := dbutil.ExecSQL(ctx, r.db, "user.ApproveDeviceCode", `
+	return dbutil.ExecMatched(ctx, r.db, "user.ApproveDeviceCode", `
 		UPDATE device_codes SET approved_at = ?, user_id = ? WHERE user_code = ? AND approved_at IS NULL
 	`, at, userID, userCode)
-	return err
 }
 
+// ConsumeDeviceCode returns sql.ErrNoRows when the code was already consumed,
+// so concurrent polls cannot both receive a session.
 func (r *Repository) ConsumeDeviceCode(ctx context.Context, deviceCode string, at time.Time) error {
-	_, err := dbutil.ExecSQL(ctx, r.db, "user.ConsumeDeviceCode", `
+	return dbutil.ExecMatched(ctx, r.db, "user.ConsumeDeviceCode", `
 		UPDATE device_codes SET consumed_at = ? WHERE device_code = ? AND consumed_at IS NULL
 	`, at, deviceCode)
-	return err
 }
 
-func (r *Repository) FindActiveUserByID(ctx context.Context, userID int64) (shared.UserRecord, error) {
-	var u shared.UserRecord
-	err := dbutil.GetSQL(ctx, r.db, "user.FindActiveUserByID", &u, `
-		SELECT id, email, name, tenant_id, active, created_at
+func (r *Repository) FindActiveUser(ctx context.Context, userID int64) (shared.AuthUser, error) {
+	var u shared.AuthUser
+	err := dbutil.GetSQL(ctx, r.db, "user.FindActiveUser", &u, `
+		SELECT id, email, name, tenant_id, role
 		FROM users
 		WHERE id = ? AND active = 1
 		LIMIT 1

@@ -1,8 +1,10 @@
 package service
 
 import (
+	"cmp"
 	"context"
-	"sort"
+	"slices"
+	"strings"
 
 	"github.com/optikklabs/query/internal/modules/saturation/kafka/models"
 	"github.com/optikklabs/query/internal/modules/saturation/kafka/repository"
@@ -64,10 +66,6 @@ func percentiles(qs []float64) percentileValues {
 	return values
 }
 
-func errRate(errors, calls uint64) float64 {
-	return metrics.Percentage(errors, calls)
-}
-
 type nodeAgg struct {
 	calls   uint64
 	errors  uint64
@@ -127,7 +125,7 @@ func (g *graphData) addConsumer(row repository.EdgeRow, winSecs float64) {
 		Group: row.ConsumerGroup, Consumer: row.Service,
 		ProduceRatePerSec: float64(g.topicProduce[row.Topic]) / winSecs,
 		ConsumeRatePerSec: float64(row.CallCount) / winSecs,
-		ErrorRate:         errRate(row.ErrorCount, row.CallCount),
+		ErrorRate:         metrics.Percentage(row.ErrorCount, row.CallCount),
 	})
 }
 
@@ -182,15 +180,12 @@ func producerNodes(m map[string]*nodeAgg, winSecs float64) []models.ProducerNode
 	for svc, a := range m {
 		out = append(out, models.ProducerNode{
 			Service: svc, RatePerSec: float64(a.calls) / winSecs,
-			ErrorRate: errRate(a.errors, a.calls),
+			ErrorRate: metrics.Percentage(a.errors, a.calls),
 			P50Ms:     a.latency.p50, P95Ms: a.latency.p95, P99Ms: a.latency.p99,
 		})
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].RatePerSec != out[j].RatePerSec {
-			return out[i].RatePerSec > out[j].RatePerSec
-		}
-		return out[i].Service < out[j].Service
+	slices.SortFunc(out, func(a, b models.ProducerNode) int {
+		return cmp.Or(cmp.Compare(b.RatePerSec, a.RatePerSec), strings.Compare(a.Service, b.Service))
 	})
 	return out
 }
@@ -210,11 +205,8 @@ func topicNodes(produce map[string]uint64, producers, groups map[string]map[stri
 			ProducerCount: len(producers[t]), ConsumerGroupCount: len(groups[t]),
 		})
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].RatePerSec != out[j].RatePerSec {
-			return out[i].RatePerSec > out[j].RatePerSec
-		}
-		return out[i].Topic < out[j].Topic
+	slices.SortFunc(out, func(a, b models.TopicNode) int {
+		return cmp.Or(cmp.Compare(b.RatePerSec, a.RatePerSec), strings.Compare(a.Topic, b.Topic))
 	})
 	return out
 }
@@ -225,18 +217,12 @@ func consumerNodes(m map[string]*nodeAgg, meta map[string][2]string, winSecs flo
 		out = append(out, models.ConsumerNode{
 			Service: meta[key][0], Group: meta[key][1],
 			RatePerSec: float64(a.calls) / winSecs,
-			ErrorRate:  errRate(a.errors, a.calls),
+			ErrorRate:  metrics.Percentage(a.errors, a.calls),
 			P50Ms:      a.latency.p50, P95Ms: a.latency.p95, P99Ms: a.latency.p99,
 		})
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].RatePerSec != out[j].RatePerSec {
-			return out[i].RatePerSec > out[j].RatePerSec
-		}
-		if out[i].Service != out[j].Service {
-			return out[i].Service < out[j].Service
-		}
-		return out[i].Group < out[j].Group
+	slices.SortFunc(out, func(a, b models.ConsumerNode) int {
+		return cmp.Or(cmp.Compare(b.RatePerSec, a.RatePerSec), strings.Compare(a.Service, b.Service), strings.Compare(a.Group, b.Group))
 	})
 	return out
 }

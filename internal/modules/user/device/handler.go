@@ -7,7 +7,6 @@ import (
 
 	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/shared"
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -31,8 +30,7 @@ func (h *Handler) DeviceCode(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeviceToken(w http.ResponseWriter, r *http.Request) {
 	var req DeviceTokenRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "device_code is required", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 
@@ -54,8 +52,7 @@ func (h *Handler) DeviceToken(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeviceApprove(w http.ResponseWriter, r *http.Request) {
 	var req DeviceApproveRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "user_code is required", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 

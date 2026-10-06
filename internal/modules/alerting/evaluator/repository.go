@@ -57,76 +57,25 @@ func (r *Repository) ClaimDue(ctx context.Context, claimID string, now time.Time
 		return nil, nil
 	}
 
-	const query = `
-		SELECT
-		  m.id, m.tenant_id, m.name, m.type, m.priority,
-		  m.scope_json, m.query_json, m.conditions_json, m.notify_json,
-		  m.message_template_id, m.message_body, m.runbook_url, m.tags_json,
-		  m.eval_every_sec, m.renotify_every_sec, m.muted_until, m.active,
-		  m.created_at, m.updated_at, m.created_by_user_id,
-		  s.monitor_id        AS s_monitor_id,
-		  s.status            AS s_status,
-		  s.current_value     AS s_current_value,
-		  s.last_evaluated_at AS s_last_evaluated_at,
-		  s.next_evaluation_at AS s_next_evaluation_at,
-		  s.triggered_at      AS s_triggered_at,
-		  s.last_notified_at  AS s_last_notified_at,
-		  s.evaluation_count  AS s_evaluation_count,
-		  s.acked_by_user_id  AS s_acked_by_user_id,
-		  s.acked_at          AS s_acked_at,
-		  s.no_data_since     AS s_no_data_since
+	query := `SELECT ` + models.MonitorWithStateColumns + `
 		FROM optikk.monitors m
 		JOIN optikk.monitor_state s ON s.monitor_id = m.id
 		WHERE s.claimed_by = ?
-		ORDER BY s.next_evaluation_at, s.monitor_id
-	`
-	var raw []dueRow
-	if err := dbutil.SelectSQL(ctx, r.db, "evaluator.LoadClaimed", &raw, query, claimID); err != nil {
+		ORDER BY s.next_evaluation_at, s.monitor_id`
+	var rows []models.MonitorWithStateRow
+	if err := dbutil.SelectSQL(ctx, r.db, "evaluator.LoadClaimed", &rows, query, claimID); err != nil {
 		return nil, err
 	}
-	out := make([]DueMonitor, 0, len(raw))
-	for _, r := range raw {
-		out = append(out, r.toDue())
+	out := make([]DueMonitor, 0, len(rows))
+	for _, row := range rows {
+		m, state := row.Split()
+		out = append(out, DueMonitor{Monitor: m, State: state})
 	}
 	return out, nil
 }
 
-type dueRow struct {
-	models.MonitorRow
-	SMonitorID        sql.NullInt64   `db:"s_monitor_id"`
-	SStatus           sql.NullString  `db:"s_status"`
-	SCurrentValue     sql.NullFloat64 `db:"s_current_value"`
-	SLastEvaluatedAt  sql.NullTime    `db:"s_last_evaluated_at"`
-	SNextEvaluationAt sql.NullTime    `db:"s_next_evaluation_at"`
-	STriggeredAt      sql.NullTime    `db:"s_triggered_at"`
-	SLastNotifiedAt   sql.NullTime    `db:"s_last_notified_at"`
-	SEvaluationCount  sql.NullInt64   `db:"s_evaluation_count"`
-	SAckedByUserID    sql.NullInt64   `db:"s_acked_by_user_id"`
-	SAckedAt          sql.NullTime    `db:"s_acked_at"`
-	SNoDataSince      sql.NullTime    `db:"s_no_data_since"`
-}
-
-func (r dueRow) toDue() DueMonitor {
-	state := models.MonitorStateRow{
-		MonitorID:       r.SMonitorID.Int64,
-		Status:          r.SStatus.String,
-		CurrentValue:    r.SCurrentValue,
-		LastEvaluatedAt: r.SLastEvaluatedAt,
-		TriggeredAt:     r.STriggeredAt,
-		LastNotifiedAt:  r.SLastNotifiedAt,
-		EvaluationCount: r.SEvaluationCount.Int64,
-		AckedByUserID:   r.SAckedByUserID,
-		AckedAt:         r.SAckedAt,
-		NoDataSince:     r.SNoDataSince,
-	}
-	if r.SNextEvaluationAt.Valid {
-		state.NextEvaluationAt = r.SNextEvaluationAt.Time
-	}
-	return DueMonitor{Monitor: r.MonitorRow, State: state}
-}
-
 func (r *Repository) UpdateState(ctx context.Context, args UpdateStateArgs) error {
-	q := `
+	const q = `
 		UPDATE optikk.monitor_state
 		   SET status = ?, current_value = ?, last_evaluated_at = ?, next_evaluation_at = ?,
 		       triggered_at = ?, last_notified_at = COALESCE(?, last_notified_at),

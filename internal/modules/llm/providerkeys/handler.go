@@ -1,7 +1,6 @@
 package providerkeys
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/optikklabs/query/internal/shared/errorcode"
@@ -25,18 +24,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	tenant := httputil.Tenant(r)
 	res, err := h.svc.Create(r.Context(), tenant.TenantID, tenant.UserID, req)
 	if err != nil {
-		if errors.Is(err, ErrNoEncryption) {
-			httputil.RespondErrorWithCause(w, r, http.StatusServiceUnavailable, errorcode.Unavailable, "provider key encryption is not configured", nil)
-		} else {
-			httputil.RespondServiceError(w, r, err, "provider key request failed")
-		}
+		httputil.RespondServiceError(w, r, err, "provider key request failed")
 		return
 	}
 	httputil.RespondOK(w, res)
@@ -48,11 +42,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Delete(r.Context(), httputil.Tenant(r).TenantID, id); err != nil {
-		if errors.Is(err, ErrNoEncryption) {
-			httputil.RespondErrorWithCause(w, r, http.StatusServiceUnavailable, errorcode.Unavailable, "provider key encryption is not configured", nil)
-		} else {
-			httputil.RespondServiceError(w, r, err, "provider key request failed")
-		}
+		httputil.RespondServiceError(w, r, err, "provider key request failed")
 		return
 	}
 	httputil.RespondOK(w, map[string]any{"deleted": id})

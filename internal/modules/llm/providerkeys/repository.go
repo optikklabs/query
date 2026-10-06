@@ -56,15 +56,8 @@ func (r *Repository) Get(ctx context.Context, tenantID, id int64) (keyRow, error
 }
 
 func (r *Repository) Delete(ctx context.Context, tenantID, id int64) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "providerkeys.Delete",
+	return dbutil.ExecMatched(ctx, r.db, "providerkeys.Delete",
 		`DELETE FROM optikk.llm_provider_keys WHERE tenant_id = ? AND id = ?`, tenantID, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
 }
 
 func (r *Repository) Secret(ctx context.Context, tenantID int64, provider string) (secretRow, error) {

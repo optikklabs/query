@@ -47,6 +47,17 @@ func (r *Repository) QueryTraces(ctx context.Context, tenantID int64, req Traces
 	return roots, nil
 }
 
+// traceAggregateColumns summarise a trace's LLM spans (GROUP BY trace_id);
+// they need pricing.Args bound.
+var traceAggregateColumns = `
+		       sum(gen_ai_input_tokens)  AS input_tokens,
+		       sum(gen_ai_output_tokens) AS output_tokens,
+		       argMinIf(gen_ai_system, (timestamp, span_id), gen_ai_system != '') AS vendor,
+		       argMaxIf(gen_ai_request_model, gen_ai_input_tokens + gen_ai_output_tokens, gen_ai_request_model != '') AS model,
+		       countIf(gen_ai_operation = 'chat' AND gen_ai_request_model != '') AS llm_calls,
+		       argMinIf(substring(gen_ai_prompt, 1, 160), (timestamp, span_id), gen_ai_prompt != '') AS prompt_preview,
+		       sum(` + pricing.SpanCostSQL + `) AS cost`
+
 func (r *Repository) queryTraceRootPage(ctx context.Context, tenantID int64, req TracesQueryRequest) ([]llmTraceRow, error) {
 	where, args := buildTraceFilters(tenantID, req)
 	where, args = appendCursorFilter(where, args, req.Cursor)
@@ -89,14 +100,7 @@ func (r *Repository) queryTraceRootPage(ctx context.Context, tenantID int64, req
 
 func (r *Repository) traceAggregates(ctx context.Context, tenantID, startMs, endMs int64, traceIDs []string) ([]llmTraceRow, error) {
 	query := `
-		SELECT trace_id,
-		       sum(gen_ai_input_tokens)  AS input_tokens,
-		       sum(gen_ai_output_tokens) AS output_tokens,
-		       argMinIf(gen_ai_system, (timestamp, span_id), gen_ai_system != '') AS vendor,
-		       argMaxIf(gen_ai_request_model, gen_ai_input_tokens + gen_ai_output_tokens, gen_ai_request_model != '') AS model,
-		       countIf(gen_ai_operation = 'chat' AND gen_ai_request_model != '') AS llm_calls,
-		       argMinIf(substring(gen_ai_prompt, 1, 160), (timestamp, span_id), gen_ai_prompt != '') AS prompt_preview,
-		       sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
+		SELECT trace_id, ` + traceAggregateColumns + `
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end AND is_gen_ai
 		WHERE trace_id IN @traceIDs
@@ -124,14 +128,7 @@ func (r *Repository) queryTracesPreAggregated(ctx context.Context, tenantID int6
 
 	query := `
 		WITH llm AS (
-		    SELECT trace_id,
-		           sum(gen_ai_input_tokens)  AS input_tokens,
-		           sum(gen_ai_output_tokens) AS output_tokens,
-		           argMinIf(gen_ai_system, (timestamp, span_id), gen_ai_system != '') AS vendor,
-		           argMaxIf(gen_ai_request_model, gen_ai_input_tokens + gen_ai_output_tokens, gen_ai_request_model != '') AS model,
-		           countIf(gen_ai_operation = 'chat' AND gen_ai_request_model != '') AS llm_calls,
-		           argMinIf(substring(gen_ai_prompt, 1, 160), (timestamp, span_id), gen_ai_prompt != '') AS prompt_preview,
-		           sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
+		    SELECT trace_id, ` + traceAggregateColumns + `
 		    FROM optikk.spans
 		    PREWHERE tenant_id = @tenantID
 		         AND timestamp >= @start AND timestamp < @end

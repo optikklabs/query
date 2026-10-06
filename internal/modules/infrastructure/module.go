@@ -8,19 +8,19 @@ import (
 	"github.com/optikklabs/query/internal/modules/infrastructure/service"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) *module {
-	return &module{
+func NewModule(nativeQuerier clickhouse.Conn) *Module {
+	return &Module{
 		handler: &Handler{Service: service.NewService(repository.NewRepository(nativeQuerier))},
 	}
 }
 
-type module struct {
+type Module struct {
 	handler *Handler
 }
 
-func (m *module) Name() string { return "infrastructure" }
+func (m *Module) Name() string { return "infrastructure" }
 
-func (m *module) RegisterRoutes(group chi.Router) {
+func (m *Module) RegisterRoutes(group chi.Router) {
 	h := m.handler
 	group.Get("/infrastructure/cpu/avg", h.GetAvgCPU)
 	group.Get("/infrastructure/memory/avg", h.GetAvgMemory)

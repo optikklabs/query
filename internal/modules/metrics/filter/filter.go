@@ -8,8 +8,6 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 )
 
-const MaxTimeRangeMs = 30 * 24 * 60 * 60 * 1000
-
 type Filters struct {
 	TenantID int64
 	StartMs  int64
@@ -39,18 +37,11 @@ var validAggregations = map[string]bool{
 	"rate": true,
 }
 
+// Validate checks one metric query and defaults its aggregation. The time
+// window is validated once per request by the explorer.
 func (f *Filters) Validate() error {
 	if f.MetricName == "" {
 		return errors.New("metricName is required")
-	}
-	if f.StartMs <= 0 || f.EndMs <= 0 {
-		return errors.New("startTime and endTime are required")
-	}
-	if f.EndMs <= f.StartMs {
-		return errors.New("endTime must be greater than startTime")
-	}
-	if f.EndMs-f.StartMs > MaxTimeRangeMs {
-		return errors.New("time range must not exceed 30 days")
 	}
 	if f.Aggregation == "" {
 		f.Aggregation = "avg"
@@ -99,11 +90,19 @@ func AttrColumn(key string) string {
 	return "attributes['" + key + "']"
 }
 
+// ValidKey reports whether key is a resource key or an attribute key made of
+// [A-Za-z0-9._-]; keys are interpolated into SQL, so nothing else passes.
 func ValidKey(key string) bool {
-	return key != "" && (Canonical(key) != "" || strings.IndexFunc(key, func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
-			r == '.' || r == '_' || r == '-')
-	}) < 0)
+	return key != "" && (Canonical(key) != "" || !strings.ContainsFunc(key, invalidKeyRune))
+}
+
+func invalidKeyRune(r rune) bool {
+	switch {
+	case 'a' <= r && r <= 'z', 'A' <= r && r <= 'Z', '0' <= r && r <= '9', r == '.', r == '_', r == '-':
+		return false
+	default:
+		return true
+	}
 }
 
 var validOperators = map[string]bool{
@@ -139,24 +138,17 @@ func BuildClauses(f Filters) (resourceWhere, attrWhere string, args []any) {
 			continue
 		}
 
-		col := AttrColumn(t.Key)
-		exists := "mapContains(attributes, '" + t.Key + "')"
 		bind := "mf" + strconv.Itoa(rowIdx)
 		rowIdx++
 		switch t.Operator {
-		case "=":
-			attrWhere += " AND " + exists + " AND " + col + " = @" + bind
+		case "=", "!=":
 			args = append(args, clickhouse.Named(bind, t.Values[0]))
-		case "!=":
-			attrWhere += " AND " + exists + " AND " + col + " != @" + bind
-			args = append(args, clickhouse.Named(bind, t.Values[0]))
-		case "IN":
-			attrWhere += " AND " + exists + " AND " + col + " IN @" + bind
+		case "IN", "NOT IN":
 			args = append(args, clickhouse.Named(bind, t.Values))
-		case "NOT IN":
-			attrWhere += " AND " + exists + " AND " + col + " NOT IN @" + bind
-			args = append(args, clickhouse.Named(bind, t.Values))
+		default:
+			continue
 		}
+		attrWhere += " AND mapContains(attributes, '" + t.Key + "') AND " + AttrColumn(t.Key) + " " + t.Operator + " @" + bind
 	}
 
 	for i, col := range resourceOrder {

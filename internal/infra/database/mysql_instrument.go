@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -32,6 +33,33 @@ func ExecSQL(ctx context.Context, db *sqlx.DB, op, query string, args ...any) (s
 	res, err := db.ExecContext(ctx, query, args...)
 	done(err, start, op)
 	return res, err
+}
+
+// ExecMatched runs a write that must hit a row and returns sql.ErrNoRows when
+// none matched. Connections report matched rather than changed rows, so an
+// UPDATE that rewrites identical values still counts as a match.
+func ExecMatched(ctx context.Context, db *sqlx.DB, op, query string, args ...any) error {
+	res, err := ExecSQL(ctx, db, op, query, args...)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// NoRowsAs maps sql.ErrNoRows to notFound and passes every other error,
+// including nil, through unchanged.
+func NoRowsAs(err, notFound error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return notFound
+	}
+	return err
 }
 
 func startSQLOp(ctx context.Context) func(error, time.Time, string) {

@@ -1,10 +1,10 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"maps"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -139,7 +139,7 @@ func (s *Service) resolveContext(ctx context.Context, req models.DetailRequest) 
 func findContext(rows []models.RawDeploymentRow, req models.DetailRequest) (models.Context, error) {
 	candidates := filterAndSortCandidates(rows, req.Service, req.Environment)
 
-	target := indexOfVersion(candidates, req.Version)
+	target := slices.IndexFunc(candidates, func(r models.RawDeploymentRow) bool { return r.Version == req.Version })
 	if target < 0 {
 		return models.Context{}, errorcode.NotFoundError{Msg: "deployment not found in the selected range"}
 	}
@@ -169,16 +169,6 @@ func findContext(rows []models.RawDeploymentRow, req models.DetailRequest) (mode
 		out.BaselineVersion = new(candidates[target-1].Version)
 	}
 	return out, nil
-}
-
-// indexOfVersion returns the index of the first candidate matching version, or -1.
-func indexOfVersion(candidates []models.RawDeploymentRow, version string) int {
-	for i := range candidates {
-		if candidates[i].Version == version {
-			return i
-		}
-	}
-	return -1
 }
 
 // filterAndSortCandidates returns rows matching the given service and
@@ -239,7 +229,7 @@ func buildListResponse(rows []models.RawDeploymentRow, endMs int64) models.ListR
 	}
 	sortDeploymentResults(results)
 
-	environments := sortedKeys(environmentSet)
+	environments := slices.Sorted(maps.Keys(environmentSet))
 	return models.ListResponse{
 		Results:      results,
 		Environments: environments,
@@ -252,18 +242,20 @@ func buildListResponse(rows []models.RawDeploymentRow, endMs int64) models.ListR
 	}
 }
 
-// groupRowsByKey buckets rows by "service\x00environment" and collects the
+type deploymentKey struct{ service, environment string }
+
+// groupRowsByKey buckets rows by (service, environment) and collects the
 // distinct environment and service sets.
 func groupRowsByKey(rows []models.RawDeploymentRow) (
-	grouped map[string][]models.RawDeploymentRow,
+	grouped map[deploymentKey][]models.RawDeploymentRow,
 	environmentSet map[string]struct{},
 	serviceSet map[string]struct{},
 ) {
-	grouped = make(map[string][]models.RawDeploymentRow)
+	grouped = make(map[deploymentKey][]models.RawDeploymentRow)
 	environmentSet = make(map[string]struct{})
 	serviceSet = make(map[string]struct{})
 	for _, row := range rows {
-		key := row.Service + "\x00" + row.Environment
+		key := deploymentKey{row.Service, row.Environment}
 		grouped[key] = append(grouped[key], row)
 		environmentSet[row.Environment] = struct{}{}
 		serviceSet[row.Service] = struct{}{}
@@ -327,17 +319,13 @@ func sumRequests(group []models.RawDeploymentRow) uint64 {
 // sortDeploymentResults orders the final result set: newest first, then
 // alphabetically by service, environment, and version.
 func sortDeploymentResults(results []models.Deployment) {
-	sort.SliceStable(results, func(i, j int) bool {
-		if !results[i].FirstSeen.Equal(results[j].FirstSeen) {
-			return results[i].FirstSeen.After(results[j].FirstSeen)
-		}
-		if results[i].Service != results[j].Service {
-			return results[i].Service < results[j].Service
-		}
-		if results[i].Environment != results[j].Environment {
-			return results[i].Environment < results[j].Environment
-		}
-		return results[i].Version < results[j].Version
+	slices.SortStableFunc(results, func(a, b models.Deployment) int {
+		return cmp.Or(
+			b.FirstSeen.Compare(a.FirstSeen),
+			strings.Compare(a.Service, b.Service),
+			strings.Compare(a.Environment, b.Environment),
+			strings.Compare(a.Version, b.Version),
+		)
 	})
 }
 
@@ -384,14 +372,16 @@ func buildTrafficResponse(
 // sortTrafficSeries places the requested version first, then sorts the rest
 // alphabetically.
 func sortTrafficSeries(series []models.TrafficSeries, requestedVersion string) {
-	sort.SliceStable(series, func(i, j int) bool {
-		if series[i].Version == requestedVersion {
-			return true
+	slices.SortStableFunc(series, func(a, b models.TrafficSeries) int {
+		aRequested, bRequested := a.Version == requestedVersion, b.Version == requestedVersion
+		switch {
+		case aRequested && !bRequested:
+			return -1
+		case bRequested && !aRequested:
+			return 1
+		default:
+			return strings.Compare(a.Version, b.Version)
 		}
-		if series[j].Version == requestedVersion {
-			return false
-		}
-		return series[i].Version < series[j].Version
 	})
 }
 
@@ -512,17 +502,9 @@ func quantiles(qs []float64) [5]float64 {
 // sortByFirstSeen sorts deployment rows by FirstSeen ascending, breaking ties
 // by Version. Used consistently across list and detail flows.
 func sortByFirstSeen(rows []models.RawDeploymentRow) {
-	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].FirstSeen.Equal(rows[j].FirstSeen) {
-			return rows[i].Version < rows[j].Version
-		}
-		return rows[i].FirstSeen.Before(rows[j].FirstSeen)
+	slices.SortStableFunc(rows, func(a, b models.RawDeploymentRow) int {
+		return cmp.Or(a.FirstSeen.Compare(b.FirstSeen), strings.Compare(a.Version, b.Version))
 	})
-}
-
-// sortedKeys returns the keys of a set in sorted order.
-func sortedKeys(set map[string]struct{}) []string {
-	return slices.Sorted(maps.Keys(set))
 }
 
 // laterOf returns whichever of a or b is later.

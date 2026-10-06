@@ -59,8 +59,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	tenant := httputil.Tenant(r)
 	var req CreateMonitorRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.Create(r.Context(), tenant.TenantID, tenant.UserID, req)
@@ -78,8 +77,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdateMonitorRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.Update(r.Context(), tenant.TenantID, tenant.UserID, id, req)

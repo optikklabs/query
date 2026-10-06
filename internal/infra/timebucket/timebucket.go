@@ -54,6 +54,15 @@ func FloorMsToBucket(ms, bucketSec int64) int64 {
 	return ms - ms%(bucketSec*1000)
 }
 
+// logBucketSeconds is the width of optikk.logs.ts_bucket as ingest writes it.
+const logBucketSeconds = 300
+
+// LogBucket returns the optikk.logs ts_bucket (bucket start in Unix seconds)
+// containing ms.
+func LogBucket(ms int64) uint32 {
+	return uint32(FloorMsToBucket(ms, logBucketSeconds) / 1000)
+}
+
 func MetricsRollup(startMs, endMs int64) string {
 	return RollupTableForGrain(displayGrainSeconds(endMs - startMs))
 }

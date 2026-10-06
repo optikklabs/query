@@ -43,6 +43,17 @@ type TrialExpiredError struct{ Msg string }
 
 func (e TrialExpiredError) Error() string { return e.Msg }
 
+// UnavailableError marks a feature missing required setup; HTTP maps it to
+// 503.
+type UnavailableError struct{ Msg string }
+
+func (e UnavailableError) Error() string { return e.Msg }
+
+// RateLimitedError marks callers that must back off; HTTP maps it to 429.
+type RateLimitedError struct{ Msg string }
+
+func (e RateLimitedError) Error() string { return e.Msg }
+
 const (
 	Internal    = "INTERNAL_ERROR"
 	QueryFailed = "QUERY_FAILED"

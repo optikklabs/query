@@ -5,20 +5,20 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) *topologyModule {
-	m := &topologyModule{}
+func NewModule(nativeQuerier clickhouse.Conn) *Module {
+	m := &Module{}
 	m.handler = &Handler{
 		Service: NewService(NewRepository(nativeQuerier)),
 	}
 	return m
 }
 
-type topologyModule struct {
+type Module struct {
 	handler *Handler
 }
 
-func (m *topologyModule) Name() string { return "services_topology" }
+func (m *Module) Name() string { return "services_topology" }
 
-func (m *topologyModule) RegisterRoutes(group chi.Router) {
+func (m *Module) RegisterRoutes(group chi.Router) {
 	group.Get("/services/topology", m.handler.GetTopology)
 }

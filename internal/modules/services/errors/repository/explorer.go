@@ -17,8 +17,6 @@ func decodeGroupsCursor(raw string) (models.ErrorGroupsCursor, bool) {
 	return cursor.Decode[models.ErrorGroupsCursor](raw)
 }
 
-func millisToTime(ms int64) time.Time { return time.UnixMilli(ms) }
-
 // Error groups are always read from the error spans themselves, so span- and
 // root-level predicates both apply to the same row — no trace-level CTE.
 const errorSpanScan = `FROM optikk.error_events
@@ -98,7 +96,7 @@ func (r *Repository) ExplorerFacetRows(ctx context.Context, req models.FacetsReq
 // issue counts are exact for the range instead of a sample of the first page.
 func (r *Repository) ExplorerSummaryRow(ctx context.Context, req models.OverviewRequest, newSinceMs int64) (models.RawSummaryRow, error) {
 	scan, args := errorSpanWhere(req.Filters)
-	args = append(args, clickhouse.DateNamed("newSince", millisToTime(newSinceMs), clickhouse.MilliSeconds))
+	args = append(args, clickhouse.DateNamed("newSince", time.UnixMilli(newSinceMs), clickhouse.MilliSeconds))
 
 	query := `
 		SELECT sum(cnt)                        AS total_errors,

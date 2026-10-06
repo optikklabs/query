@@ -9,6 +9,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
+	"github.com/optikklabs/query/internal/shared/metrics"
 	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
@@ -18,11 +19,12 @@ type APMBackend struct {
 
 func NewAPMBackend(db clickhouse.Conn) *APMBackend { return &APMBackend{db: db} }
 
-func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, cond models.Conditions, now time.Time) (ScalarResult, error) {
-	if q.APM == nil {
+func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, now time.Time) (ScalarResult, error) {
+	q := m.Query.APM
+	if q == nil {
 		return ScalarResult{}, nil
 	}
-	windowSec := monitorWindowSec(q.APM.WindowSec)
+	windowSec := monitorWindowSec(q.WindowSec)
 	startMs, endMs := completeWindow(now, windowSec, 60)
 
 	query := `
@@ -36,37 +38,37 @@ func (b *APMBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		     AND (@resource = '' OR span_name = @resource)
 		     AND ` + spanstats.InboundPred
 
-	scopeSQL, args, err := CompileScope("apm", scope, apmArgs(m.TenantID, *q.APM, startMs, endMs))
+	scopeSQL, args, err := CompileScope("apm", m.Scope, apmArgs(m.TenantID, *q, startMs, endMs))
 	if err != nil {
 		return ScalarResult{}, err
 	}
 	query += scopeSQL
-	var rows []apmAggRow
-	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.apm.Scalar", &rows, query, args...); err != nil {
+	var row apmAggRow
+	if err := dbutil.QueryRowCH(dbutil.DashboardCtx(ctx), b.db, "alerting.apm.Scalar", &row, query, args...); err != nil {
 		return ScalarResult{}, err
 	}
-	if len(rows) == 0 || rows[0].RequestCount == 0 {
+	if row.RequestCount == 0 {
 		return ScalarResult{HasData: false}, nil
 	}
-	row := rows[0]
 	row.P99 = spanstats.LatencyP99.At(row.QS, spanstats.P99)
 
-	if cond.MinSample != nil && row.RequestCount < uint64(*cond.MinSample) {
+	if minSample := m.Conditions.MinSample; minSample != nil && row.RequestCount < uint64(*minSample) {
 		return ScalarResult{HasData: false}, nil
 	}
 
-	value := apmTrackValue(q.APM.Track, row, windowSec)
+	value := apmTrackValue(q.Track, row, windowSec)
 	return ScalarResult{Value: value, HasData: true}, nil
 }
 
-func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, _ models.Conditions, windowMs int64, now time.Time) ([]Point, error) {
-	if q.APM == nil {
+func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, windowMs int64, now time.Time) ([]Point, error) {
+	q := m.Query.APM
+	if q == nil {
 		return nil, nil
 	}
 	endMs := now.UnixMilli()
 	startMs := endMs - windowMs
 
-	scopeSQL, args, err := CompileScope("apm", scope, apmArgs(m.TenantID, *q.APM, startMs, endMs))
+	scopeSQL, args, err := CompileScope("apm", m.Scope, apmArgs(m.TenantID, *q, startMs, endMs))
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +95,7 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 	for _, r := range rows {
 		p99 := spanstats.LatencyP99.At(r.QS, spanstats.P99)
 		row := apmAggRow{RequestCount: r.RequestCount, ErrorCount: r.ErrorCount, P99: p99}
-		out = append(out, Point{BucketMs: r.Bucket.UnixMilli(), Value: apmTrackValue(q.APM.Track, row, bucketSec)})
+		out = append(out, Point{BucketMs: r.Bucket.UnixMilli(), Value: apmTrackValue(q.Track, row, bucketSec)})
 	}
 	return out, nil
 }
@@ -101,10 +103,7 @@ func (b *APMBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 func apmTrackValue(track string, row apmAggRow, windowSec int64) float64 {
 	switch track {
 	case "errors":
-		if row.RequestCount == 0 {
-			return 0
-		}
-		return float64(row.ErrorCount) / float64(row.RequestCount) * 100
+		return metrics.Percentage(row.ErrorCount, row.RequestCount)
 	case "hits":
 		if windowSec == 0 {
 			return float64(row.RequestCount)

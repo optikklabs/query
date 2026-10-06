@@ -3,9 +3,21 @@ package dashboards
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/optikklabs/query/internal/shared/errorcode"
+)
+
+const maxWidgetsPerPage = 30
+
+// Widget specs come from the metrics widget builder; these are the only
+// values it produces.
+var (
+	panelTypes      = []string{"metrics-timeseries", "metrics-value", "metrics-toplist", "metrics-table"}
+	layoutVariants  = []string{"standard-chart", "kpi", "ranking", "detail-table"}
+	aggregations    = []string{"avg", "sum", "min", "max", "count", "p50", "p95", "p99", "rate"}
+	filterOperators = []string{"eq", "neq", "in", "not_in", "wildcard"}
 )
 
 func validateWidget(spec json.RawMessage) (querySpecProbe, error) {
@@ -13,10 +25,10 @@ func validateWidget(spec json.RawMessage) (querySpecProbe, error) {
 	if err := json.Unmarshal(spec, &probe); err != nil {
 		return probe, errorcode.ValidationError{Msg: "spec must be a valid panel spec object"}
 	}
-	if !isValidPanelType(probe.PanelType) {
+	if !slices.Contains(panelTypes, probe.PanelType) {
 		return probe, errorcode.ValidationError{Msg: fmt.Sprintf("panel_type %q is not a supported dashboard panel", probe.PanelType)}
 	}
-	if !isValidLayoutVariant(probe.LayoutVariant) {
+	if !slices.Contains(layoutVariants, probe.LayoutVariant) {
 		return probe, errorcode.ValidationError{Msg: fmt.Sprintf("layout_variant %q is not supported", probe.LayoutVariant)}
 	}
 	if err := validateLayout(probe.Layout); err != nil {
@@ -84,11 +96,11 @@ func validateBuilderQuery(queries []builderQueryProbe) error {
 		if strings.TrimSpace(q.MetricName) == "" {
 			return errorcode.ValidationError{Msg: "spec.query.queries[].metricName is required"}
 		}
-		if !isValidBuilderAggregation(q.Aggregation) {
+		if !slices.Contains(aggregations, q.Aggregation) {
 			return errorcode.ValidationError{Msg: fmt.Sprintf("aggregation %q is not supported", q.Aggregation)}
 		}
 		for _, f := range q.Where {
-			if !isValidBuilderOperator(f.Operator) {
+			if !slices.Contains(filterOperators, f.Operator) {
 				return errorcode.ValidationError{Msg: fmt.Sprintf("filter operator %q is not supported", f.Operator)}
 			}
 		}

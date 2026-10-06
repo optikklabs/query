@@ -1,12 +1,16 @@
 package prompts
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
+	"slices"
 	"strings"
 
+	"github.com/optikklabs/query/internal/shared/nullable"
+
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
@@ -20,9 +24,7 @@ func NewService(repo *Repository) *Service {
 
 var ErrNotFound = errorcode.NotFoundError{Msg: "prompt not found"}
 
-var validVersionStatus = map[string]struct{}{
-	"draft": {}, "production": {}, "archived": {},
-}
+var versionStatuses = []string{"draft", "production", "archived"}
 
 func (s *Service) List(ctx context.Context, tenantID int64) ([]PromptSummary, error) {
 	rows, err := s.repo.ListPrompts(ctx, tenantID)
@@ -42,18 +44,17 @@ func (s *Service) List(ctx context.Context, tenantID int64) ([]PromptSummary, er
 func (s *Service) Get(ctx context.Context, tenantID int64, name string) (PromptDetail, error) {
 	prompt, err := s.repo.GetPromptByName(ctx, tenantID, name)
 	if err != nil {
-		return PromptDetail{}, mapNotFound(err)
+		return PromptDetail{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	versions, err := s.repo.ListVersions(ctx, prompt.ID)
 	if err != nil {
 		return PromptDetail{}, err
 	}
-	detail := PromptDetail{PromptSummary: toSummary(prompt)}
+	detail := PromptDetail{PromptSummary: toSummary(prompt), Versions: make([]PromptVersion, 0, len(versions))}
 	detail.VersionCount = len(versions)
 	for _, v := range versions {
 		if v.Status == "production" {
-			ver := v.Version
-			detail.ProductionVersion = &ver
+			detail.ProductionVersion = &v.Version
 		}
 		detail.Versions = append(detail.Versions, toVersion(v))
 	}
@@ -79,7 +80,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 		TenantID: tenantID,
 		Name:     name,
 		Type:     ptype,
-		TagsJSON: marshalStrings(req.Tags),
+		Tags:     req.Tags,
 	}
 	if d := strings.TrimSpace(req.Description); d != "" {
 		p.Description = sql.NullString{Valid: true, String: d}
@@ -88,10 +89,10 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 		p.CreatedBy = sql.NullInt64{Valid: true, Int64: userID}
 	}
 	v := versionInsertArgs{
-		TenantID:      tenantID,
-		TemplateJSON:  []byte(req.Template),
-		VariablesJSON: marshalStrings(req.Variables),
-		CreatedBy:     p.CreatedBy,
+		TenantID:     tenantID,
+		TemplateJSON: []byte(req.Template),
+		Variables:    req.Variables,
+		CreatedBy:    p.CreatedBy,
 	}
 	if n := strings.TrimSpace(req.Notes); n != "" {
 		v.Notes = sql.NullString{Valid: true, String: n}
@@ -108,14 +109,14 @@ func (s *Service) AddVersion(ctx context.Context, tenantID, userID int64, name s
 	}
 	prompt, err := s.repo.GetPromptByName(ctx, tenantID, name)
 	if err != nil {
-		return PromptDetail{}, mapNotFound(err)
+		return PromptDetail{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	v := versionInsertArgs{
-		PromptID:      prompt.ID,
-		TenantID:      tenantID,
-		TemplateJSON:  []byte(req.Template),
-		VariablesJSON: marshalStrings(req.Variables),
-		Production:    req.Production,
+		PromptID:     prompt.ID,
+		TenantID:     tenantID,
+		TemplateJSON: []byte(req.Template),
+		Variables:    req.Variables,
+		Production:   req.Production,
 	}
 	if n := strings.TrimSpace(req.Notes); n != "" {
 		v.Notes = sql.NullString{Valid: true, String: n}
@@ -130,73 +131,37 @@ func (s *Service) AddVersion(ctx context.Context, tenantID, userID int64, name s
 }
 
 func (s *Service) SetVersionStatus(ctx context.Context, tenantID int64, name string, version int, req UpdateVersionRequest) (PromptDetail, error) {
-	if _, ok := validVersionStatus[req.Status]; !ok {
+	if !slices.Contains(versionStatuses, req.Status) {
 		return PromptDetail{}, errorcode.ValidationError{Msg: "status must be draft, production or archived"}
 	}
 	prompt, err := s.repo.GetPromptByName(ctx, tenantID, name)
 	if err != nil {
-		return PromptDetail{}, mapNotFound(err)
+		return PromptDetail{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	if err := s.repo.SetVersionStatus(ctx, prompt.ID, version, req.Status); err != nil {
-		return PromptDetail{}, mapNotFound(err)
+		return PromptDetail{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return s.Get(ctx, tenantID, name)
 }
 
 func toSummary(row promptRow) PromptSummary {
-	sum := PromptSummary{
-		ID:   row.ID,
-		Name: row.Name,
-		Type: row.Type,
-		Tags: unmarshalStrings(row.TagsJSON),
+	return PromptSummary{
+		ID:          row.ID,
+		Name:        row.Name,
+		Type:        row.Type,
+		Description: row.Description.String,
+		Tags:        nullable.OrEmpty(row.Tags),
+		UpdatedAt:   cmp.Or(row.UpdatedAt.Time, row.CreatedAt),
 	}
-	if row.Description != nil {
-		sum.Description = *row.Description
-	}
-	sum.UpdatedAt = row.CreatedAt
-	if row.UpdatedAt != nil {
-		sum.UpdatedAt = *row.UpdatedAt
-	}
-	return sum
 }
 
 func toVersion(v versionRow) PromptVersion {
-	pv := PromptVersion{
+	return PromptVersion{
 		Version:   v.Version,
 		Template:  json.RawMessage(v.TemplateJSON),
-		Variables: unmarshalStrings(v.VariablesJSON),
+		Variables: nullable.OrEmpty(v.Variables),
+		Notes:     v.Notes.String,
 		Status:    v.Status,
 		CreatedAt: v.CreatedAt,
 	}
-	if v.Notes != nil {
-		pv.Notes = *v.Notes
-	}
-	return pv
-}
-
-func marshalStrings(in []string) []byte {
-	if len(in) == 0 {
-		return []byte("[]")
-	}
-	b, err := json.Marshal(in)
-	if err != nil {
-		return []byte("[]")
-	}
-	return b
-}
-
-func unmarshalStrings(raw []byte) []string {
-	out := []string{}
-	if len(raw) == 0 {
-		return out
-	}
-	_ = json.Unmarshal(raw, &out)
-	return out
-}
-
-func mapNotFound(err error) error {
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	return err
 }

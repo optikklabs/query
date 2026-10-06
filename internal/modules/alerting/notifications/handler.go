@@ -3,7 +3,6 @@ package notifications
 import (
 	"net/http"
 
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -30,8 +29,7 @@ func (h *Handler) ListChannels(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
 	var req CreateChannelRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.CreateChannel(r.Context(), t.TenantID, req)
@@ -49,8 +47,7 @@ func (h *Handler) UpdateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdateChannelRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.UpdateChannel(r.Context(), t.TenantID, id, req)
@@ -101,8 +98,7 @@ func (h *Handler) ListPolicies(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
 	var req CreatePolicyRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.CreatePolicy(r.Context(), t.TenantID, req)
@@ -120,8 +116,7 @@ func (h *Handler) UpdatePolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdatePolicyRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.UpdatePolicy(r.Context(), t.TenantID, id, req)
@@ -158,8 +153,7 @@ func (h *Handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 	t := httputil.Tenant(r)
 	var req CreateTemplateRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.CreateTemplate(r.Context(), t.TenantID, req)
@@ -177,8 +171,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdateTemplateRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.Service.UpdateTemplate(r.Context(), t.TenantID, id, req)

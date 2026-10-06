@@ -5,17 +5,17 @@ import (
 	"github.com/optikklabs/query/internal/infra/middleware"
 )
 
-func NewModule(service *Service) *module {
-	return &module{handler: NewHandler(service)}
+func NewModule(service *Service) *Module {
+	return &Module{handler: NewHandler(service)}
 }
 
-type module struct {
+type Module struct {
 	handler *Handler
 }
 
-func (m *module) Name() string { return "user-users" }
+func (m *Module) Name() string { return "user-users" }
 
-func (m *module) RegisterRoutes(group chi.Router) {
+func (m *Module) RegisterRoutes(group chi.Router) {
 	group.Group(func(r chi.Router) {
 		r.Use(middleware.RequireAdmin)
 		r.Post("/users", m.handler.CreateUser)

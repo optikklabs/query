@@ -8,25 +8,19 @@ import (
 	"github.com/optikklabs/query/internal/modules/services/errors/service"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) *errorsModule {
-	module := &errorsModule{}
-	module.configure(nativeQuerier)
-	return module
+func NewModule(nativeQuerier clickhouse.Conn) *Module {
+	return &Module{handler: &ErrorHandler{
+		Service: service.NewService(repository.NewRepository(nativeQuerier)),
+	}}
 }
 
-type errorsModule struct {
+type Module struct {
 	handler *ErrorHandler
 }
 
-func (m *errorsModule) Name() string { return "servicesErrors" }
+func (m *Module) Name() string { return "servicesErrors" }
 
-func (m *errorsModule) configure(nativeQuerier clickhouse.Conn) {
-	m.handler = &ErrorHandler{
-		Service: service.NewService(repository.NewRepository(nativeQuerier)),
-	}
-}
-
-func (m *errorsModule) RegisterRoutes(group chi.Router) {
+func (m *Module) RegisterRoutes(group chi.Router) {
 	h := m.handler
 	group.Get("/errors/service-error-rate", h.GetServiceErrorRate)
 	group.Post("/errors/groups/query", h.QueryErrorGroups)

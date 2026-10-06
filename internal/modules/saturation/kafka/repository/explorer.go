@@ -8,20 +8,17 @@ import (
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/kafka/filter"
 	"github.com/optikklabs/query/internal/modules/saturation/kafka/models"
+	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
-func buildFilterArgs(tenantID, startMs, endMs int64, metricNames []string, filterCol, filterVal string) (string, []any) {
-	args := filter.WithMetricNames(filter.MetricArgs(tenantID, startMs, endMs), metricNames)
-	var extraWhere string
-	if filterVal != "" {
-		if filterCol == "topic" {
-			extraWhere = "AND " + filter.AttrTopic + " = @filterVal"
-		} else if filterCol == "consumer_group" {
-			extraWhere = "AND " + filter.AttrConsumerGroup + " = @filterVal"
-		}
-		args = append(args, clickhouse.Named("filterVal", filterVal))
+// buildFilterArgs binds the window and metric names, plus an optional
+// equality filter on attrExpr when value is set.
+func buildFilterArgs(tenantID, startMs, endMs int64, metricNames []string, attrExpr, value string) (string, []any) {
+	args := chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), metricNames)
+	if value == "" {
+		return "", args
 	}
-	return extraWhere, args
+	return "AND " + attrExpr + " = @filterVal", append(args, clickhouse.Named("filterVal", value))
 }
 
 var topicThroughputMetrics = []string{
@@ -32,7 +29,7 @@ var topicThroughputMetrics = []string{
 }
 
 func (r *Repository) QueryTopicThroughput(ctx context.Context, tenantID, startMs, endMs int64, topic string) ([]models.TopicThroughputRow, error) {
-	extraWhere, args := buildFilterArgs(tenantID, startMs, endMs, topicThroughputMetrics, "topic", topic)
+	extraWhere, args := buildFilterArgs(tenantID, startMs, endMs, topicThroughputMetrics, filter.AttrTopic, topic)
 	query := `
 		SELECT
 		    ` + filter.AttrTopic + ` AS topic,
@@ -59,7 +56,7 @@ func (r *Repository) QueryTopicThroughput(ctx context.Context, tenantID, startMs
 var groupPartitionMetrics = []string{"kafka.consumer_group.lag", "kafka.consumer_group.members"}
 
 func (r *Repository) QueryGroupPartitions(ctx context.Context, tenantID, startMs, endMs int64, group string) ([]models.GroupPartitionsRow, error) {
-	extraWhere, args := buildFilterArgs(tenantID, startMs, endMs, groupPartitionMetrics, "consumer_group", group)
+	extraWhere, args := buildFilterArgs(tenantID, startMs, endMs, groupPartitionMetrics, filter.AttrConsumerGroup, group)
 	query := `
 		SELECT
 		    ` + filter.AttrConsumerGroup + ` AS consumer_group,

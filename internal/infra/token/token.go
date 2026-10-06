@@ -1,7 +1,8 @@
 package token
 
 import (
-	"fmt"
+	"errors"
+	"slices"
 	"strconv"
 	"time"
 
@@ -9,8 +10,11 @@ import (
 	"github.com/optikklabs/query/internal/config"
 )
 
-const typAccess = "access"
-const typPasswordReset = "pwd_reset"
+const (
+	typAccess        = "access"
+	typPasswordReset = "pwd_reset"
+	passwordResetTTL = 30 * time.Minute
+)
 
 type AuthState struct {
 	UserID          int64
@@ -74,15 +78,15 @@ func (s *Service) SignAccess(state AuthState) (string, error) {
 
 func (s *Service) ParseAccess(raw string) (AuthState, error) {
 	var claims accessClaims
-	if err := s.parse(raw, &claims); err != nil {
+	if err := parseClaims(raw, &claims, s.secret); err != nil {
 		return AuthState{}, err
 	}
 	if claims.Typ != typAccess {
-		return AuthState{}, fmt.Errorf("token is not an access token")
+		return AuthState{}, errors.New("token is not an access token")
 	}
-	userID, err := strconv.ParseInt(claims.Subject, 10, 64)
-	if err != nil || userID == 0 {
-		return AuthState{}, fmt.Errorf("invalid token subject")
+	userID, err := parseSubject(claims.Subject)
+	if err != nil {
+		return AuthState{}, err
 	}
 	return AuthState{
 		UserID:          userID,
@@ -93,28 +97,14 @@ func (s *Service) ParseAccess(raw string) (AuthState, error) {
 	}, nil
 }
 
-func (s *Service) parse(raw string, claims jwt.Claims) error {
-	parser := jwt.NewParser(
-		jwt.WithValidMethods([]string{"HS256"}),
-		jwt.WithLeeway(30*time.Second),
-		jwt.WithExpirationRequired(),
-	)
-	_, err := parser.ParseWithClaims(raw, claims, func(t *jwt.Token) (any, error) {
-		return s.secret, nil
-	})
-	return err
-}
-
 func (s *Service) SignPasswordReset(userID int64, passwordHash string) (string, error) {
 	now := time.Now()
-
-	ttl := 30 * time.Minute
 	claims := resetClaims{
 		Typ: typPasswordReset,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   strconv.FormatInt(userID, 10),
 			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(passwordResetTTL)),
 		},
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.resetSecret(passwordHash))
@@ -122,50 +112,48 @@ func (s *Service) SignPasswordReset(userID int64, passwordHash string) (string, 
 
 func (s *Service) ParsePasswordReset(raw string, passwordHash string) (int64, error) {
 	var claims resetClaims
-	parser := jwt.NewParser(
-		jwt.WithValidMethods([]string{"HS256"}),
-		jwt.WithLeeway(30*time.Second),
-		jwt.WithExpirationRequired(),
-	)
-
-	secret := s.resetSecret(passwordHash)
-	_, err := parser.ParseWithClaims(raw, &claims, func(t *jwt.Token) (any, error) {
-		return secret, nil
-	})
-	if err != nil {
+	if err := parseClaims(raw, &claims, s.resetSecret(passwordHash)); err != nil {
 		return 0, err
 	}
-
 	if claims.Typ != typPasswordReset {
-		return 0, fmt.Errorf("token is not a password reset token")
+		return 0, errors.New("token is not a password reset token")
 	}
-	userID, err := strconv.ParseInt(claims.Subject, 10, 64)
-	if err != nil || userID == 0 {
-		return 0, fmt.Errorf("invalid token subject")
+	return parseSubject(claims.Subject)
+}
+
+// ResetTokenSubject reads the user ID from a reset token without verifying
+// it, to look up the password hash the token must then verify against.
+func ResetTokenSubject(raw string) (int64, error) {
+	var claims resetClaims
+	if _, _, err := jwt.NewParser().ParseUnverified(raw, &claims); err != nil {
+		return 0, err
 	}
-	return userID, nil
+	return parseSubject(claims.Subject)
 }
 
 // resetSecret keys reset tokens to the current password hash, so a token stops
-// verifying once the password changes. It always allocates: appending to
-// s.secret directly could write into its spare capacity, which is shared by
-// concurrent requests.
+// verifying once the password changes. slices.Concat always allocates, so
+// the shared secret's backing array is never written.
 func (s *Service) resetSecret(passwordHash string) []byte {
-	secret := make([]byte, 0, len(s.secret)+len(passwordHash))
-	secret = append(secret, s.secret...)
-	return append(secret, passwordHash...)
+	return slices.Concat(s.secret, []byte(passwordHash))
 }
 
-func (s *Service) ExtractSubjectWithoutVerify(raw string) (int64, error) {
-	parser := jwt.NewParser()
-	var claims resetClaims
-	_, _, err := parser.ParseUnverified(raw, &claims)
-	if err != nil {
-		return 0, err
-	}
-	userID, err := strconv.ParseInt(claims.Subject, 10, 64)
-	if err != nil || userID == 0 {
-		return 0, fmt.Errorf("invalid token subject")
+func parseClaims(raw string, claims jwt.Claims, secret []byte) error {
+	parser := jwt.NewParser(
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithLeeway(30*time.Second),
+		jwt.WithExpirationRequired(),
+	)
+	_, err := parser.ParseWithClaims(raw, claims, func(*jwt.Token) (any, error) {
+		return secret, nil
+	})
+	return err
+}
+
+func parseSubject(subject string) (int64, error) {
+	userID, err := strconv.ParseInt(subject, 10, 64)
+	if err != nil || userID <= 0 {
+		return 0, errors.New("invalid token subject")
 	}
 	return userID, nil
 }

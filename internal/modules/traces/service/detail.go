@@ -1,11 +1,10 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
-	"log/slog"
-	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -35,7 +34,6 @@ func foldTraceSummary(res repository.TraceSummaryRow) models.TraceSummary {
 func (s *Service) GetSpanEvents(ctx context.Context, tenantID int64, traceID string, startMs, endMs int64) ([]models.SpanEvent, error) {
 	combined, err := s.repo.GetSpanEvents(ctx, tenantID, traceID, startMs, endMs)
 	if err != nil {
-		slog.ErrorContext(ctx, "detail: GetSpanEvents failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
 	}
 	eventRows, exceptionRows := splitEventRows(combined)
@@ -93,41 +91,25 @@ func marshalAttributes(attrs map[string]string) string {
 }
 
 func sortSpanEvents(events []models.SpanEvent) {
-	sort.Slice(events, func(i, j int) bool {
-		if events[i].Timestamp.Equal(events[j].Timestamp) {
-			if events[i].SpanID == events[j].SpanID {
-				return events[i].EventName < events[j].EventName
-			}
-			return events[i].SpanID < events[j].SpanID
-		}
-		return events[i].Timestamp.Before(events[j].Timestamp)
+	slices.SortFunc(events, func(a, b models.SpanEvent) int {
+		return cmp.Or(a.Timestamp.Compare(b.Timestamp), strings.Compare(a.SpanID, b.SpanID), strings.Compare(a.EventName, b.EventName))
 	})
 }
 
+// GetSpanAttributes returns nil when the span is not in the window.
 func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID, spanID string, startMs, endMs int64) (*models.SpanAttributes, error) {
 	row, err := s.repo.GetSpanAttributes(ctx, tenantID, traceID, spanID, startMs, endMs)
-	if err != nil {
-		slog.ErrorContext(ctx, "detail: GetSpanAttributes failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID), slog.String("span_id", spanID))
+	if err != nil || row == nil {
 		return nil, err
-	}
-	if row == nil {
-		return nil, nil
 	}
 
 	attrs := row.Attributes
 	if attrs == nil {
 		attrs = map[string]string{}
 	}
-	resourceAttrs := map[string]string{}
-
-	outLinks := make([]models.SpanLink, 0, len(row.Links))
-	for _, l := range row.Links {
-		outLinks = append(outLinks, models.SpanLink{
-			TraceID:    l.TraceID,
-			SpanID:     l.SpanID,
-			TraceState: l.TraceState,
-			Attributes: l.Attributes,
-		})
+	links := make([]models.SpanLink, len(row.Links))
+	for i, l := range row.Links {
+		links[i] = models.SpanLink(l)
 	}
 
 	return &models.SpanAttributes{
@@ -136,17 +118,34 @@ func (s *Service) GetSpanAttributes(ctx context.Context, tenantID int64, traceID
 		OperationName:         row.OperationName,
 		ServiceName:           row.ServiceName,
 		AttributesString:      attrs,
-		ResourceAttrs:         resourceAttrs,
-		Attributes:            attrs,
+		ResourceAttrs:         resourceAttributes(row),
 		ExceptionType:         row.ExceptionType,
 		ExceptionMessage:      row.ExceptionMessage,
 		ExceptionStacktrace:   row.ExceptionStacktrace,
 		DBSystem:              row.DBSystem,
 		DBName:                row.DBName,
 		DBStatement:           row.DBStatement,
-		DBStatementNormalized: normalizeDBStatement(row.DBStatement),
-		Links:                 outLinks,
+		DBStatementNormalized: row.DBStatementNorm,
+		Links:                 links,
 	}, nil
+}
+
+// resourceAttributes rebuilds the resource attributes that ingest promotes
+// out of the attribute map into their own columns.
+func resourceAttributes(row *repository.SpanAttributeRow) map[string]string {
+	out := make(map[string]string, 5)
+	for key, value := range map[string]string{
+		"service.name":           row.ServiceName,
+		"service.version":        row.ServiceVersion,
+		"deployment.environment": row.Environment,
+		"host.name":              row.Host,
+		"k8s.pod.name":           row.Pod,
+	} {
+		if value != "" {
+			out[key] = value
+		}
+	}
+	return out
 }
 
 func (s *Service) GetRelatedTraces(ctx context.Context, tenantID int64, serviceName, operationName string, startMs, endMs int64, excludeTraceID string, limit int) ([]models.RelatedTrace, error) {
@@ -186,24 +185,5 @@ func splitEventRows(rows []repository.SpanEventCombinedRow) ([]spanEventRow, []e
 			})
 		}
 	}
-	for i, j := 0, len(exceptions)-1; i < j; i, j = i+1, j-1 {
-		exceptions[i], exceptions[j] = exceptions[j], exceptions[i]
-	}
 	return events, exceptions
-}
-
-var (
-	reNumberLiteral = regexp.MustCompile(`\b\d+(\.\d+)?\b`)
-	reStringLiteral = regexp.MustCompile(`'[^']*'`)
-	reMultiSpace    = regexp.MustCompile(`\s+`)
-)
-
-func normalizeDBStatement(stmt string) string {
-	if stmt == "" {
-		return ""
-	}
-	s := reStringLiteral.ReplaceAllString(stmt, "?")
-	s = reNumberLiteral.ReplaceAllString(s, "?")
-	s = reMultiSpace.ReplaceAllString(s, " ")
-	return strings.TrimSpace(s)
 }

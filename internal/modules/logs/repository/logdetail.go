@@ -6,6 +6,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/logs/models"
 )
 
@@ -15,8 +16,8 @@ func (r *Repository) GetByID(ctx context.Context, tenantID int64, logID string, 
 		clickhouse.Named("logID", logID),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
-		clickhouse.Named("startBucket", uint32((startMs/1000)/300*300)),
-		clickhouse.Named("endBucket", uint32((endMs/1000)/300*300)),
+		clickhouse.Named("startBucket", timebucket.LogBucket(startMs)),
+		clickhouse.Named("endBucket", timebucket.LogBucket(endMs)),
 	}
 
 	query := `

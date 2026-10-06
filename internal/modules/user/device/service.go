@@ -2,10 +2,13 @@ package device
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
 	"time"
+
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
@@ -33,14 +36,7 @@ func NewService(repo *Repository, issuer *auth.Service) *Service {
 }
 
 func (s *Service) StartDeviceAuth(ctx context.Context) (DeviceCodeResponse, error) {
-	deviceCode, err := shared.GenerateDeviceCode()
-	if err != nil {
-		return DeviceCodeResponse{}, fmt.Errorf("failed to generate device code: %w", err)
-	}
-	userCode, err := shared.GenerateUserCode()
-	if err != nil {
-		return DeviceCodeResponse{}, fmt.Errorf("failed to generate user code: %w", err)
-	}
+	deviceCode, userCode := shared.GenerateSecretToken(), shared.GenerateUserCode()
 	expiresAt := time.Now().UTC().Add(deviceCodeTTL)
 	if err := s.repo.InsertDeviceCode(ctx, deviceCode, userCode, expiresAt); err != nil {
 		return DeviceCodeResponse{}, fmt.Errorf("failed to store device code: %w", err)
@@ -55,8 +51,11 @@ func (s *Service) StartDeviceAuth(ctx context.Context) (DeviceCodeResponse, erro
 
 func (s *Service) PollDeviceToken(ctx context.Context, deviceCode string) (auth.LoginResponse, string, error) {
 	record, err := s.repo.FindDeviceCode(ctx, deviceCode)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		return auth.LoginResponse{}, "", ErrDeviceExpired
+	}
+	if err != nil {
+		return auth.LoginResponse{}, "", fmt.Errorf("failed to look up device code: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -72,21 +71,20 @@ func (s *Service) PollDeviceToken(ctx context.Context, deviceCode string) (auth.
 		slog.WarnContext(ctx, "AUTH_EVENT device_poll_touch_failed", slog.Any("error", err))
 	}
 
-	user, err := s.repo.FindActiveUserByID(ctx, *record.UserID)
-	if err != nil {
+	user, err := s.repo.FindActiveUser(ctx, *record.UserID)
+	if errors.Is(err, sql.ErrNoRows) {
 		return auth.LoginResponse{}, "", errorcode.UnauthorizedError{Msg: "Approved user is no longer active"}
 	}
+	if err != nil {
+		return auth.LoginResponse{}, "", fmt.Errorf("failed to load approved user: %w", err)
+	}
 	if err := s.repo.ConsumeDeviceCode(ctx, deviceCode, now); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return auth.LoginResponse{}, "", ErrDeviceExpired
+		}
 		return auth.LoginResponse{}, "", fmt.Errorf("failed to consume device code: %w", err)
 	}
-
-	authUser := shared.AuthUser{
-		ID:       user.ID,
-		Email:    user.Email,
-		Name:     user.Name,
-		TenantID: user.TenantID,
-	}
-	response, refresh, err := s.issuer.IssueTokens(ctx, authUser)
+	response, refresh, err := s.issuer.IssueTokens(ctx, user)
 	if err != nil {
 		return auth.LoginResponse{}, "", err
 	}
@@ -109,17 +107,18 @@ func evaluateDeviceCode(record shared.DeviceCodeRecord, now time.Time) error {
 
 func (s *Service) ApproveDeviceCode(ctx context.Context, userCode string, userID int64) error {
 	record, err := s.repo.FindDeviceCodeByUserCode(ctx, userCode)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		return errorcode.ValidationError{Msg: "Unknown or expired code"}
+	}
+	if err != nil {
+		return fmt.Errorf("failed to look up device code: %w", err)
 	}
 	if time.Now().UTC().After(record.ExpiresAt) || record.ConsumedAt != nil {
 		return errorcode.ValidationError{Msg: "This code has expired. Start a new login from the CLI."}
 	}
+	alreadyApproved := errorcode.ValidationError{Msg: "This code was already approved."}
 	if record.ApprovedAt != nil {
-		return errorcode.ValidationError{Msg: "This code was already approved."}
+		return alreadyApproved
 	}
-	if err := s.repo.ApproveDeviceCode(ctx, userCode, userID, time.Now().UTC()); err != nil {
-		return fmt.Errorf("failed to approve device code: %w", err)
-	}
-	return nil
+	return dbutil.NoRowsAs(s.repo.ApproveDeviceCode(ctx, userCode, userID, time.Now().UTC()), alreadyApproved)
 }

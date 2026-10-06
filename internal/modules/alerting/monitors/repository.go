@@ -3,11 +3,11 @@ package monitors
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 )
@@ -20,40 +20,9 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: sqlx.NewDb(db, "mysql")}
 }
 
-type insertArgs struct {
-	TenantID         int64
-	Name             string
-	Type             string
-	Priority         string
-	ScopeJSON        []byte
-	QueryJSON        []byte
-	ConditionsJSON   []byte
-	NotifyJSON       []byte
-	MessageBody      sql.NullString
-	RunbookURL       sql.NullString
-	TagsJSON         []byte
-	EvalEverySec     int
-	RenotifyEverySec sql.NullInt64
-	CreatedByUserID  sql.NullInt64
-}
-
-const insertMonitor = `
-INSERT INTO optikk.monitors
-  (tenant_id, name, type, priority, scope_json, query_json, conditions_json, notify_json,
-   message_body, runbook_url, tags_json, eval_every_sec, renotify_every_sec,
-   active, created_at, created_by_user_id)
-VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-`
-
-const insertInitialState = `
-INSERT INTO optikk.monitor_state
-  (monitor_id, status, next_evaluation_at)
-VALUES
-  (?, 'no_data', ?)
-`
-
-func (r *Repository) Create(ctx context.Context, row insertArgs) (int64, error) {
+// Create inserts the monitor and its initial no_data state in one
+// transaction and returns the new monitor id.
+func (r *Repository) Create(ctx context.Context, m models.MonitorRow) (int64, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -61,12 +30,15 @@ func (r *Repository) Create(ctx context.Context, row insertArgs) (int64, error) 
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().UTC()
-	res, err := tx.ExecContext(ctx, insertMonitor,
-		row.TenantID, row.Name, row.Type, row.Priority,
-		row.ScopeJSON, row.QueryJSON, row.ConditionsJSON, row.NotifyJSON,
-		row.MessageBody, row.RunbookURL, row.TagsJSON,
-		row.EvalEverySec, row.RenotifyEverySec,
-		now, row.CreatedByUserID)
+	res, err := tx.ExecContext(ctx, `
+		INSERT INTO optikk.monitors
+		  (tenant_id, name, type, priority, scope_json, query_json, conditions_json, notify_json,
+		   message_body, runbook_url, tags_json, eval_every_sec, renotify_every_sec,
+		   active, created_at, created_by_user_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+		m.TenantID, m.Name, m.Type, m.Priority, m.Scope, m.Query, m.Conditions, m.Notify,
+		m.MessageBody, m.RunbookURL, m.Tags, m.EvalEverySec, m.RenotifyEverySec,
+		now, m.CreatedByUserID)
 	if err != nil {
 		return 0, err
 	}
@@ -74,42 +46,28 @@ func (r *Repository) Create(ctx context.Context, row insertArgs) (int64, error) 
 	if err != nil {
 		return 0, err
 	}
-	if _, err := tx.ExecContext(ctx, insertInitialState, id, now); err != nil {
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO optikk.monitor_state (monitor_id, status, next_evaluation_at)
+		VALUES (?, 'no_data', ?)`, id, now); err != nil {
 		return 0, err
 	}
-	if err := tx.Commit(); err != nil {
-		return 0, err
-	}
-	return id, nil
+	return id, tx.Commit()
 }
 
-const updateMonitor = `
-UPDATE optikk.monitors
-   SET name = ?, type = ?, priority = ?,
-       scope_json = ?, query_json = ?, conditions_json = ?, notify_json = ?,
-       message_body = ?, runbook_url = ?, tags_json = ?,
-       eval_every_sec = ?, renotify_every_sec = ?,
-       updated_at = ?
- WHERE id = ? AND tenant_id = ?
-`
-
-func (r *Repository) Update(ctx context.Context, id, tenantID int64, row insertArgs) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "monitors.Update", updateMonitor,
-		row.Name, row.Type, row.Priority,
-		row.ScopeJSON, row.QueryJSON, row.ConditionsJSON, row.NotifyJSON,
-		row.MessageBody, row.RunbookURL, row.TagsJSON,
-		row.EvalEverySec, row.RenotifyEverySec,
-		time.Now().UTC(), id, tenantID)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+func (r *Repository) Update(ctx context.Context, id int64, m models.MonitorRow) error {
+	return dbutil.ExecMatched(ctx, r.db, "monitors.Update", `
+		UPDATE optikk.monitors
+		   SET name = ?, type = ?, priority = ?,
+		       scope_json = ?, query_json = ?, conditions_json = ?, notify_json = ?,
+		       message_body = ?, runbook_url = ?, tags_json = ?,
+		       eval_every_sec = ?, renotify_every_sec = ?, updated_at = ?
+		 WHERE id = ? AND tenant_id = ?`,
+		m.Name, m.Type, m.Priority, m.Scope, m.Query, m.Conditions, m.Notify,
+		m.MessageBody, m.RunbookURL, m.Tags, m.EvalEverySec, m.RenotifyEverySec,
+		time.Now().UTC(), id, m.TenantID)
 }
 
+// Delete removes the monitor with its state and events in one transaction.
 func (r *Repository) Delete(ctx context.Context, id, tenantID int64) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -122,88 +80,37 @@ func (r *Repository) Delete(ctx context.Context, id, tenantID int64) error {
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
 		return sql.ErrNoRows
 	}
-	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM optikk.monitor_state WHERE monitor_id = ?`, id); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM optikk.monitor_events WHERE monitor_id = ?`, id); err != nil {
-		return err
+	for _, table := range []string{"optikk.monitor_state", "optikk.monitor_events"} {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE monitor_id = ?`, id); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
 
-const selectMonitorCols = `
-  m.id, m.tenant_id, m.name, m.type, m.priority,
-  m.scope_json, m.query_json, m.conditions_json, m.notify_json,
-  m.message_template_id, m.message_body, m.runbook_url, m.tags_json,
-  m.eval_every_sec, m.renotify_every_sec, m.muted_until, m.active,
-  m.created_at, m.updated_at, m.created_by_user_id
-`
-
-const selectStateCols = `
-  s.monitor_id, s.status, s.current_value, s.last_evaluated_at,
-  s.next_evaluation_at, s.triggered_at, s.last_notified_at,
-  s.evaluation_count, s.acked_by_user_id, s.acked_at, s.no_data_since
-`
+const monitorWithStateFrom = `
+	  FROM optikk.monitors m
+	  LEFT JOIN optikk.monitor_state s ON s.monitor_id = m.id`
 
 func (r *Repository) GetByID(ctx context.Context, id, tenantID int64) (models.MonitorRow, models.MonitorStateRow, error) {
-	var row models.MonitorRow
-	var state models.MonitorStateRow
-	q := fmt.Sprintf(`
-		SELECT %s, %s
-		  FROM optikk.monitors m
-		  LEFT JOIN optikk.monitor_state s ON s.monitor_id = m.id
+	var row models.MonitorWithStateRow
+	err := dbutil.GetSQL(ctx, r.db, "monitors.GetByID", &row,
+		`SELECT `+models.MonitorWithStateColumns+monitorWithStateFrom+`
 		 WHERE m.id = ? AND m.tenant_id = ?
-		 LIMIT 1
-	`, selectMonitorCols, selectStateCols)
-	var combined monitorWithState
-	if err := dbutil.GetSQL(ctx, r.db, "monitors.GetByID", &combined, q, id, tenantID); err != nil {
-		return row, state, err
+		 LIMIT 1`, id, tenantID)
+	if err != nil {
+		return models.MonitorRow{}, models.MonitorStateRow{}, err
 	}
-	return combined.toRows()
+	m, state := row.Split()
+	return m, state, nil
 }
 
-type monitorWithState struct {
-	models.MonitorRow
-	StateMonitorID        sql.NullInt64   `db:"monitor_id"`
-	StateStatus           sql.NullString  `db:"status"`
-	StateCurrentValue     sql.NullFloat64 `db:"current_value"`
-	StateLastEvaluatedAt  sql.NullTime    `db:"last_evaluated_at"`
-	StateNextEvaluationAt sql.NullTime    `db:"next_evaluation_at"`
-	StateTriggeredAt      sql.NullTime    `db:"triggered_at"`
-	StateLastNotifiedAt   sql.NullTime    `db:"last_notified_at"`
-	StateEvaluationCount  sql.NullInt64   `db:"evaluation_count"`
-	StateAckedByUserID    sql.NullInt64   `db:"acked_by_user_id"`
-	StateAckedAt          sql.NullTime    `db:"acked_at"`
-	StateNoDataSince      sql.NullTime    `db:"no_data_since"`
-}
-
-func (m monitorWithState) toRows() (models.MonitorRow, models.MonitorStateRow, error) {
-	state := models.MonitorStateRow{}
-	if m.StateMonitorID.Valid {
-		state.MonitorID = m.StateMonitorID.Int64
-		state.Status = m.StateStatus.String
-		state.CurrentValue = m.StateCurrentValue
-		state.LastEvaluatedAt = m.StateLastEvaluatedAt
-		if m.StateNextEvaluationAt.Valid {
-			state.NextEvaluationAt = m.StateNextEvaluationAt.Time
-		}
-		state.TriggeredAt = m.StateTriggeredAt
-		state.LastNotifiedAt = m.StateLastNotifiedAt
-		state.EvaluationCount = m.StateEvaluationCount.Int64
-		state.AckedByUserID = m.StateAckedByUserID
-		state.AckedAt = m.StateAckedAt
-		state.NoDataSince = m.StateNoDataSince
-	}
-	return m.MonitorRow, state, nil
-}
-
-func monitorListWhere(tenantID int64, q ListQuery) ([]string, []any) {
+func monitorListWhere(tenantID int64, q ListQuery) (string, []any) {
 	where := []string{"m.tenant_id = ?"}
 	args := []any{tenantID}
 	if q.Type != "" {
@@ -214,13 +121,13 @@ func monitorListWhere(tenantID int64, q ListQuery) ([]string, []any) {
 		where = append(where, "m.priority = ?")
 		args = append(args, q.Priority)
 	}
-	if q.Status != "" {
-		if q.Status == "no_data" {
-			where = append(where, "(s.status IS NULL OR s.status = 'no_data')")
-		} else {
-			where = append(where, "s.status = ?")
-			args = append(args, q.Status)
-		}
+	switch q.Status {
+	case "":
+	case "no_data":
+		where = append(where, "(s.status IS NULL OR s.status = 'no_data')")
+	default:
+		where = append(where, "s.status = ?")
+		args = append(args, q.Status)
 	}
 	if q.Muted != nil {
 		if *q.Muted {
@@ -233,53 +140,37 @@ func monitorListWhere(tenantID int64, q ListQuery) ([]string, []any) {
 		where = append(where, "m.name LIKE ?")
 		args = append(args, "%"+q.Search+"%")
 	}
-	return where, args
+	return strings.Join(where, " AND "), args
 }
 
-func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]models.MonitorRow, []models.MonitorStateRow, error) {
+func (r *Repository) List(ctx context.Context, tenantID int64, q ListQuery) ([]models.MonitorWithStateRow, error) {
 	where, args := monitorListWhere(tenantID, q)
 	limit := q.Limit
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	offset := max(q.Offset, 0)
-	args = append(args, limit, offset)
+	args = append(args, limit, max(q.Offset, 0))
 
-	query := fmt.Sprintf(`
-		SELECT %s, %s
-		  FROM optikk.monitors m
-		  LEFT JOIN optikk.monitor_state s ON s.monitor_id = m.id
-		 WHERE %s
+	var rows []models.MonitorWithStateRow
+	err := dbutil.SelectSQL(ctx, r.db, "monitors.List", &rows,
+		`SELECT `+models.MonitorWithStateColumns+monitorWithStateFrom+`
+		 WHERE `+where+`
 		 ORDER BY m.created_at DESC, m.id DESC
-		 LIMIT ? OFFSET ?
-	`, selectMonitorCols, selectStateCols, strings.Join(where, " AND "))
-
-	var combined []monitorWithState
-	if err := dbutil.SelectSQL(ctx, r.db, "monitors.List", &combined, query, args...); err != nil {
-		return nil, nil, err
-	}
-	rows := make([]models.MonitorRow, 0, len(combined))
-	states := make([]models.MonitorStateRow, 0, len(combined))
-	for _, m := range combined {
-		row, state, _ := m.toRows()
-		rows = append(rows, row)
-		states = append(states, state)
-	}
-	return rows, states, nil
+		 LIMIT ? OFFSET ?`, args...)
+	return rows, err
 }
 
 func (r *Repository) Count(ctx context.Context, tenantID int64, q ListQuery) (StatusCounts, error) {
 	where, args := monitorListWhere(tenantID, q)
-	query := fmt.Sprintf(`
+	var counts StatusCounts
+	err := dbutil.GetSQL(ctx, r.db, "monitors.Count", &counts, `
 		SELECT COUNT(*) AS total,
 		       COALESCE(SUM(s.status = 'alert'), 0) AS alert,
 		       COALESCE(SUM(s.status = 'warn'), 0) AS warn,
 		       COALESCE(SUM(s.status = 'ok'), 0) AS ok,
 		       COALESCE(SUM(s.status IS NULL OR s.status = 'no_data'), 0) AS no_data,
-		       COALESCE(SUM(m.muted_until IS NOT NULL AND m.muted_until > NOW()), 0) AS muted
-		  FROM optikk.monitors m
-		  LEFT JOIN optikk.monitor_state s ON s.monitor_id = m.id
-		 WHERE %s`, strings.Join(where, " AND "))
-	var counts StatusCounts
-	return counts, dbutil.GetSQL(ctx, r.db, "monitors.Count", &counts, query, args...)
+		       COALESCE(SUM(m.muted_until IS NOT NULL AND m.muted_until > NOW()), 0) AS muted`+
+		monitorWithStateFrom+`
+		 WHERE `+where, args...)
+	return counts, err
 }

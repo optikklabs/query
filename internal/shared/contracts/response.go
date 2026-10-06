@@ -1,6 +1,9 @@
 package contracts
 
-import "time"
+import (
+	"reflect"
+	"time"
+)
 
 type APIResponse struct {
 	Success bool `json:"success"`
@@ -27,26 +30,32 @@ type PageInfo struct {
 }
 
 func Success(data any) APIResponse {
-	return APIResponse{Success: true, Data: data, Timestamp: time.Now().UTC()}
+	return APIResponse{Success: true, Data: emptyIfNilSlice(data), Timestamp: time.Now().UTC()}
 }
 
 func SuccessWithComparison(data, comparison any) APIResponse {
-	return APIResponse{Success: true, Data: data, Comparison: comparison, Timestamp: time.Now().UTC()}
+	return APIResponse{
+		Success:    true,
+		Data:       emptyIfNilSlice(data),
+		Comparison: emptyIfNilSlice(comparison),
+		Timestamp:  time.Now().UTC(),
+	}
 }
 
-func Failure(code, msg, path string, requestID ...string) APIResponse {
-	detail := &ErrorDetail{
-		Code:      code,
-		Message:   msg,
-		Timestamp: time.Now().UTC(),
-		Path:      path,
-	}
-	if len(requestID) > 0 {
-		detail.RequestID = requestID[0]
-	}
+func Failure(code, msg, path, requestID string) APIResponse {
+	now := time.Now().UTC()
 	return APIResponse{
 		Success:   false,
-		Error:     detail,
-		Timestamp: time.Now().UTC(),
+		Error:     &ErrorDetail{Code: code, Message: msg, Timestamp: now, Path: path, RequestID: requestID},
+		Timestamp: now,
 	}
+}
+
+// emptyIfNilSlice turns a nil slice into an empty one of the same type, so a
+// list endpoint with no rows encodes [] instead of null.
+func emptyIfNilSlice(data any) any {
+	if v := reflect.ValueOf(data); v.Kind() == reflect.Slice && v.IsNil() {
+		return reflect.MakeSlice(v.Type(), 0, 0).Interface()
+	}
+	return data
 }

@@ -1,6 +1,7 @@
 package explorer
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -130,15 +131,15 @@ func toFilter(tenantID, startMs, endMs int64, step string, query MetricQuery) fi
 
 func resolveMetricKind(kind metricNameDTO) (cumulative, histogram bool, err error) {
 	if kind.Variants != 1 {
-		return false, false, fmt.Errorf("metric name has incompatible series types")
+		return false, false, errors.New("metric name has incompatible series types")
 	}
 
 	switch normalizeMetricType(kind.MetricType) {
 	case "summary":
-		return false, false, fmt.Errorf("summary metrics are not safely aggregatable")
+		return false, false, errors.New("summary metrics are not safely aggregatable")
 	case "histogram", "exponential_histogram":
 		if kind.Temporality == "Cumulative" {
-			return false, false, fmt.Errorf("cumulative distributions are not safely aggregatable")
+			return false, false, errors.New("cumulative distributions are not safely aggregatable")
 		}
 		return false, true, nil
 	case "counter":

@@ -2,11 +2,12 @@ package scores
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"slices"
+
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
-var errInvalidScore = errors.New("invalid score")
+var dataTypes = []string{"numeric", "boolean", "categorical"}
 
 type Service struct {
 	repo *Repository
@@ -17,16 +18,13 @@ func NewService(repo *Repository) *Service {
 }
 
 func (s *Service) Create(ctx context.Context, tenantID int64, req CreateScoreRequest) error {
-	if req.TraceID == "" || req.Name == "" {
-		return fmt.Errorf("%w: traceId and name are required", errInvalidScore)
-	}
-	switch req.DataType {
-	case "numeric", "boolean", "categorical":
-	default:
-		return fmt.Errorf("%w: dataType must be numeric, boolean or categorical", errInvalidScore)
-	}
-	if req.DataType != "categorical" && req.Value == nil {
-		return fmt.Errorf("%w: value is required for numeric/boolean scores", errInvalidScore)
+	switch {
+	case req.TraceID == "" || req.Name == "":
+		return errorcode.ValidationError{Msg: "traceId and name are required"}
+	case !slices.Contains(dataTypes, req.DataType):
+		return errorcode.ValidationError{Msg: "dataType must be numeric, boolean or categorical"}
+	case req.DataType != "categorical" && req.Value == nil:
+		return errorcode.ValidationError{Msg: "value is required for numeric/boolean scores"}
 	}
 
 	row, err := s.repo.LookupTraceContext(ctx, tenantID, req.TraceID)
@@ -45,8 +43,6 @@ func (s *Service) Create(ctx context.Context, tenantID int64, req CreateScoreReq
 	}
 	return s.repo.Insert(ctx, row)
 }
-
-func IsValidationError(err error) bool { return errors.Is(err, errInvalidScore) }
 
 func (s *Service) Summary(ctx context.Context, tenantID, startMs, endMs int64) (ScoreSummaryResponse, error) {
 	rows, err := s.repo.Summary(ctx, tenantID, startMs, endMs)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/optikklabs/query/internal/config"
+	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 )
 
@@ -29,10 +30,7 @@ func (s *Service) IngestionEndpoints() IngestionEndpointsResponse {
 }
 
 func (s *Service) RotateAPIKey(ctx context.Context, tenantID int64) (TenantResponse, error) {
-	apiKey, err := shared.GenerateAPIKey()
-	if err != nil {
-		return TenantResponse{}, fmt.Errorf("failed to generate api key: %w", err)
-	}
+	apiKey := shared.GenerateAPIKey()
 	resp, err := s.setTenantAPIKey(ctx, tenantID, apiKey)
 	if err != nil {
 		return TenantResponse{}, err
@@ -42,15 +40,11 @@ func (s *Service) RotateAPIKey(ctx context.Context, tenantID int64) (TenantRespo
 }
 
 func (s *Service) RevokeAPIKey(ctx context.Context, tenantID int64) (TenantResponse, error) {
-	sentinel, err := shared.GenerateRevokedKey()
-	if err != nil {
-		return TenantResponse{}, fmt.Errorf("failed to revoke api key: %w", err)
-	}
-	return s.setTenantAPIKey(ctx, tenantID, sentinel)
+	return s.setTenantAPIKey(ctx, tenantID, shared.GenerateRevokedKey())
 }
 
 func (s *Service) setTenantAPIKey(ctx context.Context, tenantID int64, apiKey string) (TenantResponse, error) {
-	if err := s.repo.UpdateTenantAPIKey(ctx, tenantID, shared.HashAPIKey(apiKey), shared.APIKeyPrefix(apiKey)); err != nil {
+	if err := s.repo.UpdateTenantAPIKey(ctx, tenantID, token.HashSecret(apiKey), shared.APIKeyPrefix(apiKey)); err != nil {
 		return TenantResponse{}, fmt.Errorf("failed to update api key: %w", err)
 	}
 	tenant, err := s.repo.FindTenantByID(ctx, tenantID)

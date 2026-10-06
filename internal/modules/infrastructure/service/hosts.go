@@ -1,9 +1,9 @@
 package service
 
 import (
+	"cmp"
 	"context"
-	"math"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,7 +26,7 @@ func (s *Service) GetHosts(ctx context.Context, tenantID, startMs, endMs int64, 
 		for _, host := range order {
 			out = append(out, byHost[host])
 		}
-		sort.Slice(out, func(i, j int) bool { return out[i].Saturation > out[j].Saturation })
+		slices.SortStableFunc(out, func(a, b models.Host) int { return cmp.Compare(b.Saturation, a.Saturation) })
 		return out, nil
 	}
 
@@ -54,7 +54,7 @@ func foldUtilization(rows []repository.HostMetricRow) (map[string]models.Host, [
 		cpu := valueOrZero(foldCPU(m))
 		mem := valueOrZero(foldMem(m))
 		disk := valueOrZero(foldDisk(m))
-		sat := math.Max(cpu, math.Max(mem, disk))
+		sat := max(cpu, mem, disk)
 		byHost[host] = models.Host{
 			Host:       host,
 			Subsystem:  subsystemForHost(host),
@@ -80,7 +80,7 @@ func enrichWithSpans(byHost map[string]models.Host, spans []repository.HostSpans
 
 		total := int64(row.RequestCount)
 		errs := int64(row.ErrorCount)
-		errRate := metrics.PercentageInt(errs, total)
+		errRate := metrics.Percentage(errs, total)
 		rps := float64(total) / durationSec
 		p99 := httputil.SanitizeFloat(float64(row.P99Ms))
 
@@ -97,14 +97,16 @@ func enrichWithSpans(byHost map[string]models.Host, spans []repository.HostSpans
 	return out
 }
 
+// classifyHost grades a host by its error rate (a percentage) and p99.
 func classifyHost(errRate, p99Ms float64) models.HostStatus {
-	if errRate >= 0.10 || p99Ms >= 2000 {
+	switch {
+	case errRate > infraconsts.UnhealthyErrorPct || p99Ms >= 2000:
 		return models.HostError
-	}
-	if errRate >= 0.02 || p99Ms >= 1000 {
+	case errRate > infraconsts.DegradedErrorPct || p99Ms >= 1000:
 		return models.HostWarn
+	default:
+		return models.HostHealthy
 	}
-	return models.HostHealthy
 }
 
 func subsystemForHost(host string) string {
@@ -138,6 +140,7 @@ func foldCPU(m map[string]float64) *float64 {
 	)
 }
 
+// foldMem averages system memory utilization with JVM heap usage.
 func foldMem(m map[string]float64) *float64 {
 	var values []float64
 	if v, ok := m[infraconsts.MetricSystemMemoryUtilization]; ok {
@@ -145,8 +148,8 @@ func foldMem(m map[string]float64) *float64 {
 			values = append(values, *nv)
 		}
 	}
-	if max := m[infraconsts.MetricJVMMemoryMax]; max > 0 {
-		values = append(values, infraconsts.PercentageMultiplier*m[infraconsts.MetricJVMMemoryUsed]/max)
+	if heapMax := m[infraconsts.MetricJVMMemoryMax]; heapMax > 0 {
+		values = append(values, infraconsts.PercentageMultiplier*m[infraconsts.MetricJVMMemoryUsed]/heapMax)
 	}
 	return infraconsts.AverageUtilization(values)
 }

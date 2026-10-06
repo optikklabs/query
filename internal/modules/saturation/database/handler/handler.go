@@ -88,10 +88,7 @@ type queryPatternsRequest struct {
 
 func (r *queryPatternsRequest) BindTenant(tenantID int64) error {
 	r.TenantID = tenantID
-	if err := filterutil.ValidateTimeRange(&r.StartTime, &r.EndTime); err != nil {
-		return err
-	}
-	return nil
+	return filterutil.ValidateTimeRange(&r.StartTime, &r.EndTime)
 }
 
 func (h *Handler) QueryPatterns(w http.ResponseWriter, r *http.Request) {
@@ -99,24 +96,9 @@ func (h *Handler) QueryPatterns(w http.ResponseWriter, r *http.Request) {
 	if !httputil.BindFiltered(w, r, &req) {
 		return
 	}
-	resp, err := h.service.QueryPatterns(
-		r.Context(),
-		req.TenantID,
-		req.StartTime,
-		req.EndTime,
-		req.ExplorerFilters,
-		req.Limit,
-		req.Cursor,
-	)
+	resp, err := h.service.QueryPatterns(r.Context(), req.TenantID, req.StartTime, req.EndTime, req.ExplorerFilters, req.Limit, req.Cursor)
 	if err != nil {
-		httputil.RespondErrorWithCause(
-			w,
-			r,
-			http.StatusInternalServerError,
-			errorcode.Internal,
-			"Failed to query database patterns",
-			err,
-		)
+		httputil.RespondServiceError(w, r, err, "Failed to query database patterns")
 		return
 	}
 	httputil.RespondOK(w, resp)

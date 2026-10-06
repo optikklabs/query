@@ -10,8 +10,6 @@ import (
 
 const RefreshCookiePath = httputil.APIV1Base + "/auth"
 
-var legacyRefreshCookiePaths = []string{"/"}
-
 type cookieOpts struct {
 	name     string
 	domain   string
@@ -41,28 +39,20 @@ func (s *Service) SetRefreshCookie(w http.ResponseWriter, token string) {
 		Secure:   s.cookie.secure,
 		SameSite: s.cookie.sameSite,
 	})
-
-	s.expireCookieAt(w, legacyRefreshCookiePaths...)
 }
 
 func (s *Service) ClearRefreshCookie(w http.ResponseWriter) {
-	s.expireCookieAt(w, append([]string{RefreshCookiePath}, legacyRefreshCookiePaths...)...)
-}
-
-func (s *Service) expireCookieAt(w http.ResponseWriter, paths ...string) {
-	for _, path := range paths {
-		http.SetCookie(w, &http.Cookie{
-			Name:     s.cookie.name,
-			Value:    "",
-			Path:     path,
-			Domain:   s.cookie.domain,
-			MaxAge:   -1,
-			Expires:  time.Unix(0, 0),
-			HttpOnly: true,
-			Secure:   s.cookie.secure,
-			SameSite: s.cookie.sameSite,
-		})
-	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     s.cookie.name,
+		Value:    "",
+		Path:     RefreshCookiePath,
+		Domain:   s.cookie.domain,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+		HttpOnly: true,
+		Secure:   s.cookie.secure,
+		SameSite: s.cookie.sameSite,
+	})
 }
 
 func parseSameSite(raw string) http.SameSite {

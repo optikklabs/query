@@ -3,40 +3,28 @@ package monitors
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"time"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/alerting/shared/expr"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	"github.com/optikklabs/query/internal/modules/alerting/shared/query"
+	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
-var ErrNotAlerting = errors.New("monitor is not currently alerting")
+var ErrNotAlerting = errorcode.ConflictError{Msg: "monitor is not currently alerting"}
 
 func (s *Service) Ack(ctx context.Context, tenantID, userID, id int64) error {
-	r := s.repo
-	if err := r.Ack(ctx, id, tenantID, userID, time.Now().UTC()); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotAlerting
-		}
-		return err
-	}
-	return nil
+	return dbutil.NoRowsAs(s.repo.Ack(ctx, id, tenantID, userID, time.Now().UTC()), ErrNotAlerting)
 }
 
+// Mute silences notifications for durationSec; zero or less unmutes.
 func (s *Service) Mute(ctx context.Context, tenantID, id int64, durationSec int) error {
-	r := s.repo
 	var until sql.NullTime
 	if durationSec > 0 {
 		until = sql.NullTime{Valid: true, Time: time.Now().UTC().Add(time.Duration(durationSec) * time.Second)}
 	}
-	if err := r.Mute(ctx, id, tenantID, until); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
-		}
-		return err
-	}
-	return nil
+	return dbutil.NoRowsAs(s.repo.Mute(ctx, id, tenantID, until), ErrNotFound)
 }
 
 func (s *Service) Unmute(ctx context.Context, tenantID, id int64) error {
@@ -50,64 +38,29 @@ type TestResult struct {
 	Threshold     float64 `json:"threshold"`
 }
 
+// Test evaluates the monitor now and reports the status it would move to,
+// without persisting anything.
 func (s *Service) Test(ctx context.Context, tenantID, id int64, queries query.Registry) (TestResult, error) {
 	row, state, err := s.repo.GetByID(ctx, id, tenantID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return TestResult{}, ErrNotFound
-		}
-		return TestResult{}, err
+		return TestResult{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
-	cond, q, scope := row.Conditions, row.Query, row.Scope
 	backend, err := queries.For(row.Type)
 	if err != nil {
 		return TestResult{}, err
 	}
-	res, err := backend.Scalar(ctx, row, q, scope, cond, time.Now().UTC())
+	now := time.Now().UTC()
+	res, err := backend.Scalar(ctx, row, now)
 	if err != nil {
 		return TestResult{}, err
 	}
-	renotify := int64(0)
-	if row.RenotifyEverySec.Valid {
-		renotify = row.RenotifyEverySec.Int64
-	}
-	d := expr.Decide(state, cond, res.Value, res.HasData, renotify, time.Now().UTC())
-	threshold := 0.0
-	if cond.AlertThreshold != nil {
-		threshold = *cond.AlertThreshold
-	} else if cond.WarnThreshold != nil {
-		threshold = *cond.WarnThreshold
-	}
+	d := expr.Decide(state, row.Conditions, res.Value, res.HasData, row.RenotifyEverySec.Int64, now)
+	threshold, _ := row.Conditions.PrimaryThreshold()
 	return TestResult{
 		Value:         res.Value,
 		HasData:       res.HasData,
 		WouldDecideAs: d.NewStatus,
 		Threshold:     threshold,
-	}, nil
-}
-
-func (s *Service) Series(ctx context.Context, tenantID, id int64, queries query.Registry, windowMs int64) (SeriesResponse, error) {
-	row, _, err := s.repo.GetByID(ctx, id, tenantID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return SeriesResponse{}, ErrNotFound
-		}
-		return SeriesResponse{}, err
-	}
-	cond, q, scope := row.Conditions, row.Query, row.Scope
-	backend, err := queries.For(row.Type)
-	if err != nil {
-		return SeriesResponse{}, err
-	}
-	points, err := backend.Series(ctx, row, q, scope, cond, windowMs, time.Now().UTC())
-	if err != nil {
-		return SeriesResponse{}, err
-	}
-	return SeriesResponse{
-		Points:            points,
-		AlertThreshold:    cond.AlertThreshold,
-		WarnThreshold:     cond.WarnThreshold,
-		RecoveryThreshold: cond.RecoveryThreshold,
 	}, nil
 }
 
@@ -118,43 +71,47 @@ type SeriesResponse struct {
 	RecoveryThreshold *float64      `json:"recoveryThreshold,omitempty"`
 }
 
+func (s *Service) Series(ctx context.Context, tenantID, id int64, queries query.Registry, windowMs int64) (SeriesResponse, error) {
+	row, _, err := s.repo.GetByID(ctx, id, tenantID)
+	if err != nil {
+		return SeriesResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
+	}
+	backend, err := queries.For(row.Type)
+	if err != nil {
+		return SeriesResponse{}, err
+	}
+	points, err := backend.Series(ctx, row, windowMs, time.Now().UTC())
+	if err != nil {
+		return SeriesResponse{}, err
+	}
+	cond := row.Conditions
+	return SeriesResponse{
+		Points:            points,
+		AlertThreshold:    cond.AlertThreshold,
+		WarnThreshold:     cond.WarnThreshold,
+		RecoveryThreshold: cond.RecoveryThreshold,
+	}, nil
+}
+
 func (s *Service) Events(ctx context.Context, tenantID, id int64, limit int) ([]MonitorEventResponse, error) {
-	r := s.repo
-	rows, err := r.Events(ctx, id, tenantID, limit)
+	rows, err := s.repo.Events(ctx, id, tenantID, limit)
 	if err != nil {
 		return nil, err
 	}
 	return toEventResponses(rows), nil
 }
 
+// Activity lists events since sinceMs, defaulting to the last hour.
 func (s *Service) Activity(ctx context.Context, tenantID int64, sinceMs int64, limit int) ([]MonitorEventResponse, error) {
-	r := s.repo
-	since := time.Now().UTC().Add(-1 * time.Hour)
+	since := time.Now().UTC().Add(-time.Hour)
 	if sinceMs > 0 {
 		since = time.UnixMilli(sinceMs).UTC()
 	}
-	rows, err := r.Activity(ctx, tenantID, since, limit)
+	rows, err := s.repo.Activity(ctx, tenantID, since, limit)
 	if err != nil {
 		return nil, err
 	}
 	return toEventResponses(rows), nil
-}
-
-func (s *Service) StatusTimeline(ctx context.Context, tenantID, id int64, windowMs int64) (StatusTimelineResponse, error) {
-	r := s.repo
-	if windowMs <= 0 {
-		windowMs = 24 * 60 * 60 * 1000
-	}
-	since := time.Now().UTC().Add(-time.Duration(windowMs) * time.Millisecond)
-	rows, err := r.StatusTimelineRows(ctx, id, tenantID, since)
-	if err != nil {
-		return StatusTimelineResponse{}, err
-	}
-	return StatusTimelineResponse{
-		Bands:     buildBands(rows, since, time.Now().UTC()),
-		StartedAt: since,
-		EndedAt:   time.Now().UTC(),
-	}, nil
 }
 
 type StatusTimelineResponse struct {
@@ -169,11 +126,27 @@ type StatusBand struct {
 	EndedAt   time.Time `json:"endedAt"`
 }
 
-func buildBands(events []models.MonitorEventRow, start, end time.Time) []StatusBand {
-	if len(events) == 0 {
-		return []StatusBand{{Status: "ok", StartedAt: start, EndedAt: end}}
+// StatusTimeline folds the monitor's events over the trailing window
+// (default 24h) into contiguous status bands.
+func (s *Service) StatusTimeline(ctx context.Context, tenantID, id int64, windowMs int64) (StatusTimelineResponse, error) {
+	if windowMs <= 0 {
+		windowMs = (24 * time.Hour).Milliseconds()
 	}
-	bands := make([]StatusBand, 0, len(events)*2+1)
+	now := time.Now().UTC()
+	since := now.Add(-time.Duration(windowMs) * time.Millisecond)
+	rows, err := s.repo.StatusTimelineRows(ctx, id, tenantID, since)
+	if err != nil {
+		return StatusTimelineResponse{}, err
+	}
+	return StatusTimelineResponse{
+		Bands:     buildBands(rows, since, now),
+		StartedAt: since,
+		EndedAt:   now,
+	}, nil
+}
+
+func buildBands(events []models.MonitorEventRow, start, end time.Time) []StatusBand {
+	bands := make([]StatusBand, 0, len(events)+1)
 	cursor := start
 	current := "ok"
 	for _, e := range events {

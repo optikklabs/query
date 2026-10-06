@@ -36,8 +36,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreatePromptRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	tenant := httputil.Tenant(r)
@@ -51,8 +50,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateVersion(w http.ResponseWriter, r *http.Request) {
 	var req CreateVersionRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	tenant := httputil.Tenant(r)
@@ -71,8 +69,7 @@ func (h *Handler) UpdateVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdateVersionRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "invalid request body", nil)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	res, err := h.svc.SetVersionStatus(r.Context(), httputil.Tenant(r).TenantID, chi.URLParam(r, "name"), version, req)

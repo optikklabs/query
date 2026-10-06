@@ -7,6 +7,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/shared/sqljson"
 )
 
 type Repository struct {
@@ -22,18 +23,18 @@ type promptInsertArgs struct {
 	Name        string
 	Type        string
 	Description sql.NullString
-	TagsJSON    []byte
+	Tags        sqljson.StringList
 	CreatedBy   sql.NullInt64
 }
 
 type versionInsertArgs struct {
-	PromptID      int64
-	TenantID      int64
-	TemplateJSON  []byte
-	VariablesJSON []byte
-	Notes         sql.NullString
-	Production    bool
-	CreatedBy     sql.NullInt64
+	PromptID     int64
+	TenantID     int64
+	TemplateJSON []byte
+	Variables    sqljson.StringList
+	Notes        sql.NullString
+	Production   bool
+	CreatedBy    sql.NullInt64
 }
 
 func (r *Repository) CreatePrompt(ctx context.Context, p promptInsertArgs, v versionInsertArgs) (int64, error) {
@@ -41,13 +42,13 @@ func (r *Repository) CreatePrompt(ctx context.Context, p promptInsertArgs, v ver
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO optikk.llm_prompts
 		  (tenant_id, name, type, description, tags_json, created_at, created_by_user_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		p.TenantID, p.Name, p.Type, p.Description, p.TagsJSON, time.Now().UTC(), p.CreatedBy)
+		p.TenantID, p.Name, p.Type, p.Description, p.Tags, time.Now().UTC(), p.CreatedBy)
 	if err != nil {
 		return 0, err
 	}
@@ -59,7 +60,7 @@ func (r *Repository) CreatePrompt(ctx context.Context, p promptInsertArgs, v ver
 		INSERT INTO optikk.llm_prompt_versions
 		  (prompt_id, tenant_id, version, template_json, variables_json, notes, status, created_at, created_by_user_id)
 		VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`,
-		promptID, v.TenantID, v.TemplateJSON, v.VariablesJSON, v.Notes, "draft", time.Now().UTC(), v.CreatedBy)
+		promptID, v.TenantID, v.TemplateJSON, v.Variables, v.Notes, "draft", time.Now().UTC(), v.CreatedBy)
 	if err != nil {
 		return 0, err
 	}
@@ -78,7 +79,7 @@ func (r *Repository) CreateVersion(ctx context.Context, v versionInsertArgs) (in
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	var promptID int64
 	if err := tx.GetContext(ctx, &promptID,
@@ -97,7 +98,7 @@ func (r *Repository) CreateVersion(ctx context.Context, v versionInsertArgs) (in
 		INSERT INTO optikk.llm_prompt_versions
 		  (prompt_id, tenant_id, version, template_json, variables_json, notes, status, created_at, created_by_user_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		promptID, v.TenantID, next, v.TemplateJSON, v.VariablesJSON, v.Notes, "draft", time.Now().UTC(), v.CreatedBy)
+		promptID, v.TenantID, next, v.TemplateJSON, v.Variables, v.Notes, "draft", time.Now().UTC(), v.CreatedBy)
 	if err != nil {
 		return 0, err
 	}
@@ -114,8 +115,10 @@ func (r *Repository) CreateVersion(ctx context.Context, v versionInsertArgs) (in
 	return next, tx.Commit()
 }
 
+// SetVersionStatus sets a version's status; "production" instead points the
+// prompt's production_version_id at it, and leaving production clears that.
 func (r *Repository) SetVersionStatus(ctx context.Context, promptID int64, version int, status string) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "prompts.SetVersionStatus", `
+	return dbutil.ExecMatched(ctx, r.db, "prompts.SetVersionStatus", `
 		UPDATE optikk.llm_prompts p
 		JOIN optikk.llm_prompt_versions v ON v.prompt_id = p.id AND v.version = ?
 		   SET v.status = IF(? = 'production', 'draft', ?),
@@ -125,20 +128,6 @@ func (r *Repository) SetVersionStatus(ctx context.Context, promptID int64, versi
 		           ELSE p.production_version_id END,
 		       p.updated_at = ?
 		 WHERE p.id = ?`, version, status, status, status, time.Now().UTC(), promptID)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n > 0 {
-		return nil
-	}
-	var exists bool
-	err = dbutil.GetSQL(ctx, r.db, "prompts.VersionExists", &exists,
-		`SELECT EXISTS(SELECT 1 FROM optikk.llm_prompt_versions WHERE prompt_id = ? AND version = ?)`,
-		promptID, version)
-	if err == nil && !exists {
-		return sql.ErrNoRows
-	}
-	return err
 }
 
 func (r *Repository) GetPromptByName(ctx context.Context, tenantID int64, name string) (promptRow, error) {

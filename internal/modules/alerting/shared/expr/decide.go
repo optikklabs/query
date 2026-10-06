@@ -39,9 +39,7 @@ func Decide(prev models.MonitorStateRow, cond models.Conditions, value float64, 
 	notify := false
 	isRecovery := false
 	switch {
-	case transition && newStatus == "alert":
-		notify = true
-	case transition && newStatus == "warn":
+	case transition && (newStatus == "alert" || newStatus == "warn"):
 		notify = true
 	case transition && newStatus == "ok" && (prevStatus == "alert" || prevStatus == "warn"):
 		notify = true

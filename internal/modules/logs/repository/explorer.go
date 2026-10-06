@@ -7,6 +7,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/logs/filter"
 	"github.com/optikklabs/query/internal/modules/logs/models"
 	"github.com/optikklabs/query/internal/shared/filterutil"
@@ -19,7 +20,7 @@ func (r *Repository) ListLogs(ctx context.Context, f filter.Filters, limit int, 
 		prewhere += ` AND (ts_bucket, timestamp) <= (@curBucket, @curTs)`
 		where += ` AND (ts_bucket, timestamp, log_id) < (@curBucket, @curTs, @curLid)`
 		args = append(args,
-			clickhouse.Named("curBucket", uint32((cur.Timestamp.Unix()/300)*300)),
+			clickhouse.Named("curBucket", timebucket.LogBucket(cur.Timestamp.UnixMilli())),
 			clickhouse.DateNamed("curTs", cur.Timestamp, clickhouse.NanoSeconds),
 			clickhouse.Named("curLid", cur.LogID),
 		)
@@ -114,8 +115,8 @@ func suggestArgs(tenantID, startMs, endMs int64, prefix string, limit int) []any
 		clickhouse.Named("tenantID", uint32(tenantID)),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
-		clickhouse.Named("startBucket", uint32((startMs/1000)/300*300)),
-		clickhouse.Named("endBucket", uint32((endMs/1000)/300*300)),
+		clickhouse.Named("startBucket", timebucket.LogBucket(startMs)),
+		clickhouse.Named("endBucket", timebucket.LogBucket(endMs)),
 		clickhouse.Named("prefix", prefix),
 		clickhouse.Named("limit", uint64(limit)),
 	}

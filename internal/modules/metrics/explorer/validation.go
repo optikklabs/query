@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/optikklabs/query/internal/modules/metrics/filter"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 const (
@@ -24,7 +24,7 @@ func validateQueryRequest(req QueryRequest) error {
 	if req.EndTime <= req.StartTime {
 		return errors.New("endTime must be greater than startTime")
 	}
-	if req.EndTime-req.StartTime > filter.MaxTimeRangeMs {
+	if req.EndTime-req.StartTime > filterutil.MaxTimeRangeMs {
 		return errors.New("time range must not exceed 30 days")
 	}
 	if !validSteps[req.Step] {

@@ -16,15 +16,14 @@ type LogBackend struct {
 	db clickhouse.Conn
 }
 
-const logBucketSeconds int64 = 300
-
 func NewLogBackend(db clickhouse.Conn) *LogBackend { return &LogBackend{db: db} }
 
-func (b *LogBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, _ models.Conditions, now time.Time) (ScalarResult, error) {
-	if q.Log == nil {
+func (b *LogBackend) Scalar(ctx context.Context, m models.MonitorRow, now time.Time) (ScalarResult, error) {
+	q := m.Query.Log
+	if q == nil {
 		return ScalarResult{}, nil
 	}
-	windowSec := monitorWindowSec(q.Log.WindowSec)
+	windowSec := monitorWindowSec(q.WindowSec)
 	endMs := now.UnixMilli()
 	startMs := endMs - windowSec*1000
 
@@ -36,29 +35,28 @@ func (b *LogBackend) Scalar(ctx context.Context, m models.MonitorRow, q models.M
 		     AND timestamp >= @start AND timestamp < @end
 		WHERE (@searchTerm = '' OR lowerUTF8(body) LIKE @searchTerm)`
 
-	scopeSQL, args, err := CompileScope("log", scope, logArgs(m.TenantID, q.Log.Query, startMs, endMs))
+	scopeSQL, args, err := CompileScope("log", m.Scope, logArgs(m.TenantID, q.Query, startMs, endMs))
 	if err != nil {
 		return ScalarResult{}, err
 	}
 	query += scopeSQL
-	var rows []logCountRow
-	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), b.db, "alerting.log.Scalar", &rows, query, args...); err != nil {
+	var row logCountRow
+	if err := dbutil.QueryRowCH(dbutil.DashboardCtx(ctx), b.db, "alerting.log.Scalar", &row, query, args...); err != nil {
 		return ScalarResult{}, err
 	}
-	if len(rows) == 0 {
-		return ScalarResult{HasData: false}, nil
-	}
-	return ScalarResult{Value: float64(rows[0].Value), HasData: true}, nil
+	// Zero matching logs is a real value, not missing data.
+	return ScalarResult{Value: float64(row.Value), HasData: true}, nil
 }
 
-func (b *LogBackend) Series(ctx context.Context, m models.MonitorRow, q models.MonitorQuery, scope models.Scope, _ models.Conditions, windowMs int64, now time.Time) ([]Point, error) {
-	if q.Log == nil {
+func (b *LogBackend) Series(ctx context.Context, m models.MonitorRow, windowMs int64, now time.Time) ([]Point, error) {
+	q := m.Query.Log
+	if q == nil {
 		return nil, nil
 	}
 	endMs := now.UnixMilli()
 	startMs := endMs - windowMs
 
-	scopeSQL, args, err := CompileScope("log", scope, logArgs(m.TenantID, q.Log.Query, startMs, endMs))
+	scopeSQL, args, err := CompileScope("log", m.Scope, logArgs(m.TenantID, q.Query, startMs, endMs))
 	if err != nil {
 		return nil, err
 	}
@@ -85,20 +83,14 @@ func (b *LogBackend) Series(ctx context.Context, m models.MonitorRow, q models.M
 }
 
 func logArgs(tenantID int64, queryText string, startMs, endMs int64) []any {
-	bucketStart, bucketEnd := logBucketBounds(startMs, endMs)
 	return []any{
 		tenantIDArg(tenantID),
 		clickhouse.Named("searchTerm", filterutil.LikeSubstringPattern(strings.TrimSpace(queryText))),
 		clickhouse.Named("start", time.UnixMilli(startMs)),
 		clickhouse.Named("end", time.UnixMilli(endMs)),
-		clickhouse.Named("bucketStart", bucketStart),
-		clickhouse.Named("bucketEnd", bucketEnd),
+		clickhouse.Named("bucketStart", timebucket.LogBucket(startMs)),
+		clickhouse.Named("bucketEnd", timebucket.LogBucket(endMs)),
 	}
-}
-
-func logBucketBounds(startMs, endMs int64) (time.Time, time.Time) {
-	return time.UnixMilli(timebucket.FloorMsToBucket(startMs, logBucketSeconds)),
-		time.UnixMilli(timebucket.FloorMsToBucket(endMs, logBucketSeconds))
 }
 
 type logCountRow struct {

@@ -8,44 +8,44 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/optikklabs/query/internal/infra/metrics"
 	"github.com/optikklabs/query/internal/modules/alerting/dispatch"
 	"github.com/optikklabs/query/internal/modules/alerting/shared/expr"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	"github.com/optikklabs/query/internal/modules/alerting/shared/query"
 	tmpl "github.com/optikklabs/query/internal/modules/alerting/shared/template"
-	"golang.org/x/sync/errgroup"
+)
+
+const (
+	// claimBatch caps how many due monitors one tick claims.
+	claimBatch = 500
+	// evalConcurrency caps how many monitors one tick evaluates at once.
+	evalConcurrency = 16
 )
 
 type Service struct {
-	repo        *Repository
-	queries     query.Registry
-	dispatcher  *dispatch.Dispatcher
-	concurrency int
+	repo       *Repository
+	queries    query.Registry
+	dispatcher *dispatch.Dispatcher
 }
 
 func NewService(repo *Repository, queries query.Registry, dispatcher *dispatch.Dispatcher) *Service {
-	return &Service{
-		repo:        repo,
-		queries:     queries,
-		dispatcher:  dispatcher,
-		concurrency: 16,
-	}
+	return &Service{repo: repo, queries: queries, dispatcher: dispatcher}
 }
 
+// Tick claims the monitors due at now and evaluates them concurrently.
 func (s *Service) Tick(ctx context.Context, now time.Time) error {
-	due, err := s.repo.ClaimDue(ctx, uuid.NewString(), now, 500)
+	due, err := s.repo.ClaimDue(ctx, uuid.NewString(), now, claimBatch)
 	if err != nil {
 		return err
 	}
-	if len(due) == 0 {
-		return nil
-	}
-	g, groupCtx := errgroup.WithContext(ctx)
-	g.SetLimit(s.concurrency)
+	var g errgroup.Group
+	g.SetLimit(evalConcurrency)
 	for _, m := range due {
 		g.Go(func() error {
-			s.evalOne(groupCtx, m, now)
+			s.evalOne(ctx, m, now)
 			return nil
 		})
 	}
@@ -53,84 +53,85 @@ func (s *Service) Tick(ctx context.Context, now time.Time) error {
 }
 
 func (s *Service) evalOne(ctx context.Context, due DueMonitor, now time.Time) {
-	m := due.Monitor
-	state := due.State
-	cond, q, scope := m.Conditions, m.Query, m.Scope
-
+	m, state := due.Monitor, due.State
 	backend, err := s.queries.For(m.Type)
 	if err != nil {
 		slog.WarnContext(ctx, "alerting: no query backend for type", slog.String("type", m.Type), slog.Int64("monitor_id", m.ID))
 		return
 	}
-	res, err := backend.Scalar(ctx, m, q, scope, cond, now)
+	res, err := backend.Scalar(ctx, m, now)
 	if err != nil {
 		slog.WarnContext(ctx, "alerting: scalar eval failed", slog.Int64("monitor_id", m.ID), slog.Any("error", err))
-
-		_ = s.repo.UpdateState(ctx, nextEvalOnly(m, state, now))
+		s.updateState(ctx, m, rescheduleOnly(m, state, now))
 		return
 	}
 
-	renotify := int64(0)
-	if m.RenotifyEverySec.Valid {
-		renotify = m.RenotifyEverySec.Int64
-	}
-	decision := expr.Decide(state, cond, res.Value, res.HasData, renotify, now)
-
-	args := buildUpdateArgs(m, state, decision, res, now)
-	if err := s.repo.UpdateState(ctx, args); err != nil {
-		slog.WarnContext(ctx, "alerting: update state failed", slog.Int64("monitor_id", m.ID), slog.Any("error", err))
+	d := expr.Decide(state, m.Conditions, res.Value, res.HasData, m.RenotifyEverySec.Int64, now)
+	if !s.updateState(ctx, m, buildUpdateArgs(m, state, d, res, now)) {
 		return
 	}
 
-	if decision.Transition && (decision.NewStatus == "alert" || decision.NewStatus == "warn") {
-		s.recordEvent(ctx, m, "triggered", res, cond, now)
+	if d.Transition && (d.NewStatus == "alert" || d.NewStatus == "warn") {
+		s.recordEvent(ctx, m, "triggered", res, now)
 	}
-	if decision.IsRecovery {
-		s.recordEvent(ctx, m, "recovered", res, cond, now)
+	if d.IsRecovery {
+		s.recordEvent(ctx, m, "recovered", res, now)
 	}
-
-	if decision.ShouldNotify && !isMuted(m, now) {
-		s.dispatchAll(ctx, m, cond, res, decision, now)
+	if d.ShouldNotify && !isMuted(m, now) {
+		s.dispatchAll(ctx, m, buildPayload(m, statusOrNoData(state), res, d), now)
 	}
 }
 
-func nextEvalOnly(m models.MonitorRow, state models.MonitorStateRow, now time.Time) UpdateStateArgs {
-	status := state.Status
-	if status == "" {
-		status = "no_data"
+func (s *Service) updateState(ctx context.Context, m models.MonitorRow, args UpdateStateArgs) bool {
+	if err := s.repo.UpdateState(ctx, args); err != nil {
+		slog.WarnContext(ctx, "alerting: update state failed", slog.Int64("monitor_id", m.ID), slog.Any("error", err))
+		return false
 	}
+	return true
+}
+
+func statusOrNoData(state models.MonitorStateRow) string {
+	if state.Status == "" {
+		return "no_data"
+	}
+	return state.Status
+}
+
+func nextEvaluation(m models.MonitorRow, now time.Time) time.Time {
+	return now.Add(time.Duration(m.EvalEverySec) * time.Second)
+}
+
+// rescheduleOnly keeps the monitor's state as it is and only schedules the
+// next evaluation, for ticks where the query itself failed.
+func rescheduleOnly(m models.MonitorRow, state models.MonitorStateRow, now time.Time) UpdateStateArgs {
+	status := statusOrNoData(state)
 	return UpdateStateArgs{
 		MonitorID:          m.ID,
 		PrevStatus:         status,
 		NewStatus:          status,
+		CurrentValue:       state.CurrentValue,
 		LastEvaluatedAt:    now,
-		NextEvaluationAt:   now.Add(time.Duration(m.EvalEverySec) * time.Second),
+		NextEvaluationAt:   nextEvaluation(m, now),
+		TriggeredAt:        state.TriggeredAt,
 		NoDataSince:        state.NoDataSince,
 		IncrementEvalCount: true,
 	}
 }
 
 func buildUpdateArgs(m models.MonitorRow, state models.MonitorStateRow, d expr.Decision, res query.ScalarResult, now time.Time) UpdateStateArgs {
-	prev := state.Status
-	if prev == "" {
-		prev = "no_data"
-	}
 	args := UpdateStateArgs{
 		MonitorID:          m.ID,
-		PrevStatus:         prev,
+		PrevStatus:         statusOrNoData(state),
 		NewStatus:          d.NewStatus,
+		CurrentValue:       sql.NullFloat64{Valid: res.HasData, Float64: res.Value},
 		LastEvaluatedAt:    now,
-		NextEvaluationAt:   now.Add(time.Duration(m.EvalEverySec) * time.Second),
+		NextEvaluationAt:   nextEvaluation(m, now),
 		NoDataSince:        d.NoDataSince,
 		IncrementEvalCount: true,
 	}
-	if res.HasData {
-		args.CurrentValue = sql.NullFloat64{Valid: true, Float64: res.Value}
-	}
 	if d.NewStatus == "alert" || d.NewStatus == "warn" {
-		if state.TriggeredAt.Valid {
-			args.TriggeredAt = state.TriggeredAt
-		} else {
+		args.TriggeredAt = state.TriggeredAt
+		if !args.TriggeredAt.Valid {
 			args.TriggeredAt = sql.NullTime{Valid: true, Time: now}
 		}
 	}
@@ -140,11 +141,12 @@ func buildUpdateArgs(m models.MonitorRow, state models.MonitorStateRow, d expr.D
 	return args
 }
 
-func (s *Service) recordEvent(ctx context.Context, m models.MonitorRow, kind string, res query.ScalarResult, cond models.Conditions, now time.Time) {
+func (s *Service) recordEvent(ctx context.Context, m models.MonitorRow, kind string, res query.ScalarResult, now time.Time) {
+	threshold, hasThreshold := m.Conditions.PrimaryThreshold()
 	err := s.repo.InsertEvent(ctx, models.MonitorEventRow{
 		MonitorID: m.ID, TenantID: m.TenantID, Kind: kind,
 		Value:     sql.NullFloat64{Valid: true, Float64: res.Value},
-		Threshold: thresholdForCond(cond),
+		Threshold: sql.NullFloat64{Valid: hasThreshold, Float64: threshold},
 		StartedAt: now,
 	})
 	if err != nil {
@@ -154,31 +156,19 @@ func (s *Service) recordEvent(ctx context.Context, m models.MonitorRow, kind str
 	}
 }
 
-func thresholdForCond(c models.Conditions) sql.NullFloat64 {
-	if c.AlertThreshold != nil {
-		return sql.NullFloat64{Valid: true, Float64: *c.AlertThreshold}
-	}
-	if c.WarnThreshold != nil {
-		return sql.NullFloat64{Valid: true, Float64: *c.WarnThreshold}
-	}
-	return sql.NullFloat64{}
-}
-
 func isMuted(m models.MonitorRow, now time.Time) bool {
 	return m.MutedUntil.Valid && m.MutedUntil.Time.After(now)
 }
 
-func (s *Service) dispatchAll(ctx context.Context, m models.MonitorRow, cond models.Conditions, res query.ScalarResult, d expr.Decision, now time.Time) {
-	targets := m.Notify
-	if len(targets.ChannelIDs) == 0 {
+func (s *Service) dispatchAll(ctx context.Context, m models.MonitorRow, payload dispatch.Payload, now time.Time) {
+	if len(m.Notify.ChannelIDs) == 0 {
 		return
 	}
-	channels, err := s.repo.GetChannelsByIDs(ctx, m.TenantID, targets.ChannelIDs)
+	channels, err := s.repo.GetChannelsByIDs(ctx, m.TenantID, m.Notify.ChannelIDs)
 	if err != nil {
 		slog.WarnContext(ctx, "alerting: load channels failed", slog.Int64("monitor_id", m.ID), slog.Any("error", err))
 		return
 	}
-	payload := buildPayload(m, cond, res, d)
 	for _, ch := range channels {
 		err := s.dispatcher.Dispatch(ctx, ch, payload)
 		errText := sql.NullString{}
@@ -199,37 +189,25 @@ func (s *Service) dispatchAll(ctx context.Context, m models.MonitorRow, cond mod
 	}
 }
 
-func buildPayload(m models.MonitorRow, cond models.Conditions, res query.ScalarResult, d expr.Decision) dispatch.Payload {
-	threshold := 0.0
-	if cond.AlertThreshold != nil {
-		threshold = *cond.AlertThreshold
-	} else if cond.WarnThreshold != nil {
-		threshold = *cond.WarnThreshold
-	}
-	scopeSummary := summarizeScope(m)
-	message := renderMessageBody(m, res.Value, threshold, scopeSummary, d)
+func buildPayload(m models.MonitorRow, prevStatus string, res query.ScalarResult, d expr.Decision) dispatch.Payload {
+	threshold, _ := m.Conditions.PrimaryThreshold()
+	scopeSummary := summarizeScope(m.Scope)
 	return dispatch.Payload{
-		MonitorID:    m.ID,
 		MonitorName:  m.Name,
-		MonitorType:  m.Type,
 		Priority:     m.Priority,
-		Transition:   d.NewStatus,
+		Transition:   prevStatus + "->" + d.NewStatus,
 		Status:       d.NewStatus,
 		Value:        res.Value,
 		Threshold:    threshold,
 		ScopeSummary: scopeSummary,
-		Message:      message,
+		Message:      renderMessageBody(m, res.Value, threshold, scopeSummary, d),
 		IsAlert:      d.NewStatus == "alert",
 		IsWarning:    d.NewStatus == "warn",
 		IsRecovery:   d.IsRecovery,
 	}
 }
 
-func summarizeScope(m models.MonitorRow) string {
-	scope := m.Scope
-	if len(scope.Tags) == 0 {
-		return ""
-	}
+func summarizeScope(scope models.Scope) string {
 	parts := make([]string, 0, len(scope.Tags))
 	for _, t := range scope.Tags {
 		parts = append(parts, t.Key+":"+t.Value)
@@ -238,10 +216,7 @@ func summarizeScope(m models.MonitorRow) string {
 }
 
 func renderMessageBody(m models.MonitorRow, value, threshold float64, scopeSummary string, d expr.Decision) string {
-	body := ""
-	if m.MessageBody.Valid {
-		body = m.MessageBody.String
-	}
+	body := m.MessageBody.String
 	if strings.TrimSpace(body) == "" {
 		return defaultMessage(m, value, threshold, d)
 	}
@@ -249,7 +224,7 @@ func renderMessageBody(m models.MonitorRow, value, threshold float64, scopeSumma
 		Values: map[string]string{
 			"value":        tmpl.FormatFloat(value),
 			"threshold":    tmpl.FormatFloat(threshold),
-			"service.name": serviceFromScope(m),
+			"service.name": serviceFromScope(m.Scope),
 			"monitor.name": m.Name,
 			"scope":        scopeSummary,
 		},
@@ -267,8 +242,7 @@ func defaultMessage(m models.MonitorRow, value, threshold float64, d expr.Decisi
 	return m.Name + " " + verb + " — value " + tmpl.FormatFloat(value) + " vs threshold " + tmpl.FormatFloat(threshold)
 }
 
-func serviceFromScope(m models.MonitorRow) string {
-	scope := m.Scope
+func serviceFromScope(scope models.Scope) string {
 	for _, t := range scope.Tags {
 		if t.Key == "service" {
 			return t.Value

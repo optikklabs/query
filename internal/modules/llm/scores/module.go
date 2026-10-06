@@ -5,23 +5,17 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) *scoresModule {
-	m := &scoresModule{}
-	m.configure(nativeQuerier)
-	return m
+func NewModule(nativeQuerier clickhouse.Conn) *Module {
+	return &Module{handler: NewHandler(NewService(NewRepository(nativeQuerier)))}
 }
 
-type scoresModule struct {
+type Module struct {
 	handler *Handler
 }
 
-func (m *scoresModule) Name() string { return "llmScores" }
+func (m *Module) Name() string { return "llmScores" }
 
-func (m *scoresModule) configure(db clickhouse.Conn) {
-	m.handler = NewHandler(NewService(NewRepository(db)))
-}
-
-func (m *scoresModule) RegisterRoutes(group chi.Router) {
+func (m *Module) RegisterRoutes(group chi.Router) {
 	group.Post("/llm/scores", m.handler.Create)
 	group.Get("/llm/scores/summary", m.handler.Summary)
 }

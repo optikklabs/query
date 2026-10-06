@@ -3,9 +3,10 @@ package providerkeys
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strings"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/infra/llmproviders"
 	"github.com/optikklabs/query/internal/infra/secretbox"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
@@ -21,16 +22,9 @@ func NewService(repo *Repository, box *secretbox.Box) *Service {
 
 var (
 	ErrNotFound     = errorcode.NotFoundError{Msg: "provider key not found"}
-	ErrNoEncryption = errors.New("provider key encryption is not configured")
+	ErrNoEncryption = errorcode.UnavailableError{Msg: "provider key encryption is not configured"}
+	ErrNoKey        = errorcode.UnavailableError{Msg: "no provider key configured for this provider"}
 )
-
-func IsUnavailable(err error) bool {
-	return errors.Is(err, ErrNoEncryption) || errors.Is(err, ErrNotFound)
-}
-
-var validProvider = map[string]struct{}{
-	"openai": {}, "anthropic": {}, "mistral": {},
-}
 
 func (s *Service) List(ctx context.Context, tenantID int64) ([]ProviderKey, error) {
 	rows, err := s.repo.List(ctx, tenantID)
@@ -48,8 +42,8 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 	if s.box == nil {
 		return ProviderKey{}, ErrNoEncryption
 	}
-	if _, ok := validProvider[req.Provider]; !ok {
-		return ProviderKey{}, errorcode.ValidationError{Msg: "provider must be openai, anthropic or mistral"}
+	if err := llmproviders.ValidateProvider(req.Provider); err != nil {
+		return ProviderKey{}, err
 	}
 	label := strings.TrimSpace(req.Label)
 	if label == "" {
@@ -86,10 +80,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 }
 
 func (s *Service) Delete(ctx context.Context, tenantID, id int64) error {
-	if errors.Is(s.repo.Delete(ctx, tenantID, id), sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	return nil
+	return dbutil.NoRowsAs(s.repo.Delete(ctx, tenantID, id), ErrNotFound)
 }
 
 func (s *Service) ResolveKey(ctx context.Context, tenantID int64, provider string) (string, error) {
@@ -98,10 +89,7 @@ func (s *Service) ResolveKey(ctx context.Context, tenantID int64, provider strin
 	}
 	row, err := s.repo.Secret(ctx, tenantID, provider)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", ErrNotFound
-		}
-		return "", err
+		return "", dbutil.NoRowsAs(err, ErrNoKey)
 	}
 	plain, err := s.box.Open(row.Ciphertext, row.Nonce)
 	if err != nil {

@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"database/sql"
-	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -26,18 +25,7 @@ func (r *Repository) FindActiveUserByEmail(ctx context.Context, email string) (s
 		FROM users
 		WHERE email = ? AND active = 1
 		LIMIT 1
-	`, strings.TrimSpace(email))
-	return u, err
-}
-
-func (r *Repository) FindActiveUserByID(ctx context.Context, userID int64) (shared.UserRecord, error) {
-	var u shared.UserRecord
-	err := dbutil.GetSQL(ctx, r.db, "user.FindActiveUserByID", &u, `
-		SELECT id, email, name, tenant_id, active, role, created_at
-		FROM users
-		WHERE id = ? AND active = 1
-		LIMIT 1
-	`, userID)
+	`, email)
 	return u, err
 }
 
@@ -91,25 +79,31 @@ func (r *Repository) FindRefreshTokenByHash(ctx context.Context, tokenHash strin
 
 // RotateRefreshToken atomically revokes the presented token and stores its
 // replacement within the same family.
-func (r *Repository) RotateRefreshToken(ctx context.Context, oldHash string, userID int64, familyID, newHash string, expiresAt time.Time) error {
+// It reports false, storing nothing, when a concurrent rotation already
+// revoked the token.
+func (r *Repository) RotateRefreshToken(ctx context.Context, oldHash string, userID int64, familyID, newHash string, expiresAt time.Time) (bool, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx, `
+	res, err := tx.ExecContext(ctx, `
 		UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL
-	`, time.Now().UTC(), oldHash); err != nil {
-		return err
+	`, time.Now().UTC(), oldHash)
+	if err != nil {
+		return false, err
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return false, err
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
 		VALUES (?, ?, ?, ?)
 	`, userID, familyID, newHash, expiresAt); err != nil {
-		return err
+		return false, err
 	}
-	return tx.Commit()
+	return true, tx.Commit()
 }
 
 // RevokeFamily revokes every live refresh token in a rotation family.

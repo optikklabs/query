@@ -1,20 +1,19 @@
 package ingestion
 
 import (
-	"sort"
+	"cmp"
+	"maps"
+	"slices"
+	"strings"
 )
 
-func timeseriesByType(
-	logs, spans, metrics []dateCountRow,
-	dates []string,
-	idx map[string]int,
-) TimeseriesResponse {
-	logsC, logsB := fillDaily(logs, idx, len(dates))
-	spansC, spansB := fillDaily(spans, idx, len(dates))
-	metricsC, metricsB := fillDaily(metrics, idx, len(dates))
+func timeseriesByType(axis dateAxis, logs, spans, metrics []dateCountRow) TimeseriesResponse {
+	logsC, logsB := axis.fill(logs)
+	spansC, spansB := axis.fill(spans)
+	metricsC, metricsB := axis.fill(metrics)
 	return TimeseriesResponse{
 		GroupBy: "type",
-		Dates:   dates,
+		Dates:   axis.dates,
 		Series: []TimeseriesSeries{
 			{ID: "logs", Label: "Logs", Data: logsC, ByteData: logsB},
 			{ID: "spans", Label: "Spans (APM)", Data: spansC, ByteData: spansB},
@@ -28,7 +27,8 @@ type svcSeries struct {
 	bytes  []uint64
 }
 
-func accumulateByService(rowSets [][]svcDateCountRow, idx map[string]int, n int) map[string]*svcSeries {
+func accumulateByService(axis dateAxis, rowSets ...[]svcDateCountRow) map[string]*svcSeries {
+	n := len(axis.dates)
 	perService := map[string]*svcSeries{}
 	for _, rows := range rowSets {
 		for _, row := range rows {
@@ -37,7 +37,7 @@ func accumulateByService(rowSets [][]svcDateCountRow, idx map[string]int, n int)
 				ser = &svcSeries{counts: make([]uint64, n), bytes: make([]uint64, n)}
 				perService[row.Service] = ser
 			}
-			if i, ok := idx[dateKey(row.Day)]; ok {
+			if i, ok := axis.position(row.Day); ok {
 				ser.counts[i] += row.Count
 				ser.bytes[i] += row.Bytes
 			}
@@ -46,16 +46,12 @@ func accumulateByService(rowSets [][]svcDateCountRow, idx map[string]int, n int)
 	return perService
 }
 
-func timeseriesByServiceRows(
-	logs, spans []svcDateCountRow,
-	dates []string,
-	idx map[string]int,
-) TimeseriesResponse {
-	perService := accumulateByService([][]svcDateCountRow{logs, spans}, idx, len(dates))
+func timeseriesByServiceRows(axis dateAxis, logs, spans []svcDateCountRow) TimeseriesResponse {
+	perService := accumulateByService(axis, logs, spans)
 	ranked := rankByTotal(perService)
 	series := make([]TimeseriesSeries, 0, topServiceSeries+1)
-	otherC := make([]uint64, len(dates))
-	otherB := make([]uint64, len(dates))
+	otherC := make([]uint64, len(axis.dates))
+	otherB := make([]uint64, len(axis.dates))
 	for rank, name := range ranked {
 		ser := perService[name]
 		if rank < topServiceSeries {
@@ -71,20 +67,12 @@ func timeseriesByServiceRows(
 		series = append(series, TimeseriesSeries{ID: "other", Label: "Other services", Data: otherC, ByteData: otherB})
 	}
 
-	return TimeseriesResponse{GroupBy: "service", Dates: dates, Series: series}
+	return TimeseriesResponse{GroupBy: "service", Dates: axis.dates, Series: series}
 }
 
+// rankByTotal orders services by record volume, busiest first.
 func rankByTotal(perService map[string]*svcSeries) []string {
-	names := make([]string, 0, len(perService))
-	for name := range perService {
-		names = append(names, name)
-	}
-	sort.Slice(names, func(a, b int) bool {
-		ta, tb := sum(perService[names[a]].counts), sum(perService[names[b]].counts)
-		if ta == tb {
-			return names[a] < names[b]
-		}
-		return ta > tb
+	return slices.SortedFunc(maps.Keys(perService), func(a, b string) int {
+		return cmp.Or(cmp.Compare(sum(perService[b].counts), sum(perService[a].counts)), strings.Compare(a, b))
 	})
-	return names
 }

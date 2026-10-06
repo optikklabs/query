@@ -2,6 +2,8 @@ package monitors
 
 import (
 	"time"
+
+	"github.com/optikklabs/query/internal/shared/nullable"
 )
 
 type MonitorEventResponse struct {
@@ -21,36 +23,19 @@ type MonitorEventResponse struct {
 func toEventResponses(rows []EventRow) []MonitorEventResponse {
 	out := make([]MonitorEventResponse, 0, len(rows))
 	for _, r := range rows {
-		ev := MonitorEventResponse{
+		out = append(out, MonitorEventResponse{
 			ID:          r.ID,
 			MonitorID:   r.MonitorID,
 			MonitorName: r.MonitorName,
 			Kind:        r.Kind,
+			Value:       nullable.Ptr(r.Value.Float64, r.Value.Valid),
+			Threshold:   nullable.Ptr(r.Threshold.Float64, r.Threshold.Valid),
+			PeakValue:   nullable.Ptr(r.PeakValue.Float64, r.PeakValue.Valid),
+			ResolvedBy:  r.ResolvedBy.String,
+			Note:        r.Note.String,
 			StartedAt:   r.StartedAt,
-		}
-		if r.Value.Valid {
-			v := r.Value.Float64
-			ev.Value = &v
-		}
-		if r.Threshold.Valid {
-			v := r.Threshold.Float64
-			ev.Threshold = &v
-		}
-		if r.PeakValue.Valid {
-			v := r.PeakValue.Float64
-			ev.PeakValue = &v
-		}
-		if r.ResolvedBy.Valid {
-			ev.ResolvedBy = r.ResolvedBy.String
-		}
-		if r.Note.Valid {
-			ev.Note = r.Note.String
-		}
-		if r.EndedAt.Valid {
-			t := r.EndedAt.Time
-			ev.EndedAt = &t
-		}
-		out = append(out, ev)
+			EndedAt:     nullable.Ptr(r.EndedAt.Time, r.EndedAt.Valid),
+		})
 	}
 	return out
 }

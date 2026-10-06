@@ -3,8 +3,6 @@ package app
 import (
 	"log/slog"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
-
 	"github.com/optikklabs/query/internal/infra/llmproviders"
 	"github.com/optikklabs/query/internal/infra/secretbox"
 
@@ -41,10 +39,8 @@ import (
 	user_users "github.com/optikklabs/query/internal/modules/user/users"
 )
 
-func configuredModules(
-	nativeQuerier clickhouse.Conn,
-	infraDeps *Infra,
-) []Module {
+func configuredModules(infraDeps *Infra) []Module {
+	ch := infraDeps.CH
 	authService := user_auth.NewService(user_auth.NewRepository(infraDeps.DB), infraDeps.Tokens, infraDeps.Config.Email)
 	deviceService := user_device.NewService(user_device.NewRepository(infraDeps.DB), authService)
 	signupService := user_signup.NewService(user_signup.NewRepository(infraDeps.DB), authService, infraDeps.Config.Email)
@@ -59,27 +55,27 @@ func configuredModules(
 	llmProviders := llmproviders.NewRegistry()
 
 	return []Module{
-		deployments.NewModule(nativeQuerier),
-		logs.NewModule(nativeQuerier),
-		infrastructure.NewModule(nativeQuerier),
-		metrics_explorer.NewModule(nativeQuerier),
-		ingestion.NewModule(nativeQuerier, infraDeps.Config.Billing),
-		llm.NewModule(nativeQuerier),
-		llm_scores.NewModule(nativeQuerier),
-		llm_sessions.NewModule(nativeQuerier),
-		llm_users.NewModule(nativeQuerier),
+		deployments.NewModule(ch),
+		logs.NewModule(ch),
+		infrastructure.NewModule(ch),
+		metrics_explorer.NewModule(ch),
+		ingestion.NewModule(ch, infraDeps.Config.Billing),
+		llm.NewModule(ch),
+		llm_scores.NewModule(ch),
+		llm_sessions.NewModule(ch),
+		llm_users.NewModule(ch),
 		llm_prompts.NewModule(infraDeps.DB),
 		llm_datasets.NewModule(infraDeps.DB, providerKeySvc, llmProviders),
-		llm_evaluators.NewModule(infraDeps.DB, nativeQuerier),
+		llm_evaluators.NewModule(infraDeps.DB, ch),
 		llm_providerkeys.NewModule(providerKeySvc),
 		llm_playground.NewModule(providerKeySvc, llmProviders),
-		services_errors.NewModule(nativeQuerier),
-		services_redfleet.NewModule(nativeQuerier),
-		saturation_database.NewModule(nativeQuerier),
-		saturation_kafka.NewModule(nativeQuerier),
-		services_topology.NewModule(nativeQuerier),
-		traces.NewModule(nativeQuerier),
-		traces_explorer.NewModule(nativeQuerier),
+		services_errors.NewModule(ch),
+		services_redfleet.NewModule(ch),
+		saturation_database.NewModule(ch),
+		saturation_kafka.NewModule(ch),
+		services_topology.NewModule(ch),
+		traces.NewModule(ch),
+		traces_explorer.NewModule(ch),
 
 		user_auth.NewModule(authService, infraDeps.Tokens),
 		user_device.NewModule(deviceService, infraDeps.Tokens),
@@ -87,9 +83,9 @@ func configuredModules(
 		user_tenant.NewModule(tenantService),
 		user_users.NewModule(usersService),
 
-		alerting_monitors.NewModule(infraDeps.DB, nativeQuerier),
+		alerting_monitors.NewModule(infraDeps.DB, ch),
 		alerting_notifications.NewModule(infraDeps.DB),
-		alerting_evaluator.NewModule(infraDeps.DB, nativeQuerier),
+		alerting_evaluator.NewModule(infraDeps.DB, ch),
 
 		billing.NewModule(infraDeps.DB),
 

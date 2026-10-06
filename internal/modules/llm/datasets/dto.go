@@ -1,6 +1,7 @@
 package datasets
 
 import (
+	"database/sql"
 	"encoding/json"
 	"time"
 )
@@ -73,13 +74,13 @@ type ItemInput struct {
 }
 
 type datasetRow struct {
-	ID          int64      `db:"id"`
-	Name        string     `db:"name"`
-	Description *string    `db:"description"`
-	ItemCount   int        `db:"item_count"`
-	RunCount    int        `db:"run_count"`
-	UpdatedAt   *time.Time `db:"updated_at"`
-	CreatedAt   time.Time  `db:"created_at"`
+	ID          int64          `db:"id"`
+	Name        string         `db:"name"`
+	Description sql.NullString `db:"description"`
+	ItemCount   int            `db:"item_count"`
+	RunCount    int            `db:"run_count"`
+	UpdatedAt   sql.NullTime   `db:"updated_at"`
+	CreatedAt   time.Time      `db:"created_at"`
 }
 
 type itemRow struct {
@@ -91,25 +92,25 @@ type itemRow struct {
 }
 
 type runRow struct {
-	ID            int64      `db:"id"`
-	Name          string     `db:"name"`
-	Provider      string     `db:"provider"`
-	Model         string     `db:"model"`
-	Status        string     `db:"status"`
-	ItemCount     int        `db:"item_count"`
-	AvgScoresJSON []byte     `db:"avg_scores_json"`
-	TotalCostUsd  float64    `db:"total_cost_usd"`
-	AvgLatencyMs  float64    `db:"avg_latency_ms"`
-	Error         *string    `db:"error"`
-	CreatedAt     time.Time  `db:"created_at"`
-	CompletedAt   *time.Time `db:"completed_at"`
+	ID            int64          `db:"id"`
+	Name          string         `db:"name"`
+	Provider      string         `db:"provider"`
+	Model         string         `db:"model"`
+	Status        string         `db:"status"`
+	ItemCount     int            `db:"item_count"`
+	AvgScoresJSON []byte         `db:"avg_scores_json"`
+	TotalCostUsd  float64        `db:"total_cost_usd"`
+	AvgLatencyMs  float64        `db:"avg_latency_ms"`
+	Error         sql.NullString `db:"error"`
+	CreatedAt     time.Time      `db:"created_at"`
+	CompletedAt   sql.NullTime   `db:"completed_at"`
 }
 
 type runItemRow struct {
-	DatasetItemID int64   `db:"dataset_item_id"`
-	OutputJSON    []byte  `db:"output_json"`
-	LatencyMs     int     `db:"latency_ms"`
-	CostUsd       float64 `db:"cost_usd"`
-	ScoresJSON    []byte  `db:"scores_json"`
-	Error         *string `db:"error"`
+	DatasetItemID int64          `db:"dataset_item_id"`
+	OutputJSON    []byte         `db:"output_json"`
+	LatencyMs     int            `db:"latency_ms"`
+	CostUsd       float64        `db:"cost_usd"`
+	ScoresJSON    []byte         `db:"scores_json"`
+	Error         sql.NullString `db:"error"`
 }

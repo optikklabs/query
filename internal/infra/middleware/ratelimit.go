@@ -28,9 +28,7 @@ func TenantRateLimit(reqsPerSec float64, burst int) func(http.Handler) http.Hand
 
 			if !rl.allow(tenantID) {
 				metrics.APIRateLimitedTotal.WithLabelValues(strconv.FormatInt(tenantID, 10)).Inc()
-				httputil.WriteJSON(w, http.StatusTooManyRequests, types.Failure(
-					errorcode.RateLimited, "Too many requests", r.URL.Path,
-				))
+				httputil.RespondErrorWithCause(w, r, http.StatusTooManyRequests, errorcode.RateLimited, "Too many requests", nil)
 				return
 			}
 			next.ServeHTTP(w, r)

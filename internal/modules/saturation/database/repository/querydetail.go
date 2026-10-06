@@ -34,7 +34,9 @@ type SummaryRaw struct {
 	AvgRows        *float64  `ch:"avg_rows"`
 }
 
-func (r *Repository) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (*SummaryRaw, error) {
+// GetSummary aggregates every execution of the query hash in the window; a
+// hash with no executions yields a zero CallCount.
+func (r *Repository) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (SummaryRaw, error) {
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
 		SELECT argMax(db_statement_normalized, (timestamp, span_id)) AS query_text,
@@ -50,14 +52,9 @@ func (r *Repository) GetSummary(ctx context.Context, tenantID, startMs, endMs in
 		FROM optikk.spans` + queryHashPrewhere + filterWhere
 
 	args := append(hashArgs(tenantID, startMs, endMs, hash), filterArgs...)
-	var rows []SummaryRaw
-	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetSummary", &rows, query, args...); err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-	return &rows[0], nil
+	var row SummaryRaw
+	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "querydetail.GetSummary", &row, query, args...)
+	return row, err
 }
 
 type ServiceRaw struct {

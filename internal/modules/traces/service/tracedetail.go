@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"log/slog"
 
 	"golang.org/x/sync/errgroup"
 
@@ -49,17 +48,13 @@ func (s *Service) GetTraceDetail(ctx context.Context, tenantID int64, traceID st
 		return err
 	})
 	if err := g.Wait(); err != nil {
-		slog.ErrorContext(ctx, "detail: GetTraceDetail failed", slog.Any("error", err), slog.Int64("tenant_id", tenantID), slog.String("trace_id", traceID))
 		return nil, err
 	}
 	return buildTraceDetail(summaryRow, rows), nil
 }
 
 func buildTraceDetail(summaryRow *repository.TraceSummaryRow, rows []repository.TraceSpanRow) *TraceDetail {
-	listRows := rows
-	if len(listRows) > spanListLimit {
-		listRows = listRows[:spanListLimit]
-	}
+	listRows := rows[:min(len(rows), spanListLimit)]
 	errorRows := filterErrorRows(rows, errorSpanLimit)
 
 	detail := &TraceDetail{
@@ -99,7 +94,7 @@ func toSpanListItems(rows []repository.TraceSpanRow) []models.SpanListItem {
 }
 
 func filterErrorRows(rows []repository.TraceSpanRow, limit int) []repository.TraceSpanRow {
-	out := make([]repository.TraceSpanRow, 0)
+	out := []repository.TraceSpanRow{}
 	for i := range rows {
 		if rows[i].HasError {
 			out = append(out, rows[i])

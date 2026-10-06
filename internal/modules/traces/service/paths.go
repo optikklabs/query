@@ -1,6 +1,7 @@
 package service
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/optikklabs/query/internal/modules/traces/models"
@@ -120,33 +121,31 @@ func pickBestChild(nodes map[string]*criticalNode, children []string) string {
 }
 
 // buildErrorPath returns the root-to-leaf ancestry chain of error spans,
-// starting from an error span no other error span points to as parent.
+// ending at the earliest error span that no other error span has as parent.
 func buildErrorPath(rows []repository.TraceSpanRow) []models.ErrorPathSpan {
 	spans := make(map[string]*repository.TraceSpanRow, len(rows))
 	for i := range rows {
 		spans[rows[i].SpanID] = &rows[i]
 	}
-	leafID := pickErrorLeaf(spans)
+	leafID := pickErrorLeaf(rows)
 	if leafID == "" {
 		return []models.ErrorPathSpan{}
 	}
 	chain := walkErrorChain(spans, leafID)
-	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
-		chain[i], chain[j] = chain[j], chain[i]
-	}
+	slices.Reverse(chain)
 	return chain
 }
 
-func pickErrorLeaf(spans map[string]*repository.TraceSpanRow) string {
-	childOf := make(map[string]bool, len(spans))
-	for _, s := range spans {
-		if s.ParentSpanID != "" {
-			childOf[s.ParentSpanID] = true
-		}
+// pickErrorLeaf returns the first span, in row (start time) order, that is
+// not the parent of another span in rows.
+func pickErrorLeaf(rows []repository.TraceSpanRow) string {
+	isParent := make(map[string]bool, len(rows))
+	for i := range rows {
+		isParent[rows[i].ParentSpanID] = true
 	}
-	for sid := range spans {
-		if !childOf[sid] {
-			return sid
+	for i := range rows {
+		if !isParent[rows[i].SpanID] {
+			return rows[i].SpanID
 		}
 	}
 	return ""

@@ -1,11 +1,13 @@
 package users
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/optikklabs/query/internal/modules/user/auth"
@@ -32,11 +34,15 @@ func NewService(repo repository, authService *auth.Service) *Service {
 }
 
 func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantID int64) (UserResponse, error) {
-	role := req.Role
-	if role == "" {
-		role = shared.RoleMember
-	}
-	if !shared.IsValidRole(role) {
+	email, validEmail := shared.NormalizeEmail(req.Email)
+	name := strings.TrimSpace(req.Name)
+	role := cmp.Or(req.Role, shared.RoleMember)
+	switch {
+	case !validEmail:
+		return UserResponse{}, errorcode.ValidationError{Msg: "A valid email is required"}
+	case name == "":
+		return UserResponse{}, errorcode.ValidationError{Msg: "Name is required"}
+	case !shared.IsValidRole(role):
 		return UserResponse{}, errorcode.ValidationError{Msg: "role must be 'admin' or 'member'"}
 	}
 
@@ -52,7 +58,10 @@ func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantI
 		hashStr = hash
 	}
 
-	userID, err := s.repo.CreateUser(ctx, req.Email, hashStr, req.Name, tenantID, role, time.Now().UTC())
+	userID, err := s.repo.CreateUser(ctx, email, hashStr, name, tenantID, role, time.Now().UTC())
+	if shared.IsDuplicateEntry(err) {
+		return UserResponse{}, errorcode.ConflictError{Msg: "A user with this email already exists"}
+	}
 	if err != nil {
 		return UserResponse{}, fmt.Errorf("failed to create user: %w", err)
 	}
@@ -63,15 +72,16 @@ func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantI
 	}
 
 	if req.Password == "" {
-		if err := s.authService.ForgotPassword(ctx, req.Email); err != nil {
-			slog.WarnContext(ctx, "failed to send welcome email", slog.String("email", req.Email), slog.Any("error", err))
+		// A user created without a password sets one through the reset flow.
+		if err := s.authService.ForgotPassword(ctx, email); err != nil {
+			slog.WarnContext(ctx, "failed to send welcome email", slog.String("email", email), slog.Any("error", err))
 		}
 	}
 
-	return s.buildUserResponse(created), nil
+	return toUserResponse(created), nil
 }
 
-func (s *Service) buildUserResponse(user shared.UserRecord) UserResponse {
+func toUserResponse(user shared.UserRecord) UserResponse {
 	return UserResponse{
 		ID:        user.ID,
 		Email:     user.Email,
@@ -90,7 +100,7 @@ func (s *Service) ListUsers(ctx context.Context, tenantID int64) ([]UserResponse
 	}
 	responses := make([]UserResponse, 0, len(records))
 	for _, record := range records {
-		responses = append(responses, s.buildUserResponse(record))
+		responses = append(responses, toUserResponse(record))
 	}
 	return responses, nil
 }
@@ -112,7 +122,7 @@ func (s *Service) SetUserRole(ctx context.Context, userID, tenantID int64, role 
 		return UserResponse{}, fmt.Errorf("failed to update user role: %w", err)
 	}
 	user.Role = role
-	return s.buildUserResponse(user), nil
+	return toUserResponse(user), nil
 }
 
 func (s *Service) RemoveUser(ctx context.Context, userID, tenantID int64) error {

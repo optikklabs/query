@@ -3,12 +3,14 @@ package httputil
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -18,6 +20,9 @@ import (
 )
 
 const APIV1Base = "/api/v1"
+
+// maxBodyBytes caps every JSON request body.
+const maxBodyBytes = 1 << 20
 
 func Tenant(r *http.Request) types.TenantContext {
 	return types.TenantFrom(r.Context())
@@ -46,27 +51,33 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
-func DecodeJSON(r *http.Request, v any) error {
-	const maxBodyBytes = 1 << 20
-	limited := &io.LimitedReader{R: r.Body, N: maxBodyBytes + 1}
-	decoder := json.NewDecoder(limited)
+// BindJSON decodes the request body into v and answers 400 when the body is
+// not exactly one JSON value matching v.
+func BindJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	if err := decodeJSON(w, r, v); err != nil {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "invalid request body: "+err.Error(), nil)
+		return false
+	}
+	return true
+}
+
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(v); err != nil {
-		return err
-	}
-	if limited.N <= 0 {
-		return errors.New("request body exceeds 1 MiB")
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return errors.New("request body must contain one JSON value")
+	err := decoder.Decode(v)
+	if err == nil {
+		// A second value (or trailing garbage) means the body was not one value.
+		if err = decoder.Decode(&struct{}{}); errors.Is(err, io.EOF) {
+			return nil
 		}
-		return err
+		if err == nil {
+			return errors.New("body must contain a single JSON value")
+		}
 	}
-	if limited.N <= 0 {
-		return errors.New("request body exceeds 1 MiB")
+	if _, tooLarge := errors.AsType[*http.MaxBytesError](err); tooLarge {
+		return fmt.Errorf("body exceeds %d bytes", maxBodyBytes)
 	}
-	return nil
+	return err
 }
 
 func RespondOK(w http.ResponseWriter, data any) {
@@ -77,32 +88,37 @@ func RespondAccepted(w http.ResponseWriter, data any) {
 	WriteJSON(w, http.StatusAccepted, types.Success(data))
 }
 
+func RespondOKWithComparison(w http.ResponseWriter, data, comparison any) {
+	WriteJSON(w, http.StatusOK, types.SuccessWithComparison(data, comparison))
+}
+
+// RespondErrorWithCause writes a failure envelope. Server errors and any
+// response carrying a cause are logged; plain client errors are not.
 func RespondErrorWithCause(w http.ResponseWriter, r *http.Request, status int, code, msg string, err error) {
 	// Budget violations are client-fixable: remap to a typed 422 so the
 	// UI can prompt narrowing instead of showing a generic 500.
-	if err != nil && errors.Is(err, errorcode.ErrQueryBudgetExceeded) {
+	if errors.Is(err, errorcode.ErrQueryBudgetExceeded) {
 		status = http.StatusUnprocessableEntity
 		code = errorcode.QueryBudgetExceeded
 		msg = "query exceeded its execution budget; narrow the time range or filters"
 	}
 	requestID := w.Header().Get("X-Request-Id")
-	if err != nil {
-		slog.ErrorContext(r.Context(), "request error",
+	if err != nil || status >= http.StatusInternalServerError {
+		attrs := []any{
 			slog.String("code", code), slog.String("msg", msg),
 			slog.String("method", r.Method), slog.String("path", r.URL.Path),
 			slog.String("request_id", requestID),
-			slog.Any("error", err))
-	} else if status >= 500 {
-		slog.ErrorContext(r.Context(), "request error",
-			slog.String("code", code), slog.String("msg", msg),
-			slog.String("method", r.Method), slog.String("path", r.URL.Path),
-			slog.String("request_id", requestID))
+		}
+		if err != nil {
+			attrs = append(attrs, slog.Any("error", err))
+		}
+		slog.ErrorContext(r.Context(), "request error", attrs...)
 	}
 	WriteJSON(w, status, types.Failure(code, msg, r.URL.Path, requestID))
 }
 
-// RespondServiceError maps the shared service error kinds (validation,
-// not-found, conflict, unauthorized, trial-expired) to HTTP responses; other errors become failMsg 500s.
+// RespondServiceError maps the shared errorcode error kinds to their HTTP
+// status; any other error becomes a failMsg 500.
 func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, failMsg string) {
 	var (
 		nf errorcode.NotFoundError
@@ -110,6 +126,8 @@ func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fail
 		ve errorcode.ValidationError
 		ua errorcode.UnauthorizedError
 		te errorcode.TrialExpiredError
+		rl errorcode.RateLimitedError
+		un errorcode.UnavailableError
 	)
 	switch {
 	case errors.As(err, &nf):
@@ -122,6 +140,10 @@ func RespondServiceError(w http.ResponseWriter, r *http.Request, err error, fail
 		RespondErrorWithCause(w, r, http.StatusUnauthorized, errorcode.Unauthorized, ua.Msg, nil)
 	case errors.As(err, &te):
 		RespondErrorWithCause(w, r, http.StatusPaymentRequired, errorcode.TrialExpired, te.Msg, nil)
+	case errors.As(err, &rl):
+		RespondErrorWithCause(w, r, http.StatusTooManyRequests, errorcode.RateLimited, rl.Msg, nil)
+	case errors.As(err, &un):
+		RespondErrorWithCause(w, r, http.StatusServiceUnavailable, errorcode.Unavailable, un.Msg, nil)
 	default:
 		RespondErrorWithCause(w, r, http.StatusInternalServerError, errorcode.Internal, failMsg, err)
 	}
@@ -164,60 +186,44 @@ func ParsePageSize(r *http.Request, key string, fallback int) int {
 	return size
 }
 
-func ParseRange(r *http.Request) (startMs, endMs int64, err error) {
-	end := ParseInt64Param(r, "endTime", 0)
-	if end <= 0 {
-		end = ParseInt64Param(r, "end", 0)
+// ParseRequiredRange reads the startTime/endTime query params as Unix
+// milliseconds and answers 400 when the window is missing, inverted or
+// longer than 30 days.
+func ParseRequiredRange(w http.ResponseWriter, r *http.Request) (startMs, endMs int64, ok bool) {
+	return requireRange(w, r, filterutil.MaxTimeRangeMs)
+}
+
+// ParseRequiredUncappedRange is ParseRequiredRange without the 30-day cap.
+func ParseRequiredUncappedRange(w http.ResponseWriter, r *http.Request) (startMs, endMs int64, ok bool) {
+	return requireRange(w, r, 0)
+}
+
+func requireRange(w http.ResponseWriter, r *http.Request, maxMs int64) (startMs, endMs int64, ok bool) {
+	startMs, endMs, err := parseRange(r, maxMs)
+	if err != nil {
+		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, err.Error(), nil)
+		return 0, 0, false
 	}
-	start := ParseInt64Param(r, "startTime", 0)
-	if start <= 0 {
-		start = ParseInt64Param(r, "start", 0)
-	}
-	if start <= 0 || end <= 0 {
-		return 0, 0, errors.New("start and end time params are required")
-	}
-	if end-start > filterutil.MaxTimeRangeMs {
+	return startMs, endMs, true
+}
+
+// parseRange validates the window; maxMs of 0 leaves its length unbounded.
+func parseRange(r *http.Request, maxMs int64) (startMs, endMs int64, err error) {
+	startMs = ParseInt64Param(r, "startTime", 0)
+	endMs = ParseInt64Param(r, "endTime", 0)
+	switch {
+	case startMs <= 0 || endMs <= 0:
+		return 0, 0, errors.New("startTime and endTime must be positive Unix milliseconds")
+	case startMs >= endMs:
+		return 0, 0, errors.New("startTime must be before endTime")
+	case maxMs > 0 && endMs-startMs > maxMs:
 		return 0, 0, errors.New("time range must not exceed 30 days")
 	}
-	if start >= end {
-		return 0, 0, errors.New("start must be before end")
-	}
-	return start, end, nil
+	return startMs, endMs, nil
 }
 
-func ParseRequiredRange(w http.ResponseWriter, r *http.Request) (startMs, endMs int64, ok bool) {
-	q := r.URL.Query()
-	hasStart := q.Get("startTime") != "" || q.Get("start") != ""
-	hasEnd := q.Get("endTime") != "" || q.Get("end") != ""
-	if !hasStart || !hasEnd {
-		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "start and end time params are required", nil)
-		return 0, 0, false
-	}
-	start, end, err := ParseRange(r)
-	if err != nil {
-		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "start and end time params are required", err)
-		return 0, 0, false
-	}
-	return start, end, true
-}
-
-func ParseRequiredExplicitRange(w http.ResponseWriter, r *http.Request) (startMs, endMs int64, ok bool) {
-	startRaw := r.URL.Query().Get("startTime")
-	endRaw := r.URL.Query().Get("endTime")
-	if startRaw == "" || endRaw == "" {
-		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "startTime and endTime are required", nil)
-		return 0, 0, false
-	}
-
-	start, startErr := strconv.ParseInt(startRaw, 10, 64)
-	end, endErr := strconv.ParseInt(endRaw, 10, 64)
-	if startErr != nil || endErr != nil || start <= 0 || end <= 0 || start >= end {
-		RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.BadRequest, "startTime and endTime must be positive Unix milliseconds with startTime before endTime", nil)
-		return 0, 0, false
-	}
-	return start, end, true
-}
-
+// ParseComparisonRange resolves the comparison window from explicit
+// compareStart/compareEnd params or a compareTo preset.
 func ParseComparisonRange(r *http.Request, startMs, endMs int64) (cmpStart, cmpEnd int64, ok bool) {
 	cmpStart = ParseInt64Param(r, "compareStart", 0)
 	cmpEnd = ParseInt64Param(r, "compareEnd", 0)
@@ -225,20 +231,16 @@ func ParseComparisonRange(r *http.Request, startMs, endMs int64) (cmpStart, cmpE
 		return cmpStart, cmpEnd, true
 	}
 
-	compareTo := r.URL.Query().Get("compareTo")
-	duration := endMs - startMs
-	switch compareTo {
+	var shift int64
+	switch r.URL.Query().Get("compareTo") {
 	case "previous_period":
-		return startMs - duration, startMs, true
+		shift = endMs - startMs
 	case "previous_day":
-		return startMs - 86400000, endMs - 86400000, true
+		shift = (24 * time.Hour).Milliseconds()
 	case "previous_week":
-		return startMs - 604800000, endMs - 604800000, true
+		shift = (7 * 24 * time.Hour).Milliseconds()
 	default:
 		return 0, 0, false
 	}
-}
-
-func RespondOKWithComparison(w http.ResponseWriter, data, comparison any) {
-	WriteJSON(w, http.StatusOK, types.SuccessWithComparison(data, comparison))
+	return startMs - shift, endMs - shift, true
 }

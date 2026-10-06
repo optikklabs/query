@@ -5,6 +5,7 @@ import (
 
 	"github.com/optikklabs/query/internal/modules/traces/service"
 	"github.com/optikklabs/query/internal/shared/errorcode"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 	"github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -23,12 +24,8 @@ func traceScope(w http.ResponseWriter, r *http.Request) (tenantID int64, traceID
 		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
 		return 0, "", 0, 0, false
 	}
-	startMs, endMs, err := httputil.ParseRange(r)
-	if err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, err.Error(), nil)
-		return 0, "", 0, 0, false
-	}
-	return httputil.Tenant(r).TenantID, traceID, startMs, endMs, true
+	startMs, endMs, ok = httputil.ParseRequiredRange(w, r)
+	return httputil.Tenant(r).TenantID, traceID, startMs, endMs, ok
 }
 
 // GetTraceDetail serves the consolidated trace view: summary, span list
@@ -84,28 +81,17 @@ func (h *Handler) GetSpanAttributes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetRelatedTraces(w http.ResponseWriter, r *http.Request) {
-	tenantID := httputil.Tenant(r).TenantID
-	traceID := httputil.URLParamLower(r, "traceId")
-	if traceID == "" {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "trace id required", nil)
+	tenantID, traceID, startMs, endMs, ok := traceScope(w, r)
+	if !ok {
 		return
 	}
 	serviceName := r.URL.Query().Get("service")
 	operationName := r.URL.Query().Get("operation")
-
-	startMs, endMs, ok := httputil.ParseRequiredRange(w, r)
-	if !ok {
-		return
-	}
 	if serviceName == "" || operationName == "" {
 		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "service and operation are required", nil)
 		return
 	}
-
-	limit := httputil.ParseIntParam(r, "limit", defaultRelatedLimit)
-	if limit <= 0 || limit > maxRelatedLimit {
-		limit = defaultRelatedLimit
-	}
+	limit := filterutil.PickLimit(httputil.ParseIntParam(r, "limit", 0), defaultRelatedLimit, maxRelatedLimit)
 
 	traces, err := h.Service.GetRelatedTraces(r.Context(), tenantID, serviceName, operationName, startMs, endMs, traceID, limit)
 	if err != nil {

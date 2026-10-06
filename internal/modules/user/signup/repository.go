@@ -6,12 +6,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
+	dbutil "github.com/optikklabs/query/internal/infra/database"
+
 	"github.com/jmoiron/sqlx"
+	"github.com/optikklabs/query/internal/infra/token"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 )
-
-const mysqlDuplicateEntry = 1062
 
 type Repository struct {
 	db *sqlx.DB
@@ -48,7 +48,7 @@ func (r *Repository) CreateTenantWithAdmin(ctx context.Context, signup tenantAdm
 
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO tenant (name, api_key_hash, api_key_prefix, trial_ends_at) VALUES (?, ?, ?, ?)`,
-		signup.TenantName, shared.HashAPIKey(signup.APIKey), shared.APIKeyPrefix(signup.APIKey), signup.TrialEndsAt)
+		signup.TenantName, token.HashSecret(signup.APIKey), shared.APIKeyPrefix(signup.APIKey), signup.TrialEndsAt)
 	if err != nil {
 		return shared.AuthUser{}, err
 	}
@@ -111,13 +111,8 @@ func (r *Repository) ConsumeVerification(ctx context.Context, tokenHash string) 
 }
 
 func (r *Repository) RotateTenantAPIKey(ctx context.Context, tenantID int64, apiKey string) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE tenant SET api_key_hash=?, api_key_prefix=? WHERE id=?`, shared.HashAPIKey(apiKey), shared.APIKeyPrefix(apiKey), tenantID)
+	_, err := dbutil.ExecSQL(ctx, r.db, "user.RotateTenantAPIKey", `UPDATE tenant SET api_key_hash=?, api_key_prefix=? WHERE id=?`, token.HashSecret(apiKey), shared.APIKeyPrefix(apiKey), tenantID)
 	return err
-}
-
-func IsDuplicateEmail(err error) bool {
-	var me *mysql.MySQLError
-	return errors.As(err, &me) && me.Number == mysqlDuplicateEntry
 }
 
 var ErrAlreadyVerified = errors.New("user is already verified")
@@ -150,7 +145,7 @@ func (r *Repository) UpdateUnverifiedTenantAndAdmin(ctx context.Context, signup 
 
 	if _, err = tx.ExecContext(ctx, `
 		UPDATE tenant SET name=?, api_key_hash=?, api_key_prefix=?, trial_ends_at=? WHERE id=?
-	`, signup.TenantName, shared.HashAPIKey(signup.APIKey), shared.APIKeyPrefix(signup.APIKey), signup.TrialEndsAt, tID); err != nil {
+	`, signup.TenantName, token.HashSecret(signup.APIKey), shared.APIKeyPrefix(signup.APIKey), signup.TrialEndsAt, tID); err != nil {
 		return shared.AuthUser{}, err
 	}
 

@@ -1,14 +1,14 @@
 package llmproviders
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 )
 
+// openAIClient speaks the OpenAI chat-completions API, which Mistral also
+// implements.
 type openAIClient struct {
 	http    *http.Client
 	baseURL string
@@ -29,59 +29,25 @@ type openAIChatResponse struct {
 		PromptTokens     int `json:"prompt_tokens"`
 		CompletionTokens int `json:"completion_tokens"`
 	} `json:"usage"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
+	Error *apiError `json:"error"`
 }
 
 func (c *openAIClient) Complete(ctx context.Context, apiKey string, req CompletionRequest) (CompletionResult, error) {
-	body, err := json.Marshal(openAIChatRequest(req))
+	var resp openAIChatResponse
+	status, err := postJSON(ctx, c.http, c.baseURL+"/chat/completions",
+		map[string]string{"Authorization": "Bearer " + apiKey}, openAIChatRequest(req), &resp)
 	if err != nil {
-		return CompletionResult{}, err
+		return CompletionResult{}, fmt.Errorf("openai: %w", err)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return CompletionResult{}, err
+	if status != http.StatusOK {
+		return CompletionResult{}, providerError("openai", status, resp.Error)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-
-	resp, err := c.http.Do(httpReq)
-	if err != nil {
-		return CompletionResult{}, err
-	}
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	var parsed openAIChatResponse
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return CompletionResult{}, fmt.Errorf("openai: invalid response (status %d)", resp.StatusCode)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return CompletionResult{}, providerError("openai", resp.StatusCode, errMessage(parsed.Error))
-	}
-	if len(parsed.Choices) == 0 {
-		return CompletionResult{}, fmt.Errorf("openai: empty completion")
+	if len(resp.Choices) == 0 {
+		return CompletionResult{}, errors.New("openai: empty completion")
 	}
 	return CompletionResult{
-		Output:       parsed.Choices[0].Message.Content,
-		InputTokens:  parsed.Usage.PromptTokens,
-		OutputTokens: parsed.Usage.CompletionTokens,
+		Output:       resp.Choices[0].Message.Content,
+		InputTokens:  resp.Usage.PromptTokens,
+		OutputTokens: resp.Usage.CompletionTokens,
 	}, nil
-}
-
-func errMessage(e *struct {
-	Message string `json:"message"`
-}) string {
-	if e == nil {
-		return ""
-	}
-	return e.Message
-}
-
-func providerError(provider string, status int, msg string) error {
-	if msg != "" {
-		return fmt.Errorf("%s: %s (status %d)", provider, msg, status)
-	}
-	return fmt.Errorf("%s: request failed with status %d", provider, status)
 }

@@ -1,12 +1,15 @@
 package evaluators
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
-	"encoding/json"
-	"errors"
+	"slices"
 	"strings"
 
+	"github.com/optikklabs/query/internal/shared/nullable"
+
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
@@ -20,8 +23,10 @@ func NewService(repo *Repository) *Service {
 
 var ErrNotFound = errorcode.NotFoundError{Msg: "evaluator not found"}
 
-var validTarget = map[string]struct{}{"traces": {}, "generations": {}}
-var validDataType = map[string]struct{}{"numeric": {}, "boolean": {}, "categorical": {}}
+var (
+	targets   = []string{"traces", "generations"}
+	dataTypes = []string{"numeric", "boolean", "categorical"}
+)
 
 func (s *Service) List(ctx context.Context, tenantID, startMs, endMs int64) ([]Evaluator, error) {
 	rows, err := s.repo.List(ctx, tenantID)
@@ -65,26 +70,26 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Upsert
 func (s *Service) Update(ctx context.Context, tenantID, id int64, req UpsertRequest) (Evaluator, error) {
 	cur, err := s.repo.Get(ctx, tenantID, id)
 	if err != nil {
-		return Evaluator{}, mapNotFound(err)
+		return Evaluator{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	args, err := buildArgs(tenantID, req, fromRow(cur))
 	if err != nil {
 		return Evaluator{}, err
 	}
 	if err := s.repo.Update(ctx, tenantID, id, args); err != nil {
-		return Evaluator{}, mapNotFound(err)
+		return Evaluator{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return s.get(ctx, tenantID, id)
 }
 
 func (s *Service) Delete(ctx context.Context, tenantID, id int64) error {
-	return mapNotFound(s.repo.Delete(ctx, tenantID, id))
+	return dbutil.NoRowsAs(s.repo.Delete(ctx, tenantID, id), ErrNotFound)
 }
 
 func (s *Service) get(ctx context.Context, tenantID, id int64) (Evaluator, error) {
 	row, err := s.repo.Get(ctx, tenantID, id)
 	if err != nil {
-		return Evaluator{}, mapNotFound(err)
+		return Evaluator{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return toEvaluator(row), nil
 }
@@ -104,13 +109,13 @@ func buildArgs(tenantID int64, req UpsertRequest, base insertArgs) (insertArgs, 
 		return insertArgs{}, errorcode.ValidationError{Msg: "scoreName is required"}
 	}
 	if req.Target != "" {
-		if _, ok := validTarget[req.Target]; !ok {
+		if !slices.Contains(targets, req.Target) {
 			return insertArgs{}, errorcode.ValidationError{Msg: "target must be traces or generations"}
 		}
 		base.Target = req.Target
 	}
 	if req.DataType != "" {
-		if _, ok := validDataType[req.DataType]; !ok {
+		if !slices.Contains(dataTypes, req.DataType) {
 			return insertArgs{}, errorcode.ValidationError{Msg: "dataType must be numeric, boolean or categorical"}
 		}
 		base.DataType = req.DataType
@@ -125,7 +130,7 @@ func buildArgs(tenantID int64, req UpsertRequest, base insertArgs) (insertArgs, 
 		base.Enabled = *req.Enabled
 	}
 	if req.Categories != nil {
-		base.CategoriesJSON = marshalStrings(req.Categories)
+		base.Categories = req.Categories
 	}
 	if strings.TrimSpace(req.JudgeModel) != "" {
 		base.JudgeModel = sql.NullString{Valid: true, String: strings.TrimSpace(req.JudgeModel)}
@@ -137,71 +142,32 @@ func buildArgs(tenantID int64, req UpsertRequest, base insertArgs) (insertArgs, 
 }
 
 func fromRow(row evaluatorRow) insertArgs {
-	a := insertArgs{
+	return insertArgs{
 		Name:           row.Name,
 		ScoreName:      row.ScoreName,
+		JudgeModel:     row.JudgeModel,
 		Target:         row.Target,
 		SamplingPct:    row.SamplingPct,
 		DataType:       row.DataType,
-		CategoriesJSON: row.CategoriesJSON,
+		Categories:     row.Categories,
+		PromptTemplate: row.PromptTemplate,
 		Enabled:        row.Enabled,
 	}
-	if row.JudgeModel != nil {
-		a.JudgeModel = sql.NullString{Valid: true, String: *row.JudgeModel}
-	}
-	if row.PromptTemplate != nil {
-		a.PromptTemplate = sql.NullString{Valid: true, String: *row.PromptTemplate}
-	}
-	return a
 }
 
 func toEvaluator(row evaluatorRow) Evaluator {
-	ev := Evaluator{
-		ID:          row.ID,
-		Name:        row.Name,
-		ScoreName:   row.ScoreName,
-		Target:      row.Target,
-		SamplingPct: row.SamplingPct,
-		DataType:    row.DataType,
-		Categories:  unmarshalStrings(row.CategoriesJSON),
-		Enabled:     row.Enabled,
-		CreatedAt:   row.CreatedAt,
+	return Evaluator{
+		ID:             row.ID,
+		Name:           row.Name,
+		ScoreName:      row.ScoreName,
+		JudgeModel:     row.JudgeModel.String,
+		Target:         row.Target,
+		SamplingPct:    row.SamplingPct,
+		DataType:       row.DataType,
+		Categories:     nullable.OrEmpty(row.Categories),
+		PromptTemplate: row.PromptTemplate.String,
+		Enabled:        row.Enabled,
+		CreatedAt:      row.CreatedAt,
+		UpdatedAt:      cmp.Or(row.UpdatedAt.Time, row.CreatedAt),
 	}
-	if row.JudgeModel != nil {
-		ev.JudgeModel = *row.JudgeModel
-	}
-	if row.PromptTemplate != nil {
-		ev.PromptTemplate = *row.PromptTemplate
-	}
-	ev.UpdatedAt = row.CreatedAt
-	if row.UpdatedAt != nil {
-		ev.UpdatedAt = *row.UpdatedAt
-	}
-	return ev
-}
-
-func marshalStrings(in []string) []byte {
-	if len(in) == 0 {
-		return []byte("[]")
-	}
-	b, err := json.Marshal(in)
-	if err != nil {
-		return []byte("[]")
-	}
-	return b
-}
-
-func unmarshalStrings(raw []byte) []string {
-	out := []string{}
-	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &out)
-	}
-	return out
-}
-
-func mapNotFound(err error) error {
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	return err
 }

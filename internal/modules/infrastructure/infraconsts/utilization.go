@@ -2,6 +2,12 @@ package infraconsts
 
 import "math"
 
+// Error-rate percentages above which a host is degraded or unhealthy.
+const (
+	DegradedErrorPct  = 2.0
+	UnhealthyErrorPct = 10.0
+)
+
 func NormalizeUtilization(v float64) *float64 {
 	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > PercentageThreshold*100 {
 		return nil

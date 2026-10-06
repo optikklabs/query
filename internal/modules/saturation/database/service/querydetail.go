@@ -9,12 +9,12 @@ import (
 	"github.com/optikklabs/query/internal/modules/saturation/database/models"
 )
 
-func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (*models.QuerySummary, error) {
+func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (models.QuerySummary, error) {
 	raw, err := s.repo.GetSummary(ctx, tenantID, startMs, endMs, hash, f)
-	if err != nil || raw == nil {
-		return nil, err
+	if err != nil {
+		return models.QuerySummary{}, err
 	}
-	out := &models.QuerySummary{
+	out := models.QuerySummary{
 		QueryHash:      hash,
 		QueryText:      raw.QueryText,
 		DbSystem:       raw.DbSystem,
@@ -37,7 +37,7 @@ func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64
 
 	services, err := s.repo.GetServices(ctx, tenantID, startMs, endMs, hash, f)
 	if err != nil {
-		return nil, err
+		return models.QuerySummary{}, err
 	}
 	for _, sv := range services {
 		out.Services = append(out.Services, models.ServiceCalls{Service: sv.Service, CallCount: int64(sv.CallCount)})

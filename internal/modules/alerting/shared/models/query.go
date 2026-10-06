@@ -3,8 +3,9 @@ package models
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	"slices"
+
+	"github.com/optikklabs/query/internal/shared/sqljson"
 )
 
 type MonitorQuery struct {
@@ -13,20 +14,9 @@ type MonitorQuery struct {
 	Log    *LogQuery    `json:"log,omitempty"`
 }
 
-func (q *MonitorQuery) Scan(value any) error {
-	if value == nil {
-		return nil
-	}
-	b, ok := value.([]byte)
-	if !ok {
-		return errors.New("type assertion to []byte failed")
-	}
-	return json.Unmarshal(b, &q)
-}
+func (q *MonitorQuery) Scan(src any) error { return sqljson.Scan(src, q) }
 
-func (q MonitorQuery) Value() (driver.Value, error) {
-	return json.Marshal(q)
-}
+func (q MonitorQuery) Value() (driver.Value, error) { return json.Marshal(q) }
 
 type MetricQuery struct {
 	Metric string `json:"metric"`
@@ -54,20 +44,9 @@ type NotifyTargets struct {
 	ChannelIDs []int64 `json:"channelIds"`
 }
 
-func (n *NotifyTargets) Scan(value any) error {
-	if value == nil {
-		return nil
-	}
-	b, ok := value.([]byte)
-	if !ok {
-		return errors.New("type assertion to []byte failed")
-	}
-	return json.Unmarshal(b, &n)
-}
+func (n *NotifyTargets) Scan(src any) error { return sqljson.Scan(src, n) }
 
-func (n NotifyTargets) Value() (driver.Value, error) {
-	return json.Marshal(n)
-}
+func (n NotifyTargets) Value() (driver.Value, error) { return json.Marshal(n) }
 
 var SupportedMonitorTypes = []string{"metric", "apm", "log"}
 

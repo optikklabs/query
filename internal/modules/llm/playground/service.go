@@ -2,6 +2,8 @@ package playground
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -18,6 +20,9 @@ type Completer interface {
 	Complete(ctx context.Context, provider, apiKey string, req llmproviders.CompletionRequest) (llmproviders.CompletionResult, error)
 }
 
+// errProviderFailed marks errors returned by the upstream LLM provider.
+var errProviderFailed = errors.New("provider request failed")
+
 type Service struct {
 	keys      KeyResolver
 	completer Completer
@@ -27,11 +32,9 @@ func NewService(keys KeyResolver, completer Completer) *Service {
 	return &Service{keys: keys, completer: completer}
 }
 
-var validProvider = map[string]struct{}{"openai": {}, "anthropic": {}, "mistral": {}}
-
 func (s *Service) Complete(ctx context.Context, tenantID int64, req CompleteRequest) (CompleteResponse, error) {
-	if _, ok := validProvider[req.Provider]; !ok {
-		return CompleteResponse{}, errorcode.ValidationError{Msg: "provider must be openai, anthropic or mistral"}
+	if err := llmproviders.ValidateProvider(req.Provider); err != nil {
+		return CompleteResponse{}, err
 	}
 	if strings.TrimSpace(req.Model) == "" {
 		return CompleteResponse{}, errorcode.ValidationError{Msg: "model is required"}
@@ -52,7 +55,7 @@ func (s *Service) Complete(ctx context.Context, tenantID int64, req CompleteRequ
 		MaxTokens:   req.MaxTokens,
 	})
 	if err != nil {
-		return CompleteResponse{}, err
+		return CompleteResponse{}, fmt.Errorf("%w: %w", errProviderFailed, err)
 	}
 	return CompleteResponse{
 		Output:       result.Output,

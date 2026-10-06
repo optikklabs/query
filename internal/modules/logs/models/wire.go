@@ -7,16 +7,10 @@ import (
 )
 
 type QueryRequest struct {
-	StartTime int64  `json:"startTime"`
-	EndTime   int64  `json:"endTime"`
-	Limit     int    `json:"limit"`
-	Cursor    string `json:"cursor"`
+	filter.RangeRequest
 
-	filter.Filters
-}
-
-func (r *QueryRequest) BindTenant(tenantID int64) error {
-	return bindTenant(&r.Filters, tenantID, r.StartTime, r.EndTime)
+	Limit  int    `json:"limit"`
+	Cursor string `json:"cursor"`
 }
 
 type QueryResponse struct {
@@ -25,14 +19,7 @@ type QueryResponse struct {
 }
 
 type FacetsRequest struct {
-	StartTime int64 `json:"startTime"`
-	EndTime   int64 `json:"endTime"`
-
-	filter.Filters
-}
-
-func (r *FacetsRequest) BindTenant(tenantID int64) error {
-	return bindTenant(&r.Filters, tenantID, r.StartTime, r.EndTime)
+	filter.RangeRequest
 }
 
 type FacetsResponse struct {
@@ -40,14 +27,7 @@ type FacetsResponse struct {
 }
 
 type TrendsRequest struct {
-	StartTime int64 `json:"startTime"`
-	EndTime   int64 `json:"endTime"`
-
-	filter.Filters
-}
-
-func (r *TrendsRequest) BindTenant(tenantID int64) error {
-	return bindTenant(&r.Filters, tenantID, r.StartTime, r.EndTime)
+	filter.RangeRequest
 }
 
 type SummaryResponse struct {
@@ -56,13 +36,6 @@ type SummaryResponse struct {
 
 type TrendResponse struct {
 	Trend []TrendBucket `json:"trend"`
-}
-
-func bindTenant(f *filter.Filters, tenantID, startTime, endTime int64) error {
-	f.TenantID = tenantID
-	f.StartMs = startTime
-	f.EndMs = endTime
-	return f.Validate()
 }
 
 type SuggestRequest = filterutil.SuggestRequest

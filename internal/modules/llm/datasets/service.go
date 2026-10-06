@@ -1,13 +1,15 @@
 package datasets
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"strings"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/shared/errorcode"
+	"github.com/optikklabs/query/internal/shared/nullable"
 )
 
 const maxItemsPerRequest = 500
@@ -37,7 +39,7 @@ func (s *Service) List(ctx context.Context, tenantID int64) ([]DatasetSummary, e
 func (s *Service) Get(ctx context.Context, tenantID, id int64) (DatasetDetail, error) {
 	row, err := s.repo.Get(ctx, tenantID, id)
 	if err != nil {
-		return DatasetDetail{}, mapNotFound(err)
+		return DatasetDetail{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	items, err := s.repo.ListItems(ctx, id)
 	if err != nil {
@@ -47,7 +49,11 @@ func (s *Service) Get(ctx context.Context, tenantID, id int64) (DatasetDetail, e
 	if err != nil {
 		return DatasetDetail{}, err
 	}
-	detail := DatasetDetail{DatasetSummary: toSummary(row)}
+	detail := DatasetDetail{
+		DatasetSummary: toSummary(row),
+		Items:          make([]DatasetItem, 0, len(items)),
+		Runs:           make([]RunSummary, 0, len(runs)),
+	}
 	for _, it := range items {
 		detail.Items = append(detail.Items, toItem(it))
 	}
@@ -74,7 +80,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 }
 
 func (s *Service) Delete(ctx context.Context, tenantID, id int64) error {
-	return mapNotFound(s.repo.Delete(ctx, tenantID, id))
+	return dbutil.NoRowsAs(s.repo.Delete(ctx, tenantID, id), ErrNotFound)
 }
 
 func (s *Service) AddItems(ctx context.Context, tenantID, datasetID int64, req AddItemsRequest) (int, error) {
@@ -95,20 +101,14 @@ func (s *Service) AddItems(ctx context.Context, tenantID, datasetID int64, req A
 }
 
 func toSummary(row datasetRow) DatasetSummary {
-	sum := DatasetSummary{
-		ID:        row.ID,
-		Name:      row.Name,
-		ItemCount: row.ItemCount,
-		RunCount:  row.RunCount,
+	return DatasetSummary{
+		ID:          row.ID,
+		Name:        row.Name,
+		Description: row.Description.String,
+		ItemCount:   row.ItemCount,
+		RunCount:    row.RunCount,
+		UpdatedAt:   cmp.Or(row.UpdatedAt.Time, row.CreatedAt),
 	}
-	if row.Description != nil {
-		sum.Description = *row.Description
-	}
-	sum.UpdatedAt = row.CreatedAt
-	if row.UpdatedAt != nil {
-		sum.UpdatedAt = *row.UpdatedAt
-	}
-	return sum
 }
 
 func toItem(row itemRow) DatasetItem {
@@ -122,7 +122,7 @@ func toItem(row itemRow) DatasetItem {
 }
 
 func toRunSummary(row runRow) RunSummary {
-	sum := RunSummary{
+	return RunSummary{
 		ID:           row.ID,
 		Name:         row.Name,
 		Provider:     row.Provider,
@@ -132,27 +132,21 @@ func toRunSummary(row runRow) RunSummary {
 		AvgScores:    rawJSON(row.AvgScoresJSON),
 		TotalCostUsd: row.TotalCostUsd,
 		AvgLatencyMs: row.AvgLatencyMs,
+		Error:        row.Error.String,
 		CreatedAt:    row.CreatedAt,
-		CompletedAt:  row.CompletedAt,
+		CompletedAt:  nullable.Ptr(row.CompletedAt.Time, row.CompletedAt.Valid),
 	}
-	if row.Error != nil {
-		sum.Error = *row.Error
-	}
-	return sum
 }
 
 func toRunItem(row runItemRow) RunItem {
-	it := RunItem{
+	return RunItem{
 		DatasetItemID: row.DatasetItemID,
 		Output:        rawJSON(row.OutputJSON),
 		LatencyMs:     row.LatencyMs,
 		CostUsd:       row.CostUsd,
 		Scores:        rawJSON(row.ScoresJSON),
+		Error:         row.Error.String,
 	}
-	if row.Error != nil {
-		it.Error = *row.Error
-	}
-	return it
 }
 
 func rawJSON(b []byte) json.RawMessage {
@@ -160,11 +154,4 @@ func rawJSON(b []byte) json.RawMessage {
 		return nil
 	}
 	return json.RawMessage(b)
-}
-
-func mapNotFound(err error) error {
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	return err
 }

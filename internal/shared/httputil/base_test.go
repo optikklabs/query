@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/optikklabs/query/internal/shared/filterutil"
 )
 
 func TestClientIPTrustsOnlyTraefikXFFEntry(t *testing.T) {
@@ -65,31 +67,80 @@ func TestParseIDParam(t *testing.T) {
 	}
 }
 
-func TestParseRangeRequiresExplicitBounds(t *testing.T) {
+func TestParseRangeRejectsInvalidWindows(t *testing.T) {
 	for _, target := range []string{
 		"/",
 		"/?startTime=1000",
 		"/?endTime=2000",
+		"/?start=1000&end=2000",
+		"/?startTime=2000&endTime=1000",
+		"/?startTime=1000&endTime=1000",
+		"/?startTime=1&endTime=2592000002",
 	} {
 		req := httptest.NewRequest(http.MethodGet, target, nil)
-		if _, _, err := ParseRange(req); err == nil {
-			t.Fatalf("ParseRange(%q) unexpectedly accepted an implicit bound", target)
+		if _, _, err := parseRange(req, filterutil.MaxTimeRangeMs); err == nil {
+			t.Fatalf("parseRange(%q) unexpectedly accepted the window", target)
 		}
 	}
 }
 
-func TestParseRangeAcceptsExplicitAliases(t *testing.T) {
-	for _, target := range []string{
-		"/?startTime=1000&endTime=2000",
-		"/?start=1000&end=2000",
+func TestParseRangeAcceptsValidWindow(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/?startTime=1000&endTime=2000", nil)
+	start, end, err := parseRange(req, filterutil.MaxTimeRangeMs)
+	if err != nil {
+		t.Fatalf("parseRange: %v", err)
+	}
+	if start != 1000 || end != 2000 {
+		t.Fatalf("parseRange = (%d, %d), want (1000, 2000)", start, end)
+	}
+}
+
+func TestBindJSON(t *testing.T) {
+	type body struct {
+		Name string `json:"name"`
+	}
+	for _, tc := range []struct {
+		name, body string
+		ok         bool
+	}{
+		{"valid", `{"name":"a"}`, true},
+		{"unknown field", `{"name":"a","extra":1}`, false},
+		{"trailing value", `{"name":"a"}{"name":"b"}`, false},
+		{"trailing garbage", `{"name":"a"} x`, false},
+		{"empty", ``, false},
+		{"too large", `{"name":"` + strings.Repeat("a", maxBodyBytes) + `"}`, false},
 	} {
-		req := httptest.NewRequest(http.MethodGet, target, nil)
-		start, end, err := ParseRange(req)
-		if err != nil {
-			t.Fatalf("ParseRange(%q): %v", target, err)
-		}
-		if start != 1000 || end != 2000 {
-			t.Fatalf("ParseRange(%q) = (%d, %d), want (1000, 2000)", target, start, end)
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
+			rec := httptest.NewRecorder()
+			var v body
+			if got := BindJSON(rec, req, &v); got != tc.ok {
+				t.Fatalf("BindJSON = %v, want %v", got, tc.ok)
+			}
+			if !tc.ok && rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", rec.Code)
+			}
+		})
+	}
+}
+
+func TestParseComparisonRange(t *testing.T) {
+	const start, end = int64(10_000_000_000), int64(10_003_600_000)
+	for _, tc := range []struct {
+		query          string
+		wantStart, end int64
+		ok             bool
+	}{
+		{"compareTo=previous_period", start - 3_600_000, end - 3_600_000, true},
+		{"compareTo=previous_day", start - 86_400_000, end - 86_400_000, true},
+		{"compareStart=1&compareEnd=2", 1, 2, true},
+		{"compareTo=bogus", 0, 0, false},
+		{"", 0, 0, false},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/?"+tc.query, nil)
+		s, e, ok := ParseComparisonRange(req, start, end)
+		if s != tc.wantStart || e != tc.end || ok != tc.ok {
+			t.Errorf("%q = (%d, %d, %v), want (%d, %d, %v)", tc.query, s, e, ok, tc.wantStart, tc.end, tc.ok)
 		}
 	}
 }

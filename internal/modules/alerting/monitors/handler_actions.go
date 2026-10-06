@@ -1,10 +1,8 @@
 package monitors
 
 import (
-	"errors"
 	"net/http"
 
-	"github.com/optikklabs/query/internal/shared/errorcode"
 	httputil "github.com/optikklabs/query/internal/shared/httputil"
 )
 
@@ -15,10 +13,6 @@ func (h *Handler) Ack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Service.Ack(r.Context(), tenant.TenantID, tenant.UserID, id); err != nil {
-		if errors.Is(err, ErrNotAlerting) {
-			httputil.RespondErrorWithCause(w, r, http.StatusConflict, errorcode.Conflict, "monitor is not currently alerting", nil)
-			return
-		}
 		httputil.RespondServiceError(w, r, err, "monitor request failed")
 		return
 	}
@@ -32,8 +26,7 @@ func (h *Handler) Mute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req MuteRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondErrorWithCause(w, r, http.StatusBadRequest, errorcode.Validation, "validation error", err)
+	if !httputil.BindJSON(w, r, &req) {
 		return
 	}
 	if err := h.Service.Mute(r.Context(), tenant.TenantID, id, req.DurationSec); err != nil {

@@ -1,31 +1,16 @@
 package metrics
 
-func Percentage(numerator, denominator uint64) float64 {
-	if denominator == 0 {
+// Percentage returns part as a percentage of whole, or 0 when whole is not
+// positive.
+func Percentage[T ~int64 | ~uint64](part, whole T) float64 {
+	if whole <= 0 {
 		return 0
 	}
-	return float64(numerator) * 100 / float64(denominator)
+	return float64(part) * 100 / float64(whole)
 }
 
-func PercentageInt(numerator, denominator int64) float64 {
-	if denominator <= 0 {
-		return 0
-	}
-	return float64(numerator) * 100 / float64(denominator)
-}
-
-func ComputeErrorRate(errs, total int64) float64 {
-	return PercentageInt(errs, total)
-}
-
-func FacetPercentage(count, total int64) float64 {
-	if total <= 0 {
-		return 0
-	}
-	return float64(count) * 100.0 / float64(total)
-}
-
-func ComputeAvgLatency(sumMs float64, count uint64) float64 {
+// AvgLatency returns sumMs/count, or 0 when count is 0.
+func AvgLatency(sumMs float64, count uint64) float64 {
 	if count == 0 {
 		return 0
 	}

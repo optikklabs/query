@@ -1,6 +1,11 @@
 package evaluators
 
-import "time"
+import (
+	"database/sql"
+	"time"
+
+	"github.com/optikklabs/query/internal/shared/sqljson"
+)
 
 type Evaluator struct {
 	ID             int64            `json:"id"`
@@ -36,16 +41,16 @@ type UpsertRequest struct {
 }
 
 type evaluatorRow struct {
-	ID             int64      `db:"id"`
-	Name           string     `db:"name"`
-	ScoreName      string     `db:"score_name"`
-	JudgeModel     *string    `db:"judge_model"`
-	Target         string     `db:"target"`
-	SamplingPct    int        `db:"sampling_pct"`
-	DataType       string     `db:"data_type"`
-	CategoriesJSON []byte     `db:"categories_json"`
-	PromptTemplate *string    `db:"prompt_template"`
-	Enabled        bool       `db:"enabled"`
-	CreatedAt      time.Time  `db:"created_at"`
-	UpdatedAt      *time.Time `db:"updated_at"`
+	ID             int64              `db:"id"`
+	Name           string             `db:"name"`
+	ScoreName      string             `db:"score_name"`
+	JudgeModel     sql.NullString     `db:"judge_model"`
+	Target         string             `db:"target"`
+	SamplingPct    int                `db:"sampling_pct"`
+	DataType       string             `db:"data_type"`
+	Categories     sqljson.StringList `db:"categories_json"`
+	PromptTemplate sql.NullString     `db:"prompt_template"`
+	Enabled        bool               `db:"enabled"`
+	CreatedAt      time.Time          `db:"created_at"`
+	UpdatedAt      sql.NullTime       `db:"updated_at"`
 }

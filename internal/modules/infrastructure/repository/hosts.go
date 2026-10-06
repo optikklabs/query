@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -47,14 +48,10 @@ func (r *Repository) QueryHostUtilization(ctx context.Context, tenantID, startMs
 		ORDER BY host, metric_name
 		LIMIT 500`
 
-	args := []any{
-		clickhouse.Named("tenantID", uint32(tenantID)),
-		clickhouse.Named("start", time.UnixMilli(startMs)),
-		clickhouse.Named("end", time.UnixMilli(endMs)),
-		clickhouse.Named("metricNames", utilizationMetricNames()),
+	args := append(chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), utilizationMetricNames),
 		clickhouse.Named("cpuUtil", infraconsts.MetricSystemCPUUtilization),
 		clickhouse.Named("memUtil", infraconsts.MetricSystemMemoryUtilization),
-	}
+	)
 	var rows []HostMetricRow
 	return rows, dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "hosts.QueryHostUtilization", &rows, query, args...)
 }
@@ -86,10 +83,4 @@ func (r *Repository) QueryHostSpans(
 		&rows, query, args...)
 }
 
-func utilizationMetricNames() []string {
-	names := make([]string, 0, len(infraconsts.CPUMetrics)+len(infraconsts.MemoryMetrics)+len(infraconsts.DiskMetrics))
-	names = append(names, infraconsts.CPUMetrics...)
-	names = append(names, infraconsts.MemoryMetrics...)
-	names = append(names, infraconsts.DiskMetrics...)
-	return names
-}
+var utilizationMetricNames = slices.Concat(infraconsts.CPUMetrics, infraconsts.MemoryMetrics, infraconsts.DiskMetrics)

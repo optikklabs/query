@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/optikklabs/query/internal/infra/token"
-	"github.com/optikklabs/query/internal/modules/user/shared"
 	"github.com/optikklabs/query/internal/shared/errorcode"
 )
 
@@ -85,7 +84,7 @@ func (s *Service) Refresh(ctx context.Context, refreshTokens []string, clientIP 
 }
 
 func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginResponse, string, error) {
-	hash := token.HashRefreshToken(refreshToken)
+	hash := token.HashSecret(refreshToken)
 	stored, err := s.repo.FindRefreshTokenByHash(ctx, hash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -107,7 +106,7 @@ func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginRes
 		rotate = false
 	}
 
-	user, err := s.repo.FindActiveUserByID(ctx, stored.UserID)
+	user, err := s.repo.FindAuthUserByID(ctx, stored.UserID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return LoginResponse{}, "", &notUsableError{reason: "user_inactive"}
@@ -115,35 +114,28 @@ func (s *Service) refreshOne(ctx context.Context, refreshToken string) (LoginRes
 		return LoginResponse{}, "", fmt.Errorf("failed to load user for refresh: %w", err)
 	}
 
-	authUser := shared.AuthUser{
-		ID:       user.ID,
-		Email:    user.Email,
-		Name:     user.Name,
-		TenantID: user.TenantID,
-		Role:     user.Role,
-	}
-
-	response, err := s.buildAuthContextResponse(ctx, authUser)
+	response, err := s.buildAuthContextResponse(ctx, user)
 	if err != nil {
 		return LoginResponse{}, "", err
 	}
-
-	access, err := s.signAccess(authUser, response.Tenant.ID)
+	access, err := s.signAccess(user, response.Tenant.ID)
 	if err != nil {
 		return LoginResponse{}, "", err
 	}
 
 	var newRefresh string
 	if rotate {
-		raw, newHash, err := token.GenerateRefreshToken()
-		if err != nil {
-			return LoginResponse{}, "", fmt.Errorf("failed to issue refresh token: %w", err)
-		}
+		raw, newHash := token.GenerateRefreshToken()
 		expiresAt := time.Now().UTC().Add(s.tokens.RefreshTTL())
-		if err := s.repo.RotateRefreshToken(ctx, hash, user.ID, stored.FamilyID, newHash, expiresAt); err != nil {
+		rotated, err := s.repo.RotateRefreshToken(ctx, hash, user.ID, stored.FamilyID, newHash, expiresAt)
+		if err != nil {
 			return LoginResponse{}, "", fmt.Errorf("failed to rotate refresh token: %w", err)
 		}
-		newRefresh = raw
+		// A concurrent request rotated this token first; like a replay inside
+		// the grace window, answer without issuing a second successor.
+		if rotated {
+			newRefresh = raw
+		}
 	}
 
 	return LoginResponse{AuthContextResponse: response, AccessToken: access}, newRefresh, nil

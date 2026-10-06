@@ -1,7 +1,11 @@
 package ingestion
 
 import (
-	"sort"
+	"cmp"
+	"slices"
+	"strings"
+
+	"github.com/optikklabs/query/internal/shared/metrics"
 )
 
 type serviceAgg struct {
@@ -54,18 +58,11 @@ func priorRecordTotals(priorLogs, priorSpans []svcCountRow) map[string]uint64 {
 	return totals
 }
 
-func servicesFromUsage(
-	logTotals, spanTotals, tsTotals, priorLogs, priorSpans []svcCountRow,
-	dailyLogs, dailySpans []svcDateCountRow,
-	startMs, endMs int64,
-) ServicesResponse {
-	dates := buildDateAxis(startMs, endMs)
-	idx := axisIndex(dates)
-	services := aggregateServices(logTotals, spanTotals, tsTotals)
-	priorTotals := priorRecordTotals(priorLogs, priorSpans)
-	spark := accumulateByService([][]svcDateCountRow{dailyLogs, dailySpans}, idx, len(dates))
-
-	return buildServicesResponse(services, priorTotals, spark, len(dates))
+func servicesFromUsage(axis dateAxis, usage serviceUsageSets, tsTotals []svcCountRow) ServicesResponse {
+	services := aggregateServices(usage.logTotals, usage.spanTotals, tsTotals)
+	priorTotals := priorRecordTotals(usage.priorLogs, usage.priorSpans)
+	spark := accumulateByService(axis, usage.dailyLogs, usage.dailySpans)
+	return buildServicesResponse(services, priorTotals, spark, len(axis.dates))
 }
 
 func buildServicesResponse(services map[string]*serviceAgg, prior map[string]uint64, spark map[string]*svcSeries, n int) ServicesResponse {
@@ -81,7 +78,7 @@ func buildServicesResponse(services map[string]*serviceAgg, prior map[string]uin
 	}
 	return ServicesResponse{
 		Services: rows, TotalServices: len(names),
-		TopSharePct: pct(topSum, grandTotal), TopShareBytesPct: pct(topByteSum, grandBytes),
+		TopSharePct: metrics.Percentage(topSum, grandTotal), TopShareBytesPct: metrics.Percentage(topByteSum, grandBytes),
 	}
 }
 
@@ -96,12 +93,8 @@ func rankedServices(services map[string]*serviceAgg) ([]string, uint64, uint64) 
 		totalBytes += a.bytes()
 		names = append(names, name)
 	}
-	sort.Slice(names, func(i, j int) bool {
-		ti, tj := services[names[i]].records(), services[names[j]].records()
-		if ti == tj {
-			return names[i] < names[j]
-		}
-		return ti > tj
+	slices.SortFunc(names, func(a, b string) int {
+		return cmp.Or(cmp.Compare(services[b].records(), services[a].records()), strings.Compare(a, b))
 	})
 	return names, totalRecords, totalBytes
 }
@@ -118,7 +111,7 @@ func buildServiceRow(name string, agg *serviceAgg, prior uint64, spark *svcSerie
 	}
 	return ServiceRow{
 		Name: name, Env: agg.env, Logs: agg.logs, Spans: agg.spans, Timeseries: agg.timeseries,
-		Total: total, Bytes: bytes, Pct: pct(total, totalRecords), BytesPct: pct(bytes, totalBytes),
+		Total: total, Bytes: bytes, Pct: metrics.Percentage(total, totalRecords), BytesPct: metrics.Percentage(bytes, totalBytes),
 		DeltaPct: delta, Spark: counts, ByteSpark: byteSpark,
 	}
 }

@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/alerting/dispatch"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	"github.com/optikklabs/query/internal/shared/errorcode"
@@ -42,10 +43,7 @@ func (s *Service) CreateChannel(ctx context.Context, tenantID int64, req CreateC
 func (s *Service) UpdateChannel(ctx context.Context, tenantID, id int64, req UpdateChannelRequest) (ChannelResponse, error) {
 	existing, err := s.repo.GetChannel(ctx, id, tenantID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ChannelResponse{}, ErrNotFound
-		}
-		return ChannelResponse{}, err
+		return ChannelResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	req, err = preserveChannelCredentials(existing, req)
 	if err != nil {
@@ -56,10 +54,7 @@ func (s *Service) UpdateChannel(ctx context.Context, tenantID, id int64, req Upd
 		return ChannelResponse{}, err
 	}
 	if err := s.repo.UpdateChannel(ctx, id, tenantID, row); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ChannelResponse{}, ErrNotFound
-		}
-		return ChannelResponse{}, err
+		return ChannelResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return s.GetChannel(ctx, tenantID, id)
 }
@@ -99,24 +94,18 @@ func (s *Service) DeleteChannel(ctx context.Context, tenantID, id int64) error {
 	if inUse {
 		return ErrChannelInUse
 	}
-	if err := s.repo.DeleteChannel(ctx, id, tenantID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
-		}
-		return err
-	}
-	return nil
+	return dbutil.NoRowsAs(s.repo.DeleteChannel(ctx, id, tenantID), ErrNotFound)
 }
 
 func (s *Service) GetChannel(ctx context.Context, tenantID, id int64) (ChannelResponse, error) {
 	row, err := s.repo.GetChannel(ctx, id, tenantID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ChannelResponse{}, ErrNotFound
-		}
+		return ChannelResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
+	}
+	usage, err := s.repo.CountChannelUsage(ctx, tenantID)
+	if err != nil {
 		return ChannelResponse{}, err
 	}
-	usage, _ := s.repo.CountChannelUsage(ctx, tenantID)
 	return toChannelResponse(row, usage[row.ID]), nil
 }
 
@@ -125,7 +114,10 @@ func (s *Service) ListChannels(ctx context.Context, tenantID int64) ([]ChannelRe
 	if err != nil {
 		return nil, err
 	}
-	usage, _ := s.repo.CountChannelUsage(ctx, tenantID)
+	usage, err := s.repo.CountChannelUsage(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]ChannelResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, toChannelResponse(row, usage[row.ID]))
@@ -133,18 +125,15 @@ func (s *Service) ListChannels(ctx context.Context, tenantID int64) ([]ChannelRe
 	return out, nil
 }
 
+// TestChannel sends a sample alert through the channel and records the
+// delivery outcome on it, exactly as a real notification would.
 func (s *Service) TestChannel(ctx context.Context, tenantID, id int64) (TestChannelResponse, error) {
 	row, err := s.repo.GetChannel(ctx, id, tenantID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return TestChannelResponse{}, ErrNotFound
-		}
-		return TestChannelResponse{}, err
+		return TestChannelResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	payload := dispatch.Payload{
-		MonitorID:    0,
 		MonitorName:  "[Test] Optikk Monitors delivery",
-		MonitorType:  "metric",
 		Priority:     "P3",
 		Transition:   "ok->alert",
 		Status:       "alert",
@@ -154,16 +143,14 @@ func (s *Service) TestChannel(ctx context.Context, tenantID, id int64) (TestChan
 		Message:      "If you can see this message, this channel is wired correctly.",
 		IsAlert:      true,
 	}
-	deliverErr := s.dispatcher.Dispatch(ctx, row, payload)
-	at := time.Now().UTC()
+	out := TestChannelResponse{OK: true}
 	errText := sql.NullString{}
-	if deliverErr != nil {
-		errText = sql.NullString{Valid: true, String: deliverErr.Error()}
+	if err := s.dispatcher.Dispatch(ctx, row, payload); err != nil {
+		out = TestChannelResponse{ErrorText: err.Error()}
+		errText = sql.NullString{Valid: true, String: err.Error()}
 	}
-	_ = s.repo.MarkChannelDelivered(ctx, id, at, errText)
-	out := TestChannelResponse{OK: deliverErr == nil}
-	if deliverErr != nil {
-		out.ErrorText = deliverErr.Error()
+	if err := s.repo.MarkChannelDelivered(ctx, id, time.Now().UTC(), errText); err != nil {
+		slog.WarnContext(ctx, "notifications: record test delivery failed", slog.Int64("channel_id", id), slog.Any("error", err))
 	}
 	return out, nil
 }

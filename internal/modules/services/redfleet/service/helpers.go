@@ -53,7 +53,7 @@ func computeFleetTotals(total *models.REDMetricsRow, serviceCount int, startMs, 
 	}
 	totalCount := int64(total.TotalCount)
 	totalErrors := int64(total.ErrorCount)
-	avgErrorRate := metrics.PercentageInt(totalErrors, totalCount)
+	avgErrorRate := metrics.Percentage(totalErrors, totalCount)
 	return models.FleetTotals{
 		ServiceCount:   int64(serviceCount),
 		TotalSpanCount: totalCount,
@@ -130,7 +130,7 @@ func extractREDMetrics(redRow *models.REDMetricsRow, durationSec float64) (reqCo
 	reqCount = int64(redRow.TotalCount)
 	errCount = int64(redRow.ErrorCount)
 	rps = float64(reqCount) / durationSec
-	errRate = metrics.PercentageInt(errCount, reqCount)
+	errRate = metrics.Percentage(errCount, reqCount)
 	p50 = httputil.SanitizeFloat(float64(redRow.P50Ms))
 	p95 = httputil.SanitizeFloat(float64(redRow.P95Ms))
 	p99 = httputil.SanitizeFloat(float64(redRow.P99Ms))

@@ -45,7 +45,6 @@ type SpanAttributes struct {
 	DBName                string            `json:"dbName,omitempty"`
 	DBStatement           string            `json:"dbStatement,omitempty"`
 	DBStatementNormalized string            `json:"dbStatementNormalized,omitempty"`
-	Attributes            map[string]string `json:"attributes,omitempty"`
 	Links                 []SpanLink        `json:"links,omitempty"`
 }
 

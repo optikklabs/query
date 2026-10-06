@@ -7,21 +7,21 @@ import (
 	"github.com/optikklabs/query/internal/modules/deployments/service"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) *module {
-	return &module{
+func NewModule(nativeQuerier clickhouse.Conn) *Module {
+	return &Module{
 		handler: &Handler{
 			service: service.NewService(repository.NewRepository(nativeQuerier)),
 		},
 	}
 }
 
-type module struct {
+type Module struct {
 	handler *Handler
 }
 
-func (m *module) Name() string { return "deployments" }
+func (m *Module) Name() string { return "deployments" }
 
-func (m *module) RegisterRoutes(group chi.Router) {
+func (m *Module) RegisterRoutes(group chi.Router) {
 	h := m.handler
 	group.Get("/deployments", h.List)
 	group.Get("/deployments/{service}/{version}", h.Compare)

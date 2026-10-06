@@ -1,12 +1,11 @@
 package llmproviders
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"strings"
 )
 
 type anthropicClient struct {
@@ -14,9 +13,12 @@ type anthropicClient struct {
 	baseURL string
 }
 
-const anthropicVersion = "2023-06-01"
-
-const anthropicMaxTokens = 1024
+const (
+	anthropicVersion = "2023-06-01"
+	// anthropicMaxTokens applies when the request sets no limit; the API
+	// requires one.
+	anthropicMaxTokens = 1024
+)
 
 type anthropicRequest struct {
 	Model       string    `json:"model"`
@@ -34,9 +36,7 @@ type anthropicResponse struct {
 		InputTokens  int `json:"input_tokens"`
 		OutputTokens int `json:"output_tokens"`
 	} `json:"usage"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
+	Error *apiError `json:"error"`
 }
 
 func (c *anthropicClient) Complete(ctx context.Context, apiKey string, req CompletionRequest) (CompletionResult, error) {
@@ -45,60 +45,43 @@ func (c *anthropicClient) Complete(ctx context.Context, apiKey string, req Compl
 	if maxTokens <= 0 {
 		maxTokens = anthropicMaxTokens
 	}
-	body, err := json.Marshal(anthropicRequest{
-		Model:       req.Model,
-		System:      system,
-		Messages:    messages,
-		Temperature: req.Temperature,
-		MaxTokens:   maxTokens,
-	})
+	var resp anthropicResponse
+	status, err := postJSON(ctx, c.http, c.baseURL+"/messages",
+		map[string]string{"x-api-key": apiKey, "anthropic-version": anthropicVersion},
+		anthropicRequest{
+			Model:       req.Model,
+			System:      system,
+			Messages:    messages,
+			Temperature: req.Temperature,
+			MaxTokens:   maxTokens,
+		}, &resp)
 	if err != nil {
-		return CompletionResult{}, err
+		return CompletionResult{}, fmt.Errorf("anthropic: %w", err)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/messages", bytes.NewReader(body))
-	if err != nil {
-		return CompletionResult{}, err
+	if status != http.StatusOK {
+		return CompletionResult{}, providerError("anthropic", status, resp.Error)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", apiKey)
-	httpReq.Header.Set("anthropic-version", anthropicVersion)
-
-	resp, err := c.http.Do(httpReq)
-	if err != nil {
-		return CompletionResult{}, err
-	}
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	var parsed anthropicResponse
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return CompletionResult{}, fmt.Errorf("anthropic: invalid response (status %d)", resp.StatusCode)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return CompletionResult{}, providerError("anthropic", resp.StatusCode, errMessage(parsed.Error))
-	}
-	if len(parsed.Content) == 0 {
-		return CompletionResult{}, fmt.Errorf("anthropic: empty completion")
+	if len(resp.Content) == 0 {
+		return CompletionResult{}, errors.New("anthropic: empty completion")
 	}
 	return CompletionResult{
-		Output:       parsed.Content[0].Text,
-		InputTokens:  parsed.Usage.InputTokens,
-		OutputTokens: parsed.Usage.OutputTokens,
+		Output:       resp.Content[0].Text,
+		InputTokens:  resp.Usage.InputTokens,
+		OutputTokens: resp.Usage.OutputTokens,
 	}, nil
 }
 
+// splitSystem moves system messages into Anthropic's separate system field,
+// joining several with blank lines.
 func splitSystem(in []Message) (string, []Message) {
-	var system string
+	var system []string
 	out := make([]Message, 0, len(in))
 	for _, m := range in {
 		if m.Role == "system" {
-			if system != "" {
-				system += "\n\n"
-			}
-			system += m.Content
+			system = append(system, m.Content)
 			continue
 		}
 		out = append(out, m)
 	}
-	return system, out
+	return strings.Join(system, "\n\n"), out
 }

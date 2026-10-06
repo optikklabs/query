@@ -9,6 +9,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/shared/chargs"
+	"github.com/optikklabs/query/internal/shared/sqljson"
 )
 
 type Repository struct {
@@ -49,7 +50,7 @@ type insertArgs struct {
 	Target         string
 	SamplingPct    int
 	DataType       string
-	CategoriesJSON []byte
+	Categories     sqljson.StringList
 	PromptTemplate sql.NullString
 	Enabled        bool
 	CreatedBy      sql.NullInt64
@@ -62,7 +63,7 @@ func (r *Repository) Create(ctx context.Context, a insertArgs) (int64, error) {
 		   categories_json, prompt_template, enabled, created_at, created_by_user_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.TenantID, a.Name, a.ScoreName, a.JudgeModel, a.Target, a.SamplingPct, a.DataType,
-		a.CategoriesJSON, a.PromptTemplate, a.Enabled, time.Now().UTC(), a.CreatedBy)
+		a.Categories, a.PromptTemplate, a.Enabled, time.Now().UTC(), a.CreatedBy)
 	if err != nil {
 		return 0, err
 	}
@@ -70,32 +71,18 @@ func (r *Repository) Create(ctx context.Context, a insertArgs) (int64, error) {
 }
 
 func (r *Repository) Update(ctx context.Context, tenantID, id int64, a insertArgs) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "evaluators.Update", `
+	return dbutil.ExecMatched(ctx, r.db, "evaluators.Update", `
 		UPDATE optikk.llm_evaluators
 		   SET name = ?, score_name = ?, judge_model = ?, target = ?, sampling_pct = ?,
 		       data_type = ?, categories_json = ?, prompt_template = ?, enabled = ?, updated_at = ?
 		 WHERE tenant_id = ? AND id = ?`,
 		a.Name, a.ScoreName, a.JudgeModel, a.Target, a.SamplingPct, a.DataType,
-		a.CategoriesJSON, a.PromptTemplate, a.Enabled, time.Now().UTC(), tenantID, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+		a.Categories, a.PromptTemplate, a.Enabled, time.Now().UTC(), tenantID, id)
 }
 
 func (r *Repository) Delete(ctx context.Context, tenantID, id int64) error {
-	res, err := dbutil.ExecSQL(ctx, r.db, "evaluators.Delete",
+	return dbutil.ExecMatched(ctx, r.db, "evaluators.Delete",
 		`DELETE FROM optikk.llm_evaluators WHERE tenant_id = ? AND id = ?`, tenantID, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
 }
 
 type scoreAgg struct {

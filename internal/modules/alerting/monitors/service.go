@@ -3,11 +3,10 @@ package monitors
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	models "github.com/optikklabs/query/internal/modules/alerting/shared/models"
 	alertquery "github.com/optikklabs/query/internal/modules/alerting/shared/query"
 	"github.com/optikklabs/query/internal/shared/errorcode"
@@ -24,11 +23,11 @@ func NewService(repo *Repository) *Service {
 var ErrNotFound = errorcode.NotFoundError{Msg: "monitor not found"}
 
 func (s *Service) Create(ctx context.Context, tenantID, userID int64, req CreateMonitorRequest) (MonitorResponse, error) {
-	args, err := buildInsertArgs(tenantID, userID, req)
+	row, err := buildMonitorRow(tenantID, userID, req)
 	if err != nil {
 		return MonitorResponse{}, err
 	}
-	id, err := s.repo.Create(ctx, args)
+	id, err := s.repo.Create(ctx, row)
 	if err != nil {
 		return MonitorResponse{}, err
 	}
@@ -36,42 +35,30 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 }
 
 func (s *Service) Update(ctx context.Context, tenantID, userID, id int64, req UpdateMonitorRequest) (MonitorResponse, error) {
-	args, err := buildInsertArgs(tenantID, userID, req)
+	row, err := buildMonitorRow(tenantID, userID, req)
 	if err != nil {
 		return MonitorResponse{}, err
 	}
-	if err := s.repo.Update(ctx, id, tenantID, args); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return MonitorResponse{}, ErrNotFound
-		}
-		return MonitorResponse{}, err
+	if err := s.repo.Update(ctx, id, row); err != nil {
+		return MonitorResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return s.GetByID(ctx, tenantID, id)
 }
 
 func (s *Service) Delete(ctx context.Context, tenantID, id int64) error {
-	if err := s.repo.Delete(ctx, id, tenantID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
-		}
-		return err
-	}
-	return nil
+	return dbutil.NoRowsAs(s.repo.Delete(ctx, id, tenantID), ErrNotFound)
 }
 
 func (s *Service) GetByID(ctx context.Context, tenantID, id int64) (MonitorResponse, error) {
 	row, state, err := s.repo.GetByID(ctx, id, tenantID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return MonitorResponse{}, ErrNotFound
-		}
-		return MonitorResponse{}, err
+		return MonitorResponse{}, dbutil.NoRowsAs(err, ErrNotFound)
 	}
 	return toResponse(row, state), nil
 }
 
 func (s *Service) List(ctx context.Context, tenantID int64, q ListQuery) (MonitorListResponse, error) {
-	rows, states, err := s.repo.List(ctx, tenantID, q)
+	rows, err := s.repo.List(ctx, tenantID, q)
 	if err != nil {
 		return MonitorListResponse{}, err
 	}
@@ -80,44 +67,42 @@ func (s *Service) List(ctx context.Context, tenantID int64, q ListQuery) (Monito
 		return MonitorListResponse{}, err
 	}
 	items := make([]MonitorResponse, 0, len(rows))
-	for i, row := range rows {
-		items = append(items, toResponse(row, states[i]))
+	for _, row := range rows {
+		items = append(items, toResponse(row.Split()))
 	}
 	return MonitorListResponse{Items: items, Counts: counts}, nil
 }
 
-func buildInsertArgs(tenantID, userID int64, req CreateMonitorRequest) (insertArgs, error) {
+func buildMonitorRow(tenantID, userID int64, req CreateMonitorRequest) (models.MonitorRow, error) {
 	name, priority, evalEvery, err := validateCreateRequest(req)
 	if err != nil {
-		return insertArgs{}, err
+		return models.MonitorRow{}, err
 	}
-	scopeJSON, _ := json.Marshal(req.Scope)
-	queryJSON, _ := json.Marshal(req.Query)
-	condJSON, _ := json.Marshal(req.Conditions)
-	notifyJSON, _ := json.Marshal(req.Notify)
-	tagsJSON, _ := json.Marshal(req.Tags)
-	if len(req.Tags) == 0 {
-		tagsJSON = []byte("[]")
-	}
-
-	args := insertArgs{
-		TenantID: tenantID, Name: name, Type: req.Type, Priority: priority,
-		ScopeJSON: scopeJSON, QueryJSON: queryJSON, ConditionsJSON: condJSON,
-		NotifyJSON: notifyJSON, TagsJSON: tagsJSON, EvalEverySec: evalEvery,
+	row := models.MonitorRow{
+		TenantID:     tenantID,
+		Name:         name,
+		Type:         req.Type,
+		Priority:     priority,
+		Scope:        req.Scope,
+		Query:        req.Query,
+		Conditions:   req.Conditions,
+		Notify:       req.Notify,
+		Tags:         req.Tags,
+		EvalEverySec: evalEvery,
 	}
 	if msg := strings.TrimSpace(req.MessageBody); msg != "" {
-		args.MessageBody = sql.NullString{Valid: true, String: msg}
+		row.MessageBody = sql.NullString{Valid: true, String: msg}
 	}
 	if url := strings.TrimSpace(req.RunbookURL); url != "" {
-		args.RunbookURL = sql.NullString{Valid: true, String: url}
+		row.RunbookURL = sql.NullString{Valid: true, String: url}
 	}
 	if req.RenotifyEverySec != nil && *req.RenotifyEverySec > 0 {
-		args.RenotifyEverySec = sql.NullInt64{Valid: true, Int64: int64(*req.RenotifyEverySec)}
+		row.RenotifyEverySec = sql.NullInt64{Valid: true, Int64: int64(*req.RenotifyEverySec)}
 	}
 	if userID > 0 {
-		args.CreatedByUserID = sql.NullInt64{Valid: true, Int64: userID}
+		row.CreatedByUserID = sql.NullInt64{Valid: true, Int64: userID}
 	}
-	return args, nil
+	return row, nil
 }
 
 func validateCreateRequest(req CreateMonitorRequest) (name, priority string, evalEvery int, err error) {

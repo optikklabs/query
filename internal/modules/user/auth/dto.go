@@ -3,8 +3,8 @@ package auth
 import "time"
 
 type LoginRequest struct {
-	Email    string `json:"email" validate:"required,email" example:"user@example.com"`
-	Password string `json:"password" validate:"required" example:"securePassword123"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type LoginResponse struct {
@@ -32,15 +32,15 @@ type AuthContextResponse struct {
 }
 
 type ForgotPasswordRequest struct {
-	Email string `json:"email" validate:"required,email" example:"user@example.com"`
+	Email string `json:"email"`
 }
 
 type ResetPasswordRequest struct {
-	Token    string `json:"token" validate:"required"`
-	Password string `json:"password" validate:"required,min=8" example:"securePassword123"`
+	Token    string `json:"token"`
+	Password string `json:"password"`
 }
 
 type ChangePasswordRequest struct {
-	CurrentPassword string `json:"currentPassword" validate:"required"`
-	NewPassword     string `json:"newPassword" validate:"required,min=8" example:"securePassword123"`
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
 }

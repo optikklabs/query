@@ -23,7 +23,7 @@ func (r *Repository) TopUsers(ctx context.Context, tenantID, startMs, endMs int6
 		       arrayElement(topK(1)(service), 1) AS top_service,
 		       uniqExact(trace_id) AS traces,
 		       sum(gen_ai_input_tokens + gen_ai_output_tokens) AS tokens,
-		       sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost,
+		       sum(` + pricing.SpanCostSQL + `) AS cost,
 		       max(timestamp) AS last_seen
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
@@ -41,7 +41,7 @@ func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int6
 	query := `
 		SELECT uniqExact(llm_user_id) AS active_users,
 		       uniqExact(trace_id)     AS traces,
-		       sum(` + pricing.TokenCostSQL("gen_ai_input_tokens", "gen_ai_output_tokens", "gen_ai_request_model") + `) AS cost
+		       sum(` + pricing.SpanCostSQL + `) AS cost
 		FROM optikk.spans
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
 		WHERE is_gen_ai AND llm_user_id != ''`

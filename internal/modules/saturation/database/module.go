@@ -9,19 +9,19 @@ import (
 	"github.com/optikklabs/query/internal/modules/saturation/database/service"
 )
 
-func NewModule(nativeQuerier clickhouse.Conn) *module {
-	return &module{
+func NewModule(nativeQuerier clickhouse.Conn) *Module {
+	return &Module{
 		handler: databasehandler.New(service.NewService(repository.NewRepository(nativeQuerier))),
 	}
 }
 
-type module struct {
+type Module struct {
 	handler *databasehandler.Handler
 }
 
-func (m *module) Name() string { return "saturationDatabase" }
+func (m *Module) Name() string { return "saturationDatabase" }
 
-func (m *module) RegisterRoutes(group chi.Router) {
+func (m *Module) RegisterRoutes(group chi.Router) {
 	h := m.handler
 	group.Get("/saturation/datastores/systems", h.GetDatastoreSystems)
 	group.Get("/saturation/database/latency/by-system", h.GetLatencyBySystem)
