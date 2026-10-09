@@ -67,11 +67,6 @@ type overviewRow struct {
 	Cost       float64 `ch:"cost"`
 }
 
-type sessionScoreRow struct {
-	SessionID string  `ch:"session_id"`
-	Mean      float64 `ch:"mean"`
-}
-
 type identityRow struct {
 	Service string `ch:"service"`
 	UserID  string `ch:"user_id"`

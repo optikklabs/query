@@ -51,7 +51,7 @@ func TestResolveMetricKind(t *testing.T) {
 		{name: "exponential histogram", kind: metricNameDTO{MetricType: "ExponentialHistogram", Temporality: "Delta", Variants: 1}, histogram: true},
 		{name: "summary", kind: metricNameDTO{MetricType: "Summary", Variants: 1}, wantErr: true},
 		{name: "unknown", kind: metricNameDTO{MetricType: "Unknown", Variants: 1}, wantErr: true},
-		{name: "cumulative histogram", kind: metricNameDTO{MetricType: "Histogram", Temporality: "Cumulative", Variants: 1}, wantErr: true},
+		{name: "cumulative histogram", kind: metricNameDTO{MetricType: "Histogram", Temporality: "Cumulative", Variants: 1}, cumulative: true, histogram: true},
 		{name: "mixed variants", kind: metricNameDTO{MetricType: "Sum", Variants: 2}, wantErr: true},
 	}
 

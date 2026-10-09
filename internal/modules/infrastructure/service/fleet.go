@@ -24,7 +24,7 @@ func (s *Service) GetFleetPods(ctx context.Context, tenantID int64, startMs, end
 			ErrorCount:   int64(r.ErrorCount),
 			ErrorRate:    errorRate,
 			AvgLatencyMs: avgLatency,
-			P95LatencyMs: float64(r.P95LatencyMs),
+			P95LatencyMs: r.P95LatencyMs,
 			LastSeen:     r.LastSeen,
 		}
 	}

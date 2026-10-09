@@ -19,8 +19,12 @@ func clientsQuery(startMs, endMs int64) string {
 		LIMIT 200`
 }
 
+// EdgeRow is one (service, kind, topic, group) edge, or with IsNode one
+// (service, kind, group) node merged over all its topics.
 type EdgeRow struct {
+	IsNode        bool      `ch:"is_node"`
 	Service       string    `ch:"service"`
+	Kind          string    `ch:"kind"`
 	Topic         string    `ch:"topic"`
 	ConsumerGroup string    `ch:"consumer_group"`
 	CallCount     uint64    `ch:"call_count"`
@@ -43,7 +47,8 @@ func (r *Repository) QueryClients(ctx context.Context, tenantID, startMs, endMs 
 	return clients, nil
 }
 
-// Topic scoping is applied in Go: keep every edge on a topic that services touch.
+// Topic scoping is applied in Go: keep every edge on a topic that services
+// touch. Node rows pass through; the graph keeps those it has edges for.
 func (r *Repository) QueryEdges(ctx context.Context, tenantID, startMs, endMs int64, services []string) ([]EdgeRow, error) {
 	query := edgesQuery(timebucket.SpanStatsRollup(startMs, endMs))
 	var rows []EdgeRow
@@ -61,13 +66,13 @@ func scopeEdgesToTopics(rows []EdgeRow, services []string) []EdgeRow {
 	}
 	topics := make(map[string]struct{})
 	for _, row := range rows {
-		if _, ok := inScope[row.Service]; ok {
+		if _, ok := inScope[row.Service]; ok && !row.IsNode {
 			topics[row.Topic] = struct{}{}
 		}
 	}
 	out := make([]EdgeRow, 0, len(rows))
 	for _, row := range rows {
-		if _, ok := topics[row.Topic]; ok {
+		if _, ok := topics[row.Topic]; ok || row.IsNode {
 			out = append(out, row)
 		}
 	}
@@ -76,7 +81,9 @@ func scopeEdgesToTopics(rows []EdgeRow, services []string) []EdgeRow {
 
 func edgesQuery(rollupTable string) string {
 	return `
-		SELECT service                                           AS service,
+		SELECT toBool(grouping(topic))                           AS is_node,
+		       service                                           AS service,
+		       kind_string                                       AS kind,
 		       messaging_destination                             AS topic,
 		       messaging_consumer_group                          AS consumer_group,
 		       sum(request_count)                                AS call_count,
@@ -88,6 +95,7 @@ func edgesQuery(rollupTable string) string {
 		     AND service != ''
 		WHERE messaging_system = 'kafka'
 		  AND messaging_destination != ''
-		GROUP BY service, topic, consumer_group
+		  AND kind_string IN ('PRODUCER', 'CONSUMER')
+		GROUP BY GROUPING SETS ((service, kind, topic, consumer_group), (service, kind, consumer_group))
 		ORDER BY call_count DESC, service ASC, topic ASC, consumer_group ASC`
 }

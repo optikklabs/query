@@ -22,7 +22,10 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-var ErrNotFound = errorcode.NotFoundError{Msg: "prompt not found"}
+var (
+	ErrNotFound  = errorcode.NotFoundError{Msg: "prompt not found"}
+	errDuplicate = errorcode.ConflictError{Msg: "a prompt with this name already exists"}
+)
 
 // versionStatuses are the statuses a version can be set to. "production" is
 // not stored on the version: it points the prompt's production_version_id at
@@ -96,7 +99,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 		v.Notes = sql.NullString{Valid: true, String: n}
 	}
 	if _, err := s.repo.CreatePrompt(ctx, p, v); err != nil {
-		return PromptDetail{}, err
+		return PromptDetail{}, dbutil.DuplicateAs(err, errDuplicate)
 	}
 	return s.Get(ctx, tenantID, name)
 }

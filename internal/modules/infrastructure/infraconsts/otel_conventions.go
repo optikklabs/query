@@ -22,7 +22,10 @@ const (
 	MetricSystemNetworkErrors  = "system.network.errors"
 	MetricSystemNetworkDropped = "system.network.dropped"
 
+	// kubeletstats renamed *.cpu.utilization (which always reported cores) to
+	// *.cpu.usage; older collectors still send the utilization names.
 	MetricK8SPodCPUUtilization      = "k8s.pod.cpu.utilization"
+	MetricK8SPodCPUUsage            = "k8s.pod.cpu.usage"
 	MetricK8SPodMemoryUsage         = "k8s.pod.memory.usage"
 	MetricK8SPodMemoryWorkingSet    = "k8s.pod.memory.working_set"
 	MetricK8SPodNetworkIO           = "k8s.pod.network.io"
@@ -32,6 +35,7 @@ const (
 	MetricK8SPodFilesystemAvailable = "k8s.pod.filesystem.available"
 	MetricK8SContainerRestarts      = "k8s.container.restarts"
 	MetricContainerCPUUtilization   = "container.cpu.utilization"
+	MetricContainerCPUUsage         = "container.cpu.usage"
 	MetricContainerMemoryUsage      = "container.memory.usage"
 
 	MetricJVMMemoryUsed     = "jvm.memory.used"

@@ -20,9 +20,8 @@ func NewRepository(db clickhouse.Conn) *Repository {
 	return &Repository{db: db}
 }
 
-func extractQS(qs []float64) (p50, p95, p99 float32) {
-	a, b, c := spanstats.LatencyP50P95P99.P50P95P99(qs)
-	return float32(a), float32(b), float32(c)
+func extractQS(qs []float64) (p50, p95, p99 float64) {
+	return spanstats.LatencyP50P95P99.P50P95P99(qs)
 }
 
 func (r *Repository) GetFleetREDMetrics(ctx context.Context, f filter.Filters) ([]models.REDMetricsRow, error) {

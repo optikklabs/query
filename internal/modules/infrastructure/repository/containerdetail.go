@@ -29,7 +29,7 @@ type PodREDRow struct {
 	RequestCount  uint64  `ch:"request_total"`
 	ErrorCount    uint64  `ch:"error_total"`
 	DurationMsSum float64 `ch:"duration_ms_total"`
-	P95LatencyMs  float32 `ch:"p95_latency_ms"`
+	P95LatencyMs  float64 `ch:"p95_latency_ms"`
 }
 
 func (r *Repository) QueryPodSeries(ctx context.Context, tenantID int64, pod string, startMs, endMs int64, def seriesgroup.Def) ([]models.SeriesPoint, error) {
@@ -65,7 +65,7 @@ func (r *Repository) QueryPodRED(ctx context.Context, tenantID int64, pod string
 		    ` + spanstats.Requests + `,
 		    ` + spanstats.Errors + `,
 		    ` + spanstats.DurationSum + `,
-		    toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms
+		    toFloat64(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms
 		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp >= @start AND timestamp < @end

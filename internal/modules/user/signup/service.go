@@ -182,7 +182,7 @@ func (s *Service) provisionSignup(ctx context.Context, req normalizedSignup, sec
 	if err == nil {
 		return user, nil
 	}
-	if !shared.IsDuplicateEntry(err) {
+	if !dbutil.IsDuplicateEntry(err) {
 		return shared.AuthUser{}, fmt.Errorf("failed to create account: %w", err)
 	}
 

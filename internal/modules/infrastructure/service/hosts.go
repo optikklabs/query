@@ -79,13 +79,13 @@ func enrichWithSpans(byHost map[string]models.Host, spans []repository.HostSpans
 		errs := int64(row.ErrorCount)
 		errRate := metrics.Percentage(errs, total)
 		rps := float64(total) / durationSec
-		p99 := httputil.SanitizeFloat(float64(row.P99Ms))
+		p99 := httputil.SanitizeFloat(row.P99Ms)
 
 		h.Zone = row.Zone
 		h.RPS = &rps
 		h.ErrorRate = &errRate
 		h.P99Ms = &p99
-		h.Status = classifyHost(errRate, float64(row.P99Ms))
+		h.Status = classifyHost(errRate, row.P99Ms)
 		h.LastSeen = &row.LastSeen
 		h.RequestCount = total
 		h.ErrorCount = errs

@@ -167,41 +167,57 @@ func (r *Repository) SuggestScalar(ctx context.Context, tenantID, startMs, endMs
 	case "http_status":
 		table, count = "optikk.spans", "count()"
 	}
-	query := `
-		SELECT ` + column + `        AS value,
-		       ` + count + `          AS count
-		FROM ` + table + `
-		PREWHERE tenant_id = @tenantID AND timestamp >= @startMs AND timestamp < @endMs
-		WHERE ` + column + ` != ''
-		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
-		GROUP BY value
-		ORDER BY count DESC, value ASC
-		LIMIT @limit`
 	var rows []suggestionRow
-	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestScalar", &rows, query, suggestArgs(tenantID, startMs, endMs, prefix, limit)...); err != nil {
-		return nil, err
-	}
-	return rows, nil
+	err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestScalar", &rows,
+		suggestQuery(table, column, count, ""), suggestArgs(tenantID, startMs, endMs, prefix, limit)...)
+	return rows, err
 }
 
+// rollupColumns are the promoted span columns span_stats also keeps.
+var rollupColumns = map[string]bool{
+	"service": true, "service_version": true, "environment": true, "host": true, "pod": true,
+	"http_route": true, "http_method": true, "db_system": true, "db_name": true,
+}
+
+// attrScanCap bounds the attributes-map scan: suggestions are best effort,
+// so a partial scan beats an unbounded one.
+const attrScanCap = `
+		SETTINGS max_rows_to_read = 500000, read_overflow_mode = 'break'`
+
+// SuggestAttribute suggests values of a span attribute. Promoted keys read
+// their column (from the rollup when it keeps one); other keys scan the
+// attributes map, capped by attrScanCap.
 func (r *Repository) SuggestAttribute(ctx context.Context, tenantID, startMs, endMs int64, attrKey, prefix string, limit int) ([]suggestionRow, error) {
-	const query = `
-		SELECT attributes[@attrKey] AS value, count() AS count
-		FROM optikk.spans
+	key := strings.TrimPrefix(attrKey, "@")
+	args := suggestArgs(tenantID, startMs, endMs, prefix, limit)
+	var query string
+	col, promoted := spanfilter.PromotedColumn(key)
+	switch {
+	case promoted && rollupColumns[col]:
+		query = suggestQuery(timebucket.SpanStatsRollup(startMs, endMs), col, "sum(request_count)", "")
+	case promoted:
+		query = suggestQuery("optikk.spans", col, "count()", "")
+	default:
+		query = suggestQuery("optikk.spans", "attributes[@attrKey]", "count()", attrScanCap)
+		args = append(args, clickhouse.Named("attrKey", key))
+	}
+	var rows []suggestionRow
+	err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestAttribute", &rows, query, args...)
+	return rows, err
+}
+
+// suggestQuery ranks the non-empty values of column in table by count,
+// optionally matching @prefix anywhere in the value.
+func suggestQuery(table, column, count, settings string) string {
+	return `
+		SELECT ` + column + ` AS value, ` + count + ` AS count
+		FROM ` + table + `
 		PREWHERE tenant_id = @tenantID AND timestamp >= @startMs AND timestamp < @endMs
 		WHERE value != ''
 		  AND (length(@prefix) = 0 OR positionCaseInsensitive(value, @prefix) > 0)
 		GROUP BY value
 		ORDER BY count DESC, value ASC
-		LIMIT @limit`
-	args := append(suggestArgs(tenantID, startMs, endMs, prefix, limit),
-		clickhouse.Named("attrKey", strings.TrimPrefix(attrKey, "@")),
-	)
-	var rows []suggestionRow
-	if err := dbutil.SelectCH(dbutil.DashboardCtx(ctx), r.db, "suggest.SuggestAttribute", &rows, query, args...); err != nil {
-		return nil, err
-	}
-	return rows, nil
+		LIMIT @limit` + settings
 }
 
 func suggestArgs(tenantID, startMs, endMs int64, prefix string, limit int) []any {

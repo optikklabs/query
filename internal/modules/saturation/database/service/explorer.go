@@ -58,7 +58,7 @@ func mapDatastoreSystems(spanRows []repository.SystemSummaryRaw, conns map[strin
 			Category:          datastoreCategory(r.DBSystem),
 			QueryCount:        queryCount,
 			AvgLatencyMs:      r.AvgLatencyMs,
-			P95LatencyMs:      float64(r.P95Ms),
+			P95LatencyMs:      r.P95Ms,
 			ErrorRate:         metrics.Percentage(errorCount, queryCount),
 			ActiveConnections: conns[r.DBSystem],
 			Region:            r.Region,

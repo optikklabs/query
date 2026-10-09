@@ -42,6 +42,11 @@ func (s *Service) GetTopology(ctx context.Context, tenantID, startMs, endMs int6
 	return buildGraph(rows, float64(endMs-startMs)/1000), nil
 }
 
+const (
+	kindProducer = "PRODUCER"
+	kindConsumer = "CONSUMER"
+)
+
 type percentileValues struct {
 	p50 float64
 	p95 float64
@@ -97,7 +102,7 @@ func newGraphData(size int) *graphData {
 }
 
 func (g *graphData) addProducer(row repository.EdgeRow, winSecs float64) {
-	acc(g.producers, row.Service, row.CallCount, row.ErrorCount, percentiles(row.QS))
+	g.producers[row.Service] = &nodeAgg{}
 	g.topicProduce[row.Topic] += row.CallCount
 	addSet(g.topicProducers, row.Topic, row.Service)
 	leader, exists := g.topicLeaders[row.Topic]
@@ -111,10 +116,12 @@ func (g *graphData) addProducer(row repository.EdgeRow, winSecs float64) {
 }
 
 func (g *graphData) addConsumer(row repository.EdgeRow, winSecs float64) {
-	key := row.Service + "|" + row.ConsumerGroup
-	acc(g.consumers, key, row.CallCount, row.ErrorCount, percentiles(row.QS))
+	key := consumerKey(row)
+	g.consumers[key] = &nodeAgg{}
 	g.consumerMeta[key] = [2]string{row.Service, row.ConsumerGroup}
-	addSet(g.topicGroups, row.Topic, row.ConsumerGroup)
+	if row.ConsumerGroup != "" {
+		addSet(g.topicGroups, row.Topic, row.ConsumerGroup)
+	}
 	g.consumeEdges[[2]string{row.Topic, row.Service}] += row.CallCount
 	g.pathways = append(g.pathways, models.Pathway{
 		Producer: g.topicLeaders[row.Topic].service, Topic: row.Topic,
@@ -125,16 +132,40 @@ func (g *graphData) addConsumer(row repository.EdgeRow, winSecs float64) {
 	})
 }
 
+// setNode fills a node the edges registered with its stats, which SQL merged
+// over all of the node's topics.
+func (g *graphData) setNode(row repository.EdgeRow) {
+	nodes, key := g.producers, row.Service
+	if row.Kind == kindConsumer {
+		nodes, key = g.consumers, consumerKey(row)
+	}
+	if a, ok := nodes[key]; ok {
+		*a = nodeAgg{calls: row.CallCount, errors: row.ErrorCount, latency: percentiles(row.QS)}
+	}
+}
+
+func consumerKey(row repository.EdgeRow) string {
+	return row.Service + "|" + row.ConsumerGroup
+}
+
 func buildGraph(rows []repository.EdgeRow, winSecs float64) models.TopologyResponse {
+	// Producers go first so each pathway can name its topic's leading producer.
+	// Classify by span kind: consumer spans may lack a group (e.g. a client's
+	// receive span), which must not make them producers.
 	graph := newGraphData(len(rows))
 	for _, row := range rows {
-		if row.ConsumerGroup == "" {
+		if !row.IsNode && row.Kind == kindProducer {
 			graph.addProducer(row, winSecs)
 		}
 	}
 	for _, row := range rows {
-		if row.ConsumerGroup != "" {
+		if !row.IsNode && row.Kind == kindConsumer {
 			graph.addConsumer(row, winSecs)
+		}
+	}
+	for _, row := range rows {
+		if row.IsNode {
+			graph.setNode(row)
 		}
 	}
 	for key, calls := range graph.consumeEdges {
@@ -149,19 +180,6 @@ func buildGraph(rows []repository.EdgeRow, winSecs float64) models.TopologyRespo
 		Consumers: consumerNodes(graph.consumers, graph.consumerMeta, winSecs),
 		Edges:     graph.edges, Pathways: graph.pathways,
 	}
-}
-
-func acc(m map[string]*nodeAgg, key string, calls, errors uint64, latency percentileValues) {
-	a := m[key]
-	if a == nil {
-		a = &nodeAgg{}
-		m[key] = a
-	}
-	a.calls += calls
-	a.errors += errors
-	a.latency.p50 = max(a.latency.p50, latency.p50)
-	a.latency.p95 = max(a.latency.p95, latency.p95)
-	a.latency.p99 = max(a.latency.p99, latency.p99)
 }
 
 func addSet(m map[string]map[string]struct{}, key, val string) {

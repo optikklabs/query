@@ -7,6 +7,7 @@ import (
 
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
+	"github.com/optikklabs/query/internal/modules/llm/scores"
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
@@ -31,14 +32,14 @@ func (r *Repository) TopSessions(ctx context.Context, tenantID, startMs, endMs i
 		SELECT llm_session_id AS session_id,
 		       ` + serviceSQL + ` AS service,
 		       ` + userIDSQL + ` AS user_id,
-		       argMinIf(substring(gen_ai_prompt, 1, 140), (timestamp, span_id), gen_ai_prompt != '') AS preview,
+		       argMinIf(prompt_preview, (timestamp, span_id), prompt_preview != '') AS preview,
 		       uniqExact(trace_id) AS turns,
 		       ` + durationMsSQL + ` AS duration_ms,
 		       sum(` + pricing.SpanCostSQL + `) AS cost,
 		       max(timestamp) AS last_ts
-		FROM optikk.spans
+		FROM optikk.llm_spans
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		WHERE is_gen_ai AND llm_session_id != ''
+		WHERE llm_session_id != ''
 		GROUP BY session_id
 		ORDER BY last_ts DESC, session_id ASC
 		LIMIT @limit`
@@ -59,9 +60,9 @@ func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int6
 		    SELECT uniqExact(trace_id) AS turns,
 		           ` + durationMsSQL + ` AS dur,
 		           sum(` + pricing.SpanCostSQL + `) AS cost
-		    FROM optikk.spans
+		    FROM optikk.llm_spans
 		    PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		    WHERE is_gen_ai AND llm_session_id != ''
+		    WHERE llm_session_id != ''
 		    GROUP BY llm_session_id
 		)`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
@@ -70,18 +71,8 @@ func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int6
 	return row, err
 }
 
-func (r *Repository) MeanScoreBySession(ctx context.Context, tenantID, startMs, endMs int64, sessionIDs []string) ([]sessionScoreRow, error) {
-	query := `
-		SELECT session_id, avg(value) AS mean
-		FROM optikk.llm_scores
-		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		WHERE session_id IN @sessionIDs AND data_type = 'numeric'
-		GROUP BY session_id`
-	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
-		clickhouse.Named("sessionIDs", sessionIDs))
-	var rows []sessionScoreRow
-	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.sessions.MeanScoreBySession", &rows, query, args...)
-	return rows, err
+func (r *Repository) MeanScoreBySession(ctx context.Context, tenantID, startMs, endMs int64, sessionIDs []string) (map[string]*float64, error) {
+	return scores.MeanScores(ctx, r.db, "llm.sessions.MeanScoreBySession", scores.BySession, tenantID, startMs, endMs, sessionIDs)
 }
 
 func (r *Repository) Detail(ctx context.Context, tenantID int64, sessionID string, startMs, endMs int64) ([]turnRow, error) {
@@ -109,9 +100,9 @@ func (r *Repository) Identity(ctx context.Context, tenantID int64, sessionID str
 	query := `
 		SELECT ` + serviceSQL + ` AS service,
 		       ` + userIDSQL + ` AS user_id
-		FROM optikk.spans
+		FROM optikk.llm_spans
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		WHERE is_gen_ai AND llm_session_id = @sessionID`
+		WHERE llm_session_id = @sessionID`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("sessionID", sessionID))
 	var row identityRow
 	err := dbutil.QueryRowCH(dbutil.ExplorerCtx(ctx), r.db, "llm.sessions.Identity", &row, query, args...)

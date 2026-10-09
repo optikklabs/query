@@ -9,6 +9,7 @@ import (
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
+	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
 const (
@@ -20,31 +21,27 @@ type SummaryRaw struct {
 	QueryText      string    `ch:"query_text"`
 	DbSystem       string    `ch:"db_system_any"`
 	CollectionName string    `ch:"collection_name"`
-	OperationName  string    `ch:"operation_name"`
 	CallCount      uint64    `ch:"call_count"`
 	ErrorCount     uint64    `ch:"error_count"`
-	QS             []float32 `ch:"qs"`
-	AvgMs          float64   `ch:"avg_ms"`
+	QS             []float64 `ch:"qs"`
 	TotalTimeMs    float64   `ch:"total_time_ms"`
 	AvgRows        *float64  `ch:"avg_rows"`
 }
 
-// GetSummary aggregates every execution of the query hash in the window; a
-// hash with no executions yields a zero CallCount.
+// GetSummary aggregates the query hash over the window from the span
+// rollups; a hash with no executions yields a zero CallCount.
 func (r *Repository) GetSummary(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) (SummaryRaw, error) {
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
-		SELECT argMax(db_statement_normalized, (timestamp, span_id)) AS query_text,
-		       argMax(db_system, (timestamp, span_id))             AS db_system_any,
-		       argMax(db_name, (timestamp, span_id))               AS collection_name,
-		       argMax(attributes['db.operation.name'], (timestamp, span_id)) AS operation_name,
-		       count()                                            AS call_count,
-		       countIf(is_error)                                  AS error_count,
-		       quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
-		       avg(duration_nano / 1000000.0)                     AS avg_ms,
-		       sum(duration_nano) / 1000000.0                     AS total_time_ms,
-		       avgOrNull(toFloat64OrNull(attributes['db.response.returned_rows'])) AS avg_rows
-		FROM optikk.spans` + queryHashPrewhere + filterWhere
+		SELECT any(db_statement)                                     AS query_text,
+		       argMax(db_system, timestamp)                          AS db_system_any,
+		       argMax(db_name, timestamp)                            AS collection_name,
+		       sum(request_count)                                    AS call_count,
+		       sumIf(request_count, ` + spanstats.ErrorPred + `)     AS error_count,
+		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs,
+		       sum(duration_ms_sum)                                  AS total_time_ms,
+		       sum(db_rows_sum) / nullIf(sum(db_rows_count), 0)      AS avg_rows
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + queryHashPrewhere + filterWhere
 
 	args := append(hashArgs(tenantID, startMs, endMs, hash), filterArgs...)
 	var row SummaryRaw
@@ -60,8 +57,8 @@ type ServiceRaw struct {
 func (r *Repository) GetServices(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) ([]ServiceRaw, error) {
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
-		SELECT service, count() AS call_count
-		FROM optikk.spans` + queryHashPrewhere + filterWhere + `
+		SELECT service, sum(request_count) AS call_count
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + queryHashPrewhere + filterWhere + `
 		GROUP BY service
 		ORDER BY call_count DESC, service ASC
 		LIMIT 10`
@@ -77,18 +74,18 @@ type TimeseriesRaw struct {
 	CallCount  uint64    `ch:"call_count"`
 	ErrorCount uint64    `ch:"error_count"`
 	AvgMs      float64   `ch:"avg_ms"`
-	P99Ms      float32   `ch:"p99_ms"`
+	P99Ms      float64   `ch:"p99_ms"`
 }
 
 func (r *Repository) GetTimeseries(ctx context.Context, tenantID, startMs, endMs int64, hash string, f filter.Filters) ([]TimeseriesRaw, error) {
 	filterWhere, filterArgs := filter.BuildSpanClauses(f)
 	query := `
-		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
-		       count()                                           AS call_count,
-		       countIf(is_error)                                 AS error_count,
-		       avg(duration_nano / 1000000.0)                    AS avg_ms,
-		       quantileTiming(0.99)(duration_nano / 1000000.0)   AS p99_ms
-		FROM optikk.spans` + queryHashPrewhere + filterWhere + `
+		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + `       AS bucket_at,
+		       sum(request_count)                                  AS call_count,
+		       sumIf(request_count, ` + spanstats.ErrorPred + `)   AS error_count,
+		       sum(duration_ms_sum) / sum(request_count)           AS avg_ms,
+		       toFloat64(quantilesTDigestMerge(0.99)(latency_state)[1])   AS p99_ms
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + queryHashPrewhere + filterWhere + `
 		GROUP BY bucket_at
 		ORDER BY bucket_at`
 

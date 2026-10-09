@@ -3,11 +3,8 @@ package shared
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"net/mail"
 	"strings"
-
-	"github.com/go-sql-driver/mysql"
 )
 
 // randomHex returns n cryptographically random bytes, hex encoded.
@@ -65,11 +62,4 @@ func NormalizeEmail(raw string) (string, bool) {
 	email := strings.ToLower(strings.TrimSpace(raw))
 	addr, err := mail.ParseAddress(email)
 	return email, err == nil && addr.Address == email
-}
-
-// IsDuplicateEntry reports whether err is a MySQL unique-key violation.
-func IsDuplicateEntry(err error) bool {
-	const duplicateEntry = 1062
-	me, ok := errors.AsType[*mysql.MySQLError](err)
-	return ok && me.Number == duplicateEntry
 }

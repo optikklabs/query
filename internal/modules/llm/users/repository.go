@@ -7,6 +7,7 @@ import (
 
 	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/llm/pricing"
+	"github.com/optikklabs/query/internal/modules/llm/scores"
 	"github.com/optikklabs/query/internal/shared/chargs"
 )
 
@@ -26,9 +27,9 @@ func (r *Repository) TopUsers(ctx context.Context, tenantID, startMs, endMs int6
 		       sum(gen_ai_input_tokens + gen_ai_output_tokens) AS tokens,
 		       sum(` + pricing.SpanCostSQL + `) AS cost,
 		       max(timestamp) AS last_seen
-		FROM optikk.spans
+		FROM optikk.llm_spans
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		WHERE is_gen_ai AND llm_user_id != ''
+		WHERE llm_user_id != ''
 		GROUP BY user_id
 		ORDER BY cost DESC, user_id ASC
 		LIMIT @limit`
@@ -44,27 +45,17 @@ func (r *Repository) Overview(ctx context.Context, tenantID, startMs, endMs int6
 		SELECT uniqExact(llm_user_id) AS active_users,
 		       uniqExact(trace_id)     AS traces,
 		       sum(` + pricing.SpanCostSQL + `) AS cost
-		FROM optikk.spans
+		FROM optikk.llm_spans
 		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		WHERE is_gen_ai AND llm_user_id != ''`
+		WHERE llm_user_id != ''`
 	args := append(chargs.RangeArgs(tenantID, startMs, endMs), pricing.Args()...)
 	var row overviewRow
 	err := dbutil.QueryRowCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.Overview", &row, query, args...)
 	return row, err
 }
 
-func (r *Repository) MeanScoreByUser(ctx context.Context, tenantID, startMs, endMs int64, userIDs []string) ([]userScoreRow, error) {
-	query := `
-		SELECT user_id, avg(value) AS mean
-		FROM optikk.llm_scores
-		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-		WHERE user_id IN @userIDs AND data_type = 'numeric'
-		GROUP BY user_id`
-	args := append(chargs.RangeArgs(tenantID, startMs, endMs),
-		clickhouse.Named("userIDs", userIDs))
-	var rows []userScoreRow
-	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.users.MeanScoreByUser", &rows, query, args...)
-	return rows, err
+func (r *Repository) MeanScoreByUser(ctx context.Context, tenantID, startMs, endMs int64, userIDs []string) (map[string]*float64, error) {
+	return scores.MeanScores(ctx, r.db, "llm.users.MeanScoreByUser", scores.ByUser, tenantID, startMs, endMs, userIDs)
 }
 
 func (r *Repository) LowScoreUserCount(ctx context.Context, tenantID, startMs, endMs int64, threshold float64) (uint64, error) {

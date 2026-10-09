@@ -184,9 +184,9 @@ type REDMetricsRow struct {
 	TotalCount  uint64    `ch:"request_total"`
 	ErrorCount  uint64    `ch:"error_total"`
 	QS          []float64 `ch:"qs"`
-	P50Ms       float32   `ch:"p50_ms"`
-	P95Ms       float32   `ch:"p95_ms"`
-	P99Ms       float32   `ch:"p99_ms"`
+	P50Ms       float64   `ch:"p50_ms"`
+	P95Ms       float64   `ch:"p95_ms"`
+	P99Ms       float64   `ch:"p99_ms"`
 	Version     string    `ch:"latest_version"`
 	Environment string    `ch:"latest_environment"`
 	Instances   uint64    `ch:"instances"`
@@ -195,9 +195,9 @@ type REDMetricsRow struct {
 type OperationBaselineRow struct {
 	SpanCount uint64    `ch:"request_total"`
 	QS        []float64 `ch:"qs"`
-	P50Ms     float32   `ch:"p50_ms"`
-	P95Ms     float32   `ch:"p95_ms"`
-	P99Ms     float32   `ch:"p99_ms"`
+	P50Ms     float64   `ch:"p50_ms"`
+	P95Ms     float64   `ch:"p95_ms"`
+	P99Ms     float64   `ch:"p99_ms"`
 }
 
 type ServiceMetricRow struct {
@@ -229,9 +229,9 @@ type StatusBucketRow struct {
 type LatencyPercentilesRow struct {
 	BucketAt time.Time `ch:"bucket_at"`
 	QS       []float64 `ch:"qs"`
-	P50Ms    float32   `ch:"p50_ms"`
-	P95Ms    float32   `ch:"p95_ms"`
-	P99Ms    float32   `ch:"p99_ms"`
+	P50Ms    float64   `ch:"p50_ms"`
+	P95Ms    float64   `ch:"p95_ms"`
+	P99Ms    float64   `ch:"p99_ms"`
 }
 
 type EndpointRateRow struct {
@@ -255,9 +255,9 @@ type TopDBQueryRow struct {
 	TotalCount    uint64    `ch:"request_total"`
 	ErrorCount    uint64    `ch:"error_total"`
 	QS            []float64 `ch:"qs"`
-	P50Ms         float32   `ch:"p50_ms"`
-	P95Ms         float32   `ch:"p95_ms"`
-	P99Ms         float32   `ch:"p99_ms"`
+	P50Ms         float64   `ch:"p50_ms"`
+	P95Ms         float64   `ch:"p95_ms"`
+	P99Ms         float64   `ch:"p99_ms"`
 }
 
 type TopEndpointRow struct {
@@ -270,7 +270,7 @@ type TopEndpointRow struct {
 	TotalCount    uint64    `ch:"request_total"`
 	ErrorCount    uint64    `ch:"error_total"`
 	QS            []float64 `ch:"qs"`
-	P50Ms         float32   `ch:"p50_ms"`
-	P95Ms         float32   `ch:"p95_ms"`
-	P99Ms         float32   `ch:"p99_ms"`
+	P50Ms         float64   `ch:"p50_ms"`
+	P95Ms         float64   `ch:"p95_ms"`
+	P99Ms         float64   `ch:"p99_ms"`
 }

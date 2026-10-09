@@ -8,6 +8,7 @@ import (
 const (
 	AttrState      = "attributes['state']"
 	AttrMountpoint = "attributes['mountpoint']"
+	AttrMode       = "attributes['mode']"
 
 	attrDevice    = "attributes['device']"
 	attrDirection = "attributes['direction']"

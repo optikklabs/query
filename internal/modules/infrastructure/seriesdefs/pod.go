@@ -19,7 +19,9 @@ var podDefs = []seriesgroup.Def{
 		ID: "cpu",
 		MetricNames: []string{
 			infraconsts.MetricK8SPodCPUUtilization,
+			infraconsts.MetricK8SPodCPUUsage,
 			infraconsts.MetricContainerCPUUtilization,
+			infraconsts.MetricContainerCPUUsage,
 		},
 		LabelSQL: containerLabel,
 		Agg:      seriesgroup.Gauge,

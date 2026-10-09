@@ -63,9 +63,9 @@ func nodeAggsFromRows(rows []nodeAggRow) []NodeAgg {
 			Service:      r.ServiceName,
 			RequestCount: int64(r.RequestCount),
 			ErrorCount:   int64(r.ErrorCount),
-			P50Ms:        float64(r.P50Ms),
-			P95Ms:        float64(r.P95Ms),
-			P99Ms:        float64(r.P99Ms),
+			P50Ms:        r.P50Ms,
+			P95Ms:        r.P95Ms,
+			P99Ms:        r.P99Ms,
 		}
 	}
 	return out
@@ -79,8 +79,8 @@ func edgeAggsFromRows(rows []edgeAggRow) []EdgeAgg {
 			Target:     r.Target,
 			CallCount:  int64(r.CallCount),
 			ErrorCount: int64(r.ErrorCount),
-			P50Ms:      float64(r.P50Ms),
-			P95Ms:      float64(r.P95Ms),
+			P50Ms:      r.P50Ms,
+			P95Ms:      r.P95Ms,
 		}
 	}
 	return out

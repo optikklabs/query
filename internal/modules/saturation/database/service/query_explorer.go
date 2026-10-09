@@ -53,9 +53,9 @@ func toSlowQueryPatterns(rows []repository.PatternRaw) []models.SlowQueryPattern
 			QueryText:      r.QueryText,
 			DBSystem:       r.DBSystem,
 			CollectionName: r.CollectionName,
-			P50Ms:          float64(r.QS[0]),
-			P95Ms:          float64(r.QS[1]),
-			P99Ms:          float64(r.QS[2]),
+			P50Ms:          r.QS[0],
+			P95Ms:          r.QS[1],
+			P99Ms:          r.QS[2],
 			CallCount:      int64(r.CallCount),
 			ErrorCount:     int64(r.ErrorCount),
 		}

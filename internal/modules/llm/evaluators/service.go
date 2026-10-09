@@ -21,7 +21,10 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-var ErrNotFound = errorcode.NotFoundError{Msg: "evaluator not found"}
+var (
+	ErrNotFound  = errorcode.NotFoundError{Msg: "evaluator not found"}
+	errDuplicate = errorcode.ConflictError{Msg: "an evaluator with this name already exists"}
+)
 
 var (
 	targets   = []string{"traces", "generations"}
@@ -60,7 +63,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Upsert
 	args.CreatedBy = sql.NullInt64{Valid: true, Int64: userID}
 	id, err := s.repo.Create(ctx, args)
 	if err != nil {
-		return Evaluator{}, err
+		return Evaluator{}, dbutil.DuplicateAs(err, errDuplicate)
 	}
 	return s.get(ctx, tenantID, id)
 }
@@ -75,7 +78,7 @@ func (s *Service) Update(ctx context.Context, tenantID, id int64, req UpsertRequ
 		return Evaluator{}, err
 	}
 	if err := s.repo.Update(ctx, tenantID, id, args); err != nil {
-		return Evaluator{}, dbutil.NoRowsAs(err, ErrNotFound)
+		return Evaluator{}, dbutil.DuplicateAs(dbutil.NoRowsAs(err, ErrNotFound), errDuplicate)
 	}
 	return s.get(ctx, tenantID, id)
 }

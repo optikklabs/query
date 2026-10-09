@@ -23,7 +23,7 @@ type SystemSummaryRaw struct {
 	QueryCount   uint64    `ch:"query_count"`
 	ErrorCount   uint64    `ch:"error_count"`
 	AvgLatencyMs float64   `ch:"avg_latency_ms"`
-	P95Ms        float32   `ch:"p95_ms"`
+	P95Ms        float64   `ch:"p95_ms"`
 	Region       string    `ch:"region"`
 	LastSeen     time.Time `ch:"last_seen"`
 }
@@ -39,7 +39,7 @@ func (r *Repository) GetSystemSummariesRaw(ctx context.Context, tenantID, startM
 		       sum(request_count)                                       AS query_count,
 		       sumIf(request_count, ` + spanstats.ErrorPred + `)        AS error_count,
 		       sum(duration_ms_sum) / nullIf(sum(request_count), 0)     AS avg_latency_ms,
-		       toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_ms,
+		       toFloat64(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_ms,
 		       arrayElement(topKWeightedIf(1)(cloud_region, request_count, cloud_region != ''), 1) AS region,
 		       max(timestamp)                                           AS last_seen
 		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `

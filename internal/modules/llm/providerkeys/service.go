@@ -23,6 +23,8 @@ func NewService(repo *Repository, box *secretbox.Box) *Service {
 var (
 	ErrNotFound = errorcode.NotFoundError{Msg: "provider key not found"}
 	ErrNoKey    = errorcode.ValidationError{Msg: "no provider key is configured for this provider"}
+
+	errDuplicate = errorcode.ConflictError{Msg: "a key with this provider and label already exists"}
 )
 
 func (s *Service) List(ctx context.Context, tenantID int64) ([]ProviderKey, error) {
@@ -64,7 +66,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 	a.CreatedBy = sql.NullInt64{Valid: true, Int64: userID}
 	id, err := s.repo.Create(ctx, a)
 	if err != nil {
-		return ProviderKey{}, err
+		return ProviderKey{}, dbutil.DuplicateAs(err, errDuplicate)
 	}
 	row, err := s.repo.Get(ctx, tenantID, id)
 	if err != nil {

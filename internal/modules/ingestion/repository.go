@@ -70,7 +70,7 @@ func (r *Repository) DailySignals(ctx context.Context, tenantID, startMs, endMs 
 	       sum(record_count) AS c, sum(byte_count) AS b
 	FROM optikk.ingestion_stats
 	PREWHERE tenant_id = @tenantID
-	     AND bucket_hour >= @start AND bucket_hour < @end
+	     AND bucket_hour >= toStartOfHour(@start) AND bucket_hour < @end
 	     AND signal IN @signals
 	GROUP BY signal, d
 	ORDER BY d, signal`
@@ -87,13 +87,13 @@ func (r *Repository) ServiceUsage(
 	tenantID, priorStartMs, currentStartMs, endMs int64,
 ) ([]serviceUsageRow, error) {
 	query := `
-	SELECT if(bucket_hour < @currentStart, 'prior', 'current') AS period,
+	SELECT if(bucket_hour < toStartOfHour(@currentStart), 'prior', 'current') AS period,
 	       signal, toDate(bucket_hour) AS d, service AS svc,
 	       argMax(environment, (bucket_hour, environment)) AS env, sum(record_count) AS c,
 	       sum(byte_count) AS b
 	FROM optikk.ingestion_stats
 	PREWHERE tenant_id = @tenantID
-	     AND bucket_hour >= @start AND bucket_hour < @end
+	     AND bucket_hour >= toStartOfHour(@start) AND bucket_hour < @end
 	     AND signal IN @signals
 	GROUP BY period, signal, d, svc
 	ORDER BY period, d, svc, signal`

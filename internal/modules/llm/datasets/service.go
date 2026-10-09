@@ -22,7 +22,10 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-var ErrNotFound = errorcode.NotFoundError{Msg: "dataset not found"}
+var (
+	ErrNotFound  = errorcode.NotFoundError{Msg: "dataset not found"}
+	errDuplicate = errorcode.ConflictError{Msg: "a dataset with this name already exists"}
+)
 
 func (s *Service) List(ctx context.Context, tenantID int64) ([]DatasetSummary, error) {
 	rows, err := s.repo.List(ctx, tenantID)
@@ -74,7 +77,7 @@ func (s *Service) Create(ctx context.Context, tenantID, userID int64, req Create
 	}
 	id, err := s.repo.Create(ctx, tenantID, userID, name, desc)
 	if err != nil {
-		return DatasetDetail{}, err
+		return DatasetDetail{}, dbutil.DuplicateAs(err, errDuplicate)
 	}
 	return s.Get(ctx, tenantID, id)
 }

@@ -23,17 +23,17 @@ func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64
 		QueryText:      raw.QueryText,
 		DbSystem:       raw.DbSystem,
 		CollectionName: raw.CollectionName,
-		OperationName:  operationName(raw.OperationName, raw.QueryText),
+		OperationName:  operationName(raw.QueryText),
 		CallCount:      int64(raw.CallCount),
 		ErrorCount:     int64(raw.ErrorCount),
 		AvgRows:        raw.AvgRows,
 		Services:       []models.ServiceCalls{},
 	}
 	if len(raw.QS) >= 3 {
-		p50, p95, p99 := float64(raw.QS[0]), float64(raw.QS[1]), float64(raw.QS[2])
+		p50, p95, p99 := raw.QS[0], raw.QS[1], raw.QS[2]
 		out.P50Ms, out.P95Ms, out.P99Ms = &p50, &p95, &p99
 	}
-	out.AvgMs = raw.AvgMs
+	out.AvgMs = raw.TotalTimeMs / float64(raw.CallCount)
 	out.TotalTimeMs = raw.TotalTimeMs
 
 	services, err := s.repo.GetServices(ctx, tenantID, startMs, endMs, hash, f)
@@ -46,10 +46,8 @@ func (s *Service) GetSummary(ctx context.Context, tenantID, startMs, endMs int64
 	return out, nil
 }
 
-func operationName(attr, queryText string) string {
-	if attr != "" {
-		return attr
-	}
+// operationName is the statement's leading keyword (SELECT, INSERT, ...).
+func operationName(queryText string) string {
 	if fields := strings.Fields(queryText); len(fields) > 0 {
 		return strings.ToUpper(fields[0])
 	}
@@ -63,7 +61,7 @@ func (s *Service) GetTimeseries(ctx context.Context, tenantID, startMs, endMs in
 	}
 	out := make([]models.QueryTimeseriesPoint, len(rows))
 	for i, r := range rows {
-		avg, p99 := r.AvgMs, float64(r.P99Ms)
+		avg, p99 := r.AvgMs, r.P99Ms
 		out[i] = models.QueryTimeseriesPoint{
 			TimeBucketMs: r.BucketAt.UnixMilli(),
 			CallCount:    int64(r.CallCount),

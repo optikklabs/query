@@ -59,9 +59,9 @@ func (s *Service) GetServiceSummary(ctx context.Context, f filter.Filters) (mode
 		resp.ErrorCount = int64(row.ErrorCount)
 		resp.RPS = httputil.SanitizeFloat(float64(resp.RequestCount) / windowSeconds(f))
 		resp.ErrorRate = httputil.SanitizeFloat(metrics.Percentage(resp.ErrorCount, resp.RequestCount))
-		resp.P50Ms = httputil.SanitizeFloat(float64(row.P50Ms))
-		resp.P95Ms = httputil.SanitizeFloat(float64(row.P95Ms))
-		resp.P99Ms = httputil.SanitizeFloat(float64(row.P99Ms))
+		resp.P50Ms = httputil.SanitizeFloat(row.P50Ms)
+		resp.P95Ms = httputil.SanitizeFloat(row.P95Ms)
+		resp.P99Ms = httputil.SanitizeFloat(row.P99Ms)
 	}
 	return resp, nil
 }

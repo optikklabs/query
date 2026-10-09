@@ -19,13 +19,12 @@ func (s *Service) GetLatencyBySystem(ctx context.Context, tenantID, startMs, end
 func foldLatency(rows []repository.LatencyRaw) []models.LatencyTimeSeries {
 	out := make([]models.LatencyTimeSeries, len(rows))
 	for i, r := range rows {
-		p50, p95, p99 := float64(r.P50Ms), float64(r.P95Ms), float64(r.P99Ms)
 		out[i] = models.LatencyTimeSeries{
 			TimeBucketMs: r.BucketAt.UnixMilli(),
 			GroupBy:      r.GroupBy,
-			P50Ms:        &p50,
-			P95Ms:        &p95,
-			P99Ms:        &p99,
+		}
+		if len(r.QS) >= 3 {
+			out[i].P50Ms, out[i].P95Ms, out[i].P99Ms = &r.QS[0], &r.QS[1], &r.QS[2]
 		}
 	}
 	return out

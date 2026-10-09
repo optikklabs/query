@@ -46,7 +46,7 @@ func (r *Repository) GetNodes(ctx context.Context, tenantID, startMs, endMs int6
 	}
 	for i := range rows {
 		p50, p95, p99 := spanstats.LatencyP50P95P99.P50P95P99(rows[i].QS)
-		rows[i].P50Ms, rows[i].P95Ms, rows[i].P99Ms = float32(p50), float32(p95), float32(p99)
+		rows[i].P50Ms, rows[i].P95Ms, rows[i].P99Ms = p50, p95, p99
 	}
 	return rows, nil
 }
@@ -70,7 +70,7 @@ func (r *Repository) GetEdges(ctx context.Context, tenantID, startMs, endMs int6
 	}
 	for i := range rows {
 		p50, p95 := spanstats.LatencyP50P95.P50P95(rows[i].QS)
-		rows[i].P50Ms, rows[i].P95Ms = float32(p50), float32(p95)
+		rows[i].P50Ms, rows[i].P95Ms = p50, p95
 	}
 	return rows, nil
 }

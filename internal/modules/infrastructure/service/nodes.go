@@ -24,7 +24,7 @@ func (s *Service) GetInfrastructureNodes(ctx context.Context, tenantID int64, st
 			ErrorCount:   int64(r.ErrorCount),
 			ErrorRate:    errorRate,
 			AvgLatencyMs: avgLatency,
-			P95LatencyMs: float64(r.P95LatencyMs),
+			P95LatencyMs: r.P95LatencyMs,
 			LastSeen:     r.LastSeen,
 		}
 	}
@@ -58,7 +58,7 @@ func (s *Service) GetInfrastructureNodeServices(ctx context.Context, tenantID in
 			ErrorCount:   int64(r.ErrorCount),
 			ErrorRate:    errorRate,
 			AvgLatencyMs: avgLatency,
-			P95LatencyMs: float64(r.P95LatencyMs),
+			P95LatencyMs: r.P95LatencyMs,
 			PodCount:     int64(r.PodCount),
 		}
 	}

@@ -129,8 +129,15 @@ func (r *Repository) UpdateUnverifiedTenantAndAdmin(ctx context.Context, signup 
 		}
 	}()
 
+	// Only a signup still awaiting email verification may be replaced.
+	// active=0 alone also matches users an admin removed; re-signing up as
+	// one of them must not reclaim the account or its tenant.
 	var uID, tID int64
-	err = tx.QueryRowContext(ctx, `SELECT id, tenant_id FROM users WHERE email=? AND active=0 FOR UPDATE`, signup.Email).Scan(&uID, &tID)
+	err = tx.QueryRowContext(ctx, `
+		SELECT u.id, u.tenant_id FROM users u
+		WHERE u.email=? AND u.active=0
+		  AND EXISTS (SELECT 1 FROM email_verifications v WHERE v.user_id=u.id AND v.consumed_at IS NULL)
+		FOR UPDATE`, signup.Email).Scan(&uID, &tID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return shared.AuthUser{}, ErrAlreadyVerified

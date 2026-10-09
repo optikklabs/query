@@ -6,9 +6,11 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 
 	dbutil "github.com/optikklabs/query/internal/infra/database"
+	"github.com/optikklabs/query/internal/infra/timebucket"
 	"github.com/optikklabs/query/internal/modules/saturation/database/filter"
 	"github.com/optikklabs/query/internal/shared/chargs"
 	"github.com/optikklabs/query/internal/shared/filterutil"
+	"github.com/optikklabs/query/internal/shared/spanstats"
 )
 
 type PatternRaw struct {
@@ -16,7 +18,7 @@ type PatternRaw struct {
 	QueryText      string    `ch:"query_text"`
 	DBSystem       string    `ch:"db_system"`
 	CollectionName string    `ch:"collection_name"`
-	QS             []float32 `ch:"qs"`
+	QS             []float64 `ch:"qs"`
 	CallCount      uint64    `ch:"call_count"`
 	ErrorCount     uint64    `ch:"error_count"`
 }
@@ -43,18 +45,16 @@ func (r *Repository) QueryPatterns(
 
 	query := `
 		SELECT query_hash,
-		       argMax(db_statement_normalized, (timestamp, span_id))       AS query_text,
+		       any(db_statement)                                     AS query_text,
 		       db_system,
-		       db_name                                                     AS collection_name,
-		       quantilesTiming(0.5, 0.95, 0.99)(duration_nano / 1000000.0) AS qs,
-		       count()                                                     AS call_count,
-		       countIf(is_error)                                           AS error_count
-		FROM optikk.spans
+		       db_name                                               AS collection_name,
+		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs,
+		       sum(request_count)                                    AS call_count,
+		       sumIf(request_count, ` + spanstats.ErrorPred + `)     AS error_count
+		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp >= @start AND timestamp < @end
-		     AND db_system != ''
-		     AND query_hash != ''
-		WHERE 1=1` + where + `
+		WHERE db_system != '' AND query_hash != ''` + where + `
 		GROUP BY query_hash, db_system, collection_name` + having + `
 		ORDER BY call_count DESC, query_hash ASC, db_system ASC, collection_name ASC
 		LIMIT @qLimit`
@@ -73,7 +73,7 @@ func buildExplorerClauses(f filter.ExplorerFilters, cursor *QueryPatternsCursor)
 		filterutil.InClause{Column: "service", Bind: "services", Values: f.Services},
 	)
 	if f.QueryText != "" {
-		where += " AND positionCaseInsensitive(db_statement_normalized, @queryText) > 0"
+		where += " AND positionCaseInsensitive(db_statement, @queryText) > 0"
 		args = append(args, clickhouse.Named("queryText", f.QueryText))
 	}
 

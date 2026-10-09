@@ -5,9 +5,9 @@ type nodeAggRow struct {
 	RequestCount uint64    `ch:"request_total"`
 	ErrorCount   uint64    `ch:"error_total"`
 	QS           []float64 `ch:"qs"`
-	P50Ms        float32   `ch:"p50_ms"`
-	P95Ms        float32   `ch:"p95_ms"`
-	P99Ms        float32   `ch:"p99_ms"`
+	P50Ms        float64   `ch:"p50_ms"`
+	P95Ms        float64   `ch:"p95_ms"`
+	P99Ms        float64   `ch:"p99_ms"`
 }
 
 type edgeAggRow struct {
@@ -16,6 +16,6 @@ type edgeAggRow struct {
 	CallCount  uint64    `ch:"request_total"`
 	ErrorCount uint64    `ch:"error_total"`
 	QS         []float64 `ch:"qs"`
-	P50Ms      float32   `ch:"p50_ms"`
-	P95Ms      float32   `ch:"p95_ms"`
+	P50Ms      float64   `ch:"p50_ms"`
+	P95Ms      float64   `ch:"p95_ms"`
 }

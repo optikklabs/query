@@ -124,7 +124,7 @@ func (r *Repository) ErrorChangeRows(
 		SELECT ` + errorgroups.IdentityProjection("") + `,
 		       countIf(` + current + `) AS current_count,
 		       countIf(` + baseline + `) AS baseline_count
-		FROM optikk.spans
+		FROM optikk.error_events
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp >= @baselineStart AND timestamp < @currentEnd
 		     AND service = @service AND environment = @environment

@@ -67,9 +67,9 @@ func (s *Service) GetOperationBaseline(
 	return models.OperationBaseline{
 		ServiceName:   serviceName,
 		OperationName: operationName,
-		P50Ms:         httputil.SanitizeFloat(float64(row.P50Ms)),
-		P95Ms:         httputil.SanitizeFloat(float64(row.P95Ms)),
-		P99Ms:         httputil.SanitizeFloat(float64(row.P99Ms)),
+		P50Ms:         httputil.SanitizeFloat(row.P50Ms),
+		P95Ms:         httputil.SanitizeFloat(row.P95Ms),
+		P99Ms:         httputil.SanitizeFloat(row.P99Ms),
 		SpanCount:     int64(row.SpanCount),
 	}, nil
 }

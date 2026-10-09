@@ -38,10 +38,10 @@ func applyAggregation(rows []timeseriesPointDTO, aggregation string, startMs, en
 
 func computeValue(row timeseriesPointDTO, agg string, bucketSec float64, cumulative, histogram bool) float64 {
 	switch {
-	case cumulative:
-		return cumulativeValue(row, agg, bucketSec)
 	case histogram:
 		return histogramValue(row, agg, bucketSec)
+	case cumulative:
+		return cumulativeValue(row, agg, bucketSec)
 	default:
 		return deltaValue(row, agg, bucketSec)
 	}
@@ -133,10 +133,7 @@ func resolveMetricKind(kind metricNameDTO) (cumulative, histogram bool, err erro
 	case "summary":
 		return false, false, errors.New("summary metrics are not safely aggregatable")
 	case "histogram", "exponential_histogram":
-		if kind.Temporality == "Cumulative" {
-			return false, false, errors.New("cumulative distributions are not safely aggregatable")
-		}
-		return false, true, nil
+		return kind.Temporality == "Cumulative", true, nil
 	case "counter":
 		return kind.Temporality == "Cumulative" && kind.IsMonotonic, false, nil
 	case "gauge":
@@ -147,7 +144,7 @@ func resolveMetricKind(kind metricNameDTO) (cumulative, histogram bool, err erro
 }
 
 func validateAggregationForMode(aggregation string, cumulative, histogram bool) error {
-	if cumulative && aggregation != "sum" && aggregation != "rate" {
+	if cumulative && !histogram && aggregation != "sum" && aggregation != "rate" {
 		return fmt.Errorf("%s is not supported for cumulative counters", aggregation)
 	}
 	if histogram && (aggregation == "min" || aggregation == "max") {
@@ -156,8 +153,10 @@ func validateAggregationForMode(aggregation string, cumulative, histogram bool) 
 	return nil
 }
 
-func shouldZeroFill(metricType, aggregation string, cumulative bool) bool {
-	return strings.EqualFold(metricType, "sum") || cumulative || aggregation == "count" || aggregation == "rate"
+// shouldZeroFill reports whether empty buckets mean zero: counters and counts
+// do, distributions (a missing p99) do not.
+func shouldZeroFill(metricType, aggregation string, cumulativeCounter bool) bool {
+	return strings.EqualFold(metricType, "sum") || cumulativeCounter || aggregation == "count" || aggregation == "rate"
 }
 
 func mapPointsToAxis(points []TimeseriesPoint, tsIndex map[int64]int, length int) []*float64 {

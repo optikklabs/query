@@ -1,12 +1,9 @@
 package shared
 
 import (
-	"errors"
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/go-sql-driver/mysql"
 )
 
 func TestNormalizeEmail(t *testing.T) {
@@ -40,15 +37,5 @@ func TestGeneratedSecrets(t *testing.T) {
 	}
 	if APIKeyPrefix("short") != "short" {
 		t.Fatal("prefix of a short key")
-	}
-}
-
-func TestIsDuplicateEntry(t *testing.T) {
-	dup := &mysql.MySQLError{Number: 1062}
-	if !IsDuplicateEntry(dup) || !IsDuplicateEntry(errors.Join(errors.New("wrap"), dup)) {
-		t.Fatal("duplicate entry not detected")
-	}
-	if IsDuplicateEntry(&mysql.MySQLError{Number: 1452}) || IsDuplicateEntry(nil) {
-		t.Fatal("false positive")
 	}
 }

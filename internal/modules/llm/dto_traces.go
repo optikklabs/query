@@ -60,6 +60,7 @@ type llmTraceRow struct {
 	SessionID     string    `ch:"session_id"`
 	Tags          []string  `ch:"tags"`
 	LLMCalls      uint64    `ch:"llm_calls"`
+	LLMErrors     uint64    `ch:"llm_errors"`
 	PromptPreview string    `ch:"prompt_preview"`
 	InputTokens   uint64    `ch:"input_tokens"`
 	OutputTokens  uint64    `ch:"output_tokens"`

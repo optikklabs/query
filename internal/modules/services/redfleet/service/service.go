@@ -119,9 +119,9 @@ func (s *Service) GetLatencyPercentilesTimeSeries(ctx context.Context, f filter.
 		func(t time.Time, row models.LatencyPercentilesRow, ok bool) models.LatencyPercentilesPoint {
 			pt := models.LatencyPercentilesPoint{TimestampMs: t.UnixMilli()}
 			if ok {
-				pt.P50Ms = httputil.SanitizeFloat(float64(row.P50Ms))
-				pt.P95Ms = httputil.SanitizeFloat(float64(row.P95Ms))
-				pt.P99Ms = httputil.SanitizeFloat(float64(row.P99Ms))
+				pt.P50Ms = httputil.SanitizeFloat(row.P50Ms)
+				pt.P95Ms = httputil.SanitizeFloat(row.P95Ms)
+				pt.P99Ms = httputil.SanitizeFloat(row.P99Ms)
 			}
 			return pt
 		}), nil

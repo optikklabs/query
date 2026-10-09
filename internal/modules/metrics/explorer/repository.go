@@ -177,6 +177,8 @@ func (r *Repository) QueryRollupSeries(ctx context.Context, f filter.Filters) ([
 
 	var sql string
 	switch {
+	case f.Histogram && f.Cumulative:
+		sql = cumulativeHistogramSQL(where, selectCols, groupByCols, len(f.GroupBy) > 0)
 	case f.Histogram && strings.HasPrefix(f.Aggregation, "p"):
 		sql = histogramQuantileSQL(fromTable, where, selectCols, groupByCols)
 	case f.Cumulative:
@@ -259,6 +261,59 @@ func cumulativeRollupSQL(fromTable, where, selectCols, groupByCols string, group
 		       toUInt64(0)   AS val_count,
 		       toFloat64(0)  AS val_min,
 		       toFloat64(0)  AS val_max
+		FROM increases
+		GROUP BY ` + resultCols + `
+		HAVING bucket_at >= @displayStart
+		ORDER BY bucket_at ASC
+		SETTINGS max_execution_time = 30`
+}
+
+// cumulativeHistogramSQL turns each series' cumulative histogram into
+// per-sample increases, as cumulativeRollupSQL does for counters: a drop in
+// count or a changed bucket layout is a reset. The increases then merge
+// across series like the delta rollups (see 05_metrics_rollups.sql).
+func cumulativeHistogramSQL(where, selectCols, groupByCols string, grouped bool) string {
+	resultCols := "bucket_at"
+	if grouped {
+		resultCols += ", group_values"
+	}
+	return `
+		WITH
+		per_series AS (
+			SELECT fingerprint, timestamp AS sample_at, ` + selectCols + `,
+			       any(hist_buckets) AS bounds,
+			       any(hist_counts)  AS counts,
+			       any(hist_sum)     AS hsum,
+			       any(hist_count)   AS hcount
+			FROM optikk.metrics
+			PREWHERE tenant_id     = @tenantID
+			     AND metric_name = @metricName
+			     AND timestamp >= @start AND timestamp < @end` + where + `
+			GROUP BY fingerprint, sample_at, ` + groupByCols + `
+		),
+		increases AS (
+			SELECT ` + resultCols + `, bounds,
+			       row_number() OVER w = 1 AS is_first,
+			       hcount < lagInFrame(hcount) OVER w OR bounds != lagInFrame(bounds) OVER w AS is_reset,
+			       multiIf(is_first, toUInt64(0), is_reset, hcount, toUInt64(hcount - lagInFrame(hcount) OVER w)) AS dcount,
+			       multiIf(is_first, 0., is_reset, hsum, hsum - lagInFrame(hsum) OVER w) AS dsum,
+			       multiIf(is_first, arrayMap(c -> toUInt64(0), counts),
+			               is_reset, counts,
+			               arrayMap((c, p) -> toUInt64(if(c > p, c - p, 0)), counts, lagInFrame(counts) OVER w)) AS dcounts
+			FROM per_series
+			WINDOW w AS (
+				PARTITION BY fingerprint
+				ORDER BY sample_at
+				ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+			)
+		)
+		SELECT ` + resultCols + `,
+		       sum(dsum)   AS hist_sum,
+		       sum(dcount) AS hist_count,
+		       quantilesPrometheusHistogramArray(0.5, 0.95, 0.99)(
+		           if(length(dcounts) = length(bounds) + 1, arrayPushBack(bounds, inf), emptyArrayFloat64()),
+		           if(length(dcounts) = length(bounds) + 1, arrayCumSum(dcounts), emptyArrayUInt64())
+		       ) AS quantiles
 		FROM increases
 		GROUP BY ` + resultCols + `
 		HAVING bucket_at >= @displayStart

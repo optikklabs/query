@@ -7,11 +7,11 @@ import (
 	"github.com/optikklabs/query/internal/modules/saturation/database/models"
 )
 
-func percentilePair(qs []float32) (*float64, *float64) {
+func percentilePair(qs []float64) (*float64, *float64) {
 	if len(qs) < 2 {
 		return nil, nil
 	}
-	p95, p99 := float64(qs[0]), float64(qs[1])
+	p95, p99 := qs[0], qs[1]
 	return &p95, &p99
 }
 
@@ -99,9 +99,9 @@ func (s *Service) GetQueryPerformanceSeries(
 		}
 		response.Series[index].Points = append(response.Series[index].Points, models.QueryPerformancePoint{
 			TimeBucketMs: row.BucketAt.UnixMilli(),
-			P50Ms:        float64(row.QS[0]),
-			P95Ms:        float64(row.QS[1]),
-			P99Ms:        float64(row.QS[2]),
+			P50Ms:        row.QS[0],
+			P95Ms:        row.QS[1],
+			P99Ms:        row.QS[2],
 			OpsPerSec:    row.OpsPerSec,
 		})
 	}

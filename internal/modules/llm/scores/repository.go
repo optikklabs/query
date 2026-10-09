@@ -91,3 +91,35 @@ func (r *Repository) Summary(ctx context.Context, tenantID, startMs, endMs int64
 		chargs.RangeArgs(tenantID, startMs, endMs)...)
 	return rows, err
 }
+
+// MeanColumn is the llm_scores column MeanScores groups by.
+type MeanColumn string
+
+const (
+	BySession MeanColumn = "session_id"
+	ByUser    MeanColumn = "user_id"
+)
+
+// MeanScores returns the mean numeric score of each of ids in column col.
+// Ids with no numeric score are absent from the map.
+func MeanScores(ctx context.Context, db clickhouse.Conn, op string, col MeanColumn, tenantID, startMs, endMs int64, ids []string) (map[string]*float64, error) {
+	query := `
+		SELECT ` + string(col) + ` AS id, avg(value) AS mean
+		FROM ` + scoresTable + `
+		PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
+		WHERE ` + string(col) + ` IN @ids AND data_type = 'numeric'
+		GROUP BY id`
+	args := append(chargs.RangeArgs(tenantID, startMs, endMs), clickhouse.Named("ids", ids))
+	var rows []struct {
+		ID   string  `ch:"id"`
+		Mean float64 `ch:"mean"`
+	}
+	if err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), db, op, &rows, query, args...); err != nil {
+		return nil, err
+	}
+	means := make(map[string]*float64, len(rows))
+	for _, row := range rows {
+		means[row.ID] = &row.Mean
+	}
+	return means, nil
+}

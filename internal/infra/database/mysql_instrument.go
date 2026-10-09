@@ -4,35 +4,29 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log/slog"
-	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-
-	"github.com/optikklabs/query/internal/infra/metrics"
 )
 
 func GetSQL(ctx context.Context, db *sqlx.DB, op string, dest any, query string, args ...any) error {
-	done := startSQLOp(ctx)
-	start := time.Now()
+	done := instrument(ctx, "mysql", op)
 	err := db.GetContext(ctx, dest, query, args...)
-	done(err, start, op)
+	done(err)
 	return err
 }
 
 func SelectSQL(ctx context.Context, db *sqlx.DB, op string, dest any, query string, args ...any) error {
-	done := startSQLOp(ctx)
-	start := time.Now()
+	done := instrument(ctx, "mysql", op)
 	err := db.SelectContext(ctx, dest, query, args...)
-	done(err, start, op)
+	done(err)
 	return err
 }
 
 func ExecSQL(ctx context.Context, db *sqlx.DB, op, query string, args ...any) (sql.Result, error) {
-	done := startSQLOp(ctx)
-	start := time.Now()
+	done := instrument(ctx, "mysql", op)
 	res, err := db.ExecContext(ctx, query, args...)
-	done(err, start, op)
+	done(err)
 	return res, err
 }
 
@@ -63,17 +57,18 @@ func NoRowsAs(err, notFound error) error {
 	return err
 }
 
-func startSQLOp(ctx context.Context) func(error, time.Time, string) {
-	return func(err error, start time.Time, op string) {
-		dur := time.Since(start).Seconds()
-		metrics.DBQueryDuration.WithLabelValues("mysql", op).Observe(dur)
-		metrics.DBQueriesTotal.WithLabelValues("mysql", op, resultLabel(err)).Inc()
-		if isFailure(err) {
-			slog.ErrorContext(ctx, "mysql query failed",
-				slog.String("op", op),
-				slog.Float64("duration_s", dur),
-				slog.Any("error", err),
-			)
-		}
+// IsDuplicateEntry reports whether err is a MySQL unique-key violation.
+func IsDuplicateEntry(err error) bool {
+	const duplicateEntry = 1062
+	me, ok := errors.AsType[*mysql.MySQLError](err)
+	return ok && me.Number == duplicateEntry
+}
+
+// DuplicateAs maps a unique-key violation to conflict, passing other errors
+// through.
+func DuplicateAs(err, conflict error) error {
+	if IsDuplicateEntry(err) {
+		return conflict
 	}
+	return err
 }

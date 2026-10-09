@@ -26,7 +26,7 @@ func NewRepository(db clickhouse.Conn) *Repository {
 func (r *Repository) ModelUsage(ctx context.Context, tenantID, startMs, endMs int64) ([]modelUsageRow, error) {
 	query := `
 		SELECT gen_ai_request_model AS model,
-		       argMax(gen_ai_system, (timestamp, service, gen_ai_system)) AS vendor,
+		       argMaxIf(gen_ai_system, (timestamp, gen_ai_system), gen_ai_system != '') AS vendor,
 		       sum(span_count)      AS traces,
 		       sum(input_tokens)    AS in_tokens,
 		       sum(output_tokens)   AS out_tokens,
@@ -87,9 +87,8 @@ func (r *Repository) TraceCounts(ctx context.Context, tenantID, startMs, endMs i
 		SELECT if(timestamp >= @start, 1, 0) AS is_current,
 		       uniqExact(trace_id) AS traces,
 		       count()        AS spans
-		FROM optikk.spans
+		FROM optikk.llm_spans
 		PREWHERE tenant_id = @tenantID AND timestamp >= @prevStart AND timestamp < @end
-		WHERE is_gen_ai
 		GROUP BY is_current`
 	var rows []traceCountRow
 	err := dbutil.SelectCH(dbutil.OverviewCtx(ctx), r.db, "llm.TraceCounts", &rows, query,

@@ -19,7 +19,7 @@ type FleetPodAggregateRow struct {
 	RequestCount  uint64    `ch:"request_total"`
 	ErrorCount    uint64    `ch:"error_total"`
 	DurationMsSum float64   `ch:"duration_ms_total"`
-	P95LatencyMs  float32   `ch:"p95_latency_ms"`
+	P95LatencyMs  float64   `ch:"p95_latency_ms"`
 	LastSeen      time.Time `ch:"last_seen"`
 }
 
@@ -32,7 +32,7 @@ func (r *Repository) QueryFleetPods(ctx context.Context, tenantID int64, startMs
 		    ` + spanstats.Requests + `,
 		    ` + spanstats.Errors + `,
 		    ` + spanstats.DurationSum + `,
-		    toFloat32(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms,
+		    toFloat64(quantilesTDigestMerge(0.95)(latency_state)[1]) AS p95_latency_ms,
 		    max(timestamp)                                           AS last_seen
 		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID

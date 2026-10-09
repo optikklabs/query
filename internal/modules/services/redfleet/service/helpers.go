@@ -25,9 +25,9 @@ func mapFleetServices(rows []models.REDMetricsRow) []models.ServiceREDMetric {
 			ServiceName:  row.ServiceName,
 			RequestCount: int64(row.TotalCount),
 			ErrorCount:   int64(row.ErrorCount),
-			P50Latency:   httputil.SanitizeFloat(float64(row.P50Ms)),
-			P95Latency:   httputil.SanitizeFloat(float64(row.P95Ms)),
-			P99Latency:   httputil.SanitizeFloat(float64(row.P99Ms)),
+			P50Latency:   httputil.SanitizeFloat(row.P50Ms),
+			P95Latency:   httputil.SanitizeFloat(row.P95Ms),
+			P99Latency:   httputil.SanitizeFloat(row.P99Ms),
 			Version:      row.Version,
 			Environment:  row.Environment,
 			Instances:    row.Instances,
@@ -63,9 +63,9 @@ func computeFleetTotals(total *models.REDMetricsRow, serviceCount int, startMs, 
 		TotalErrors:    totalErrors,
 		TotalRPS:       httputil.SanitizeFloat(float64(totalCount) / durationSec),
 		AvgErrorRate:   httputil.SanitizeFloat(avgErrorRate),
-		AvgP50Ms:       httputil.SanitizeFloat(float64(total.P50Ms)),
-		AvgP95Ms:       httputil.SanitizeFloat(float64(total.P95Ms)),
-		AvgP99Ms:       httputil.SanitizeFloat(float64(total.P99Ms)),
+		AvgP50Ms:       httputil.SanitizeFloat(total.P50Ms),
+		AvgP95Ms:       httputil.SanitizeFloat(total.P95Ms),
+		AvgP99Ms:       httputil.SanitizeFloat(total.P99Ms),
 	}
 }
 
@@ -90,11 +90,11 @@ func toTopEndpoint(row models.TopEndpointRow, durationSec float64) models.TopEnd
 	}
 }
 
-func redMetrics(total, errors uint64, p50, p95, p99 float32, durationSec float64) models.REDMetrics {
+func redMetrics(total, errors uint64, p50, p95, p99, durationSec float64) models.REDMetrics {
 	return models.REDMetrics{
 		RPS: float64(total) / durationSec, ErrorRate: metrics.Percentage(errors, total),
 		ErrorCount: int64(errors), TotalCount: int64(total),
-		P50Ms: httputil.SanitizeFloat(float64(p50)), P95Ms: httputil.SanitizeFloat(float64(p95)), P99Ms: httputil.SanitizeFloat(float64(p99)),
+		P50Ms: httputil.SanitizeFloat(p50), P95Ms: httputil.SanitizeFloat(p95), P99Ms: httputil.SanitizeFloat(p99),
 	}
 }
 

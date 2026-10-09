@@ -25,7 +25,7 @@ type HostSpansRow struct {
 	Zone         string    `ch:"zone"`
 	RequestCount uint64    `ch:"request_total"`
 	ErrorCount   uint64    `ch:"error_total"`
-	P99Ms        float32   `ch:"p99_ms"`
+	P99Ms        float64   `ch:"p99_ms"`
 	LastSeen     time.Time `ch:"last_seen"`
 }
 
@@ -60,7 +60,7 @@ func (r *Repository) QueryHostSpans(
 		    argMax(environment, (timestamp, environment))            AS zone,
 		    ` + spanstats.Requests + `,
 		    ` + spanstats.Errors + `,
-		    toFloat32(quantileTDigestMerge(0.99)(latency_state))     AS p99_ms,
+		    toFloat64(quantilesTDigestMerge(0.99)(latency_state)[1]) AS p99_ms,
 		    max(timestamp)                                           AS last_seen
 		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID

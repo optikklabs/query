@@ -55,13 +55,9 @@ func (s *Service) Query(ctx context.Context, tenantID int64, req SessionsQueryRe
 	for i, r := range rows {
 		sessionIDs[i] = r.SessionID
 	}
-	scores, err := s.repo.MeanScoreBySession(ctx, tenantID, req.StartTime, req.EndTime, sessionIDs)
+	meanBySession, err := s.repo.MeanScoreBySession(ctx, tenantID, req.StartTime, req.EndTime, sessionIDs)
 	if err != nil {
 		return SessionsQueryResponse{}, err
-	}
-	meanBySession := make(map[string]*float64, len(scores))
-	for _, sc := range scores {
-		meanBySession[sc.SessionID] = &sc.Mean
 	}
 	out := make([]Session, len(rows))
 	for i, r := range rows {

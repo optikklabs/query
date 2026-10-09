@@ -21,7 +21,7 @@ type CollectionOptionRaw struct {
 	Name       string    `ch:"name"`
 	QueryCount uint64    `ch:"query_count"`
 	CallCount  uint64    `ch:"call_count"`
-	QS         []float32 `ch:"qs"`
+	QS         []float64 `ch:"qs"`
 }
 
 type QueryOptionRaw struct {
@@ -29,7 +29,7 @@ type QueryOptionRaw struct {
 	QueryLabel     string    `ch:"query_label"`
 	CollectionName string    `ch:"collection_name"`
 	CallCount      uint64    `ch:"call_count"`
-	QS             []float32 `ch:"qs"`
+	QS             []float64 `ch:"qs"`
 	TotalQueries   uint64    `ch:"total_queries"`
 }
 
@@ -43,7 +43,7 @@ type RankedQueryRaw struct {
 type QuerySeriesPointRaw struct {
 	BucketAt  time.Time `ch:"bucket_at"`
 	QueryHash string    `ch:"query_hash"`
-	QS        []float32 `ch:"qs"`
+	QS        []float64 `ch:"qs"`
 	OpsPerSec float64   `ch:"ops_per_sec"`
 }
 
@@ -58,7 +58,7 @@ func (r *Repository) GetQueryCatalogue(
 		SELECT db_name AS name,
 		       uniqExact(query_hash) AS query_count,
 		       sum(request_count) AS call_count,
-		       arrayMap(x -> toFloat32(x), quantilesTDigestMerge(0.95, 0.99)(latency_state)) AS qs
+		       quantilesTDigestMerge(0.95, 0.99)(latency_state) AS qs
 		FROM ` + table + `
 		PREWHERE tenant_id = @tenantID
 		     AND timestamp >= @start AND timestamp < @end
@@ -72,10 +72,10 @@ func (r *Repository) GetQueryCatalogue(
 
 	queriesQuery := `
 		SELECT query_hash,
-		       argMax(span_name, timestamp) AS query_label,
+		       any(db_statement) AS query_label,
 		       argMax(db_name, timestamp) AS collection_name,
 		       sum(request_count) AS call_count,
-		       arrayMap(x -> toFloat32(x), quantilesTDigestMerge(0.95, 0.99)(latency_state)) AS qs,
+		       quantilesTDigestMerge(0.95, 0.99)(latency_state) AS qs,
 		       count() OVER () AS total_queries
 		FROM ` + table + `
 		PREWHERE tenant_id = @tenantID
@@ -108,7 +108,7 @@ func (r *Repository) GetRankedQueries(
 	}
 	query := `
 		SELECT query_hash,
-		       argMax(span_name, timestamp) AS query_label,
+		       any(db_statement) AS query_label,
 		       argMax(db_name, timestamp) AS collection_name,
 		       sum(request_count) AS call_count
 		FROM ` + table + `
@@ -155,7 +155,7 @@ func (r *Repository) GetQuerySeriesPoints(
 	query := `
 		SELECT ` + timebucket.DisplayGrainSQL(endMs-startMs) + ` AS bucket_at,
 		       query_hash,
-		       arrayMap(x -> toFloat32(x), quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state)) AS qs,
+		       quantilesTDigestMerge(0.5, 0.95, 0.99)(latency_state) AS qs,
 		       sum(request_count) / @bucketGrainSec AS ops_per_sec
 		FROM ` + timebucket.SpanStatsRollup(startMs, endMs) + `
 		PREWHERE tenant_id = @tenantID

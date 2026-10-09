@@ -21,7 +21,7 @@ const errorSpanScan = `FROM optikk.error_events
 
 func errorSpanWhere(f spanfilter.Filters) (string, []any) {
 	c := spanfilter.BuildClauses(f)
-	return errorSpanScan + c.Span + c.Root, c.Args
+	return errorSpanScan + c.Resource + c.Span + c.Root, c.Args
 }
 
 func (r *Repository) ExplorerGroupRows(ctx context.Context, req models.GroupsRequest, limit int, cur *models.ErrorGroupsCursor) ([]models.RawErrorGroupRow, error) {

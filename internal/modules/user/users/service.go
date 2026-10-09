@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	dbutil "github.com/optikklabs/query/internal/infra/database"
 	"github.com/optikklabs/query/internal/modules/user/auth"
 	"github.com/optikklabs/query/internal/modules/user/shared"
 	"github.com/optikklabs/query/internal/shared/errorcode"
@@ -57,7 +58,7 @@ func (s *Service) CreateUser(ctx context.Context, req CreateUserRequest, tenantI
 	}
 
 	userID, err := s.repo.CreateUser(ctx, email, hashStr, name, tenantID, req.Role, time.Now().UTC())
-	if shared.IsDuplicateEntry(err) {
+	if dbutil.IsDuplicateEntry(err) {
 		return UserResponse{}, errorcode.ConflictError{Msg: "A user with this email already exists"}
 	}
 	if err != nil {

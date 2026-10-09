@@ -86,6 +86,8 @@ var kpiMetricNames = []string{
 	infraconsts.MetricSystemProcessCount,
 }
 
+// QueryKPIs averages the host's KPI metrics. Read-only mounts (ISO images,
+// squashfs snaps) always read 100% full, so they are left out of the disk KPI.
 func (r *Repository) QueryKPIs(ctx context.Context, tenantID int64, host string, startMs, endMs int64) ([]KPIRow, error) {
 	query := `
 		SELECT
@@ -98,6 +100,7 @@ func (r *Repository) QueryKPIs(ctx context.Context, tenantID int64, host string,
 		     AND metric_name IN @metricNames
 		     AND timestamp >= @start AND timestamp < @end
 		     AND host = @host
+		WHERE NOT (metric_name = '` + infraconsts.MetricSystemFilesystemUtil + `' AND ` + seriesdefs.AttrMode + ` = 'ro')
 		GROUP BY metric_name, state, mount`
 	args := chargs.WithMetricNames(chargs.RangeArgs(tenantID, startMs, endMs), kpiMetricNames)
 	args = append(args, clickhouse.Named("host", host))

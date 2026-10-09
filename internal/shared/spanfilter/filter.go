@@ -63,6 +63,9 @@ func (r *RangeRequest) BindTenant(tenantID int64) error {
 	return r.Validate()
 }
 
+// Clauses split the filters by the rows they test. Root predicates apply to
+// the trace's root span. Span predicates select traces with any matching
+// span; Resource predicates are the cheap subset of those, put in PREWHERE.
 type Clauses struct {
 	Resource string
 	Span     string
@@ -70,8 +73,9 @@ type Clauses struct {
 	Args     []any
 }
 
+// HasSpanMatch reports whether the filters need an any-span match.
 func (c Clauses) HasSpanMatch() bool {
-	return c.Span != ""
+	return c.Span != "" || c.Resource != ""
 }
 
 func BuildClauses(f Filters) Clauses {
@@ -81,11 +85,9 @@ func BuildClauses(f Filters) Clauses {
 		chargs.Millis("end", f.EndMs),
 	}}
 
-	if len(f.Services) > 0 {
-		c.Root += ` AND service IN @services`
-		c.Resource += ` AND service IN @services`
-		c.Args = append(c.Args, clickhouse.Named("services", f.Services))
-	}
+	c.Args = filterutil.AppendIn(&c.Resource, c.Args,
+		filterutil.InClause{Column: "service", Bind: "services", Values: f.Services},
+	)
 	c.Args = filterutil.AppendIn(&c.Root, c.Args,
 		filterutil.InClause{Column: "service_version", Bind: "serviceVersions", Values: f.ServiceVersions},
 	)
@@ -141,9 +143,8 @@ func BuildClauses(f Filters) Clauses {
 		if *f.HasError {
 			op = " IN "
 		}
-		c.Root += ` AND trace_id` + op + `(SELECT trace_id FROM optikk.spans
-			PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end
-			WHERE is_error = 1)`
+		c.Root += ` AND trace_id` + op + `(SELECT trace_id FROM optikk.error_events
+			PREWHERE tenant_id = @tenantID AND timestamp >= @start AND timestamp < @end)`
 	}
 	return c
 }
@@ -166,6 +167,67 @@ func buildAttrEqClause(af AttrFilter, k, v string, keyArg any, negate bool) (str
 	return ` AND (mapContains(attributes, @` + k + `) AND attributes[@` + k + `] = @` + v + `)`, args
 }
 
+// promotedColumns maps the attribute keys ingest promotes out of the
+// attributes map to the column that holds their raw string value. Keys whose
+// column holds a derived value (operation, tokens) are left out.
+var promotedColumns = map[string]string{
+	"http.route":                "http_route",
+	"http.method":               "http_method",
+	"http.request.method":       "http_method",
+	"http.url":                  "http_url",
+	"url.full":                  "http_url",
+	"http.host":                 "http_host",
+	"net.host.name":             "http_host",
+	"http.status_code":          "response_status_code",
+	"http.response.status_code": "response_status_code",
+	"service.name":              "service",
+	"service.version":           "service_version",
+	"deployment.environment":    "environment",
+	"host.name":                 "host",
+	"k8s.pod.name":              "pod",
+	"peer.service":              "peer_service",
+	"db.system":                 "db_system",
+	"db.system.name":            "db_system",
+	"db.name":                   "db_name",
+	"db.namespace":              "db_name",
+	"db.statement":              "db_statement",
+	"db.query.text":             "db_statement",
+	"exception.type":            "exception_type",
+	"exception.message":         "exception_message",
+	"exception.stacktrace":      "exception_stacktrace",
+	"gen_ai.provider.name":      "gen_ai_system",
+	"gen_ai.system":             "gen_ai_system",
+	"gen_ai.request.model":      "gen_ai_request_model",
+	"gen_ai.response.model":     "gen_ai_response_model",
+}
+
+// PromotedColumn returns the column holding a promoted attribute key.
+func PromotedColumn(key string) (string, bool) {
+	col, ok := promotedColumns[key]
+	return col, ok
+}
+
+// columnAttrSQL matches a promoted key against its column, where an empty
+// value means the attribute was absent.
+func columnAttrSQL(col string) filterutil.AttrSQL {
+	return filterutil.AttrSQL{
+		StringExpr:    func(string) string { return `nullIf(` + col + `, '')` },
+		NumberExpr:    func(string) string { return `toFloat64OrNull(` + col + `)` },
+		ExistsExpr:    func(string) string { return col + ` != ''` },
+		NotExistsExpr: func(string) string { return col + ` = ''` },
+		EqExpr: func(af AttrFilter, _, v string, _ any, negate bool) (string, []any) {
+			args := []any{clickhouse.Named(v, af.Value)}
+			if negate {
+				return ` AND (` + col + ` != '' AND ` + col + ` != @` + v + `)`, args
+			}
+			return ` AND ` + col + ` = @` + v, args
+		},
+	}
+}
+
 func buildAttrClause(af AttrFilter, i int) (string, []any) {
+	if col, ok := PromotedColumn(af.Key); ok {
+		return filterutil.BuildAttrClause(columnAttrSQL(col), af, i)
+	}
 	return filterutil.BuildAttrClause(attrSQL, af, i)
 }

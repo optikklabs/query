@@ -43,8 +43,3 @@ type overviewRow struct {
 	Traces      uint64  `ch:"traces"`
 	Cost        float64 `ch:"cost"`
 }
-
-type userScoreRow struct {
-	UserID string  `ch:"user_id"`
-	Mean   float64 `ch:"mean"`
-}

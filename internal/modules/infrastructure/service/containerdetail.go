@@ -55,5 +55,5 @@ func foldRED(red repository.PodREDRow, out *models.PodOverview) {
 	}
 	out.ErrorRate = new(metrics.Percentage(red.ErrorCount, red.RequestCount))
 	out.AvgLatencyMs = new(red.DurationMsSum / float64(red.RequestCount))
-	out.P95LatencyMs = new(float64(red.P95LatencyMs))
+	out.P95LatencyMs = new(red.P95LatencyMs)
 }

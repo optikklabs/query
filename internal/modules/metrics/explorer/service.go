@@ -190,7 +190,7 @@ func (s *Service) executeQueries(ctx context.Context, prepared []preparedQuery) 
 				return fmt.Errorf("query %q: %w", query.request.ID, err)
 			}
 
-			fillZero := shouldZeroFill(query.metricType, queryFilter.Aggregation, queryFilter.Cumulative)
+			fillZero := shouldZeroFill(query.metricType, queryFilter.Aggregation, queryFilter.Cumulative && !queryFilter.Histogram)
 			points := applyAggregation(rows, queryFilter.Aggregation, queryFilter.StartMs, queryFilter.EndMs, queryFilter.Step, queryFilter.Cumulative, queryFilter.Histogram)
 			query.result = buildGroupedColumnarResult(
 				rows, points, queryFilter.GroupBy,
